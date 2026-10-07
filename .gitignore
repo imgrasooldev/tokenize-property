@@ -1,0 +1,36 @@
+# Secrets: never commit. Use .env.example for documented, non-secret defaults.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+keystore/
+**/keys/
+
+# Node / TypeScript
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+contracts/broadcast/**/dry-run/
+
+# Local chain data
+chain/data/
+chain/**/database/
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
