@@ -41,22 +41,22 @@
 
 ## 4. Threats and controls
 
-Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built**, **Verified** (tested or audited). Everything is Planned or Spec at this stage.
+Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built, tested** (implemented with passing tests), **Verified** (externally audited). Nothing is externally verified yet.
 
 ### 4.1 Smart contracts
 
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
-| SC-1 | Elevation | Bug in custom code lets an attacker mint or move tokens | Minimal custom code; audited ERC-3643 core; invariant tests I-1 to I-16; Slither; formal verification of guards; two external audits | Spec |
-| SC-2 | Elevation | A single stolen key mints tokens | Mint only via `IssuanceGuard`, called by a 2-of-3 Safe that includes a trustee signer; supply capped by trustee register | Spec |
+| SC-1 | Elevation | Bug in custom code lets an attacker mint or move tokens | Minimal custom code; audited ERC-3643 core; invariant tests I-1 to I-16; Slither; formal verification of guards; two external audits | Built: 100% coverage, invariants and Slither clean. Formal verification and audits pending |
+| SC-2 | Elevation | A single stolen key mints tokens | Mint only via `IssuanceGuard`, called by a 2-of-3 Safe that includes a trustee signer; supply capped by trustee register | Built, tested |
 | SC-3 | Tampering | Malicious upgrade replaces logic | Guards non-upgradeable; core upgrades only via 72h timelock; public notice; trustee can cancel | Spec |
-| SC-4 | Elevation | Stolen pauser key | Pauser can only pause, never unpause (I-10) | Spec |
-| SC-5 | Elevation | Abuse of forced transfer or recovery | 48h delay, evidence hash required, cancellable by Admin or Trustee Safe, one execution only (I-13) | Spec |
-| SC-6 | Spoofing | Unverified wallet receives tokens | Identity registry check on every transfer (I-3, I-4); claims only from our HSM-held issuer | Spec |
-| SC-7 | Elevation | Stolen registrar key floods fake identities | On-chain rate limit (I-12); identity needs valid claim from separate issuer key; monitor compares registrations with KYC DB | Spec |
-| SC-8 | Tampering | Wrong rent distribution root | 48h challenge window; trustee recomputes and can reject; any investor can verify own leaf | Spec |
+| SC-4 | Elevation | Stolen pauser key | Pauser can only pause, never unpause (I-10) | Built, tested |
+| SC-5 | Elevation | Abuse of forced transfer or recovery | 48h delay, evidence hash required, cancellable by Admin or Trustee Safe, one execution only (I-13) | Built, tested |
+| SC-6 | Spoofing | Unverified wallet receives tokens | Identity registry check on every transfer (I-3, I-4); claims only from our HSM-held issuer | Built, tested |
+| SC-7 | Elevation | Stolen registrar key floods fake identities | On-chain rate limit (I-12); identity needs valid claim from separate issuer key; monitor compares registrations with KYC DB | Built, tested |
+| SC-8 | Tampering | Wrong rent distribution root | 48h challenge window; trustee recomputes and can reject; any investor can verify own leaf | Built, tested |
 | SC-9 | Info. disclosure | Personal data on-chain | Only wallet addresses, hashes and amounts on-chain; no names, CNICs or bank details | Spec |
-| SC-10 | Tampering | Deployer keeps hidden powers | Post-deploy script asserts I-8 and I-9; deployer roles renounced; deployer key destroyed | Spec |
+| SC-10 | Tampering | Deployer keeps hidden powers | Post-deploy script asserts I-8 and I-9; deployer roles renounced; deployer key destroyed | Built, tested |
 | SC-11 | Tampering | Deployed code differs from audited code | Bytecode verification against audited commit before go-live | Spec |
 | SC-12 | DoS | Contract becomes unusable (gas, loops) | No unbounded loops over holders; batch sizes capped; Merkle proofs instead of on-chain iteration | Spec |
 
@@ -110,6 +110,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built*
 | KYC-1 | Spoofing | Fake or stolen CNIC | NADRA Verisys; selfie match with liveness check | Planned |
 | KYC-2 | Elevation | Money laundering through tokens | Sanctions and PEP screening; source-of-funds checks; transaction monitoring; reporting to FMU | Planned |
 | KYC-3 | Spoofing | Claim issuer key misuse | Claim issuer key in HSM, separate from registrar key; claims have expiry; revocation on-chain | Planned |
+| KYC-4 | Elevation | Revoked investor restores own verification (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)) | Never rely on claim revocation: freeze via FreezeGuard immediately, then delete identity through the timelock | Built, tested |
 
 ### 4.7 Chain and infrastructure
 

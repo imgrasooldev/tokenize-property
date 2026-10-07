@@ -1,6 +1,6 @@
 # Smart Contract Specification
 
-- Version: 0.1 (draft for review)
+- Version: 0.2 (updated during Step 3 implementation)
 - Date: 2026-10-08
 - Scope: contracts deployed per property on the private Besu chain, plus the public-chain anchor.
 
@@ -11,7 +11,7 @@ This document is the source of truth for Step 3. Code and tests must match it. A
 ## 1. Design principles
 
 1. **Contracts never hold money.** No `payable` functions, no ERC-20 balances. Rent and investments move in PKR through banks. Contracts record ownership and entitlements only.
-2. **Reuse audited code.** The token, identity registry and compliance framework come from the official ERC-3643 implementation (`github.com/ERC-3643/ERC-3643`, pinned to a release tag). The older `TokenySolutions/T-REX` repo is deprecated and is not used.
+2. **Reuse audited code.** The token, identity registry and compliance framework come from the official ERC-3643 implementation (`github.com/ERC-3643/ERC-3643`, pinned to tag **4.1.3**) with ONCHAINID **2.2.1** and OpenZeppelin **4.9.6** as its dependencies. Our own contracts use OpenZeppelin **5.6.1** and solc **0.8.30**. The older `TokenySolutions/T-REX` repo is deprecated and is not used.
 3. **Small custom code, narrow permissions.** Our own contracts are small "guard" contracts. Each one exposes exactly one kind of power and adds limits (delays, caps, rate limits). No person or server key is ever a direct agent or owner of the token.
 4. **No single key can do damage.** Every powerful action needs a multisig, a timelock, or both.
 5. **Non-upgradeable guards.** Our guard and registry contracts are not proxies. To change one, deploy a new version and swap it in through the timelock. The ERC-3643 core uses its own proxy pattern; its upgrades also go through the timelock.
@@ -74,7 +74,12 @@ Public chain:  StateAnchor  (hourly hash of the private chain)
 - Required claim topics (in `ClaimTopicsRegistry`): `1 = KYC`, `2 = AML_SCREENED`.
 - Trusted issuer: our KYC claim-issuer contract only.
 - Country code stored in the registry (ISO 3166 numeric, Pakistan = 586).
-- The only identity-registry agent is `RegistrarGuard`, and it can only register. Deleting or updating an identity goes through the timelock.
+- Identity-registry agents:
+  - `RegistrarGuard`: register only, rate-limited.
+  - The token itself: required by ERC-3643 so wallet recovery can re-register the new wallet.
+  - The TimelockController: deletes or updates identities (for example AML offboarding) after the 72h delay.
+- Investor ONCHAINIDs are created by an **identity operator** key that owns the ONCHAINID factory. Creating an identity is harmless on its own: it cannot hold tokens until it carries claims from our HSM-held claim issuer and is registered by `RegistrarGuard`.
+- **Do not rely on claim revocation to offboard an investor.** ONCHAINID 2.2.1 revocation can be bypassed with a re-encoded signature (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)). Offboarding is: freeze via `FreezeGuard` immediately, then delete the identity through the timelock.
 
 ### 4.3 Compliance modules
 
@@ -102,7 +107,7 @@ Only path to `mint` and `burn`.
 | Function | Caller | Behaviour |
 |---|---|---|
 | `setTrusteeCap(uint256 cap)` | Timelock | Sets the number of units on the trustee register. Cannot go below current `totalSupply`. |
-| `mint(address to, uint256 amount, bytes32 refId)` | Issuance Safe | Reverts if `totalSupply + amount > trusteeCap`. `refId` links to the off-chain subscription record; each `refId` can be used once. |
+| `mint(address to, uint256 amount, bytes32 refId)` | Issuance Safe | Reverts if `totalSupply + amount > trusteeCap`, or while the token is paused (ERC-3643 itself would allow minting while paused). `refId` links to the off-chain subscription record; each `refId` can be used once, across mint and burn. |
 | `burn(address from, uint256 amount, bytes32 refId)` | Issuance Safe | For redemptions and exits; `refId` used once. |
 
 Events: `TrusteeCapSet(old, new)`, `Minted(to, amount, refId)`, `Burned(from, amount, refId)`.
@@ -139,7 +144,7 @@ For lost wallets, deceased investors (succession) and court orders. Two steps wi
 | `execute(uint256 id)` | Trustee Safe | Only after `RECOVERY_DELAY` (48h) and if not cancelled. Executes once. |
 | `cancel(uint256 id)` | Admin Safe or Trustee Safe | Cancels a pending request |
 
-`to` must already be a verified identity. Events: `RecoveryProposed`, `RecoveryExecuted`, `RecoveryCancelled`.
+For a forced transfer, `to` must be a verified identity (the token checks this). For wallet recovery, the new wallet must first be added as a management key on the investor's ONCHAINID; the token then registers it and moves the full balance, including any frozen amount and frozen status. Execution reverts if the token reports failure. Events: `RecoveryProposed`, `RecoveryExecuted`, `RecoveryCancelled`.
 
 ### 5.5 RegistrarGuard
 
@@ -147,8 +152,10 @@ Registers KYC-approved investors in the identity registry. Called many times a d
 
 | Function | Caller | Behaviour |
 |---|---|---|
-| `register(address wallet, IIdentity identity, uint16 country)` | Registrar key | Registers an identity. Reverts if the rolling 1-hour count exceeds `maxPerHour` (default 50). The identity must already hold valid KYC and AML claims from the trusted issuer. |
-| `setRegistrar(address)` / `setMaxPerHour(uint32)` | Timelock | |
+| `register(address wallet, IIdentity identity, uint16 country)` | Registrar key | Registers an identity. Reverts if the exact rolling 1-hour count would exceed `maxPerHour` (default 50, max 500). Reverts unless the identity already holds valid KYC and AML claims from the trusted issuer. |
+| `setRegistrar(address)` | Timelock | |
+
+`maxPerHour` is immutable. Changing it means deploying a new guard through the timelock; this keeps the sliding window exact.
 
 A stolen registrar key can register at most 50 wallets per hour, and only identities that already carry a valid claim from our HSM-held claim issuer. The monitor alerts on any registration not matching a KYC record in the database.
 
@@ -207,7 +214,7 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 | I-4 | A transfer to an unverified address always reverts |
 | I-5 | A frozen address cannot send; frozen partial amounts cannot move |
 | I-6 | While paused, no ordinary transfer succeeds |
-| I-7 | No protocol contract holds native coin or any ERC-20 balance |
+| I-7 | No protocol function is `payable` or holds ERC-20 balances. (The vendored ERC-3643 proxies have a payable fallback; on the private chain the native coin has no value and gas price is zero.) |
 | I-8 | Token agents are exactly the four guards; no EOA is an agent or owner of any protocol contract |
 | I-9 | The owner of every protocol contract is the TimelockController, and its minimum delay is at least 72h |
 | I-10 | Only the Admin Safe can unpause |
@@ -218,17 +225,18 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 | I-15 | Document records are never deleted or modified |
 | I-16 | Anchored block numbers strictly increase |
 
-**To verify in Step 3 against ERC-3643 source:** whether forced transfer and recovery work while the token is paused. Desired behaviour: yes, so the trustee can act during an incident.
+**Verified in Step 3:** forced transfer and wallet recovery work while the token is paused (`test_worksWhileTokenPaused`), so the trustee can act during an incident.
 
 ## 9. Deployment procedure (summary)
 
 1. Deploy Safes (Admin, Trustee, Issuance, Ops) and the TimelockController.
 2. Deploy the ERC-3643 suite through its factory, with the deployer as temporary owner.
 3. Deploy guards and registries; add the four guards as token agents and `RegistrarGuard` as identity-registry agent.
-4. Transfer ownership of every contract to the TimelockController.
-5. **Renounce** all deployer roles. Run the post-deploy check script, which asserts I-8 and I-9 on-chain.
+4. Transfer ownership of every contract to the TimelockController, including the identity registry storage (via `TREXFactory.recoverContractOwnership`) and the factory itself. Add the timelock as identity-registry agent.
+5. **Renounce** all deployer roles. Run the post-deploy check script, which asserts I-8 and I-9 on-chain (same assertions as `test/Deployment.t.sol`).
 6. Verify that deployed bytecode matches the audited commit.
 7. Destroy the deployer key.
+8. **Go-live:** ERC-3643 tokens are deployed **paused**. After the trustee cap is set through the timelock and all checks pass, the Admin Safe unpauses through `PauseGuard`.
 
 ## 10. Out of scope for v0.1
 

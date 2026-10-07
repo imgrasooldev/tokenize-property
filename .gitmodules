@@ -1,0 +1,18 @@
+[submodule "contracts/lib/forge-std"]
+	path = contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "contracts/lib/erc3643"]
+	path = contracts/lib/erc3643
+	url = https://github.com/ERC-3643/ERC-3643
+[submodule "contracts/lib/onchain-id"]
+	path = contracts/lib/onchain-id
+	url = https://github.com/onchain-id/solidity
+[submodule "contracts/lib/oz-v4"]
+	path = contracts/lib/oz-v4
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "contracts/lib/oz-up-v4"]
+	path = contracts/lib/oz-up-v4
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "contracts/lib/oz"]
+	path = contracts/lib/oz
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts

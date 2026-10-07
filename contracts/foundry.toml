@@ -1,0 +1,53 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+libs = ["lib"]
+# Our code is pinned to 0.8.30; the vendored ERC-3643 suite is pinned to 0.8.17 by its own pragmas.
+auto_detect_solc = true
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+bytecode_hash = "none"
+cbor_metadata = false
+# Warnings from audited vendor code are not ours to fix; warnings in src/ and test/ still show.
+ignored_warnings_from = ["lib"]
+
+# The ERC-3643 suite needs OpenZeppelin 4.9.6; our contracts use OpenZeppelin 5.
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "lib/erc3643/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
+  "lib/erc3643/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
+  "lib/onchain-id/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
+  "lib/onchain-id/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
+  "src/vendor/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
+  "src/vendor/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
+  "@onchain-id/solidity/=lib/onchain-id/",
+  "@erc3643/=lib/erc3643/",
+  "@openzeppelin/contracts/=lib/oz/contracts/",
+]
+
+[fuzz]
+runs = 2000
+seed = "0x5eed"
+
+[invariant]
+runs = 256
+depth = 100
+fail_on_revert = false
+
+[profile.ci.fuzz]
+runs = 10000
+
+[profile.ci.invariant]
+runs = 1000
+depth = 200
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+quote_style = "double"
+number_underscore = "thousands"
