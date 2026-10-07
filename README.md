@@ -27,6 +27,10 @@ Each step ends with a review. The next step starts only after approval.
 | 6 | Admin panel (maker-checker) | Not started |
 | 7 | Flutter investor app | Not started |
 
+## Security standards
+
+The project follows recognised international standards, including EEA EthTrust [Q], OWASP ASVS L3, OWASP MASVS L2+R, CCSS Level III, NIST SSDF, SLSA L3, CIS Benchmarks and ISO 27001 / SOC 2. The full mapping, target levels and per-step gates are in [docs/security-standards.md](docs/security-standards.md).
+
 ## Ground rules
 
 1. Spec first, then tests, then code.

@@ -3,7 +3,7 @@
 - Version: 0.1 (draft for review)
 - Date: 2026-10-08
 - Method: STRIDE per component, plus insider and supply-chain threats
-- Companion: [contract-spec.md](contract-spec.md), [ADR 0001](decisions/0001-stack.md)
+- Companion: [contract-spec.md](contract-spec.md), [security-standards.md](security-standards.md), [ADR 0001](decisions/0001-stack.md)
 
 ## 1. What we protect
 
