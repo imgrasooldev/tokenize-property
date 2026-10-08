@@ -59,6 +59,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | SC-10 | Tampering | Deployer keeps hidden powers | Post-deploy script asserts I-8 and I-9; deployer roles renounced; deployer key destroyed | Built, tested |
 | SC-11 | Tampering | Deployed code differs from audited code | Bytecode verification against audited commit before go-live | Spec |
 | SC-13 | Elevation | Owner of an implementation authority or UUPS module upgrades token, identity or module code | Both authorities and both modules owned by the 72h timelock; asserted by `DeployLib.checkHandover` and verified on a live Anvil deployment | Built, tested |
+| SC-14 | Elevation | A real network is configured with the local dev chain ID (586586) and gets a 60 s timelock | Chain ID reserved and documented (ADR 0002); `Deploy.s.sol` also requires `LOCAL_DEV_NETWORK=true`; production genesis review checks the chain ID | Built, tested |
 | SC-12 | DoS | Contract becomes unusable (gas, loops) | No unbounded loops over holders; batch sizes capped; Merkle proofs instead of on-chain iteration | Spec |
 
 ### 4.2 Keys and signing
@@ -120,8 +121,8 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
 | CH-1 | Tampering | Validators collude to rewrite history | 4 validators run by separate organisations (platform, trustee, auditor, backup); hourly public-chain anchor makes rewrites detectable | Spec |
-| CH-2 | DoS | Validators go offline | QBFT tolerates 1 of 4 failing; monitoring and runbook for validator recovery | Planned |
-| CH-3 | Elevation | Unauthorised node joins network | Permissioned node allowlist; TLS between nodes | Planned |
+| CH-2 | DoS | Validators go offline | QBFT tolerates 1 of 4 failing; monitoring and runbook for validator recovery | Built, tested locally (`chain/flow.py` stops and restarts a validator) |
+| CH-3 | Elevation | Unauthorised node joins network | Permissioned node allowlist; static peering, discovery off; TLS between nodes | Allow-list and static peering built locally; TLS planned |
 | INF-1 | Elevation | Lateral movement after one service is breached | Private subnets; mTLS between services; signing service and DB not internet-reachable | Planned |
 | INF-2 | Elevation | Admin panel exposed | VPN + SSO + FIDO2 hardware keys; IP allowlist; separate domain | Planned |
 

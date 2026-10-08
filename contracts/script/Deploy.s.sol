@@ -17,6 +17,11 @@ import {DeployLib} from "./DeployLib.sol";
 contract Deploy is Script {
     function run() external returns (DeployLib.Deployment memory d) {
         DeployLib.Config memory c = _config();
+        // The local dev chain ID unlocks a short timelock. Require an explicit opt-in as well, so a
+        // network misconfigured with that ID can never get a short timelock by accident.
+        if (block.chainid == DeployLib.LOCAL_DEV_CHAIN_ID) {
+            require(vm.envOr("LOCAL_DEV_NETWORK", false), "Deploy: local dev chain ID without LOCAL_DEV_NETWORK=true");
+        }
 
         vm.startBroadcast(c.deployer);
         d = DeployLib.deploy(c);

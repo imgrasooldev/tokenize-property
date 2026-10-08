@@ -399,11 +399,17 @@ STEPS = [
         "3",
         "Smart contracts",
         "Done (internal)",
-        "5 guards, 2 registries, public anchor on ERC-3643 4.1.3 + T-REX 4.1.6 modules. 120 tests, 100% coverage, "
+        "5 guards, 2 registries, public anchor on ERC-3643 4.1.3 + T-REX 4.1.6 modules. 121 tests, 100% coverage, "
         "Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil.",
     ),
-    ("4", "Local chain", "Next", "Anvil, then a 4-validator Besu QBFT network on Java 21; deploy via DeployLib."),
-    ("5", "Backend services", "Not started", "Ledger, outbox, signing service + policy engine, indexer, reconciliation, KYC/bank mocks."),
+    (
+        "4",
+        "Local chain",
+        "Done",
+        "4-validator Besu 26.9 QBFT network (portable JDK 25); deployed via DeployLib; 50/50 end-to-end checks on real "
+        "blocks; validator outage and recovery tested.",
+    ),
+    ("5", "Backend services", "Next", "Ledger, outbox, signing service + policy engine, indexer, reconciliation, KYC/bank mocks."),
     ("6", "Internal portals", "Not started", "Operations, compliance and trustee portals with maker-checker; enforce offboarding order (F-02)."),
     ("7", "Investor apps", "Not started", "Website, investor web portal, verification page, Flutter app."),
 ]
@@ -438,9 +444,9 @@ def build():
     story.append(Spacer(1, 10))
     story.append(
         callout(
-            "<b>Current position (8 October 2026):</b> Phases 1 and 2 are complete. Phase 3 is in progress: Steps 1–3 are done "
-            "internally, including all smart contracts with 120 passing tests and 100% coverage. The next step is Step 4, the local "
-            "Besu chain. Nothing has been externally audited yet."
+            "<b>Current position (8 October 2026):</b> Phases 1 and 2 are complete. Phase 3 is in progress: Steps 1–4 are done "
+            "internally: smart contracts (121 tests, 100% coverage) and a 4-validator Besu network where the full lifecycle runs on "
+            "real blocks (50/50 checks). The next step is Step 5, backend services. Nothing has been externally audited yet."
         )
     )
     story.append(PageBreak())
@@ -577,13 +583,14 @@ def build():
     story.append(P("Step 3 results (smart contracts)", "h2"))
     metrics = [
         ["Check", "Result"],
-        ["Tests (unit, fuzz, invariant)", "<b>120 / 120 passing</b>; invariant campaign of 25,600 random calls, 0 violations"],
+        ["Tests (unit, fuzz, invariant)", "<b>121 / 121 passing</b>; invariant campaign of 25,600 random calls, 0 violations"],
         ["Coverage of our contracts", "<b>100%</b> lines, statements, branches and functions"],
         ["Static analysis", "Slither 0.11.6: <b>0 results</b>; forge lint: 0 warnings; formatting enforced"],
         ["Documentation", "NatSpec on every external and public function"],
         ["EthTrust", "[Q] self-assessment against the v3 draft: all Met or N/A except one exception and one partial for the auditor"],
         ["Deployment", "Single DeployLib used by tests and production; deployed to Anvil and verified on-chain with cast"],
         ["Contract sizes", "Largest 3.7 KB of the 24 KB limit (small code is easier to audit)"],
+        ["Step 4: real network", "Besu 26.9, 4 validators: <b>50 / 50 end-to-end checks</b>; QBFT kept producing blocks with one validator down"],
     ]
     story.append(table(metrics, [0.32, 0.68], bold_first_col=True))
     story.append(Spacer(1, 8))
@@ -622,7 +629,7 @@ def build():
     story.append(P("Environments", "h2"))
     env = [
         ["Environment", "Chain", "Keys", "Data"],
-        ["Local", "Anvil", "Public test accounts", "Synthetic"],
+        ["Local", "Anvil (quick) and 4-validator Besu (chain/)", "Generated dev keys, git-ignored", "Synthetic"],
         ["Dev", "Private Besu", "Software keys, dev-only", "Synthetic"],
         ["Staging", "Besu, production-like", "Separate HSM partition", "Anonymised"],
         ["Production", "Besu, 4 organisations + public anchor", "HSM/MPC, hardware-wallet Safes", "Real; never copied down"],
@@ -781,7 +788,7 @@ def build():
     story.append(P("Next actions", "h2"))
     story.append(table(
         [["#", "Action", "Owner"],
-         ["1", "Step 4: 4-validator Besu QBFT network on Java 21; deploy via DeployLib; run flows against it", "Engineering"],
+         ["1", "Step 5: backend services (ledger, outbox, signing service, indexer, reconciliation); PostgreSQL 16", "Engineering"],
          ["2", "GitHub branch protection on main, Dependabot alerts, secret scanning", "Repository owner"],
          ["3", "Report F-01 to the ONCHAINID maintainers (responsible disclosure)", "Engineering"],
          ["4", "Shortlist two audit firms and a formal-verification provider", "Founders"],

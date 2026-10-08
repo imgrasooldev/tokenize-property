@@ -36,6 +36,11 @@ library DeployLib {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     uint256 internal constant MIN_TIMELOCK_DELAY = 72 hours;
+    /// Chain ID reserved for the local 4-validator Besu dev network (chain/). Production and staging
+    /// networks must never use it.
+    uint256 internal constant LOCAL_DEV_CHAIN_ID = 586_586;
+    /// On the local dev network only, a short delay is allowed so go-live can be exercised end to end.
+    uint256 internal constant LOCAL_DEV_MIN_TIMELOCK_DELAY = 60 seconds;
     uint256 internal constant TOPIC_KYC = 1;
     uint256 internal constant TOPIC_AML = 2;
 
@@ -84,7 +89,7 @@ library DeployLib {
     }
 
     function deploy(Config memory c) internal returns (Deployment memory d) {
-        require(c.timelockDelay >= MIN_TIMELOCK_DELAY, "DeployLib: timelock delay below 72h");
+        require(c.timelockDelay >= minTimelockDelay(), "DeployLib: timelock delay below 72h");
         require(c.maxBalance > 0 && c.allowedCountries.length > 0, "DeployLib: compliance config");
 
         d.timelock = _deployTimelock(c);
@@ -235,7 +240,7 @@ library DeployLib {
     /// @notice Asserts invariants I-8 and I-9 on a live deployment. Reverts with the first failure.
     function checkHandover(Config memory c, Deployment memory d) internal view {
         address tl = address(d.timelock);
-        require(d.timelock.getMinDelay() >= MIN_TIMELOCK_DELAY, "I-9: timelock delay");
+        require(d.timelock.getMinDelay() >= minTimelockDelay(), "I-9: timelock delay");
         require(!d.timelock.hasRole(d.timelock.DEFAULT_ADMIN_ROLE(), c.deployer), "I-9: deployer timelock admin");
         require(!d.timelock.hasRole(d.timelock.PROPOSER_ROLE(), c.deployer), "I-9: deployer proposer");
         require(d.timelock.hasRole(d.timelock.CANCELLER_ROLE(), c.trusteeSafe), "I-9: trustee canceller");
@@ -288,6 +293,11 @@ library DeployLib {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /// @notice 72h everywhere, except 60s on the local dev chain (LOCAL_DEV_CHAIN_ID).
+    function minTimelockDelay() internal view returns (uint256) {
+        return block.chainid == LOCAL_DEV_CHAIN_ID ? LOCAL_DEV_MIN_TIMELOCK_DELAY : MIN_TIMELOCK_DELAY;
+    }
 
     function _create(string memory artifact, bytes memory args) private returns (address addr) {
         bytes memory code = bytes.concat(vm.getCode(artifact), args);

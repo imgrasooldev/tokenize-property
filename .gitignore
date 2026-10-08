@@ -21,9 +21,15 @@ contracts/broadcast/*/31337/
 contracts/broadcast/**/dry-run/
 contracts/lcov.info
 
-# Local chain data
+# Local chain: binaries, node keys and data never go into git
+chain/tools/
 chain/data/
 chain/**/database/
+chain/network/nodes/*/key
+chain/network/nodes/*/key.priv
+chain/network/nodes/*/key.pub
+chain/network/dev-accounts.env
+chain/network/generated/
 
 # Flutter
 mobile/.dart_tool/
@@ -35,3 +41,4 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+contracts/broadcast/*/586586/

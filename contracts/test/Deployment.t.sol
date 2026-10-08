@@ -50,6 +50,28 @@ contract DeploymentTest is Fixture {
         this.deployExternal(c);
     }
 
+    function test_shortTimelockOnlyOnLocalDevChain() public {
+        DeployLib.Config memory c = config;
+        c.timelockDelay = 60;
+
+        // Any chain other than the local dev chain still requires 72h (Anvil, mainnet, staging...).
+        uint256[3] memory chains = [uint256(1), 31_337, 586_587];
+        for (uint256 i; i < chains.length; ++i) {
+            vm.chainId(chains[i]);
+            c.salt = string.concat("SHORT", vm.toString(i));
+            vm.expectRevert("DeployLib: timelock delay below 72h");
+            this.deployExternal(c);
+        }
+
+        vm.chainId(586_586);
+        c.salt = "LOCALDEV";
+        c.timelockDelay = 59;
+        vm.expectRevert("DeployLib: timelock delay below 72h");
+        this.deployExternal(c);
+        c.timelockDelay = 60;
+        this.deployExternal(c);
+    }
+
     function deployExternal(DeployLib.Config memory c) external {
         DeployLib.deploy(c);
     }

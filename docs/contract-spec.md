@@ -242,6 +242,8 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 
 Implemented once in `contracts/script/DeployLib.sol` and used by both the production script (`script/Deploy.s.sol`) and every test, so the tested deployment is the real one. `DeployLib.checkHandover` asserts I-8 and I-9 after deployment.
 
+**Timelock minimum:** 72 hours on every chain, except chain ID **586586**, reserved for the local Besu dev network, where 60 seconds is allowed so go-live can be exercised end to end. `Deploy.s.sol` additionally requires `LOCAL_DEV_NETWORK=true` on that chain. Production and staging must never use chain ID 586586 ([ADR 0002](decisions/0002-local-network.md)).
+
 1. Deploy Safes (Admin, Trustee, Issuance, Ops) and the TimelockController.
 2. Deploy the ERC-3643 suite through its factory, with the deployer as temporary owner.
 3. Deploy guards and registries; add the four guards as token agents and `RegistrarGuard` as identity-registry agent.

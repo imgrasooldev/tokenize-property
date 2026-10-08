@@ -13,7 +13,7 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 |---|---|
 | `docs/` | Specs, threat model, architecture decisions (`docs/decisions/`) |
 | `contracts/` | Solidity contracts and Foundry tests |
-| `chain/` | Local Besu QBFT network config |
+| `chain/` | Local 4-validator Besu QBFT network: `net.py` (setup/start/stop/status), `flow.py` (end-to-end checks) |
 | `backend/` | API, ledger, indexer, signing service |
 | `admin/` | Admin panel (Next.js) |
 | `mobile/` | Investor app (Flutter) |
@@ -25,10 +25,10 @@ Each step ends with a review. The next step starts only after approval.
 | Step | Scope | Status |
 |---|---|---|
 | 1 | Repo setup, CI, stack decision | Done |
-| 2 | Contract spec and threat model | Done (v0.2) |
-| 3 | Smart contracts + unit, fuzz and invariant tests + Slither | Done (internal): 120 tests, 100% coverage, Slither clean, EthTrust [Q] self-assessment, deploy script verified on Anvil. External audits pending |
-| 4 | Local chain: Anvil, then 4-node Besu QBFT | Not started |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | Not started |
+| 2 | Contract spec and threat model | Done (spec v0.3) |
+| 3 | Smart contracts + unit, fuzz and invariant tests + Slither | Done (internal): 121 tests, 100% coverage, Slither clean, EthTrust [Q] self-assessment, deploy script verified on Anvil. External audits pending |
+| 4 | Local chain: Anvil, then 4-node Besu QBFT | Done: 4-validator Besu 26.9 network (`chain/`), 50-check end-to-end flow on real blocks, validator outage tested |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | Next |
 | 6 | Admin panel (maker-checker) | Not started |
 | 7 | Flutter investor app | Not started |
 

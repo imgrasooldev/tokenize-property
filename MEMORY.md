@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-08
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Step 3 (smart contracts) done internally. Next: Step 4 (local Besu chain).**
+- Current position: **Step 4 (local Besu network) done. Next: Step 5 (backend services).**
 
 ---
 
@@ -45,8 +45,8 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 1 | Repo, CI, stack decision | Done |
 | 2 | Contract spec + threat model | Done (spec v0.3) |
 | 3 | Smart contracts + tests | **Done (internal)**: 120 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
-| 4 | Local chain: Anvil, then 4-node Besu QBFT | **Next** |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | Not started |
+| 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **Next** |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -72,6 +72,11 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - In tests, `vm.prank` is consumed by precompile calls such as `sha256`. Compute arguments before pranking.
 - In tests, use `vm.getBlockTimestamp()` after `vm.warp`, not `block.timestamp`.
 - Coverage misattributes several reverting `new` calls in one test; use one test per constructor check.
+- **Besu 26.9 needs Java 25.** A portable Temurin JDK 25 lives in `chain/tools/`; the system Java 21 is untouched.
+- On Windows, Besu fails to parse `bootnodes` (`Illegal char <:>`): use `static-nodes-file` with discovery off.
+- `forge`/`cast` here do not read `ETH_PRIVATE_KEY`; pass local dev keys as arguments to child processes, never print them.
+- In end-to-end scripts, count a "refused" check only on a real revert. A missing wallet once made a refusal check pass falsely.
+- Chain ID **586586** is reserved for the local dev network (60 s timelock, plus `LOCAL_DEV_NETWORK=true`). Never use it elsewhere.
 
 ## 6. How to work on the code
 
@@ -79,13 +84,14 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 git clone --recursive https://github.com/imgrasooldev/tokenize-property.git
 cd tokenize-property/contracts
 forge build
-forge test                      # 120 tests, about 1-2 minutes
+forge test                      # 121 tests, about 2 minutes
 forge coverage --report summary --no-match-coverage "(test|lib|vendor|script)"
 python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-dependencies
 ```
 
 - Foundry lives in `~/.foundry/bin` (add it to PATH). Slither: `python -m slither`.
-- Deploy locally: start `anvil`, fill `script/deploy.env.example` into `.env.local` (never commit), then `forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --unlocked --sender $DEPLOYER`.
+- Local network: `python chain/net.py setup` once, then `python chain/net.py start` and `python chain/flow.py` (deploy + 50 end-to-end checks). See [chain/README.md](chain/README.md).
+- Quick deploy on Anvil: start `anvil`, fill `script/deploy.env.example` into `.env.local` (never commit), then `forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --unlocked --sender $DEPLOYER`.
 - **All deployments go through `script/DeployLib.sol`.** Tests use the same library, so never deploy contracts any other way.
 - Every PR follows the security definition of done in [docs/security-standards.md](docs/security-standards.md) (template in `.github/pull_request_template.md`).
 - No `.bak` files; rely on git. No secrets in the repo.
@@ -99,7 +105,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. Step 4: 4-validator Besu QBFT network on Java 21 (no Docker), deploy via `DeployLib`, run the test flows against it.
+1. Step 5: backend services (ledger, outbox, signing service with policy engine, indexer, reconciliation). Needs PostgreSQL 16 locally. Share the plan first.
 2. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
 3. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
 4. Shortlist two audit firms and a formal-verification provider.
@@ -130,7 +136,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Push to `imgrasooldev/tokenize-property` | Pushed; continued Step 3: modules, DeployLib, F-02, EthTrust checklist; pushed |
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
-| 2026-10-08 | Continue | Step 4 (local Besu chain) started |
+| 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
 
 ## 11. Document index
 
@@ -142,6 +148,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | [docs/threat-model.md](docs/threat-model.md) | STRIDE threats and controls |
 | [docs/security-standards.md](docs/security-standards.md) | Standards baseline and per-PR definition of done |
 | [docs/product-map.md](docs/product-map.md) | Websites, portals, apps and services |
-| [docs/decisions/](docs/decisions/) | Architecture decision records |
+| [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network) |
+| [chain/README.md](chain/README.md) | Local Besu network: setup, verified downloads, secrets, production differences |
 | [docs/findings/](docs/findings/) | Security findings with proofs and mitigations |
 | [docs/audit/ethtrust-checklist.md](docs/audit/ethtrust-checklist.md) | EthTrust [Q] self-assessment |
