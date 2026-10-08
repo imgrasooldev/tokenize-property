@@ -2,6 +2,11 @@
 
 A permissioned platform for fractional ownership of real estate in Pakistan. Each property is held by an independent trustee; investors hold ERC-3643 security tokens that mirror the trustee's register. Rent is paid in PKR through banks. Smart contracts record ownership and entitlements only and never hold money.
 
+## Start here
+
+- [MEMORY.md](MEMORY.md): decisions, current status, findings, gotchas and next actions. Read this first.
+- [docs/Development-Lifecycle.pdf](docs/Development-Lifecycle.pdf): the complete lifecycle (phases, gates, standards, status). Regenerate with `python docs/tools/build_lifecycle_pdf.py`.
+
 ## Repository layout
 
 | Folder | Contents |
