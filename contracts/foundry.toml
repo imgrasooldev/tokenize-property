@@ -21,10 +21,14 @@ remappings = [
   "lib/erc3643/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
   "lib/onchain-id/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
   "lib/onchain-id/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
+  "lib/trex/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
+  "lib/trex/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
+  "lib/trex/:@onchain-id/solidity/=lib/onchain-id/",
   "src/vendor/:@openzeppelin/contracts/=lib/oz-v4/contracts/",
   "src/vendor/:@openzeppelin/contracts-upgradeable/=lib/oz-up-v4/contracts/",
   "@onchain-id/solidity/=lib/onchain-id/",
   "@erc3643/=lib/erc3643/",
+  "@trex/=lib/trex/",
   "@openzeppelin/contracts/=lib/oz/contracts/",
 ]
 

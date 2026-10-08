@@ -32,6 +32,7 @@ interface ITokenFull is IOwnableV4, IAgentRole {
 interface IIdentityRegistryFull is IOwnableV4, IAgentRole {
     function registerIdentity(address account, address identity, uint16 country) external;
     function deleteIdentity(address account) external;
+    function updateIdentity(address account, address identity) external;
     function contains(address account) external view returns (bool);
     function isVerified(address account) external view returns (bool);
     function identity(address account) external view returns (address);
@@ -92,6 +93,7 @@ interface IIdFactory is IOwnableV4 {
 
 interface IIdentity {
     function addKey(bytes32 key, uint256 purpose, uint256 keyType) external returns (bool);
+    function removeKey(bytes32 key, uint256 purpose) external returns (bool);
     function keyHasPurpose(bytes32 key, uint256 purpose) external view returns (bool);
     function addClaim(
         uint256 topic,
@@ -110,4 +112,26 @@ interface IClaimIssuer is IIdentity {
         external
         view
         returns (bool);
+}
+
+interface IModularCompliance is IOwnableV4 {
+    function getModules() external view returns (address[] memory);
+    function isModuleBound(address module) external view returns (bool);
+    function callModuleFunction(bytes calldata callData, address module) external;
+}
+
+/// Owner-only admin surface shared by the UUPS-upgradeable T-REX modules.
+interface IUpgradeableModule is IOwnableV4 {
+    function upgradeTo(address newImplementation) external;
+    function name() external pure returns (string memory);
+}
+
+interface ICountryAllowModule is IUpgradeableModule {
+    function batchAllowCountries(uint16[] calldata countries) external;
+    function isCountryAllowed(address compliance, uint16 country) external view returns (bool);
+}
+
+interface IMaxBalanceModule is IUpgradeableModule {
+    function setMaxBalance(uint256 max) external;
+    function getIDBalance(address compliance, address identity) external view returns (uint256);
 }

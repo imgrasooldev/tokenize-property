@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Fixture} from "./helpers/Fixture.sol";
-import {IIdentity} from "./helpers/VendorInterfaces.sol";
+import {IIdentity} from "../script/VendorInterfaces.sol";
 import {Governed} from "../src/common/Governed.sol";
 import {RecoveryGuard} from "../src/guards/RecoveryGuard.sol";
 
@@ -26,7 +26,7 @@ contract RecoveryGuardTest is Fixture {
 
     function test_forcedTransfer_afterDelay() public {
         uint256 id = _proposeForced(40);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         recovery.execute(id);
         assertEq(token.balanceOf(alice), 60);
@@ -44,7 +44,7 @@ contract RecoveryGuardTest is Fixture {
 
     function test_I13_executesOnlyOnce() public {
         uint256 id = _proposeForced(40);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.startPrank(trusteeSafe);
         recovery.execute(id);
         vm.expectRevert(abi.encodeWithSelector(RecoveryGuard.NotPending.selector, id));
@@ -56,7 +56,7 @@ contract RecoveryGuardTest is Fixture {
         uint256 id = _proposeForced(40);
         vm.prank(adminSafe);
         recovery.cancel(id);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         vm.expectRevert(abi.encodeWithSelector(RecoveryGuard.NotPending.selector, id));
         recovery.execute(id);
@@ -71,7 +71,7 @@ contract RecoveryGuardTest is Fixture {
             recovery.propose(RecoveryGuard.Kind.ForcedTransfer, alice, bob, address(0), 1, EVIDENCE);
         }
         uint256 id = _proposeForced(1);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(adminSafe);
         vm.expectRevert(abi.encodeWithSelector(Governed.Unauthorized.selector, adminSafe));
         recovery.execute(id);
@@ -110,7 +110,7 @@ contract RecoveryGuardTest is Fixture {
         vm.prank(trusteeSafe);
         uint256 id =
             recovery.propose(RecoveryGuard.Kind.WalletRecovery, alice, aliceNewWallet, identityOf[alice], 0, EVIDENCE);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         recovery.execute(id);
 
@@ -125,7 +125,7 @@ contract RecoveryGuardTest is Fixture {
         vm.prank(trusteeSafe);
         uint256 id =
             recovery.propose(RecoveryGuard.Kind.WalletRecovery, alice, aliceNewWallet, identityOf[alice], 0, EVIDENCE);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         vm.expectRevert("Recovery not possible");
         recovery.execute(id);
@@ -135,7 +135,7 @@ contract RecoveryGuardTest is Fixture {
         uint256 id = _proposeForced(10);
         vm.prank(pauser);
         pauseGuard.pause("incident");
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         recovery.execute(id);
         assertEq(token.balanceOf(bob), 10);
@@ -145,7 +145,7 @@ contract RecoveryGuardTest is Fixture {
         vm.prank(trusteeSafe);
         uint256 id =
             recovery.propose(RecoveryGuard.Kind.ForcedTransfer, alice, makeAddr("stranger"), address(0), 10, EVIDENCE);
-        vm.warp(block.timestamp + recovery.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + recovery.RECOVERY_DELAY());
         vm.prank(trusteeSafe);
         vm.expectRevert("Transfer not possible");
         recovery.execute(id);

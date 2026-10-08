@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Fixture} from "./helpers/Fixture.sol";
-import {IAgentRole} from "./helpers/VendorInterfaces.sol";
+import {IAgentRole} from "../script/VendorInterfaces.sol";
 import {Governed} from "../src/common/Governed.sol";
 import {RegistrarGuard} from "../src/guards/RegistrarGuard.sol";
 import {IERC3643IdentityRegistry} from "../src/interfaces/IERC3643.sol";
@@ -69,13 +69,13 @@ contract RegistrarGuardTest is Fixture {
 
         (address wallet, address identity) = _freshVerified();
         vm.prank(registrar);
-        vm.expectRevert(abi.encodeWithSelector(RegistrarGuard.RateLimited.selector, block.timestamp + 1 hours));
+        vm.expectRevert(abi.encodeWithSelector(RegistrarGuard.RateLimited.selector, vm.getBlockTimestamp() + 1 hours));
         small.register(wallet, identity, PAKISTAN);
     }
 
     function test_I12_windowSlides() public {
         // Spread registrations: t=0, t=20m, t=40m. At t=60m the first slot frees up, not all three.
-        uint256 start = block.timestamp;
+        uint256 start = vm.getBlockTimestamp();
         for (uint256 i; i < SMALL_LIMIT; ++i) {
             vm.warp(start + i * 20 minutes);
             (address w, address id) = _freshVerified();
@@ -98,11 +98,11 @@ contract RegistrarGuardTest is Fixture {
         uint256[] memory accepted = new uint256[](12);
         uint256 n;
         for (uint256 i; i < gapsMinutes.length; ++i) {
-            vm.warp(block.timestamp + uint256(gapsMinutes[i] % 40) * 1 minutes);
+            vm.warp(vm.getBlockTimestamp() + uint256(gapsMinutes[i] % 40) * 1 minutes);
             (address w, address id) = _freshVerified();
             vm.prank(registrar);
             try small.register(w, id, PAKISTAN) {
-                accepted[n++] = block.timestamp;
+                accepted[n++] = vm.getBlockTimestamp();
             } catch {}
         }
         // Any SMALL_LIMIT + 1 consecutive accepted registrations must span at least one hour.

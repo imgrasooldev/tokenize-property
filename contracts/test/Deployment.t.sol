@@ -2,8 +2,9 @@
 pragma solidity 0.8.30;
 
 import {Fixture} from "./helpers/Fixture.sol";
-import {IOwnableV4, ITREXFactory, ITokenFull} from "./helpers/VendorInterfaces.sol";
+import {IOwnableV4, ITREXFactory, ITokenFull} from "../script/VendorInterfaces.sol";
 import {Governed} from "../src/common/Governed.sol";
+import {DeployLib} from "../script/DeployLib.sol";
 
 /// @notice Post-deploy checks for invariants I-8 and I-9 (contract-spec.md section 8). The same
 ///         assertions run against the real deployment before go-live.
@@ -24,6 +25,33 @@ contract DeploymentTest is Fixture {
         assertEq(registrarGuard.owner(), tl, "registrar guard");
         assertEq(distributions.owner(), tl, "distribution registry");
         assertEq(documents.owner(), tl, "document registry");
+    }
+
+    function test_I9_upgradeAuthoritiesAndModulesOwnedByTimelock() public view {
+        address tl = address(timelock);
+        assertEq(IOwnableV4(deployment.trexAuthority).owner(), tl, "token implementation authority");
+        assertEq(IOwnableV4(deployment.oidAuthority).owner(), tl, "identity implementation authority");
+        assertEq(countryModule.owner(), tl, "country module");
+        assertEq(maxBalanceModule.owner(), tl, "max balance module");
+        assertEq(idFactory.owner(), identityOperator, "ID factory");
+    }
+
+    function test_claimIssuerManagedByManagerNotDeployer() public view {
+        assertFalse(claimIssuer.keyHasPurpose(keccak256(abi.encode(address(this))), 1));
+        assertTrue(claimIssuer.keyHasPurpose(keccak256(abi.encode(claimIssuerManager)), 1));
+        assertTrue(claimIssuer.keyHasPurpose(keccak256(abi.encode(claimSigner)), 3));
+    }
+
+    function test_deployRefusesShortTimelock() public {
+        DeployLib.Config memory c = config;
+        c.timelockDelay = 72 hours - 1;
+        c.salt = "SHORT";
+        vm.expectRevert("DeployLib: timelock delay below 72h");
+        this.deployExternal(c);
+    }
+
+    function deployExternal(DeployLib.Config memory c) external {
+        DeployLib.deploy(c);
     }
 
     function test_I9_timelockDelayIsAtLeast72h() public view {
@@ -112,7 +140,7 @@ contract DeploymentTest is Fixture {
         vm.prank(trusteeSafe);
         timelock.cancel(id);
 
-        vm.warp(block.timestamp + TIMELOCK_DELAY);
+        vm.warp(vm.getBlockTimestamp() + TIMELOCK_DELAY);
         vm.prank(adminSafe);
         vm.expectRevert();
         timelock.execute(address(issuance), 0, data, bytes32(0), bytes32("x"));
@@ -122,7 +150,7 @@ contract DeploymentTest is Fixture {
         bytes memory data = abi.encodeWithSignature("transferOwnership(address)", makeAddr("attacker"));
         vm.prank(adminSafe);
         timelock.schedule(address(issuance), 0, data, bytes32(0), bytes32("y"), TIMELOCK_DELAY);
-        vm.warp(block.timestamp + TIMELOCK_DELAY - 1);
+        vm.warp(vm.getBlockTimestamp() + TIMELOCK_DELAY - 1);
         vm.prank(adminSafe);
         vm.expectRevert();
         timelock.execute(address(issuance), 0, data, bytes32(0), bytes32("y"));

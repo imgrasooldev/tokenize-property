@@ -42,12 +42,17 @@ contract IssuanceGuard is Governed {
         emit IssuerSet(address(0), issuer_);
     }
 
+    /// @notice Rotates the Issuance Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setIssuer(address issuer_) external onlyOwner {
         if (issuer_ == address(0)) revert ZeroAddress();
         emit IssuerSet(issuer, issuer_);
         issuer = issuer_;
     }
 
+    /// @notice Sets the number of units on the trustee's register.
+    /// @dev Timelock only. Cannot be set below the current total supply.
+    /// @param cap New maximum total supply.
     function setTrusteeCap(uint256 cap) external onlyOwner {
         uint256 supply = token.totalSupply();
         if (cap < supply) revert CapBelowSupply(cap, supply);
@@ -56,6 +61,9 @@ contract IssuanceGuard is Governed {
     }
 
     /// @notice Mint is refused while the token is paused (ERC-3643 itself would allow it).
+    /// @param to Verified investor wallet receiving the tokens.
+    /// @param amount Token units to mint; must be non-zero.
+    /// @param refId Off-chain subscription reference; usable once.
     function mint(address to, uint256 amount, bytes32 refId) external onlyIssuer {
         if (token.paused()) revert TokenPaused();
         _useRef(refId, amount);
@@ -65,6 +73,11 @@ contract IssuanceGuard is Governed {
         token.mint(to, amount);
     }
 
+    /// @notice Burns tokens for a redemption or exit.
+    /// @dev Issuance Safe only. Unfreezes frozen tokens if needed (ERC-3643 behaviour).
+    /// @param from Investor wallet.
+    /// @param amount Token units to burn; must be non-zero.
+    /// @param refId Off-chain redemption reference; usable once.
     function burn(address from, uint256 amount, bytes32 refId) external onlyIssuer {
         _useRef(refId, amount);
         emit Burned(from, amount, refId);

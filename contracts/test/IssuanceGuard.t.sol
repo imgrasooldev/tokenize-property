@@ -10,9 +10,13 @@ contract IssuanceGuardTest is Fixture {
     address internal alice = makeAddr("alice");
     address internal outsider = makeAddr("outsider");
 
+    /// Below the 10% per-investor limit, so the trustee cap is what binds in these tests.
+    uint256 internal constant CAP = 50_000;
+
     function setUp() public override {
         super.setUp();
         _onboard(alice);
+        _timelockExec(address(issuance), abi.encodeCall(IssuanceGuard.setTrusteeCap, (CAP)));
     }
 
     function test_mint_byIssuanceSafe() public {
@@ -35,18 +39,18 @@ contract IssuanceGuardTest is Fixture {
 
     function test_I2_mint_cannotExceedTrusteeCap() public {
         vm.startPrank(issuanceSafe);
-        issuance.mint(alice, INITIAL_CAP, bytes32("all"));
-        vm.expectRevert(abi.encodeWithSelector(IssuanceGuard.CapExceeded.selector, INITIAL_CAP + 1, INITIAL_CAP));
+        issuance.mint(alice, CAP, bytes32("all"));
+        vm.expectRevert(abi.encodeWithSelector(IssuanceGuard.CapExceeded.selector, CAP + 1, CAP));
         issuance.mint(alice, 1, bytes32("one-more"));
         vm.stopPrank();
     }
 
     function testFuzz_I2_mint_respectsCap(uint256 a, uint256 b) public {
-        a = bound(a, 1, INITIAL_CAP);
+        a = bound(a, 1, CAP);
         b = bound(b, 1, type(uint128).max);
         vm.startPrank(issuanceSafe);
         issuance.mint(alice, a, bytes32("a"));
-        if (a + b > INITIAL_CAP) vm.expectRevert();
+        if (a + b > CAP) vm.expectRevert();
         issuance.mint(alice, b, bytes32("b"));
         vm.stopPrank();
         assertLe(token.totalSupply(), issuance.trusteeCap());

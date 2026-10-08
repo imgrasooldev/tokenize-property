@@ -4,7 +4,6 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
-import {IERC3643Token, IERC3643IdentityRegistry} from "../../src/interfaces/IERC3643.sol";
 import {IssuanceGuard} from "../../src/guards/IssuanceGuard.sol";
 import {PauseGuard} from "../../src/guards/PauseGuard.sol";
 import {FreezeGuard} from "../../src/guards/FreezeGuard.sol";
@@ -16,17 +15,17 @@ import {DocumentRegistry} from "../../src/registries/DocumentRegistry.sol";
 import {
     ITokenFull,
     IIdentityRegistryFull,
-    ITREXImplementationAuthority,
     ITREXFactory,
     IIdFactory,
     IIdentity,
     IClaimIssuer,
-    IOwnableV4
-} from "./VendorInterfaces.sol";
+    ICountryAllowModule,
+    IMaxBalanceModule
+} from "../../script/VendorInterfaces.sol";
+import {DeployLib} from "../../script/DeployLib.sol";
 
-/// @notice Deploys the full system the way production will: ERC-3643 suite through the official
-///         factory, guards as the only agents, everything owned by a 72h TimelockController, and
-///         deployer powers handed over (contract-spec.md section 9).
+/// @notice Deploys the full system through DeployLib, the same code the production script runs,
+///         checks the hand-over, then performs go-live (trustee cap via timelock, Admin Safe unpause).
 abstract contract Fixture is Test {
     uint256 internal constant TIMELOCK_DELAY = 72 hours;
     uint256 internal constant TOPIC_KYC = 1;
@@ -34,6 +33,8 @@ abstract contract Fixture is Test {
     uint16 internal constant PAKISTAN = 586;
     uint256 internal constant INITIAL_CAP = 1_000_000;
     uint256 internal constant MAX_PER_HOUR = 50;
+    /// 10% of the cap per investor (contract-spec.md section 4.3).
+    uint256 internal constant MAX_BALANCE = INITIAL_CAP / 10;
     string internal constant SALT = "GPF3";
 
     // Actors (Safes are plain addresses in tests; production uses Safe multisigs).
@@ -49,10 +50,14 @@ abstract contract Fixture is Test {
     uint256 internal claimSignerKey;
 
     // System.
+    DeployLib.Config internal config;
+    DeployLib.Deployment internal deployment;
     TimelockController internal timelock;
     ITREXFactory internal factory;
     IIdFactory internal idFactory;
     IClaimIssuer internal claimIssuer;
+    ICountryAllowModule internal countryModule;
+    IMaxBalanceModule internal maxBalanceModule;
     ITokenFull internal token;
     IIdentityRegistryFull internal ir;
 
@@ -70,116 +75,53 @@ abstract contract Fixture is Test {
 
     function setUp() public virtual {
         (claimSigner, claimSignerKey) = makeAddrAndKey("claimSigner");
-        _deployTimelock();
-        _deploySuite();
-        _deployGuards();
-        _handOver();
+        uint16[] memory countries = new uint16[](1);
+        countries[0] = PAKISTAN;
+        config = DeployLib.Config({
+            deployer: address(this),
+            adminSafe: adminSafe,
+            trusteeSafe: trusteeSafe,
+            issuanceSafe: issuanceSafe,
+            opsSafe: opsSafe,
+            pauser: pauser,
+            registrar: registrar,
+            identityOperator: identityOperator,
+            claimIssuerManager: claimIssuerManager,
+            claimSigner: claimSigner,
+            timelockDelay: TIMELOCK_DELAY,
+            registrarMaxPerHour: MAX_PER_HOUR,
+            maxBalance: MAX_BALANCE,
+            allowedCountries: countries,
+            salt: SALT,
+            name: "Gulberg Plaza Floor 3",
+            symbol: "GPF3"
+        });
+        deployment = DeployLib.deploy(config);
+        DeployLib.checkHandover(config, deployment);
+        _expose(deployment);
+
+        // Go-live (spec section 9, step 8): set the trustee cap through the timelock, then unpause.
         _timelockExec(address(issuance), abi.encodeCall(IssuanceGuard.setTrusteeCap, (INITIAL_CAP)));
-        // ERC-3643 tokens are deployed paused. Go-live is the Admin Safe unpausing after all checks pass.
         vm.prank(adminSafe);
         pauseGuard.unpause();
     }
 
-    // ---------------------------------------------------------------- deployment
-
-    function _deployTimelock() private {
-        address[] memory proposers = new address[](1);
-        proposers[0] = adminSafe;
-        address[] memory executors = new address[](1);
-        executors[0] = adminSafe;
-        timelock = new TimelockController(TIMELOCK_DELAY, proposers, executors, address(this));
-        timelock.grantRole(timelock.CANCELLER_ROLE(), trusteeSafe);
-        timelock.renounceRole(timelock.DEFAULT_ADMIN_ROLE(), address(this));
-    }
-
-    function _deploySuite() private {
-        address identityImpl = deployCode("Identity.sol:Identity", abi.encode(address(this), true));
-        address oidAuthority =
-            deployCode("ImplementationAuthority.sol:ImplementationAuthority", abi.encode(identityImpl));
-        idFactory = IIdFactory(deployCode("IdFactory.sol:IdFactory", abi.encode(oidAuthority)));
-
-        ITREXImplementationAuthority.TREXContracts memory impls = ITREXImplementationAuthority.TREXContracts({
-            tokenImplementation: deployCode("Token.sol:Token"),
-            ctrImplementation: deployCode("ClaimTopicsRegistry.sol:ClaimTopicsRegistry"),
-            irImplementation: deployCode("IdentityRegistry.sol:IdentityRegistry"),
-            irsImplementation: deployCode("IdentityRegistryStorage.sol:IdentityRegistryStorage"),
-            tirImplementation: deployCode("TrustedIssuersRegistry.sol:TrustedIssuersRegistry"),
-            mcImplementation: deployCode("ModularCompliance.sol:ModularCompliance")
-        });
-        address trexAuthority = deployCode(
-            "TREXImplementationAuthority.sol:TREXImplementationAuthority", abi.encode(true, address(0), address(0))
-        );
-        ITREXImplementationAuthority(trexAuthority)
-            .addAndUseTREXVersion(ITREXImplementationAuthority.Version(4, 1, 3), impls);
-
-        factory = ITREXFactory(deployCode("TREXFactory.sol:TREXFactory", abi.encode(trexAuthority, address(idFactory))));
-        idFactory.addTokenFactory(address(factory));
-
-        claimIssuer = IClaimIssuer(deployCode("ClaimIssuer.sol:ClaimIssuer", abi.encode(claimIssuerManager)));
-        vm.prank(claimIssuerManager);
-        claimIssuer.addKey(keccak256(abi.encode(claimSigner)), 3, 1);
-
-        uint256[] memory topics = new uint256[](2);
-        topics[0] = TOPIC_KYC;
-        topics[1] = TOPIC_AML;
-        address[] memory issuers = new address[](1);
-        issuers[0] = address(claimIssuer);
-        uint256[][] memory issuerClaims = new uint256[][](1);
-        issuerClaims[0] = topics;
-
-        factory.deployTREXSuite(
-            SALT,
-            ITREXFactory.TokenDetails({
-                owner: address(this),
-                name: "Gulberg Plaza Floor 3",
-                symbol: "GPF3",
-                decimals: 0,
-                irs: address(0),
-                ONCHAINID: address(0),
-                irAgents: new address[](0),
-                tokenAgents: new address[](0),
-                complianceModules: new address[](0),
-                complianceSettings: new bytes[](0)
-            }),
-            ITREXFactory.ClaimDetails({claimTopics: topics, issuers: issuers, issuerClaims: issuerClaims})
-        );
-        token = ITokenFull(factory.getToken(SALT));
-        ir = IIdentityRegistryFull(token.identityRegistry());
-    }
-
-    function _deployGuards() private {
-        IERC3643Token t = IERC3643Token(address(token));
-        address tl = address(timelock);
-        issuance = new IssuanceGuard(tl, t, issuanceSafe);
-        pauseGuard = new PauseGuard(tl, t, pauser, opsSafe, adminSafe);
-        freezeGuard = new FreezeGuard(tl, t, opsSafe);
-        recovery = new RecoveryGuard(tl, t, trusteeSafe, adminSafe);
-        registrarGuard = new RegistrarGuard(tl, IERC3643IdentityRegistry(address(ir)), registrar, MAX_PER_HOUR);
-        distributions = new DistributionRegistry(tl, opsSafe, trusteeSafe);
-        documents = new DocumentRegistry(tl, opsSafe);
-
-        token.addAgent(address(issuance));
-        token.addAgent(address(pauseGuard));
-        token.addAgent(address(freezeGuard));
-        token.addAgent(address(recovery));
-        ir.addAgent(address(registrarGuard));
-        // Identity updates and deletions (e.g. AML offboarding) go through the 72h timelock.
-        ir.addAgent(address(timelock));
-    }
-
-    /// Post-deploy hand-over: every owner becomes the timelock; the deployer keeps nothing.
-    function _handOver() private {
-        address tl = address(timelock);
-        token.transferOwnership(tl);
-        ir.transferOwnership(tl);
-        IOwnableV4(ir.issuersRegistry()).transferOwnership(tl);
-        IOwnableV4(ir.topicsRegistry()).transferOwnership(tl);
-        IOwnableV4(token.compliance()).transferOwnership(tl);
-        factory.recoverContractOwnership(ir.identityStorage(), tl);
-        factory.transferOwnership(tl);
-        // Identity creation is a routine operation; a dedicated operator key owns the ID factory.
-        // An identity without claims from the HSM-held issuer cannot hold tokens.
-        idFactory.transferOwnership(identityOperator);
+    function _expose(DeployLib.Deployment memory d) private {
+        timelock = d.timelock;
+        factory = d.factory;
+        idFactory = d.idFactory;
+        claimIssuer = d.claimIssuer;
+        countryModule = d.countryModule;
+        maxBalanceModule = d.maxBalanceModule;
+        token = d.token;
+        ir = d.ir;
+        issuance = d.issuance;
+        pauseGuard = d.pauseGuard;
+        freezeGuard = d.freezeGuard;
+        recovery = d.recovery;
+        registrarGuard = d.registrarGuard;
+        distributions = d.distributions;
+        documents = d.documents;
     }
 
     // ---------------------------------------------------------------- helpers
@@ -188,7 +130,7 @@ abstract contract Fixture is Test {
         bytes32 salt = bytes32(++_opNonce);
         vm.prank(adminSafe);
         timelock.schedule(target, 0, data, bytes32(0), salt, TIMELOCK_DELAY);
-        vm.warp(block.timestamp + TIMELOCK_DELAY);
+        vm.warp(vm.getBlockTimestamp() + TIMELOCK_DELAY);
         vm.prank(adminSafe);
         timelock.execute(target, 0, data, bytes32(0), salt);
     }

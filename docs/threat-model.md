@@ -58,6 +58,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | SC-9 | Info. disclosure | Personal data on-chain | Only wallet addresses, hashes and amounts on-chain; no names, CNICs or bank details | Spec |
 | SC-10 | Tampering | Deployer keeps hidden powers | Post-deploy script asserts I-8 and I-9; deployer roles renounced; deployer key destroyed | Built, tested |
 | SC-11 | Tampering | Deployed code differs from audited code | Bytecode verification against audited commit before go-live | Spec |
+| SC-13 | Elevation | Owner of an implementation authority or UUPS module upgrades token, identity or module code | Both authorities and both modules owned by the 72h timelock; asserted by `DeployLib.checkHandover` and verified on a live Anvil deployment | Built, tested |
 | SC-12 | DoS | Contract becomes unusable (gas, loops) | No unbounded loops over holders; batch sizes capped; Merkle proofs instead of on-chain iteration | Spec |
 
 ### 4.2 Keys and signing
@@ -110,7 +111,9 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | KYC-1 | Spoofing | Fake or stolen CNIC | NADRA Verisys; selfie match with liveness check | Planned |
 | KYC-2 | Elevation | Money laundering through tokens | Sanctions and PEP screening; source-of-funds checks; transaction monitoring; reporting to FMU | Planned |
 | KYC-3 | Spoofing | Claim issuer key misuse | Claim issuer key in HSM, separate from registrar key; claims have expiry; revocation on-chain | Planned |
-| KYC-4 | Elevation | Revoked investor restores own verification (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)) | Never rely on claim revocation: freeze via FreezeGuard immediately, then delete identity through the timelock | Built, tested |
+| KYC-4 | Elevation | Revoked investor restores own verification (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)) | Never rely on claim revocation: freeze immediately, move or redeem tokens, then delete identity through the timelock | Built, tested |
+| KYC-5 | DoS | Tokens stranded by deleting or updating a holder's identity (finding [F-02](findings/F-02-maxbalance-identity-coupling.md)) | Offboarding order enforced by procedure and admin portal; never `updateIdentity` on a holding wallet; invariant I-17 | Built, tested (portal enforcement in Step 6) |
+| KYC-6 | Spoofing | Claim replay on another chain (claims lack `chainid`, finding F-03) | One claim-signer key per chain | Spec |
 
 ### 4.7 Chain and infrastructure
 

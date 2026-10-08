@@ -16,3 +16,6 @@
 [submodule "contracts/lib/oz"]
 	path = contracts/lib/oz
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "contracts/lib/trex"]
+	path = contracts/lib/trex
+	url = https://github.com/TokenySolutions/T-REX

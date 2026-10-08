@@ -24,12 +24,18 @@ contract StateAnchor is Governed {
         emit AnchorerSet(address(0), anchorer_);
     }
 
+    /// @notice Rotates the hot key that writes anchors.
+    /// @dev Owner (public-chain Safe) only. Reverts on the zero address.
     function setAnchorer(address anchorer_) external onlyOwner {
         if (anchorer_ == address(0)) revert ZeroAddress();
         emit AnchorerSet(anchorer, anchorer_);
         anchorer = anchorer_;
     }
 
+    /// @notice Records the hash of a private-chain block.
+    /// @dev Anchorer only. Block numbers must strictly increase; existing anchors are never overwritten.
+    /// @param besuBlock Private-chain block number.
+    /// @param blockHash Hash of that block; must be non-zero.
     function anchor(uint64 besuBlock, bytes32 blockHash) external {
         if (msg.sender != anchorer) revert Unauthorized(msg.sender);
         if (besuBlock <= lastAnchoredBlock) revert NotIncreasing(besuBlock, lastAnchoredBlock);

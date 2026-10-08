@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Fixture} from "../helpers/Fixture.sol";
-import {IIdentity} from "../helpers/VendorInterfaces.sol";
+import {IIdentity} from "../../script/VendorInterfaces.sol";
 
 /// @notice FINDING F-01 (ONCHAINID 2.2.1, ClaimIssuer): claim revocation can be bypassed.
 ///
@@ -11,9 +11,9 @@ import {IIdentity} from "../helpers/VendorInterfaces.sol";
 /// A revoked investor can re-add their old claim with a re-encoded signature and become verified
 /// again. These tests prove the issue and prove our mitigation.
 ///
-/// Mitigation (contract-spec.md section 4.2): never rely on `revokeClaim*` alone. Revoking an
-/// investor means (1) freeze the wallet via FreezeGuard immediately, then (2) delete the identity
-/// from the registry through the timelock.
+/// Mitigation (contract-spec.md section 4.2): never rely on `revokeClaim*` alone. Offboarding means
+/// (1) freeze the wallet via FreezeGuard immediately, (2) move or redeem the tokens, then (3) delete
+/// the identity from the registry through the timelock.
 contract OnchainIdRevocationBypassTest is Fixture {
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
@@ -74,6 +74,9 @@ contract OnchainIdRevocationBypassTest is Fixture {
     function test_F01_mitigation_registryDeletionThroughTimelock() public {
         vm.prank(opsSafe);
         freezeGuard.freezeAddress(alice, bytes32("AML-CASE-9"));
+        // Redeem first: deleting an identity that still holds tokens strands them (F-02).
+        vm.prank(issuanceSafe);
+        issuance.burn(alice, 100, bytes32("aml-redemption"));
         _timelockExec(address(ir), abi.encodeWithSignature("deleteIdentity(address)", alice));
         assertFalse(ir.contains(alice));
         assertFalse(ir.isVerified(alice));

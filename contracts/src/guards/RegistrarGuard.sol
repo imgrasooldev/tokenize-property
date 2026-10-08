@@ -43,12 +43,19 @@ contract RegistrarGuard is Governed {
         emit RegistrarSet(address(0), registrar_);
     }
 
+    /// @notice Rotates the registrar hot key.
+    /// @dev Timelock only. Reverts on the zero address.
     function setRegistrar(address registrar_) external onlyOwner {
         if (registrar_ == address(0)) revert ZeroAddress();
         emit RegistrarSet(registrar, registrar_);
         registrar = registrar_;
     }
 
+    /// @notice Registers a KYC-approved investor wallet.
+    /// @dev Registrar only. Rate-limited; reverts unless the identity already holds valid claims.
+    /// @param account Investor wallet.
+    /// @param identity Investor ONCHAINID.
+    /// @param country ISO 3166 numeric country code.
     function register(address account, address identity, uint16 country) external {
         if (msg.sender != registrar) revert Unauthorized(msg.sender);
         if (account == address(0)) revert ZeroAddress();

@@ -1,6 +1,6 @@
 # Smart Contract Specification
 
-- Version: 0.2 (updated during Step 3 implementation)
+- Version: 0.3 (compliance modules, deployment library, findings F-01 to F-03)
 - Date: 2026-10-08
 - Scope: contracts deployed per property on the private Besu chain, plus the public-chain anchor.
 
@@ -79,16 +79,26 @@ Public chain:  StateAnchor  (hourly hash of the private chain)
   - The token itself: required by ERC-3643 so wallet recovery can re-register the new wallet.
   - The TimelockController: deletes or updates identities (for example AML offboarding) after the 72h delay.
 - Investor ONCHAINIDs are created by an **identity operator** key that owns the ONCHAINID factory. Creating an identity is harmless on its own: it cannot hold tokens until it carries claims from our HSM-held claim issuer and is registered by `RegistrarGuard`.
-- **Do not rely on claim revocation to offboard an investor.** ONCHAINID 2.2.1 revocation can be bypassed with a re-encoded signature (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)). Offboarding is: freeze via `FreezeGuard` immediately, then delete the identity through the timelock.
+- **Do not rely on claim revocation to offboard an investor.** ONCHAINID 2.2.1 revocation can be bypassed with a re-encoded signature (finding [F-01](findings/F-01-onchainid-claim-revocation-bypass.md)).
+- **Offboarding order** (findings F-01 and [F-02](findings/F-02-maxbalance-identity-coupling.md)):
+  1. Freeze the wallet via `FreezeGuard` immediately.
+  2. Move the tokens (forced transfer via `RecoveryGuard`) or redeem them (burn via `IssuanceGuard`).
+  3. Only when the balance is zero, delete the identity through the timelock.
+- **Never call `updateIdentity` on a wallet that holds tokens.** The max-balance module would lose track of the balance and the tokens would be stuck. Use wallet recovery instead.
+- The claim-signer key is used on exactly one chain, because ONCHAINID claim signatures do not include `chainid` (finding F-03, see `docs/audit/ethtrust-checklist.md`).
 
 ### 4.3 Compliance modules
 
 | Module | Rule | Default |
 |---|---|---|
-| Country allow | Only listed investor countries can hold | `[586]` plus countries approved by legal |
-| Max balance | No single investor holds more than X% of supply | 10% |
+| `CountryAllowModule` | Only investors registered with a listed country can receive tokens (mint or transfer) | `[586]` plus countries approved by legal |
+| `MaxBalanceModule` | No single investor **identity** (all its wallets together) holds more than `maxBalance` units | 10% of the trustee register, e.g. 100,000 of 1,000,000 |
 
-**Open item (Step 3):** the current ERC-3643 repo ships only the module framework. The concrete modules above existed in the deprecated T-REX repo (Hacken audit, April 2023). Step 3 decides between porting those audited modules unchanged or writing minimal ones. Either way they get full tests and go into our audit scope.
+- **Source:** T-REX 4.1.6 (`lib/trex`), used unchanged. The module framework is byte-identical to ERC-3643 4.1.3. These module versions post-date the April 2023 Hacken audit, so they are **in our external audit scope**.
+- `maxBalance` is an absolute number of units, set at deployment from the planned register size.
+- Both modules are UUPS-upgradeable proxies. Their owner can replace the code, so the owner is the timelock (I-9).
+- Settings (countries, limit) change only through the compliance contract, i.e. through the timelock.
+- Forced transfers skip the country check (the trustee acts under a court order) but still respect the max balance.
 
 Supply cap is **not** a compliance module. It is enforced in `IssuanceGuard` (section 5.1), so it cannot be bypassed by a misconfigured module list.
 
@@ -216,7 +226,7 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 | I-6 | While paused, no ordinary transfer succeeds |
 | I-7 | No protocol function is `payable` or holds ERC-20 balances. (The vendored ERC-3643 proxies have a payable fallback; on the private chain the native coin has no value and gas price is zero.) |
 | I-8 | Token agents are exactly the four guards; no EOA is an agent or owner of any protocol contract |
-| I-9 | The owner of every protocol contract is the TimelockController, and its minimum delay is at least 72h |
+| I-9 | The owner of every protocol contract is the TimelockController, and its minimum delay is at least 72h. This includes both implementation authorities (which can upgrade every token and every identity), both compliance modules and the factory. The ID factory is owned by the identity operator. |
 | I-10 | Only the Admin Safe can unpause |
 | I-11 | Each `refId` in `IssuanceGuard` is used at most once |
 | I-12 | Registrations in any 1-hour window never exceed `maxPerHour` |
@@ -224,10 +234,13 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 | I-14 | Distribution IDs strictly increase; a published root never changes; finalize happens only after the window and only if not rejected; payout is recorded at most once |
 | I-15 | Document records are never deleted or modified |
 | I-16 | Anchored block numbers strictly increase |
+| I-17 | The max-balance module's record for every identity equals the real token balance of its wallets and never exceeds `maxBalance` |
 
 **Verified in Step 3:** forced transfer and wallet recovery work while the token is paused (`test_worksWhileTokenPaused`), so the trustee can act during an incident.
 
 ## 9. Deployment procedure (summary)
+
+Implemented once in `contracts/script/DeployLib.sol` and used by both the production script (`script/Deploy.s.sol`) and every test, so the tested deployment is the real one. `DeployLib.checkHandover` asserts I-8 and I-9 after deployment.
 
 1. Deploy Safes (Admin, Trustee, Issuance, Ops) and the TimelockController.
 2. Deploy the ERC-3643 suite through its factory, with the deployer as temporary owner.
@@ -247,6 +260,6 @@ Each invariant becomes a Foundry invariant or fuzz test in Step 3. A failing inv
 ## 11. Open questions
 
 1. GPL-3.0 licence of ERC-3643: legal review required.
-2. Compliance modules: port from audited T-REX or write minimal (section 4.3).
+2. ~~Compliance modules: port or write~~ Resolved: T-REX 4.1.6 modules used unchanged and added to audit scope (section 4.3).
 3. Max balance default (10%) and retail investment limits: business and legal decision.
 4. Public chain for anchoring: Ethereum mainnet (most trusted, higher fees) or an L2 such as Base or Polygon (cheap).

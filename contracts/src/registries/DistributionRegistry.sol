@@ -68,18 +68,30 @@ contract DistributionRegistry is Governed {
         emit TrusteeSafeSet(address(0), trusteeSafe_);
     }
 
+    /// @notice Rotates the Ops Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setOpsSafe(address opsSafe_) external onlyOwner {
         if (opsSafe_ == address(0)) revert ZeroAddress();
         emit OpsSafeSet(opsSafe, opsSafe_);
         opsSafe = opsSafe_;
     }
 
+    /// @notice Rotates the Trustee Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setTrusteeSafe(address trusteeSafe_) external onlyOwner {
         if (trusteeSafe_ == address(0)) revert ZeroAddress();
         emit TrusteeSafeSet(trusteeSafe, trusteeSafe_);
         trusteeSafe = trusteeSafe_;
     }
 
+    /// @notice Publishes a rent distribution and opens the challenge window.
+    /// @dev Ops Safe only.
+    /// @param token Property token the distribution belongs to.
+    /// @param recordBlock Block at which holdings were measured; must be in the past.
+    /// @param merkleRoot Root of (wallet, amountPaisa) entitlements.
+    /// @param totalPaisa Sum of all entitlements, in paisa.
+    /// @param statementHash Hash of the signed rent statement.
+    /// @return id Distribution ID.
     function publish(address token, uint64 recordBlock, bytes32 merkleRoot, uint256 totalPaisa, bytes32 statementHash)
         external
         returns (uint256 id)
@@ -106,6 +118,10 @@ contract DistributionRegistry is Governed {
         emit DistributionPublished(id, token, recordBlock, merkleRoot, totalPaisa, statementHash);
     }
 
+    /// @notice Rejects a distribution during its challenge window.
+    /// @dev Trustee Safe only.
+    /// @param id Distribution ID.
+    /// @param reason Free-text reason, recorded in the event.
     function reject(uint256 id, string calldata reason) external {
         if (msg.sender != trusteeSafe) revert Unauthorized(msg.sender);
         Distribution storage d = _requireStatus(id, Status.Published);
@@ -119,6 +135,7 @@ contract DistributionRegistry is Governed {
     }
 
     /// @notice Anyone may finalize once the challenge window has passed without rejection.
+    /// @param id Distribution ID.
     function finalize(uint256 id) external {
         Distribution storage d = _requireStatus(id, Status.Published);
         uint256 closesAt = d.publishedAt + CHALLENGE_WINDOW;
@@ -131,6 +148,10 @@ contract DistributionRegistry is Governed {
         emit DistributionFinalized(id);
     }
 
+    /// @notice Records that the bank has paid a finalized distribution.
+    /// @dev Ops Safe only. Once per distribution.
+    /// @param id Distribution ID.
+    /// @param payoutBatchHash Hash of the bank payout batch file; must be non-zero.
     function recordPayout(uint256 id, bytes32 payoutBatchHash) external {
         if (msg.sender != opsSafe) revert Unauthorized(msg.sender);
         if (payoutBatchHash == bytes32(0)) revert InvalidDistribution();
@@ -141,6 +162,11 @@ contract DistributionRegistry is Governed {
     }
 
     /// @notice Lets any investor check their own entitlement against a published root.
+    /// @param id Distribution ID.
+    /// @param account Investor wallet.
+    /// @param amountPaisa Claimed entitlement, in paisa.
+    /// @param proof Merkle proof for the (account, amountPaisa) leaf.
+    /// @return True if the leaf is in the distribution's tree.
     function verify(uint256 id, address account, uint256 amountPaisa, bytes32[] calldata proof)
         external
         view
@@ -154,6 +180,8 @@ contract DistributionRegistry is Governed {
         return MerkleProof.verifyCalldata(proof, root, leaf);
     }
 
+    /// @notice Returns a distribution.
+    /// @param id Distribution ID.
     function getDistribution(uint256 id) external view returns (Distribution memory) {
         return _distributions[id];
     }

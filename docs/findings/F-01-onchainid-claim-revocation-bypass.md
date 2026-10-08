@@ -28,10 +28,11 @@ If we relied on claim revocation to offboard an investor (for example, after an 
 We never rely on claim revocation alone. Offboarding an investor is:
 
 1. **Immediately** freeze the wallet via `FreezeGuard` (Ops Safe). A frozen wallet cannot send, whatever its claims say.
-2. Delete the identity from the identity registry through the 72h timelock. The timelock is an identity-registry agent for this purpose.
-3. Also revoke the claim at the issuer, for completeness and audit trail.
+2. Move the tokens (forced transfer) or redeem them (burn). Deleting an identity that still holds tokens strands them (finding [F-02](F-02-maxbalance-identity-coupling.md)).
+3. Delete the identity from the identity registry through the 72h timelock. The timelock is an identity-registry agent for this purpose.
+4. Also revoke the claim at the issuer, for completeness and audit trail.
 
-Tests `test_F01_mitigation_freezeStopsRevokedInvestor` and `test_F01_mitigation_registryDeletionThroughTimelock` prove steps 1 and 2.
+`test_F01_mitigation_freezeStopsRevokedInvestor` proves step 1, `test_F01_mitigation_registryDeletionThroughTimelock` proves steps 2 and 3, and `test_F02_safeOffboarding` proves the full order with a forced transfer.
 
 ## Follow-up
 

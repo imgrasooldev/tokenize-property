@@ -82,18 +82,31 @@ contract RecoveryGuard is Governed {
         emit AdminSafeSet(address(0), adminSafe_);
     }
 
+    /// @notice Rotates the Trustee Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setTrusteeSafe(address trusteeSafe_) external onlyOwner {
         if (trusteeSafe_ == address(0)) revert ZeroAddress();
         emit TrusteeSafeSet(trusteeSafe, trusteeSafe_);
         trusteeSafe = trusteeSafe_;
     }
 
+    /// @notice Rotates the Admin Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setAdminSafe(address adminSafe_) external onlyOwner {
         if (adminSafe_ == address(0)) revert ZeroAddress();
         emit AdminSafeSet(adminSafe, adminSafe_);
         adminSafe = adminSafe_;
     }
 
+    /// @notice Starts a recovery or forced transfer; executable after RECOVERY_DELAY.
+    /// @dev Trustee Safe only.
+    /// @param kind WalletRecovery (full balance to a new wallet of the same ONCHAINID) or ForcedTransfer.
+    /// @param from Wallet the tokens move from.
+    /// @param to Wallet the tokens move to.
+    /// @param onchainId Investor ONCHAINID; required for WalletRecovery, zero for ForcedTransfer.
+    /// @param amount Token units; zero for WalletRecovery, non-zero for ForcedTransfer.
+    /// @param evidenceHash Hash of the court order or re-verification file; must be non-zero.
+    /// @return id Request ID.
     function propose(Kind kind, address from, address to, address onchainId, uint256 amount, bytes32 evidenceHash)
         external
         onlyTrustee
@@ -125,6 +138,9 @@ contract RecoveryGuard is Governed {
         emit RecoveryProposed(id, kind, from, to, onchainId, amount, evidenceHash, eta);
     }
 
+    /// @notice Executes a pending request once its delay has passed.
+    /// @dev Trustee Safe only. Works while the token is paused.
+    /// @param id Request ID.
     function execute(uint256 id) external onlyTrustee {
         Request storage r = _requests[id];
         if (r.status != Status.Pending) revert NotPending(id);
@@ -144,6 +160,9 @@ contract RecoveryGuard is Governed {
         if (!ok) revert ExecutionFailed(id);
     }
 
+    /// @notice Cancels a pending request.
+    /// @dev Trustee Safe or Admin Safe.
+    /// @param id Request ID.
     function cancel(uint256 id) external {
         if (msg.sender != trusteeSafe && msg.sender != adminSafe) revert Unauthorized(msg.sender);
         Request storage r = _requests[id];
@@ -152,6 +171,8 @@ contract RecoveryGuard is Governed {
         emit RecoveryCancelled(id, msg.sender);
     }
 
+    /// @notice Returns a request.
+    /// @param id Request ID.
     function getRequest(uint256 id) external view returns (Request memory) {
         return _requests[id];
     }

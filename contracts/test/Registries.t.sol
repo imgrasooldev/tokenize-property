@@ -40,7 +40,7 @@ contract DistributionRegistryTest is Test {
 
     function test_fullLifecycle() public {
         uint256 id = _publish();
-        vm.warp(block.timestamp + reg.CHALLENGE_WINDOW());
+        vm.warp(vm.getBlockTimestamp() + reg.CHALLENGE_WINDOW());
         reg.finalize(id); // anyone may finalize
         vm.prank(opsSafe);
         reg.recordPayout(id, keccak256("bank-batch-0912"));
@@ -69,7 +69,7 @@ contract DistributionRegistryTest is Test {
         uint256 id = _publish();
         vm.prank(trusteeSafe);
         reg.reject(id, "root does not match register");
-        vm.warp(block.timestamp + reg.CHALLENGE_WINDOW());
+        vm.warp(vm.getBlockTimestamp() + reg.CHALLENGE_WINDOW());
         vm.expectRevert(
             abi.encodeWithSelector(DistributionRegistry.WrongStatus.selector, id, DistributionRegistry.Status.Rejected)
         );
@@ -78,7 +78,7 @@ contract DistributionRegistryTest is Test {
 
     function test_I14_cannotRejectAfterWindow() public {
         uint256 id = _publish();
-        vm.warp(block.timestamp + reg.CHALLENGE_WINDOW());
+        vm.warp(vm.getBlockTimestamp() + reg.CHALLENGE_WINDOW());
         vm.prank(trusteeSafe);
         vm.expectRevert(abi.encodeWithSelector(DistributionRegistry.WindowClosed.selector, id));
         reg.reject(id, "late");
@@ -86,7 +86,7 @@ contract DistributionRegistryTest is Test {
 
     function test_I14_cannotFinalizeEarly() public {
         uint256 id = _publish();
-        uint256 closesAt = block.timestamp + reg.CHALLENGE_WINDOW();
+        uint256 closesAt = vm.getBlockTimestamp() + reg.CHALLENGE_WINDOW();
         vm.warp(closesAt - 1);
         vm.expectRevert(abi.encodeWithSelector(DistributionRegistry.WindowOpen.selector, id, closesAt));
         reg.finalize(id);
@@ -100,7 +100,7 @@ contract DistributionRegistryTest is Test {
         );
         reg.recordPayout(id, keccak256("batch"));
 
-        vm.warp(block.timestamp + reg.CHALLENGE_WINDOW());
+        vm.warp(vm.getBlockTimestamp() + reg.CHALLENGE_WINDOW());
         reg.finalize(id);
         vm.startPrank(opsSafe);
         reg.recordPayout(id, keccak256("batch"));

@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {Fixture} from "../helpers/Fixture.sol";
-import {ITokenFull} from "../helpers/VendorInterfaces.sol";
+import {ITokenFull} from "../../script/VendorInterfaces.sol";
 import {IssuanceGuard} from "../../src/guards/IssuanceGuard.sol";
 import {PauseGuard} from "../../src/guards/PauseGuard.sol";
 import {FreezeGuard} from "../../src/guards/FreezeGuard.sol";
@@ -121,7 +121,7 @@ contract Handler is Test {
     }
 
     function warp(uint256 secs) external {
-        vm.warp(block.timestamp + bound(secs, 1, 3 days));
+        vm.warp(vm.getBlockTimestamp() + bound(secs, 1, 3 days));
     }
 }
 
@@ -194,6 +194,18 @@ contract TokenInvariantsTest is Fixture {
     /// I-10: only the Admin Safe ever unpauses.
     function invariant_I10_onlyAdminUnpauses() public view {
         assertEq(handler.ghostUnpauseByNonAdmin(), 0);
+    }
+
+    /// I-17: the max-balance module's per-identity record equals the real balance and never exceeds the
+    ///       per-investor limit (each verified actor has its own ONCHAINID here).
+    function invariant_I17_maxBalanceTrackingMatchesAndHolds() public view {
+        address mc = token.compliance();
+        for (uint256 i; i < handler.verifiedCount(); ++i) {
+            address actor = handler.actors(i);
+            uint256 tracked = maxBalanceModule.getIDBalance(mc, identityOf[actor]);
+            assertEq(tracked, token.balanceOf(actor), "module tracking drifted");
+            assertLe(tracked, MAX_BALANCE, "per-investor limit exceeded");
+        }
     }
 
     /// Only the Issuance Safe ever mints.

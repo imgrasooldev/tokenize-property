@@ -277,7 +277,7 @@ contract RecoveryDefensiveCheckTest is Test {
         uint256 id2 = g.propose(
             RecoveryGuard.Kind.WalletRecovery, makeAddr("a"), makeAddr("b"), makeAddr("oid"), 0, bytes32("e")
         );
-        vm.warp(block.timestamp + g.RECOVERY_DELAY());
+        vm.warp(vm.getBlockTimestamp() + g.RECOVERY_DELAY());
         vm.expectRevert(abi.encodeWithSelector(RecoveryGuard.ExecutionFailed.selector, id));
         g.execute(id);
         vm.expectRevert(abi.encodeWithSelector(RecoveryGuard.ExecutionFailed.selector, id2));

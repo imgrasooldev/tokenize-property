@@ -21,7 +21,7 @@ Each step ends with a review. The next step starts only after approval.
 |---|---|---|
 | 1 | Repo setup, CI, stack decision | Done |
 | 2 | Contract spec and threat model | Done (v0.2) |
-| 3 | Smart contracts + unit, fuzz and invariant tests + Slither | In progress: core built (105 tests, 100% coverage, Slither clean). Next: compliance modules, deploy script, EthTrust checklist |
+| 3 | Smart contracts + unit, fuzz and invariant tests + Slither | Done (internal): 120 tests, 100% coverage, Slither clean, EthTrust [Q] self-assessment, deploy script verified on Anvil. External audits pending |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | Not started |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | Not started |
 | 6 | Admin panel (maker-checker) | Not started |

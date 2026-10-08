@@ -34,5 +34,11 @@
       "name": "v4.9.6",
       "rev": "dc44c9f1a4c3b10af99492eed84f83ed244203f6"
     }
+  },
+  "lib\\trex": {
+    "tag": {
+      "name": "4.1.6",
+      "rev": "a09cfd38aa257d56db7ff9c90f30e65f125a141b"
+    }
   }
 }

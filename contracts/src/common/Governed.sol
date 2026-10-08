@@ -15,6 +15,7 @@ abstract contract Governed is Ownable2Step {
 
     constructor(address timelock) Ownable(timelock) {}
 
+    /// @notice Always reverts: a contract without an owner could never rotate a compromised key.
     function renounceOwnership() public view override onlyOwner {
         revert RenounceDisabled();
     }

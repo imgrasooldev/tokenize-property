@@ -55,12 +55,21 @@ contract DocumentRegistry is Governed {
         emit OpsSafeSet(address(0), opsSafe_);
     }
 
+    /// @notice Rotates the Ops Safe.
+    /// @dev Timelock only. Reverts on the zero address.
     function setOpsSafe(address opsSafe_) external onlyOwner {
         if (opsSafe_ == address(0)) revert ZeroAddress();
         emit OpsSafeSet(opsSafe, opsSafe_);
         opsSafe = opsSafe_;
     }
 
+    /// @notice Records a document hash for a property token.
+    /// @dev Ops Safe only.
+    /// @param token Property token.
+    /// @param docType Kind of document.
+    /// @param sha256Hash SHA-256 of the file; must be non-zero.
+    /// @param uri Location in the private document store (no personal data); 1-512 bytes.
+    /// @return id Document ID.
     function add(address token, DocType docType, bytes32 sha256Hash, string calldata uri)
         external
         onlyOps
@@ -86,6 +95,8 @@ contract DocumentRegistry is Governed {
 
     /// @notice Marks `oldId` as replaced by `newId`. Both must belong to the same token and be
     ///         current; a document cannot supersede itself.
+    /// @param oldId Document being replaced.
+    /// @param newId Replacement document.
     function supersede(uint256 oldId, uint256 newId) external onlyOps {
         Document storage oldDoc = _documents[oldId];
         Document storage newDoc = _documents[newId];
@@ -97,6 +108,8 @@ contract DocumentRegistry is Governed {
         emit DocumentSuperseded(oldId, newId);
     }
 
+    /// @notice Returns a document record.
+    /// @param id Document ID.
     function getDocument(uint256 id) external view returns (Document memory) {
         return _documents[id];
     }
