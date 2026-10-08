@@ -104,7 +104,35 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 3. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
 4. Shortlist two audit firms and a formal-verification provider.
 
-## 9. Document index
+## 9. Owner preferences and working agreement
+
+- **Language:** chat in Roman Urdu (simple, mixed with English terms); all repository docs in English.
+- **Safety bar:** "world best standards" on every layer, technical side most of all. When in doubt, choose the safer option and explain the trade-off.
+- **Performance bar:** "response is everything". The owner asked for the fastest stack ("mix and match"); we chose all-TypeScript and keep the chain out of the read path (ADR 0001).
+- **Process:** step by step with a review gate after each step. Share the plan before starting a new step.
+- **Git:** the owner creates GitHub repos themselves. After finishing work, commit and **push** to `origin/main` (the owner asks for this every time).
+- **Location and market:** code in `D:\property-token`; target market Pakistan.
+- **Honesty:** say clearly what is internal versus externally verified; never present self-assessments as audits.
+
+## 10. Communication log
+
+Short, dated record of what the owner asked and what came out of it. Add a line per working session.
+
+| Date | Owner asked | Outcome |
+|---|---|---|
+| 2026-10-01 | "Property Tokenization Blockchain": explain the concept, for Pakistan | Explained SPV/REIT wrapper, tokens as claims on the legal entity, KYC whitelist, rent flow. Pakistan context: Companies Act 50-member cap for private companies, SECP REIT Regulations and sandbox, SBP 2018 circular, PVARA (2025), PKR via banks/Raast, title risk, FBR tax, Shariah structures |
+| 2026-10-01 | Make it much safer, all aspects | 10-layer safety framework (legal, title, contracts, keys, money, app, compliance, insider, continuity, investor honesty); became `docs/threat-model.md` |
+| 2026-10-02 | Technical side must be very safe | Architecture with isolated signing service, HSM/MPC, permissioned chain + public anchor, ledger, monitoring; became ADR 0001 and spec |
+| 2026-10-07 | Guide the development lifecycle | Phases 0–8 with gates; later published as `docs/Development-Lifecycle.pdf` |
+| 2026-10-08 | Start development; show the flow first; use Chrome if needed | 7-step flow agreed; folder `D:\property-token`; backend "mix and match" → all-TypeScript decision; Steps 1–2 done |
+| 2026-10-08 | Follow world-best security standards | `docs/security-standards.md` baseline and PR definition of done |
+| 2026-10-08 | Start development; list websites, portals and apps | `docs/product-map.md`; Step 3 contracts built (F-01 found) |
+| 2026-10-08 | Push to `imgrasooldev/tokenize-property` | Pushed; continued Step 3: modules, DeployLib, F-02, EthTrust checklist; pushed |
+| 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
+| 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
+| 2026-10-08 | Continue | Step 4 (local Besu chain) started |
+
+## 11. Document index
 
 | Document | Purpose |
 |---|---|
