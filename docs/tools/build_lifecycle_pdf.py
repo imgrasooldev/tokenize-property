@@ -413,8 +413,8 @@ STEPS = [
         "5",
         "Backend services",
         "In progress",
-        "5a done: TypeScript workspace, validated config, redacting logger, PostgreSQL 18 with tamper-evident migrations, "
-        "typed ABIs, CI job. Next: ledger, outbox, signing service + policy engine, indexer, reconciliation, mocks.",
+        "5a foundation and 5b ledger done: double-entry, append-only, hash-chained ledger enforced inside PostgreSQL "
+        "(23 tests incl. tamper detection and property tests). Next: outbox, signing service, indexer, reconciliation, mocks.",
     ),
     ("6", "Internal portals", "Not started", "Operations, compliance and trustee portals with maker-checker; enforce offboarding order (F-02)."),
     ("7", "Investor apps", "Not started", "Website, investor web portal, verification page, Flutter app."),

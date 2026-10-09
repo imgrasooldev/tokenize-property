@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-10
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Step 5 in progress: 5a (backend foundation) done. Next: 5b (ledger).**
+- Current position: **Step 5 in progress: 5a foundation and 5b ledger done. Next: Live Demo Console (owner's request), then 5c outbox.**
 
 ---
 
@@ -46,7 +46,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 2 | Contract spec + threat model | Done (spec v0.3) |
 | 3 | Smart contracts + tests | **Done (internal)**: 120 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a done (workspace, config, logger, migrations, typed ABIs, CI job). Next 5b ledger |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Next: demo console, then 5c |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -79,6 +79,8 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - Chain ID **586586** is reserved for the local dev network (60 s timelock, plus `LOCAL_DEV_NETWORK=true`). Never use it elsewhere.
 - **PostgreSQL:** the EDB binaries zip is unsigned, so it was rejected. Binaries come from the Authenticode-signed EDB installer in extract-only mode, which needs a UAC prompt; the owner approved it. Local cluster runs on `127.0.0.1:5433`. `pg_ctl start` must not have its output piped or the call hangs.
 - **Laragon's Redis is 5.0.14** (old Windows port): do not use it.
+- **Never edit a committed migration**; the runner refuses changed checksums. Uncommitted migrations may be edited only after resetting the local test DB.
+- SQL functions marked `STRICT` return NULL if any argument is NULL; this once nulled the ledger hash (caught by NOT NULL + tests).
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
 
@@ -109,10 +111,11 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. Step 5b: ledger (double-entry, append-only enforced by DB roles and triggers, hash chain, paisa as bigint). Then 5c to 5h per backend/README.md.
-2. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
-3. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
-4. Shortlist two audit firms and a formal-verification provider.
+1. **Live Demo Console** (owner chose it for team presentations): a local web page showing validators, blocks, mint/transfer, balances, pause/freeze and ledger live. No hosted server yet (staging after Step 6).
+2. Then 5c outbox and jobs in PostgreSQL, and onwards per backend/README.md.
+3. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
+4. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
+5. Shortlist two audit firms and a formal-verification provider.
 
 ## 9. Owner preferences and working agreement
 
@@ -141,6 +144,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
 | 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
+| 2026-10-10 | Next (5b); asked whether we can go live and demo alongside, to present to the team | Advised: not production-live (audits, legal, Steps 5–7 pending); demo in stages. Owner chose a **Live Demo Console** after finishing 5b. 5b ledger done (13 ledger tests incl. tamper, concurrency, property tests); pushed |
 | 2026-10-10 | Next; chose PostgreSQL 18, queues in PostgreSQL, approved download | Unsigned EDB zip rejected; signed installer verified and extracted via UAC (no service). 5a foundation done (10 tests, lint 0 warnings, 0 vulnerabilities); ADR 0003; CI fixed + backend job; pushed |
 
 ## 11. Document index

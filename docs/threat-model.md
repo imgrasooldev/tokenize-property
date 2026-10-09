@@ -79,7 +79,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 |---|---|---|---|---|
 | M-1 | Spoofing | Payout redirected to an attacker's account | Payouts only to an IBAN whose title matches the investor's CNIC name; 72h cooling-off after any bank-detail change, with notifications on all channels | Planned |
 | M-2 | Tampering | Insider changes payout amounts | Amounts come from the finalized on-chain distribution; maker-checker; daily 3-way reconciliation (chain, ledger, bank) freezes payouts on mismatch | Planned |
-| M-3 | Tampering | Duplicate payout | Idempotency key on every payment instruction; payout recorded once on-chain (I-14) | Planned |
+| M-3 | Tampering | Duplicate payout | Idempotency key on every payment instruction; payout recorded once on-chain (I-14) | Ledger idempotency built, tested; bank side Step 5g |
 | M-4 | Elevation | Investor money mixed with company funds | Separate trustee escrow account; platform has no withdrawal authority over it | Planned |
 | M-5 | Repudiation | Dispute over whether a payment happened | Bank batch hash recorded on-chain; ledger keeps bank references | Spec |
 
@@ -99,7 +99,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
-| D-1 | Tampering | Ledger rows edited or deleted | Append-only enforced by DB permissions and triggers; each entry hash-chained to the previous one; hourly hash anchored | Planned |
+| D-1 | Tampering | Ledger rows edited or deleted | Append-only enforced by DB permissions and triggers; each entry hash-chained to the previous one; hourly hash anchored | Built, tested (anchoring pending, Step 5f) |
 | D-2 | Info. disclosure | Database dump leaks CNICs and bank details | Field-level encryption with KMS; KYC data in a separate database; encrypted backups | Planned |
 | D-3 | Tampering | Read model drifts from chain | Indexer re-checks by block hash; daily full rebuild comparison; UI shows "pending" until confirmed | Planned |
 | D-4 | DoS | Data loss | Point-in-time recovery; backups in two locations; quarterly restore drill | Planned |

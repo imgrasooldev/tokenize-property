@@ -7,8 +7,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | Sub-step | Scope | Status |
 |---|---|---|
 | 5a | Foundation: workspace, config, logger, DB pool + migration runner, typed ABIs, CI | Done |
-| 5b | Ledger: double-entry, append-only, hash-chained | Next |
-| 5c | Outbox + jobs in PostgreSQL, idempotency | Planned |
+| 5b | Ledger: double-entry, append-only, hash-chained | Done |
+| 5c | Outbox + jobs in PostgreSQL, idempotency | Next |
 | 5d | Signing service + policy engine | Planned |
 | 5e | Indexer → read model | Planned |
 | 5f | Reconciliation (chain vs ledger vs bank) | Planned |
@@ -23,6 +23,22 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/logger` | pino with redaction of passwords, keys, tokens, CNIC, IBAN |
 | `@pt/db` | Connection pool with statement/idle timeouts; migration runner with checksum (tamper) detection, advisory lock and per-migration transactions |
 | `@pt/contracts` | Typed ABIs generated from `contracts/out` (CI fails on drift) |
+| `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
+
+## Ledger guarantees (migration `0002_ledger.sql`)
+
+Enforced by PostgreSQL, so a bug in a service cannot break them:
+
+| ID | Guarantee | Test |
+|---|---|---|
+| L-1 | Every journal balances to zero per asset (PKR paisa, token units) | `L-1 double entry` |
+| L-2 | No UPDATE, DELETE or TRUNCATE, even for the admin (triggers) | `blocks UPDATE, DELETE and TRUNCATE` |
+| L-3 | Service roles cannot touch tables; writes only via validated `SECURITY DEFINER` functions | `writer role ... only the validated functions` |
+| L-4 | SHA-256 hash chain over every journal and its postings; `verify_chain()` finds tampering | `detects a change made by ... a rogue DBA` |
+| L-5 | Idempotency: identical retry returns the same journal; a different payload is refused | `L-5 idempotency` |
+| L-6 | Protected accounts cannot be overdrawn (no overpaying an investor) | `L-6 no overdraft` |
+
+Writes are serialised by an advisory lock to keep the chain linear (tested with 30 concurrent writers). A superuser can still disable triggers; that is why the chain head will be anchored on-chain (Step 5f) and production DBA access is separated and audited.
 
 ## Local PostgreSQL 18
 
