@@ -21,7 +21,6 @@ jobs:
 
   contracts:
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('contracts/foundry.toml') != '' }}
     defaults:
       run:
         working-directory: contracts
@@ -37,11 +36,10 @@ jobs:
       - name: Tests (unit, fuzz, invariant)
         run: forge test -vvv
       - name: Coverage
-        run: forge coverage --report summary
+        run: forge coverage --report summary --no-match-coverage "(test|lib|vendor|script)"
 
   slither:
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('contracts/foundry.toml') != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,4 +47,56 @@ jobs:
       - uses: crytic/slither-action@v0.4.0
         with:
           target: contracts
-          fail-on: high
+          slither-args: --filter-paths "lib/|test/|src/vendor/|script/" --exclude-dependencies
+          fail-on: low
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pt_admin
+          # Throw-away CI container only; not a real credential.
+          POSTGRES_PASSWORD: ci_only_not_a_secret_0000
+          POSTGRES_DB: property_token_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pt_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_ADMIN_USER: pt_admin
+      PG_ADMIN_PASSWORD: ci_only_not_a_secret_0000
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (zero warnings)
+        run: npm run lint
+      - name: Migrations apply cleanly
+        run: npm run migrate -- --test
+      - name: Tests
+        run: npm test
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: ABIs match the contracts (no drift)
+        run: |
+          (cd ../contracts && forge build)
+          npm run gen:abis
+          git diff --exit-code -- packages/contracts/src/abis.ts

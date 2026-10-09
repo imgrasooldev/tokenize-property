@@ -31,6 +31,13 @@ chain/network/nodes/*/key.pub
 chain/network/dev-accounts.env
 chain/network/generated/
 
+# Backend: portable PostgreSQL, local database files and env
+backend/tools/
+backend/data/
+backend/**/.env
+backend/**/.env.*
+!backend/**/.env.example
+
 # Flutter
 mobile/.dart_tool/
 mobile/build/

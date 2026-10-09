@@ -1,6 +1,6 @@
 # ADR 0001: Technology stack
 
-- Status: Accepted
+- Status: Accepted (database and queue choices amended by ADR 0003)
 - Date: 2026-10-08
 
 ## Context

@@ -31,7 +31,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "docs" / "Development-Lifecycle.pdf"
 VERSION = "1.0"
-UPDATED = date(2026, 10, 8)
+UPDATED = date(2026, 10, 10)
 
 # ---------------------------------------------------------------- fonts and colours
 
@@ -409,7 +409,13 @@ STEPS = [
         "4-validator Besu 26.9 QBFT network (portable JDK 25); deployed via DeployLib; 50/50 end-to-end checks on real "
         "blocks; validator outage and recovery tested.",
     ),
-    ("5", "Backend services", "Next", "Ledger, outbox, signing service + policy engine, indexer, reconciliation, KYC/bank mocks."),
+    (
+        "5",
+        "Backend services",
+        "In progress",
+        "5a done: TypeScript workspace, validated config, redacting logger, PostgreSQL 18 with tamper-evident migrations, "
+        "typed ABIs, CI job. Next: ledger, outbox, signing service + policy engine, indexer, reconciliation, mocks.",
+    ),
     ("6", "Internal portals", "Not started", "Operations, compliance and trustee portals with maker-checker; enforce offboarding order (F-02)."),
     ("7", "Investor apps", "Not started", "Website, investor web portal, verification page, Flutter app."),
 ]
@@ -444,9 +450,10 @@ def build():
     story.append(Spacer(1, 10))
     story.append(
         callout(
-            "<b>Current position (8 October 2026):</b> Phases 1 and 2 are complete. Phase 3 is in progress: Steps 1–4 are done "
+            "<b>Current position (10 October 2026):</b> Phases 1 and 2 are complete. Phase 3 is in progress: Steps 1–4 are done "
             "internally: smart contracts (121 tests, 100% coverage) and a 4-validator Besu network where the full lifecycle runs on "
-            "real blocks (50/50 checks). The next step is Step 5, backend services. Nothing has been externally audited yet."
+            "real blocks (50/50 checks). Step 5 (backend) is under way: the foundation is done, the ledger is next. Nothing has been "
+            "externally audited yet."
         )
     )
     story.append(PageBreak())
@@ -788,7 +795,7 @@ def build():
     story.append(P("Next actions", "h2"))
     story.append(table(
         [["#", "Action", "Owner"],
-         ["1", "Step 5: backend services (ledger, outbox, signing service, indexer, reconciliation); PostgreSQL 16", "Engineering"],
+         ["1", "Step 5b onwards: ledger, outbox, signing service, indexer, reconciliation (PostgreSQL 18)", "Engineering"],
          ["2", "GitHub branch protection on main, Dependabot alerts, secret scanning", "Repository owner"],
          ["3", "Report F-01 to the ONCHAINID maintainers (responsible disclosure)", "Engineering"],
          ["4", "Shortlist two audit firms and a formal-verification provider", "Founders"],

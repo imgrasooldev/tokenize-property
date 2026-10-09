@@ -2,10 +2,10 @@
 
 The single place to pick this project up from. Read this first, then the linked docs. Update it at the end of every working session and at every step gate.
 
-- Last updated: 2026-10-08
+- Last updated: 2026-10-10
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Step 4 (local Besu network) done. Next: Step 5 (backend services).**
+- Current position: **Step 5 in progress: 5a (backend foundation) done. Next: 5b (ledger).**
 
 ---
 
@@ -29,7 +29,7 @@ Full product list (websites, portals, apps, services): [docs/product-map.md](doc
 | Our contracts | Small non-upgradeable **guards** are the only token agents; solc **0.8.30**; OpenZeppelin **5.6.1** | spec §5 |
 | Governance | Every owner is a **72h TimelockController**; Admin Safe 3-of-5 proposes/executes; Trustee Safe can cancel | spec §3 |
 | Chain | Private **Hyperledger Besu QBFT**, 4 validators run by separate organisations, hourly hash anchor on a public chain | ADR 0001 |
-| Server stack | All TypeScript: **NestJS on Fastify**, viem, PostgreSQL 16, Redis. Speed comes from never putting the chain in the read path | ADR 0001 |
+| Server stack | All TypeScript: **NestJS on Fastify**, viem, **PostgreSQL 18**; queues/outbox in PostgreSQL (no Redis for now). Speed comes from never putting the chain in the read path | ADR 0001, ADR 0003 |
 | Frontends | **Next.js** for website, investor portal and internal portals; **Flutter** for the mobile app | ADR 0001 |
 | Money | PKR only, via banks/Raast. No stablecoins, no on-chain payments | spec §10 |
 | Max holding | 10% of the trustee register per investor identity (default 100,000 of 1,000,000) | spec §4.3 |
@@ -46,7 +46,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 2 | Contract spec + threat model | Done (spec v0.3) |
 | 3 | Smart contracts + tests | **Done (internal)**: 120 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **Next** |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a done (workspace, config, logger, migrations, typed ABIs, CI job). Next 5b ledger |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -77,6 +77,10 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - `forge`/`cast` here do not read `ETH_PRIVATE_KEY`; pass local dev keys as arguments to child processes, never print them.
 - In end-to-end scripts, count a "refused" check only on a real revert. A missing wallet once made a refusal check pass falsely.
 - Chain ID **586586** is reserved for the local dev network (60 s timelock, plus `LOCAL_DEV_NETWORK=true`). Never use it elsewhere.
+- **PostgreSQL:** the EDB binaries zip is unsigned, so it was rejected. Binaries come from the Authenticode-signed EDB installer in extract-only mode, which needs a UAC prompt; the owner approved it. Local cluster runs on `127.0.0.1:5433`. `pg_ctl start` must not have its output piped or the call hangs.
+- **Laragon's Redis is 5.0.14** (old Windows port): do not use it.
+- **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
+- CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
 
 ## 6. How to work on the code
 
@@ -105,7 +109,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. Step 5: backend services (ledger, outbox, signing service with policy engine, indexer, reconciliation). Needs PostgreSQL 16 locally. Share the plan first.
+1. Step 5b: ledger (double-entry, append-only enforced by DB roles and triggers, hash chain, paisa as bigint). Then 5c to 5h per backend/README.md.
 2. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
 3. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
 4. Shortlist two audit firms and a formal-verification provider.
@@ -137,6 +141,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
 | 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
+| 2026-10-10 | Next; chose PostgreSQL 18, queues in PostgreSQL, approved download | Unsigned EDB zip rejected; signed installer verified and extracted via UAC (no service). 5a foundation done (10 tests, lint 0 warnings, 0 vulnerabilities); ADR 0003; CI fixed + backend job; pushed |
 
 ## 11. Document index
 
@@ -148,7 +153,8 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | [docs/threat-model.md](docs/threat-model.md) | STRIDE threats and controls |
 | [docs/security-standards.md](docs/security-standards.md) | Standards baseline and per-PR definition of done |
 | [docs/product-map.md](docs/product-map.md) | Websites, portals, apps and services |
-| [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network) |
+| [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network, 0003 PostgreSQL 18 + queues in PostgreSQL) |
 | [chain/README.md](chain/README.md) | Local Besu network: setup, verified downloads, secrets, production differences |
+| [backend/README.md](backend/README.md) | Backend packages, local PostgreSQL 18, commands, supply-chain rules |
 | [docs/findings/](docs/findings/) | Security findings with proofs and mitigations |
 | [docs/audit/ethtrust-checklist.md](docs/audit/ethtrust-checklist.md) | EthTrust [Q] self-assessment |
