@@ -38,6 +38,10 @@ backend/**/.env
 backend/**/.env.*
 !backend/**/.env.example
 
+# Web app build output
+web/.next/
+web/*.tsbuildinfo
+
 # Flutter
 mobile/.dart_tool/
 mobile/build/

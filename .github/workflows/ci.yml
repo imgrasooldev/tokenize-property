@@ -50,6 +50,31 @@ jobs:
           slither-args: --filter-paths "lib/|test/|src/vendor/|script/" --exclude-dependencies
           fail-on: low
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (zero warnings)
+        run: npm run lint
+      - name: ABIs identical to the backend copy
+        run: cmp src/lib/abis.ts ../backend/packages/contracts/src/abis.ts
+      - name: Production build
+        run: npm run build
+
   backend:
     runs-on: ubuntu-latest
     services:
