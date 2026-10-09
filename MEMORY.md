@@ -47,6 +47,8 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 3 | Smart contracts + tests | **Done (internal)**: 120 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Next: demo console, then 5c |
+| Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
+| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 done (properties, live chain data, charts, EN/Urdu RTL). Next W2 login + KYC |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -147,6 +149,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
 | 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
+| 2026-10-10 | Push to GitHub and update MEMORY.md | Already pushed (73aeb43); added demo and website rows to the step table and this log line; pushed |
 | 2026-10-10 | Continue (website) | Showed flow and market-page layout; built W1: properties list and detail with live chain data, NAV and rent charts, English/Urdu RTL; verified in the browser; web CI job; pushed |
 | 2026-10-10 | Asked for an end-user website with a real-time trading chart (complete flow) | Explained the market needs SECP approval; offered real NAV/rent charts plus a clearly labelled demo market. Owner chose: portal + demo market, website before backend 5c–5h, English + Urdu toggle. Demo Console finished and verified in the browser (scenario 50/50, rent cycle, tamper test; security 403s); pushed |
 | 2026-10-10 | Next (5b); asked whether we can go live and demo alongside, to present to the team | Advised: not production-live (audits, legal, Steps 5–7 pending); demo in stages. Owner chose a **Live Demo Console** after finishing 5b. 5b ledger done (13 ledger tests incl. tamper, concurrency, property tests); pushed |
