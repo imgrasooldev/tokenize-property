@@ -44,9 +44,9 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 |---|---|---|
 | 1 | Repo, CI, stack decision | Done |
 | 2 | Contract spec + threat model | Done (spec v0.3) |
-| 3 | Smart contracts + tests | **Done (internal)**: 120 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
+| 3 | Smart contracts + tests | **Done (internal)**: 121 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Next: demo console, then 5c |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
 | 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 done (properties, live chain data, charts, EN/Urdu RTL). Next W2 login + KYC |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
