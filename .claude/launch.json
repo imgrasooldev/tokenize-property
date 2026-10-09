@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "demo-console",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "demo", "--prefix", "backend"],
+      "port": 4800,
+      "url": "http://127.0.0.1:4800"
+    }
+  ]
+}

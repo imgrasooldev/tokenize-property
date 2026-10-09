@@ -1,0 +1,8 @@
+{
+  "name": "@pt/demo-console",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-only live demo console for team presentations (binds 127.0.0.1)",
+  "type": "module",
+  "exports": "./src/server.ts"
+}

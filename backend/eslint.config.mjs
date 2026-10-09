@@ -3,7 +3,7 @@ import security from "eslint-plugin-security";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["node_modules/", "tools/", "data/", "packages/contracts/src/abis.ts"] },
+  { ignores: ["node_modules/", "tools/", "data/", "packages/contracts/src/abis.ts", "**/public/**"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   security.configs.recommended,

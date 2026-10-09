@@ -4,6 +4,7 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 
 ## Start here
 
+- **Live demo for the team:** start Postgres and the chain, then `cd backend && npm run demo` and open http://127.0.0.1:4800 (see [backend/README.md](backend/README.md#live-demo-console)).
 - [MEMORY.md](MEMORY.md): decisions, current status, findings, gotchas and next actions. Read this first.
 - [docs/Development-Lifecycle.pdf](docs/Development-Lifecycle.pdf): the complete lifecycle (phases, gates, standards, status). Regenerate with `python docs/tools/build_lifecycle_pdf.py`.
 

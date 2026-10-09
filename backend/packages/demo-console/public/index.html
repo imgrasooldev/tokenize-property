@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Live Demo</title>
+<style nonce="__NONCE__">
+:root {
+  --navy: #12263a; --navy-2: #1b3550; --teal: #0f766e; --teal-soft: #e6f2f1;
+  --amber: #b45309; --amber-soft: #fdf3e7; --red: #b42318; --red-soft: #fdecea;
+  --green: #15803d; --green-soft: #e8f5ec; --ink: #1f2933; --muted: #5b6770;
+  --line: #d5dbe0; --bg: #f4f6f8; --card: #ffffff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+header { background: var(--navy); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+header h1 { font-size: 19px; margin: 0; font-weight: 700; }
+header .sub { color: #9fb2c3; font-size: 13px; }
+.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.pill.ok { background: var(--green-soft); color: var(--green); }
+.pill.bad { background: var(--red-soft); color: var(--red); }
+.pill.warn { background: var(--amber-soft); color: var(--amber); }
+.spacer { flex: 1; }
+main { padding: 18px 24px 28px; display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h2 { margin: 0 0 2px; font-size: 15px; color: var(--navy); }
+.card .why { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.span-12 { grid-column: span 12; } .span-8 { grid-column: span 8; } .span-7 { grid-column: span 7; }
+.span-6 { grid-column: span 6; } .span-5 { grid-column: span 5; } .span-4 { grid-column: span 4; }
+@media (max-width: 1100px) { .span-8, .span-7, .span-6, .span-5, .span-4 { grid-column: span 12; } }
+.validators { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 700px) { .validators { grid-template-columns: repeat(2, 1fr); } }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px; border-top: 4px solid var(--green); }
+.node.down { border-top-color: var(--red); background: var(--red-soft); }
+.node .name { font-weight: 700; }
+.node .big { font-size: 22px; font-weight: 700; color: var(--navy); }
+.node .meta { font-size: 12px; color: var(--muted); }
+.node button { margin-top: 8px; width: 100%; }
+.stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 12px; }
+.stat .label { font-size: 12px; color: var(--muted); }
+.stat .value { font-size: 22px; font-weight: 700; color: var(--navy); }
+.bar { height: 8px; background: #e6eaee; border-radius: 99px; overflow: hidden; margin: 4px 0 12px; }
+.bar > div { height: 100%; background: var(--teal); width: 0; transition: width .5s; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 6px; }
+td { padding: 7px 6px; border-bottom: 1px solid #edf0f2; vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+.tag.ok { background: var(--green-soft); color: var(--green); }
+.tag.bad { background: var(--red-soft); color: var(--red); }
+.tag.mint { background: var(--teal-soft); color: var(--teal); }
+.tag.transfer { background: #eef2ff; color: #3949ab; }
+.tag.pause, .tag.freeze { background: var(--amber-soft); color: var(--amber); }
+.tag.governance, .tag.identity, .tag.recovery, .tag.rent, .tag.other { background: #eef1f4; color: var(--muted); }
+.feed { max-height: 360px; overflow: auto; }
+.feed .item { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid #edf0f2; align-items: baseline; }
+.feed .blk { font-size: 12px; color: var(--muted); min-width: 64px; font-variant-numeric: tabular-nums; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button { font: inherit; font-size: 13.5px; font-weight: 600; border: 1px solid var(--navy); background: var(--navy); color: #fff; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+button.secondary { background: #fff; color: var(--navy); }
+button.danger { background: #fff; color: var(--red); border-color: var(--red); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.console { background: #0f1b28; color: #d6e2ee; font: 12.5px/1.5 Consolas, monospace; border-radius: 8px; padding: 10px 12px; height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.console .ok { color: #7ee2a8; } .console .bad { color: #ff9b8f; } .console .t { color: #6f8396; }
+.mono { font-family: Consolas, monospace; font-size: 12.5px; }
+.empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+footer { padding: 0 24px 24px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Property Token · Live Demo</h1>
+    <div class="sub">Local 4-validator Besu network · ERC-3643 contracts · PostgreSQL ledger · test data only</div>
+  </div>
+  <span class="spacer"></span>
+  <span id="netPill" class="pill warn">connecting…</span>
+  <span id="busyPill" class="pill warn" hidden>working…</span>
+</header>
+
+<main>
+  <section class="card span-12">
+    <h2>Demo actions</h2>
+    <p class="why">Each button runs real code against the real local network and database. Watch the panels below update.</p>
+    <div class="actions">
+      <button data-action="network-start" class="secondary">Start network</button>
+      <button data-action="scenario">Run full scenario (deploy + 50 checks)</button>
+      <button data-action="rent-cycle">Rent cycle in ledger</button>
+      <button data-action="tamper-demo" class="danger">Tamper test (scratch DB)</button>
+      <button data-action="network-stop" class="secondary">Stop network</button>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <h2>Validators</h2>
+    <p class="why">Four independent validators agree on every block (QBFT). In production each is run by a different organisation. Stop one: the chain keeps going.</p>
+    <div id="validators" class="validators"></div>
+  </section>
+
+  <section class="card span-7">
+    <h2>Property token</h2>
+    <p class="why">Only KYC-verified investors can hold it. Supply can never exceed the trustee's register.</p>
+    <div id="token"><div class="empty">No deployment yet. Click "Run full scenario".</div></div>
+  </section>
+
+  <section class="card span-5">
+    <h2>Latest blocks</h2>
+    <p class="why">A new block every ~2 seconds, final immediately (no reversals).</p>
+    <div id="blocks"><div class="empty">Waiting for the network…</div></div>
+  </section>
+
+  <section class="card span-7">
+    <h2>Live on-chain events</h2>
+    <p class="why">Read directly from the blockchain, translated into plain language.</p>
+    <div id="feed" class="feed"><div class="empty">No events yet.</div></div>
+  </section>
+
+  <section class="card span-5">
+    <h2>Ledger (money, in PostgreSQL)</h2>
+    <p class="why">Double-entry and append-only. Every entry is chained by SHA-256, so any later change is detected.</p>
+    <div id="ledger"><div class="empty">Ledger not connected.</div></div>
+  </section>
+
+  <section class="card span-12">
+    <h2>Console</h2>
+    <p class="why">Live output of the actions above.</p>
+    <div id="console" class="console"></div>
+  </section>
+</main>
+<footer>Local demo only (127.0.0.1). Not production: no real money, no real investors, keys are development keys. Nothing here has been externally audited yet.</footer>
+
+<script nonce="__NONCE__">
+"use strict";
+const TOKEN = "__DEMO_TOKEN__";
+const $ = (id) => document.getElementById(id);
+
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") el.className = v;
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else el.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+const fmt = (n) => BigInt(n).toLocaleString("en-US");
+const rupees = (paisa) => {
+  const p = BigInt(paisa); const neg = p < 0n; const a = neg ? -p : p;
+  return (neg ? "-" : "") + "Rs " + (a / 100n).toLocaleString("en-US") + "." + (a % 100n).toString().padStart(2, "0");
+};
+const short = (s) => s ? s.slice(0, 10) + "…" + s.slice(-6) : "";
+
+async function act(action, extra) {
+  const res = await fetch("/api/action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Demo-Token": TOKEN },
+    body: JSON.stringify({ action, ...(extra || {}) }),
+  });
+  if (!res.ok) log("Action refused: " + (await res.text()), "bad");
+}
+document.querySelectorAll("button[data-action]").forEach((b) => b.addEventListener("click", () => act(b.dataset.action)));
+
+function log(line, cls) {
+  const box = $("console");
+  const t = new Date().toLocaleTimeString();
+  const kind = cls || (/^\s*ok\b|verified|intact|DETECTED|REFUSED|passed/i.test(line) ? "ok" : /FAIL|Error|!!/i.test(line) ? "bad" : "");
+  box.append(h("div", {}, h("span", { class: "t" }, t + "  "), h("span", { class: kind }, line)));
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderValidators(vs) {
+  const up = vs.filter((v) => v.up).length;
+  const pill = $("netPill");
+  pill.textContent = up === 4 ? "Network healthy · 4/4 validators" : up >= 3 ? `Degraded but running · ${up}/4` : up === 0 ? "Network stopped" : `Halted · ${up}/4 (needs 3)`;
+  pill.className = "pill " + (up === 4 ? "ok" : up === 3 ? "warn" : "bad");
+  $("validators").replaceChildren(...vs.map((v, i) => h("div", { class: "node" + (v.up ? "" : " down") },
+    h("div", { class: "name" }, "Validator " + (i + 1)),
+    h("div", { class: "big" }, v.up ? "#" + fmt(v.height) : "DOWN"),
+    h("div", { class: "meta" }, v.up ? `${v.peers} peers connected` : "not producing"),
+    h("button", { class: v.up ? "danger" : "secondary", dataset: { node: String(i + 1) } }, v.up ? "Stop this node" : "Start this node"),
+  )));
+  $("validators").querySelectorAll("button[data-node]").forEach((b) => b.addEventListener("click", () =>
+    act(b.textContent.startsWith("Stop") ? "node-stop" : "node-start", { node: Number(b.dataset.node) })));
+}
+
+function renderBlocks(blocks) {
+  if (!blocks || blocks.error) { $("blocks").replaceChildren(h("div", { class: "empty" }, blocks?.error || "Network stopped")); return; }
+  $("blocks").replaceChildren(h("table", {},
+    h("thead", {}, h("tr", {}, h("th", {}, "Block"), h("th", {}, "Time"), h("th", { class: "num" }, "Transactions"))),
+    h("tbody", {}, blocks.map((b) => h("tr", {}, h("td", {}, "#" + fmt(b.number)), h("td", {}, new Date(b.time).toLocaleTimeString()), h("td", { class: "num" }, b.txs)))),
+  ));
+}
+
+function renderToken(t) {
+  if (!t) return;
+  if (t.error) { $("token").replaceChildren(h("div", { class: "empty" }, t.error)); return; }
+  const pct = BigInt(t.cap) > 0n ? Number((BigInt(t.supply) * 10000n) / BigInt(t.cap)) / 100 : 0;
+  const bar = h("div");
+  bar.style.width = Math.min(pct, 100) + "%";
+  $("token").replaceChildren(
+    h("div", { class: "stat-row" },
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Token"), h("div", { class: "value" }, `${t.symbol}`), h("div", { class: "label" }, t.name)),
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Issued"), h("div", { class: "value" }, fmt(t.supply))),
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Trustee register (cap)"), h("div", { class: "value" }, fmt(t.cap))),
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Trading"), h("div", {}, h("span", { class: "tag " + (t.paused ? "bad" : "ok") }, t.paused ? "PAUSED" : "LIVE"))),
+    ),
+    h("div", { class: "label" }, `${pct}% of the register issued`), h("div", { class: "bar" }, bar),
+    h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Investor"), h("th", {}, "KYC"), h("th", {}, "Status"), h("th", { class: "num" }, "Tokens"))),
+      h("tbody", {}, t.holders.map((x) => h("tr", {},
+        h("td", {}, x.name, h("div", { class: "mono" }, short(x.address))),
+        h("td", {}, h("span", { class: "tag " + (x.verified ? "ok" : "bad") }, x.verified ? "verified" : "not verified")),
+        h("td", {}, h("span", { class: "tag " + (x.frozen ? "bad" : "ok") }, x.frozen ? "frozen" : "active")),
+        h("td", { class: "num" }, fmt(x.balance)),
+      ))),
+    ),
+  );
+}
+
+function renderFeed(feed) {
+  if (!feed || feed.length === 0) { $("feed").replaceChildren(h("div", { class: "empty" }, "No events yet.")); return; }
+  $("feed").replaceChildren(...feed.map((e) => h("div", { class: "item" },
+    h("span", { class: "blk" }, "#" + fmt(e.block)), h("span", { class: "tag " + e.kind }, e.kind), h("span", {}, e.text))));
+}
+
+function renderLedger(l) {
+  if (!l) return;
+  if (l.error) { $("ledger").replaceChildren(h("div", { class: "empty" }, l.error)); return; }
+  $("ledger").replaceChildren(
+    h("div", { class: "stat-row" },
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Hash chain"), h("div", {}, h("span", { class: "tag " + (l.intact ? "ok" : "bad") }, l.intact ? "INTACT" : `${l.problems} PROBLEMS`))),
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Journal entries"), h("div", { class: "value" }, fmt(l.journals))),
+      h("div", { class: "stat" }, h("div", { class: "label" }, "Head hash"), h("div", { class: "mono" }, l.head ? short(l.head.hash) : "—")),
+    ),
+    l.balances.length === 0 ? h("div", { class: "empty" }, 'No demo accounts yet. Click "Rent cycle in ledger".') :
+    h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Account"), h("th", { class: "num" }, "Balance"))),
+      h("tbody", {}, l.balances.map((b) => h("tr", {}, h("td", { class: "mono" }, b.code.replace(/^demo:/, "")), h("td", { class: "num" }, b.asset === "PKR" ? rupees(b.balance) : fmt(b.balance))))),
+    ),
+  );
+}
+
+const es = new EventSource("/stream");
+es.addEventListener("state", (ev) => {
+  const s = JSON.parse(ev.data);
+  renderValidators(s.validators);
+  renderBlocks(s.blocks);
+  renderToken(s.token);
+  renderFeed(s.feed);
+  renderLedger(s.ledger);
+});
+es.addEventListener("log", (ev) => log(JSON.parse(ev.data).line));
+es.addEventListener("busy", (ev) => {
+  const a = JSON.parse(ev.data).action;
+  $("busyPill").hidden = !a;
+  $("busyPill").textContent = a ? "working: " + a : "";
+  document.querySelectorAll("button").forEach((b) => { b.disabled = Boolean(a); });
+});
+es.onerror = () => { $("netPill").textContent = "Console disconnected"; $("netPill").className = "pill bad"; };
+log("Console connected. Start the network, then run the full scenario.");
+</script>
+</body>
+</html>

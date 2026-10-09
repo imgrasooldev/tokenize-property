@@ -24,6 +24,21 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/db` | Connection pool with statement/idle timeouts; migration runner with checksum (tamper) detection, advisory lock and per-migration transactions |
 | `@pt/contracts` | Typed ABIs generated from `contracts/out` (CI fails on drift) |
 | `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
+| `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
+
+## Live Demo Console
+
+```bash
+python backend/scripts/pg.py start
+python chain/net.py start
+cd backend && npm run demo          # open http://127.0.0.1:4800
+```
+
+Shows, updating every 2 seconds: the 4 validators (with stop/start buttons to demonstrate fault tolerance), latest blocks, the token (supply vs trustee cap, paused state, investors with KYC and freeze status), on-chain events in plain language, and the ledger (hash-chain status, balances).
+
+Buttons: **Run full scenario** (deploy + 50 on-chain checks, streamed live), **Rent cycle in ledger** (rent split by on-chain holdings, exact to the paisa, then an overpayment the database refuses), **Tamper test** (rogue-DBA change in a throw-away database, caught by the hash chain).
+
+Local-only hardening: binds 127.0.0.1; rejects foreign Host headers (DNS rebinding) with 403; actions need same-origin plus a per-run token (CSRF) or get 403; strict CSP with nonces, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`; all on-chain text rendered with `textContent` (no HTML injection); private keys never leave the server. It is a presentation tool, never deployed.
 
 ## Ledger guarantees (migration `0002_ledger.sql`)
 
