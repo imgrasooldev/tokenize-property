@@ -82,6 +82,8 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | M-3 | Tampering | Duplicate payout | Idempotency key on every payment instruction; payout recorded once on-chain (I-14) | Ledger idempotency built, tested; bank side Step 5g |
 | M-4 | Elevation | Investor money mixed with company funds | Separate trustee escrow account; platform has no withdrawal authority over it | Planned |
 | M-5 | Repudiation | Dispute over whether a payment happened | Bank batch hash recorded on-chain; ledger keeps bank references | Spec |
+| M-6 | Tampering | Tokens issued without payment, payment kept without tokens, or one payment charged or minted twice | Payment recorded in the ledger before minting; single-use `refId` per subscription (I-11); request idempotency key; refund only when the mint provably never happened (not broadcast, or reverted); unknown outcomes held for review and settled only against a matching on-chain `Minted` event (wallet and amount); per-visit reconciliation of ledger, chain and subscriptions | Prototype built and tested (web W3); production in Steps 5c–5g |
+| M-7 | Tampering | Rent statement altered after publication (amounts changed off chain) | Statement hash and Merkle root on chain; investors verify their own leaf and the statement hash themselves | Prototype built (web W3, `chain/rent.py`) |
 
 ### 4.4 API and backend
 

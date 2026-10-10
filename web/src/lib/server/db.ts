@@ -25,7 +25,8 @@ function localDbSettings(): pg.PoolConfig {
     port: Number(env.get("PG_PORT") ?? 5433),
     user: env.get("PG_ADMIN_USER") ?? "pt_admin",
     password: env.get("PG_ADMIN_PASSWORD") ?? "",
-    database: "property_token",
+    // Tests point this at property_token_test; nothing else sets it.
+    database: process.env.WEB_DB_NAME === "property_token_test" ? "property_token_test" : "property_token",
     application_name: "web-prototype",
     max: 5,
     statement_timeout: 15_000,
@@ -47,7 +48,23 @@ CREATE TABLE IF NOT EXISTS webdemo.investors (
   kyc_status       text NOT NULL CHECK (kyc_status IN ('pending', 'verified', 'rejected')),
   kyc_note         text,
   created_at       timestamptz NOT NULL DEFAULT now()
-);`;
+);
+CREATE TABLE IF NOT EXISTS webdemo.subscriptions (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id   uuid NOT NULL UNIQUE,
+  investor_id  uuid NOT NULL REFERENCES webdemo.investors (id),
+  symbol       text NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,11}$'),
+  tokens       bigint NOT NULL CHECK (tokens > 0),
+  amount_paisa bigint NOT NULL CHECK (amount_paisa > 0),
+  bank_ref     text NOT NULL CHECK (bank_ref ~ '^RAAST-DEMO-[0-9A-F]{12}$'),
+  ref_id       text NOT NULL UNIQUE CHECK (ref_id ~ '^0x[0-9a-f]{64}$'),
+  status       text NOT NULL CHECK (status IN ('paid', 'minting', 'done', 'refunded', 'review')),
+  mint_tx      text CHECK (mint_tx ~ '^0x[0-9a-f]{64}$'),
+  note         text CHECK (length(note) <= 300),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS subscriptions_investor ON webdemo.subscriptions (investor_id, created_at DESC);`;
 
 let pool: pg.Pool | null = null;
 let ready: Promise<void> | null = null;

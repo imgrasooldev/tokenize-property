@@ -70,6 +70,8 @@ jobs:
         run: npm run typecheck
       - name: Lint (zero warnings)
         run: npm run lint
+      - name: Tests (chain integration tests skip without a local network)
+        run: npm run test
       - name: ABIs identical to the backend copy
         run: cmp src/lib/abis.ts ../backend/packages/contracts/src/abis.ts
       - name: Production build

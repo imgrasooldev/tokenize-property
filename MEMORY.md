@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-10
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Investor website prototype W1 + W2 done (web/). Next: W3 (invest: mock bank → ledger → real mint; portfolio), then W4–W5, then backend 5c–5h.**
+- Current position: **Investor website prototype W1–W3 done (web/): invest flow, portfolio, rent self-verification. Next: W4 (demo secondary market), then W5, then backend 5c–5h.**
 
 ---
 
@@ -48,7 +48,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
-| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL) and W2 (personas, sign-up, mock KYC, real on-chain onboarding) done. Next W3 invest + portfolio |
+| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) and W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify; 28 web tests) done. Next W4 demo market |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -86,6 +86,11 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - **Demo Console:** `cd backend && npm run demo`, then open `http://127.0.0.1:4800`. Start Postgres and the chain first. Child Python processes must run with `-u` or their output only appears at the end. The preview tool picked another project's launch config, so start the server via a background shell and open it by URL.
 - **Web (Next.js 16):** use `src/proxy.ts`, not `middleware`; route `params` are a Promise. `next dev` auto-writes `web/AGENTS.md`, so commit it. `eslint-config-next` was dropped over a high-severity `braces` advisory. ABIs are copied from the backend by `npm run sync:abis`, and CI checks they are identical. Dev server runs on `127.0.0.1:3100`. Browser-pane screenshots can go stale when the window is hidden; reload before taking one.
 - **Web W2:** run `npm run setup:demo` once to create `web/.env.local` (session, wallet-encryption and CNIC-pepper secrets). Investor demo data lives in schema `webdemo` in the local `property_token` DB. React resets the form after a server action, so refill fields when testing. Mock NADRA rejects CNICs ending in 0.
+- **W3 invest:** refunds only when the mint provably never happened (simulation refused, or mined and reverted); unknown outcomes go to `review` and settle only against a `Minted` event matching wallet **and** amount. The status UPDATE gates every settle/refund journal. Web tests use `WEB_DB_NAME=property_token_test` (only that value is honoured) and onboard a fresh investor each run.
+- **Rent statements:** `python chain/rent.py [rupees]` writes `chain/data/rent/<token>-<id>.json` (git-ignored, wiped by `net.py reset`). Distribution 1 from `flow.py` has no statement file, so the portfolio shows "statement not available" for it. `flow.py`'s outage check moves 1 token Alice → Bob, so balances are 49,999 / 10,001 after a fresh run.
+- **Windows shell:** in a backgrounded `cd X && cmd & other &` chain, only the first command runs in `X`; a download once landed in the repo root. Use absolute paths. Python on Windows writes CRLF in text mode; `.gitattributes` normalises to LF.
+- **New machine setup (2026-10-10):** Foundry 1.8.5 (release zip, SHA-256 checked) in `~/.foundry/bin`; Besu, JDK 25 and PostgreSQL 18.6 verified against the hashes in chain/README.md and backend/README.md (Postgres also Authenticode). `net.py setup` creates new dev keys, so earlier demo investors do not carry over.
+- **Grid layouts:** panels inside `.detail` need `min-inline-size: 0` or wide tables push the page past 375 px on phones.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
 
@@ -116,7 +121,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. **Investor website prototype**, W1 + W2 done, next W3 (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
+1. **Investor website prototype**, W1–W3 done, next W4 demo secondary market (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
 2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
 3. Hosted staging server only after Step 6 (owner agreed).
 4. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
@@ -140,6 +145,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 
 | Date | Owner asked | Outcome |
 |---|---|---|
+| 2026-10-10 | Fetch/pull the repo and read memory (new machine); then approved 5 verified downloads + setup and the W3 plan | Cloned to `D:\property-token`, all checksums/signature verified, baseline green (121 contract tests, flow 50/50, 23 backend tests). W3 built: invest flow with ledger-first payment, single-use refId mint, safe refund/review rules, portfolio reconciliation, `chain/rent.py` + Merkle self-verify, EN/Urdu, mobile; 28 web tests incl. 5 concurrent identical submits; threat model M-6, M-7; pushed |
 | 2026-10-01 | "Property Tokenization Blockchain": explain the concept, for Pakistan | Explained SPV/REIT wrapper, tokens as claims on the legal entity, KYC whitelist, rent flow. Pakistan context: Companies Act 50-member cap for private companies, SECP REIT Regulations and sandbox, SBP 2018 circular, PVARA (2025), PKR via banks/Raast, title risk, FBR tax, Shariah structures |
 | 2026-10-01 | Make it much safer, all aspects | 10-layer safety framework (legal, title, contracts, keys, money, app, compliance, insider, continuity, investor honesty); became `docs/threat-model.md` |
 | 2026-10-02 | Technical side must be very safe | Architecture with isolated signing service, HSM/MPC, permissioned chain + public anchor, ledger, monitoring; became ADR 0001 and spec |

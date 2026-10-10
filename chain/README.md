@@ -33,6 +33,7 @@ python chain/net.py setup       # dev accounts, 4 validator keys, genesis, node 
 python chain/net.py start       # start all validators (about 20 s for the JVMs)
 python chain/net.py status      # height, peers and validators per node
 python chain/flow.py            # deploy via DeployLib and run the 50-check end-to-end flow
+python chain/rent.py 300000    # publish a rent distribution (website demo); statement in chain/data/rent/
 python chain/net.py stop        # stop everything
 python chain/net.py reset       # stop and wipe chain data (keeps keys and accounts)
 ```

@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { randomUUID } from "node:crypto";
 import { BuildingArt } from "@/components/BuildingArt";
 import { NavChart, RentChart } from "@/components/HistoryCharts";
+import { InvestForm } from "@/components/InvestForm";
+import { tokenAbi } from "@/lib/abis";
 import { formatNumber, formatPkr, loc } from "@/lib/i18n";
+import { MAX_HOLDING_TOKENS, MIN_TOKENS } from "@/lib/invest-rules";
 import { findProperty, sampleHistory } from "@/lib/properties";
 import { liveToken } from "@/lib/server/chain";
+import { investorById } from "@/lib/server/db";
+import { publicClient } from "@/lib/server/demo-signer";
 import { getDict } from "@/lib/server/lang";
+import { isVerifiedOnChain } from "@/lib/server/onboarding";
+import { currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +25,17 @@ export default async function PropertyPage({ params }: { params: Promise<{ symbo
   const { lang, t } = await getDict();
   const live = p.status === "live" ? await liveToken(p.symbol) : null;
   const history = sampleHistory(p);
-  const minTokens = 10;
+  const minTokens = Number(MIN_TOKENS);
+  const investorId = await currentInvestorId();
+  const investor = investorId ? await investorById(investorId) : null;
+  const verified = investor ? (await isVerifiedOnChain(investor.wallet_address)) === true : false;
+  const holding =
+    investor && live
+      ? await publicClient
+          .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
+          .catch(() => null)
+      : null;
+  const room = holding === null ? 0n : MAX_HOLDING_TOKENS - holding;
 
   return (
     <main className="container">
@@ -76,10 +94,26 @@ export default async function PropertyPage({ params }: { params: Promise<{ symbo
               <dd>{loc(p.tenant, lang)}</dd>
             </dl>
             <div style={{ marginBlockStart: 16, display: "grid", gap: 8 }}>
-              <span className="btn secondary" aria-disabled="true">
-                {t.invest}
-              </span>
-              <span className="meta" style={{ fontSize: 12.5 }}>{t.investSoon}</span>
+              {!live ? (
+                <>
+                  <span className="btn secondary" aria-disabled="true">
+                    {t.invest}
+                  </span>
+                  <span className="meta" style={{ fontSize: 12.5 }}>{p.status === "live" ? t.chainUnavailable : t.comingSoon}</span>
+                </>
+              ) : !investor ? (
+                <Link href="/login" className="btn">
+                  {t.signInToInvest}
+                </Link>
+              ) : !verified ? (
+                <p className="note">{t.errUnverified}</p>
+              ) : live.paused ? (
+                <p className="note">{t.errPaused}</p>
+              ) : room < MIN_TOKENS ? (
+                <p className="note">{t.errMaxHolding}</p>
+              ) : (
+                <InvestForm t={t} lang={lang} symbol={p.symbol} navPkr={p.navPkr} requestId={randomUUID()} maxTokens={Number(room)} />
+              )}
             </div>
           </section>
 
