@@ -146,3 +146,24 @@ a { color: inherit; }
 .verify { display: grid; gap: 8px; justify-items: start; }
 .verify .steps-list { margin: 0; font-size: 13.5px; }
 .detail .panel { min-inline-size: 0; }
+.alert.demo { background: var(--amber-soft); color: var(--amber); }
+.chart.tall { block-size: 340px; }
+.market-live { display: grid; gap: 20px; }
+.market-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; flex-wrap: wrap; margin-block-end: 10px; }
+.market-head .stats { margin: 0; }
+.value.up { color: var(--green); }
+.value.down { color: var(--red); }
+.market-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.market-grid .panel { min-inline-size: 0; }
+@media (max-width: 700px) { .market-grid { grid-template-columns: minmax(0, 1fr); } }
+.book td:first-child { background-repeat: no-repeat; background-position: right; font-variant-numeric: tabular-nums; }
+.book tr.ask td:first-child { color: var(--red); background-image: linear-gradient(var(--red-soft), var(--red-soft)); }
+.book tr.bid td:first-child { color: var(--green); background-image: linear-gradient(var(--green-soft), var(--green-soft)); }
+.book tr.spread td { text-align: center; color: var(--muted); font-size: 12px; padding: 4px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { font: inherit; font-weight: 600; padding: 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button.on.buy { background: var(--green-soft); color: var(--green); }
+.seg button.on.sell { background: var(--red-soft); color: var(--red); }
+.btn.sell { background: var(--red); border-color: var(--red); }
+.steps-list.numbered { list-style: decimal; padding-inline-start: 20px; font-size: 13.5px; }
+.form input:not([type="checkbox"]) { min-inline-size: 0; inline-size: 100%; }

@@ -3,40 +3,17 @@
 import { redirect } from "next/navigation";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
-import { idFactoryAbi } from "@/lib/abis";
-import { latestDeployment } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
-import { personaAccount, publicClient, type Persona } from "@/lib/server/demo-signer";
-import { isVerifiedOnChain, onboardOnChain } from "@/lib/server/onboarding";
+import { onboardOnChain } from "@/lib/server/onboarding";
+import { upsertPersona } from "@/lib/server/personas";
 import { encrypt, hmac } from "@/lib/server/secrets";
 import { endSession, startSession } from "@/lib/server/session";
-
-const PERSONAS: Record<Persona, string> = { ALICE: "Alice (demo)", BOB: "Bob (demo)" };
 
 /** Signs in as one of the two pre-verified demo investors. */
 export async function loginAsPersona(formData: FormData): Promise<void> {
   const persona = formData.get("persona");
   if (persona !== "ALICE" && persona !== "BOB") throw new Error("Unknown persona");
-  const account = personaAccount(persona);
-  const idFactory = latestDeployment()?.get("idFactory");
-  const identity = idFactory
-    ? await publicClient
-        .readContract({ address: idFactory, abi: idFactoryAbi, functionName: "getIdentity", args: [account.address] })
-        .catch(() => null)
-    : null;
-  const verified = (await isVerifiedOnChain(account.address)) === true;
-  const pool = await db();
-  const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO webdemo.investors (persona, display_name, wallet_address, identity_address, kyc_status)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (persona) DO UPDATE SET wallet_address = EXCLUDED.wallet_address,
-       identity_address = EXCLUDED.identity_address, kyc_status = EXCLUDED.kyc_status
-     RETURNING id`,
-    [persona, persona === "ALICE" ? PERSONAS.ALICE : PERSONAS.BOB, account.address, identity && !/^0x0+$/.test(identity) ? identity : null, verified ? "verified" : "pending"],
-  );
-  const id = rows[0]?.id;
-  if (!id) throw new Error("Could not sign in");
-  await startSession(id);
+  await startSession(await upsertPersona(persona));
   redirect("/account");
 }
 

@@ -2,10 +2,10 @@
 
 The single place to pick this project up from. Read this first, then the linked docs. Update it at the end of every working session and at every step gate.
 
-- Last updated: 2026-10-10
+- Last updated: 2026-10-11
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Investor website prototype W1–W3 done (web/): invest flow, portfolio, rent self-verification. Next: W4 (demo secondary market), then W5, then backend 5c–5h.**
+- Current position: **Investor website prototype W1–W4 done (web/): invest flow, portfolio, rent self-verification, demo secondary market with real-time chart. Next: W5 (polish, end-to-end tests), then backend 5c–5h.**
 
 ---
 
@@ -48,7 +48,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
-| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) and W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify; 28 web tests) done. Next W4 demo market |
+| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify) and W4 (demo market: cash top-up, limit orders with escrow, single matcher, DvP settlement on chain, SSE real-time candles; `npm run demo:market`) done; 61 web tests. Next W5 |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -90,6 +90,9 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - **Rent statements:** `python chain/rent.py [rupees]` writes `chain/data/rent/<token>-<id>.json` (git-ignored, wiped by `net.py reset`). Distribution 1 from `flow.py` has no statement file, so the portfolio shows "statement not available" for it. `flow.py`'s outage check moves 1 token Alice → Bob, so balances are 49,999 / 10,001 after a fresh run.
 - **Windows shell:** in a backgrounded `cd X && cmd & other &` chain, only the first command runs in `X`; a download once landed in the repo root. Use absolute paths. Python on Windows writes CRLF in text mode; `.gitattributes` normalises to LF.
 - **New machine setup (2026-10-10):** Foundry 1.8.5 (release zip, SHA-256 checked) in `~/.foundry/bin`; Besu, JDK 25 and PostgreSQL 18.6 verified against the hashes in chain/README.md and backend/README.md (Postgres also Authenticode). `net.py setup` creates new dev keys, so earlier demo investors do not carry over.
+- **W4 market:** a buy order's cost sits in its own escrow account `web:order:<id>:escrow`; price improvement on partial fills stays there until the order ends. Matcher = `pg_try_advisory_lock(586586030)`; cancels wait on the same lock. Any failure before broadcast (including a missing custodial key) must fail the trade, never send it to review. Band ±10% of NAV and demo liquidity were the owner's choices (2026-10-10).
+- **Dev server speed:** the first request after editing a file includes Turbopack compile time (10–15 s); measured order + on-chain settlement is about 2–3 s, mostly the 2 s block time. viem `pollingInterval` is 250 ms (default 4 s).
+- **Stopping the dev server:** `TaskStop` on `npm run dev` leaves the `next` child on port 3100; stop the process listening on 3100. Never run `next build` while `next dev` runs (shared `.next`). `next build` rewrites `web/next-env.d.ts`; restore it before committing.
 - **Grid layouts:** panels inside `.detail` need `min-inline-size: 0` or wide tables push the page past 375 px on phones.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
@@ -121,7 +124,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. **Investor website prototype**, W1–W3 done, next W4 demo secondary market (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
+1. **Investor website prototype**, W1–W4 done, next W5 polish + end-to-end tests (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
 2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
 3. Hosted staging server only after Step 6 (owner agreed).
 4. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
@@ -145,6 +148,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 
 | Date | Owner asked | Outcome |
 |---|---|---|
+| 2026-10-11 | Continue: approved the W4 plan (±10% band, demo liquidity script) | W4 built: demo cash, limit orders with per-order escrow, single matcher, DvP settlement on chain, SSE real-time candles/order book, EN/Urdu, mobile; `npm run demo:market`; 61 web tests (5 market integration incl. racing buyers and frozen seller); threat model M-8; pushed |
 | 2026-10-10 | Fetch/pull the repo and read memory (new machine); then approved 5 verified downloads + setup and the W3 plan | Cloned to `D:\property-token`, all checksums/signature verified, baseline green (121 contract tests, flow 50/50, 23 backend tests). W3 built: invest flow with ledger-first payment, single-use refId mint, safe refund/review rules, portfolio reconciliation, `chain/rent.py` + Merkle self-verify, EN/Urdu, mobile; 28 web tests incl. 5 concurrent identical submits; threat model M-6, M-7; pushed |
 | 2026-10-01 | "Property Tokenization Blockchain": explain the concept, for Pakistan | Explained SPV/REIT wrapper, tokens as claims on the legal entity, KYC whitelist, rent flow. Pakistan context: Companies Act 50-member cap for private companies, SECP REIT Regulations and sandbox, SBP 2018 circular, PVARA (2025), PKR via banks/Raast, title risk, FBR tax, Shariah structures |
 | 2026-10-01 | Make it much safer, all aspects | 10-layer safety framework (legal, title, contracts, keys, money, app, compliance, insider, continuity, investor honesty); became `docs/threat-model.md` |

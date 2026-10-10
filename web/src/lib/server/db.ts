@@ -64,7 +64,48 @@ CREATE TABLE IF NOT EXISTS webdemo.subscriptions (
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS subscriptions_investor ON webdemo.subscriptions (investor_id, created_at DESC);`;
+CREATE INDEX IF NOT EXISTS subscriptions_investor ON webdemo.subscriptions (investor_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS webdemo.topups (
+  id           uuid PRIMARY KEY,
+  request_id   uuid NOT NULL UNIQUE,
+  investor_id  uuid NOT NULL REFERENCES webdemo.investors (id),
+  amount_paisa bigint NOT NULL CHECK (amount_paisa > 0),
+  bank_ref     text NOT NULL CHECK (bank_ref ~ '^RAAST-DEMO-[0-9A-F]{12}$'),
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS webdemo.orders (
+  id          uuid PRIMARY KEY,
+  request_id  uuid NOT NULL UNIQUE,
+  investor_id uuid NOT NULL REFERENCES webdemo.investors (id),
+  symbol      text NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,11}$'),
+  side        text NOT NULL CHECK (side IN ('buy', 'sell')),
+  price_paisa bigint NOT NULL CHECK (price_paisa > 0),
+  tokens      bigint NOT NULL CHECK (tokens > 0),
+  filled      bigint NOT NULL DEFAULT 0 CHECK (filled >= 0 AND filled <= tokens),
+  status      text NOT NULL CHECK (status IN ('open', 'filled', 'cancelled')),
+  note        text CHECK (length(note) <= 300),
+  created_at  timestamptz NOT NULL DEFAULT clock_timestamp(),
+  updated_at  timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS orders_book ON webdemo.orders (symbol, side, status, price_paisa, created_at);
+CREATE INDEX IF NOT EXISTS orders_investor ON webdemo.orders (investor_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS webdemo.trades (
+  id          uuid PRIMARY KEY,
+  symbol      text NOT NULL,
+  buy_order   uuid NOT NULL REFERENCES webdemo.orders (id),
+  sell_order  uuid NOT NULL REFERENCES webdemo.orders (id),
+  buyer_id    uuid NOT NULL REFERENCES webdemo.investors (id),
+  seller_id   uuid NOT NULL REFERENCES webdemo.investors (id),
+  price_paisa bigint NOT NULL CHECK (price_paisa > 0),
+  tokens      bigint NOT NULL CHECK (tokens > 0),
+  status      text NOT NULL CHECK (status IN ('settling', 'settled', 'failed', 'review')),
+  transfer_tx text CHECK (transfer_tx ~ '^0x[0-9a-f]{64}$'),
+  note        text CHECK (length(note) <= 300),
+  created_at  timestamptz NOT NULL DEFAULT clock_timestamp(),
+  updated_at  timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CHECK (buyer_id <> seller_id)
+);
+CREATE INDEX IF NOT EXISTS trades_symbol ON webdemo.trades (symbol, status, created_at);`;
 
 let pool: pg.Pool | null = null;
 let ready: Promise<void> | null = null;

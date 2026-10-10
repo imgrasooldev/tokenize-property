@@ -135,12 +135,14 @@ describe.skipIf(!up)("invest flow on the local chain", () => {
   it("refunds in full when the chain refuses the mint (reused refId), and mints nothing", async () => {
     const issuance = d?.get("issuance");
     if (!issuance) throw new Error("no issuance guard");
-    // A refId already consumed on chain by someone else's mint (e.g. the scenario's), not yet in this table.
-    const minted = await publicClient.getContractEvents({ address: issuance, abi: issuanceGuardAbi, eventName: "Minted", fromBlock: 0n });
-    const { rows } = await (await db()).query<{ ref_id: string }>("SELECT ref_id FROM webdemo.subscriptions");
-    const taken = new Set(rows.map((r) => r.ref_id));
-    const used = minted.map((m) => m.args.refId).find((r) => r !== undefined && !taken.has(r));
-    if (!used) throw new Error("no earlier mint left to reuse; reset the test database");
+    // Consume a fresh refId on chain first, then make a subscription that (wrongly) carries it.
+    const used = refIdFor(randomUUID());
+    await sendAndWait(platformAccount("ISSUANCE_SAFE"), {
+      address: issuance,
+      abi: issuanceGuardAbi,
+      functionName: "mint",
+      args: [investor.wallet_address, 10n, used],
+    });
 
     const held = await chainBalance(investor.wallet_address);
     const id = await insertPaid(40n, used, "paid");

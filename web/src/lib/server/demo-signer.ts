@@ -32,7 +32,8 @@ export const localChain = defineChain({
   rpcUrls: { default: { http: [RPC_URL] } },
 });
 
-export const publicClient = createPublicClient({ chain: localChain, transport: http(RPC_URL, { timeout: 5_000 }) });
+// Blocks come every 2 s; poll receipts every 250 ms instead of viem's 4 s default.
+export const publicClient = createPublicClient({ chain: localChain, transport: http(RPC_URL, { timeout: 5_000 }), pollingInterval: 250 });
 
 export type PlatformRole = "IDENTITY_OPERATOR" | "CLAIM_SIGNER" | "REGISTRAR" | "ISSUANCE_SAFE" | "OPS_SAFE";
 export type Persona = "ALICE" | "BOB";
