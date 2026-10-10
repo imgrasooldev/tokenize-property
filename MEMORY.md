@@ -119,9 +119,9 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 1. **Investor website prototype**, W1 + W2 done, next W3 (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
 2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
 3. Hosted staging server only after Step 6 (owner agreed).
-3. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
-4. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
-5. Shortlist two audit firms and a formal-verification provider.
+4. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
+5. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
+6. Shortlist two audit firms and a formal-verification provider.
 
 ## 9. Owner preferences and working agreement
 
@@ -130,6 +130,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 - **Performance bar:** "response is everything". The owner asked for the fastest stack ("mix and match"); we chose all-TypeScript and keep the chain out of the read path (ADR 0001).
 - **Process:** step by step with a review gate after each step. Share the plan before starting a new step.
 - **Git:** the owner creates GitHub repos themselves. After finishing work, commit and **push** to `origin/main` (the owner asks for this every time).
+- **Memory:** keep this file current after every piece of work (status, next actions, gotchas, communication log) and push it with the work. The owner asks for this regularly.
 - **Location and market:** code in `D:\property-token`; target market Pakistan.
 - **Honesty:** say clearly what is internal versus externally verified; never present self-assessments as audits.
 
@@ -150,6 +151,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
 | 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
+| 2026-10-10 | Update MEMORY.md | Already current after W2; fixed duplicate numbering in next actions, added web/README.md to the index and the "keep memory current" agreement; pushed |
 | 2026-10-10 | Continue W2, then push | W2 done and verified in the browser: Alice login; NADRA-failure path; new investor "Ayesha Test" onboarded on chain (isVerified=true via cast); duplicate CNIC refused; forged session refused; DB holds no full CNIC or phone; pushed |
 | 2026-10-10 | Push to GitHub and update MEMORY.md | Already pushed (73aeb43); added demo and website rows to the step table and this log line; pushed |
 | 2026-10-10 | Continue (website) | Showed flow and market-page layout; built W1: properties list and detail with live chain data, NAV and rent charts, English/Urdu RTL; verified in the browser; web CI job; pushed |
@@ -169,6 +171,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | [docs/product-map.md](docs/product-map.md) | Websites, portals, apps and services |
 | [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network, 0003 PostgreSQL 18 + queues in PostgreSQL) |
 | [chain/README.md](chain/README.md) | Local Besu network: setup, verified downloads, secrets, production differences |
+| [web/README.md](web/README.md) | Investor website prototype: status W1–W5, run commands, sign-up/KYC design, security |
 | [backend/README.md](backend/README.md) | Backend packages, local PostgreSQL 18, commands, supply-chain rules |
 | [docs/findings/](docs/findings/) | Security findings with proofs and mitigations |
 | [docs/audit/ethtrust-checklist.md](docs/audit/ethtrust-checklist.md) | EthTrust [Q] self-assessment |
