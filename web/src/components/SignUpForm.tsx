@@ -11,7 +11,9 @@ export function SignUpForm({ t }: { t: Dict }) {
       ? t.errNadra
       : state.error === "duplicate"
         ? t.errDuplicate
-        : state.error === "chain"
+        : state.error === "rate"
+          ? t.errRate
+          : state.error === "chain"
           ? t.errChain
           : state.error
             ? t.errGeneric

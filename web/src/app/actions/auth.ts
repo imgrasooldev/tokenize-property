@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db } from "@/lib/server/db";
 import { onboardOnChain } from "@/lib/server/onboarding";
 import { upsertPersona } from "@/lib/server/personas";
+import { clientKey, take } from "@/lib/server/rate-limit";
+import { logError } from "@/lib/server/log";
 import { encrypt, hmac } from "@/lib/server/secrets";
 import { endSession, startSession } from "@/lib/server/session";
 
@@ -13,6 +15,7 @@ import { endSession, startSession } from "@/lib/server/session";
 export async function loginAsPersona(formData: FormData): Promise<void> {
   const persona = formData.get("persona");
   if (persona !== "ALICE" && persona !== "BOB") throw new Error("Unknown persona");
+  if (!take("login", await clientKey())) redirect("/login?e=rate");
   await startSession(await upsertPersona(persona));
   redirect("/account");
 }
@@ -49,6 +52,7 @@ const signUpSchema = z.object({
  * display and an HMAC (with a secret pepper) to enforce one account per CNIC.
  */
 export async function signUp(_prev: SignUpState, formData: FormData): Promise<SignUpState> {
+  if (!take("signup", await clientKey())) return { error: "rate" };
   const parsed = signUpSchema.safeParse({
     fullName: formData.get("fullName"),
     cnic: formData.get("cnic"),
@@ -79,19 +83,30 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
 
   const key = generatePrivateKey();
   const account = privateKeyToAccount(key);
-  const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO webdemo.investors (display_name, cnic_last4, cnic_hmac, phone_last3, wallet_address, wallet_key_enc, kyc_status, kyc_note)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'NADRA (mock) passed; liveness (simulated) passed') RETURNING id`,
-    [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), account.address, encrypt(key)],
-  );
-  const id = rows[0]?.id;
+  let id: string | undefined;
+  try {
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO webdemo.investors (display_name, cnic_last4, cnic_hmac, phone_last3, wallet_address, wallet_key_enc, kyc_status, kyc_note)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'NADRA (mock) passed; liveness (simulated) passed') RETURNING id`,
+      [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), account.address, encrypt(key)],
+    );
+    id = rows[0]?.id;
+  } catch (e) {
+    // Two sign-ups with the same CNIC at once: the unique index refuses the second.
+    if (e instanceof Error && "code" in e && e.code === "23505") return { error: "duplicate" };
+    logError("signUp insert", e);
+    return { error: "generic" };
+  }
   if (!id) return { error: "generic" };
 
   try {
     const { identity } = await onboardOnChain(account, `web-${id}`);
     await pool.query("UPDATE webdemo.investors SET identity_address = $2, kyc_status = 'verified' WHERE id = $1", [id, identity]);
-  } catch {
-    await pool.query("UPDATE webdemo.investors SET kyc_note = 'on-chain registration failed; retry later' WHERE id = $1", [id]);
+  } catch (e) {
+    // Not registered: remove the pending record so the same person can simply try again. A partly
+    // created ONCHAINID stays unregistered on chain and cannot hold tokens.
+    logError("signUp onboarding", e);
+    await pool.query("DELETE FROM webdemo.investors WHERE id = $1 AND kyc_status = 'pending'", [id]);
     return { error: "chain" };
   }
   await startSession(id);

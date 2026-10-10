@@ -4,10 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { freezeGuardAbi, tokenAbi } from "../src/lib/abis";
 import { latestDeployment } from "../src/lib/server/chain";
 import { db, investorById, type InvestorRow } from "../src/lib/server/db";
-import { LOCAL_CHAIN_ID, platformAccount, publicClient, sendAndWait } from "../src/lib/server/demo-signer";
+import { LOCAL_CHAIN_ID, platformAccount, publicClient, send, sendAndWait, waitSuccess } from "../src/lib/server/demo-signer";
 import { placeOrder as invest } from "../src/lib/server/invest";
 import { chainProblems } from "../src/lib/server/ledger";
-import { cancelOrder, cashOf, escrowOf, placeOrder, runMatcher, topUp } from "../src/lib/server/market";
+import { cancelOrder, cashOf, escrowMatches, escrowOf, placeOrder, runMatcher, topUp } from "../src/lib/server/market";
+import { signerFor } from "../src/lib/server/wallets";
 import { onboardOnChain } from "../src/lib/server/onboarding";
 
 /**
@@ -56,6 +57,24 @@ async function tokensOf(who: InvestorRow): Promise<bigint> {
 
 async function order(who: InvestorRow, side: "buy" | "sell", rupees: bigint, tokens: bigint) {
   return placeOrder(who, { symbol: "GPF3", side, price: rupees * RS, tokens, requestId: randomUUID() });
+}
+
+/** What the matcher records before sending, as if the process then crashed. */
+async function recordInterruptedTrade(tradeId: string, buy: string, sell: string, rupees: bigint, tokens: bigint): Promise<void> {
+  const pool = await db();
+  for (const o of [buy, sell]) {
+    await pool.query("UPDATE webdemo.orders SET filled = filled + $2 WHERE id = $1", [o, tokens.toString()]);
+  }
+  await pool.query(
+    `INSERT INTO webdemo.trades (id, symbol, buy_order, sell_order, buyer_id, seller_id, price_paisa, tokens, status)
+     VALUES ($1, 'GPF3', $2, $3, $4, $5, $6, $7, 'review')`,
+    [tradeId, buy, sell, buyer.id, seller.id, (rupees * RS).toString(), tokens.toString()],
+  );
+}
+
+async function tradeStatus(tradeId: string): Promise<string | undefined> {
+  const { rows } = await (await db()).query<{ status: string }>("SELECT status FROM webdemo.trades WHERE id = $1", [tradeId]);
+  return rows[0]?.status;
 }
 
 function id(r: Awaited<ReturnType<typeof placeOrder>>): string {
@@ -140,6 +159,48 @@ describe.skipIf(!up)("demo market on the local chain", () => {
     expect(await escrowOf(buyer.id)).toBe(10n * 500n * RS);
     expect(await cashOf(buyer.id)).toBe(cashBefore - 30n * 500n * RS);
     for (const r of results.slice(0, 3)) if (r && "orderId" in r) await cancelOrder(buyer, r.orderId);
+    expect(await escrowOf(buyer.id)).toBe(0n);
+  });
+
+  it("after a crash, a trade that never sent anything is undone and its escrow returned", async () => {
+    const cashBefore = await cashOf(buyer.id);
+    const ask = id(await order(seller, "sell", 530n, 10n));
+    const bid = id(await order(buyer, "buy", 520n, 10n)); // does not cross
+    const t = randomUUID();
+    await recordInterruptedTrade(t, bid, ask, 520n, 5n);
+    await runMatcher("GPF3");
+    expect(await tradeStatus(t)).toBe("failed");
+    expect(await escrowOf(buyer.id)).toBe(0n);
+    expect(await cashOf(buyer.id)).toBe(cashBefore);
+    expect(await escrowMatches(buyer.id)).toBe(true);
+  });
+
+  it("after a crash, a transfer that was sent and mined is settled from its recorded hash", async () => {
+    const token = d?.get("token");
+    if (!token) throw new Error("no token");
+    const sellerCash = await cashOf(seller.id);
+    const buyerTokens = await tokensOf(buyer);
+    const ask = id(await order(seller, "sell", 530n, 10n));
+    const bid = id(await order(buyer, "buy", 520n, 10n));
+    const t = randomUUID();
+    await recordInterruptedTrade(t, bid, ask, 520n, 5n);
+    // The transfer went out and was recorded (hash and nonce first), then the process died.
+    const hash = await send(
+      signerFor(seller),
+      { address: token, abi: tokenAbi, functionName: "transfer", args: [buyer.wallet_address, 5n] },
+      async (signed) => {
+        await (await db()).query("UPDATE webdemo.trades SET transfer_tx = $2, transfer_nonce = $3 WHERE id = $1", [t, signed.hash, signed.nonce]);
+      },
+    );
+    await waitSuccess(hash);
+    await runMatcher("GPF3");
+    expect(await tradeStatus(t)).toBe("settled");
+    expect(await cashOf(seller.id)).toBe(sellerCash + 5n * 520n * RS);
+    expect(await tokensOf(buyer)).toBe(buyerTokens + 5n);
+    expect(await escrowOf(buyer.id)).toBe(5n * 520n * RS); // the other 5 are still on order
+    expect(await escrowMatches(buyer.id)).toBe(true);
+    await cancelOrder(buyer, bid);
+    await cancelOrder(seller, ask);
     expect(await escrowOf(buyer.id)).toBe(0n);
   });
 

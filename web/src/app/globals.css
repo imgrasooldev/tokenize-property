@@ -167,3 +167,6 @@ a { color: inherit; }
 .btn.sell { background: var(--red); border-color: var(--red); }
 .steps-list.numbered { list-style: decimal; padding-inline-start: 20px; font-size: 13.5px; }
 .form input:not([type="checkbox"]) { min-inline-size: 0; inline-size: 100%; }
+.teaser { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto; gap: 20px; align-items: center; }
+@media (max-width: 900px) { .teaser { grid-template-columns: minmax(0, 1fr); } }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }

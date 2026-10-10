@@ -7,9 +7,10 @@ import { PROPERTIES } from "@/lib/properties";
 import { liveToken } from "@/lib/server/chain";
 import { db, investorById } from "@/lib/server/db";
 import { publicClient } from "@/lib/server/demo-signer";
-import { investorAccount, reconcile, refUsedOnChain, subscriptionsOf, type SubscriptionStatus } from "@/lib/server/invest";
+import { investorAccount, reconcileThrottled, refUsedOnChain, subscriptionsOf, type SubscriptionStatus } from "@/lib/server/invest";
 import { getDict } from "@/lib/server/lang";
-import { balanceOf, chainProblems } from "@/lib/server/ledger";
+import { balanceOf, chainProblemsCached } from "@/lib/server/ledger";
+import { cashOf, escrowMatches, escrowOf, ordersOf } from "@/lib/server/market";
 import { distributionsFor } from "@/lib/server/rent";
 import { currentInvestorId } from "@/lib/server/session";
 
@@ -43,7 +44,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const { sub } = await searchParams;
   const highlight = sub && UUID.test(sub) ? sub : null;
 
-  await reconcile(investor).catch(() => undefined);
+  await reconcileThrottled(investor).catch(() => undefined);
   const subs = await subscriptionsOf(investor.id);
 
   const holdings = await Promise.all(
@@ -58,12 +59,17 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     }),
   );
   const pool = await db();
-  const [ledgerBalance, problems, onChain, distributions] = await Promise.all([
+  const [ledgerBalance, problems, onChain, distributions, cash, escrow, escrowOk, orders] = await Promise.all([
     balanceOf(pool, investorAccount(investor.id)).catch(() => null),
-    chainProblems(pool).catch(() => null),
+    chainProblemsCached(pool).catch(() => null),
     Promise.all(subs.map((s) => (s.status === "done" || s.status === "refunded" ? refUsedOnChain(s.ref_id) : Promise.resolve(null)))),
     distributionsFor(investor.wallet_address),
+    cashOf(investor.id).catch(() => null),
+    escrowOf(investor.id).catch(() => null),
+    escrowMatches(investor.id).catch(() => false),
+    ordersOf(investor.id).catch(() => []),
   ]);
+  const openOrders = orders.filter((o) => o.status === "open").length;
 
   // Money the ledger holds for this investor awaiting tokens must equal the open subscriptions.
   const open = subs.filter((s) => s.status === "paid" || s.status === "minting" || s.status === "review");
@@ -105,6 +111,19 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         <div className="stat">
           <div className="label">{t.investedHere}</div>
           <div className="value">{formatPkr(rupees(invested), lang)}</div>
+        </div>
+        <div className="stat">
+          <div className="label">{t.cashTitle}</div>
+          <div className="value">{cash === null ? "—" : formatPkr(rupees(cash), lang)}</div>
+        </div>
+        <div className="stat">
+          <div className="label">{t.openOrders}</div>
+          <div className="value">
+            <Link href="/market">
+              {formatNumber(openOrders, lang)}
+              {escrow !== null && escrow > 0n ? ` · ${formatPkr(rupees(escrow), lang)} ${t.reserved}` : ""}
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -191,6 +210,9 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               </li>
               <li>
                 <span className={`chip ${problems === 0 ? "green" : "red"}`}>{problems === 0 ? "✓" : "✗"}</span> {t.reconHash}
+              </li>
+              <li>
+                <span className={`chip ${escrowOk ? "green" : "red"}`}>{escrowOk ? "✓" : "✗"}</span> {t.reconEscrow}
               </li>
             </ul>
             <p className="note">{t.reconNote}</p>

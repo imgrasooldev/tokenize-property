@@ -8,7 +8,7 @@ import { priceBand } from "@/lib/market-rules";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
-import { marketSnapshot, ordersOf, positionOf, runMatcher, toView, tradesOf } from "@/lib/server/market";
+import { marketSnapshot, nudgeMatcher, ordersOf, positionOf, toView, tradesOf } from "@/lib/server/market";
 import { isVerifiedOnChain } from "@/lib/server/onboarding";
 import { currentInvestorId } from "@/lib/server/session";
 
@@ -21,8 +21,8 @@ export default async function MarketPage() {
 
   const id = await currentInvestorId();
   const investor = id ? await investorById(id) : null;
-  // Picks up anything left crossing or held for review (e.g. after a restart).
-  await runMatcher(p.symbol).catch(() => undefined);
+  // Picks up anything left crossing or held for review (e.g. after a restart); throttled, non-blocking.
+  nudgeMatcher(p.symbol);
   const view = toView(await marketSnapshot(p.symbol));
   const verified = investor ? (await isVerifiedOnChain(investor.wallet_address)) === true : false;
   const [position, orders, trades] = investor

@@ -3,9 +3,9 @@ import type { Address, Hex } from "viem";
 import { issuanceGuardAbi, tokenAbi } from "../abis";
 import { checkOrder, quotePaisa, refIdFor, type OrderProblem } from "../invest-rules";
 import { findProperty } from "../properties";
-import { latestDeployment, liveToken } from "./chain";
+import { deploymentFromBlock, inBlockWindows, latestDeployment, liveToken } from "./chain";
 import { db, type InvestorRow } from "./db";
-import { NotSentError, platformAccount, publicClient, RevertedError, send, waitSuccess } from "./demo-signer";
+import { NotSentError, platformAccount, publicClient, RevertedError, send, txOutcome, waitSuccess } from "./demo-signer";
 import { openAccount, postJournal } from "./ledger";
 import { isVerifiedOnChain } from "./onboarding";
 
@@ -36,6 +36,8 @@ export interface SubscriptionRow {
   ref_id: Hex;
   status: SubscriptionStatus;
   mint_tx: Hex | null;
+  mint_nonce: number | null;
+  mint_from: Address | null;
   note: string | null;
   created_at: Date;
   updated_at: Date;
@@ -55,7 +57,7 @@ export async function placeOrder(
   if (investor.kyc_status !== "verified" || (await isVerifiedOnChain(investor.wallet_address)) !== true) {
     return { error: "unverified" };
   }
-  const live = await liveToken(p.symbol);
+  const live = await liveToken(p.symbol, true);
   if (!live) return { error: "chain" };
   const holding = await publicClient
     .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
@@ -134,14 +136,21 @@ export async function mint(id: string, to: Address): Promise<void> {
 
   let hash: Hex;
   try {
-    hash = await send(platformAccount("ISSUANCE_SAFE"), {
-      address: issuance,
-      abi: issuanceGuardAbi,
-      functionName: "mint",
-      args: [to, BigInt(sub.tokens), sub.ref_id],
-    });
+    hash = await send(
+      platformAccount("ISSUANCE_SAFE"),
+      { address: issuance, abi: issuanceGuardAbi, functionName: "mint", args: [to, BigInt(sub.tokens), sub.ref_id] },
+      async (signed) => {
+        // Durable before broadcast: if anything fails after this, reconcile can find the transaction.
+        const r = await pool.query(
+          `UPDATE webdemo.subscriptions SET mint_tx = $2, mint_nonce = $3, mint_from = $4, updated_at = now()
+           WHERE id = $1 AND status = 'minting'`,
+          [sub.id, signed.hash, signed.nonce, signed.from],
+        );
+        if (r.rowCount !== 1) throw new Error("subscription is no longer minting");
+      },
+    );
   } catch (e) {
-    if (e instanceof NotSentError) await refund(sub, "refused by on-chain checks before sending");
+    if (e instanceof NotSentError) await refund(sub, "refused before sending (on-chain checks or signing)");
     else await markReview(sub.id, "mint broadcast failed; outcome unknown");
     return;
   }
@@ -196,7 +205,7 @@ async function refund(sub: SubscriptionRow, reason: string): Promise<void> {
   try {
     await client.query("BEGIN");
     const moved = await client.query(
-      "UPDATE webdemo.subscriptions SET status = 'refunded', note = $2, updated_at = now() WHERE id = $1 AND status = 'minting'",
+      "UPDATE webdemo.subscriptions SET status = 'refunded', note = $2, updated_at = now() WHERE id = $1 AND status IN ('minting', 'review')",
       [sub.id, reason.slice(0, 300)],
     );
     if (moved.rowCount !== 1) {
@@ -232,11 +241,25 @@ async function markReview(id: string, reason: string, from: SubscriptionStatus[]
 }
 
 /**
- * Reconciles an investor's unfinished subscriptions with the chain. Only ever moves forward to
- * "done" when the chain shows the refId as used; refunds for unknown outcomes stay a manual
- * operations decision. A "minting" row older than two minutes (crashed request) goes to review;
- * a "paid" row that was never claimed is minted now.
+ * Reconciles an investor's unfinished subscriptions with the chain:
+ * - "done" only when the refId is used AND a Minted event matches this wallet and amount;
+ * - refunded only when the mint provably never happened: its recorded transaction reverted or was
+ *   dropped (nonce taken by another transaction), or no transaction was ever recorded (and so none
+ *   was ever broadcast);
+ * - otherwise it stays in review (pending, unreachable chain, or a mismatch for operations).
+ * A "paid" row that was never claimed is minted now. Rows younger than two minutes are left alone.
  */
+const lastReconcile = new Map<string, number>();
+
+/** Page-load reconcile: at most once every 5 s per investor. */
+export async function reconcileThrottled(investor: InvestorRow): Promise<void> {
+  const last = lastReconcile.get(investor.id) ?? 0;
+  if (Date.now() - last < 5_000) return;
+  lastReconcile.set(investor.id, Date.now());
+  if (lastReconcile.size > 10_000) lastReconcile.clear();
+  await reconcile(investor);
+}
+
 export async function reconcile(investor: InvestorRow): Promise<void> {
   const pool = await db();
   const { rows } = await pool.query<SubscriptionRow>(
@@ -255,18 +278,28 @@ export async function reconcile(investor: InvestorRow): Promise<void> {
     const used = await publicClient
       .readContract({ address: issuance, abi: issuanceGuardAbi, functionName: "refUsed", args: [sub.ref_id] })
       .catch(() => null);
-    if (used === true) {
+    if (used === null) continue; // chain unreachable: decide nothing
+    if (used) {
       // The refId alone is not enough: the mint must be to this investor, for exactly this amount.
-      const logs = await publicClient
-        .getContractEvents({ address: issuance, abi: issuanceGuardAbi, eventName: "Minted", args: { refId: sub.ref_id }, fromBlock: 0n })
-        .catch(() => null);
+      const logs = await inBlockWindows(deploymentFromBlock(), (fromBlock, toBlock) =>
+        publicClient.getContractEvents({ address: issuance, abi: issuanceGuardAbi, eventName: "Minted", args: { refId: sub.ref_id }, fromBlock, toBlock }),
+      ).catch(() => null);
       const match = logs?.find(
         (l) => l.args.to?.toLowerCase() === investor.wallet_address.toLowerCase() && l.args.amount === BigInt(sub.tokens),
       );
       if (match) await settle(sub, match.transactionHash);
       else if (logs !== null) await markReview(sub.id, "on-chain use of this reference does not match the subscription", ["minting", "review"]);
-    } else if (sub.status === "minting") {
-      await markReview(sub.id, "request interrupted; waiting for reconciliation");
+      continue;
+    }
+    // Not minted (refUsed is false).
+    if (sub.mint_tx && sub.mint_from && sub.mint_nonce !== null) {
+      const outcome = await txOutcome(sub.mint_tx, sub.mint_from, sub.mint_nonce);
+      if (outcome === "reverted" || outcome === "dropped") await refund(sub, `mint ${outcome} (${sub.mint_tx}); nothing was issued`);
+      else if (sub.status === "minting") await markReview(sub.id, "request interrupted; waiting for the chain");
+    } else {
+      // The hash is recorded before broadcast and only while the row is "minting"; once refunded,
+      // a late sender cannot record it and so will not broadcast. No hash = nothing was ever sent.
+      await refund(sub, "no transaction was ever sent");
     }
   }
 }

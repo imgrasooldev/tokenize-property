@@ -28,7 +28,9 @@ function localDbSettings(): pg.PoolConfig {
     // Tests point this at property_token_test; nothing else sets it.
     database: process.env.WEB_DB_NAME === "property_token_test" ? "property_token_test" : "property_token",
     application_name: "web-prototype",
-    max: 5,
+    max: 10,
+    // Fail fast instead of queueing forever when the pool is exhausted.
+    connectionTimeoutMillis: 10_000,
     statement_timeout: 15_000,
   };
 }
@@ -105,9 +107,34 @@ CREATE TABLE IF NOT EXISTS webdemo.trades (
   updated_at  timestamptz NOT NULL DEFAULT clock_timestamp(),
   CHECK (buyer_id <> seller_id)
 );
-CREATE INDEX IF NOT EXISTS trades_symbol ON webdemo.trades (symbol, status, created_at);`;
+CREATE INDEX IF NOT EXISTS trades_symbol ON webdemo.trades (symbol, status, created_at);
+-- Recorded before broadcast, so an interrupted send can be resolved from the chain later.
+ALTER TABLE webdemo.subscriptions ADD COLUMN IF NOT EXISTS mint_nonce integer CHECK (mint_nonce >= 0);
+ALTER TABLE webdemo.subscriptions ADD COLUMN IF NOT EXISTS mint_from text CHECK (mint_from ~ '^0x[0-9a-fA-F]{40}$');
+ALTER TABLE webdemo.trades ADD COLUMN IF NOT EXISTS transfer_nonce integer CHECK (transfer_nonce >= 0);`;
 
 let pool: pg.Pool | null = null;
+let lockPool: pg.Pool | null = null;
+
+/**
+ * Runs fn while holding a cross-process lock for one signing address, so two processes (website,
+ * demo script, tests) never pick the same nonce. The lock lives in the `postgres` database, which
+ * every process can reach whichever application database it uses.
+ */
+export async function withSignerLock<T>(address: string, fn: () => Promise<T>): Promise<T> {
+  lockPool ??= new pg.Pool({ ...localDbSettings(), database: "postgres", max: 4, application_name: "web-signer-lock" });
+  const client = await lockPool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock($1, hashtext($2))", [586_586_040, address.toLowerCase()]);
+    try {
+      return await fn();
+    } finally {
+      await client.query("SELECT pg_advisory_unlock($1, hashtext($2))", [586_586_040, address.toLowerCase()]);
+    }
+  } finally {
+    client.release();
+  }
+}
 let ready: Promise<void> | null = null;
 
 export async function db(): Promise<pg.Pool> {

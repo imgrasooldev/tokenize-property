@@ -16,6 +16,7 @@
     "sync:abis": "node scripts/sync-abis.mjs",
     "test": "vitest run",
     "demo:market": "tsx tools/market-demo.ts",
+    "test:e2e": "playwright test",
     "check": "npm run typecheck && npm run lint && npm run test",
     "setup:demo": "node scripts/setup-demo.mjs"
   },
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.0",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",

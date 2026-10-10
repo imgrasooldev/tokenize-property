@@ -149,10 +149,12 @@ export class DemoState {
     const latest = await this.client.getBlockNumber();
     if (latest <= this.scannedTo) return;
     const fromBlock = this.scannedTo + 1n;
+    // Besu refuses eth_getLogs ranges over 5,000 blocks (rpc-max-logs-range); catch up a window at a time.
+    const toBlock = latest - fromBlock > 3_999n ? fromBlock + 3_999n : latest;
     const logs = await this.client.getLogs({
       address: [d.token, d.issuance, d.pauseGuard, d.freezeGuard, d.recovery, d.registrarGuard, d.distributions, d.timelock],
       fromBlock,
-      toBlock: latest,
+      toBlock,
     });
     const decoded = parseEventLogs({ abi: EVENTS_ABI, logs, strict: false });
     for (const log of decoded) {
@@ -160,7 +162,7 @@ export class DemoState {
       if (item) this.feed.unshift({ block: log.blockNumber.toString(), ...item });
     }
     this.feed = this.feed.slice(0, 60);
-    this.scannedTo = latest;
+    this.scannedTo = toBlock;
   }
 
   private async token(d: Deployment) {

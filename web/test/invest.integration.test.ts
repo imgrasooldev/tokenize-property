@@ -165,16 +165,32 @@ describe.skipIf(!up)("invest flow on the local chain", () => {
       args: [investor.wallet_address, 15n, refIdFor(id)],
     });
     await insertPaid(15n, refIdFor(id), "review", id);
-    // A second subscription claims 16 tokens under its own refId, which was never used: must stay in review.
+    // A second subscription never recorded a transaction (so none was ever sent): refunded in full.
     const pending = await insertPaid(16n, refIdFor(randomUUID()), "review");
+    // A third recorded a transaction whose nonce was then used by another one: dropped, refunded.
+    const dropped = await insertPaid(17n, refIdFor(randomUUID()), "review");
+    await (await db()).query(
+      "UPDATE webdemo.subscriptions SET mint_tx = $2, mint_nonce = 0, mint_from = $3 WHERE id = $1",
+      [dropped, `0x${"ab".repeat(32)}`, platformAccount("ISSUANCE_SAFE").address],
+    );
+    // A fourth recorded a transaction that is still unknown to the chain at a future nonce: left alone.
+    const unknown = await insertPaid(18n, refIdFor(randomUUID()), "review");
+    await (await db()).query(
+      "UPDATE webdemo.subscriptions SET mint_tx = $2, mint_nonce = 1000000, mint_from = $3 WHERE id = $1",
+      [unknown, `0x${"cd".repeat(32)}`, platformAccount("ISSUANCE_SAFE").address],
+    );
 
     await reconcile(investor);
     const done = await subscriptionById(investor.id, id);
     expect(done?.status).toBe("done");
     expect(done?.mint_tx).toBe(hash);
     expect(await journals(id)).toEqual(["paid", "settled"]);
-    expect((await subscriptionById(investor.id, pending))?.status).toBe("review");
-    expect(await journals(pending)).toEqual(["paid"]);
+    expect((await subscriptionById(investor.id, pending))?.status).toBe("refunded");
+    expect(await journals(pending)).toEqual(["paid", "refunded"]);
+    expect((await subscriptionById(investor.id, dropped))?.status).toBe("refunded");
+    expect(await journals(dropped)).toEqual(["paid", "refunded"]);
+    expect((await subscriptionById(investor.id, unknown))?.status).toBe("review");
+    expect(await journals(unknown)).toEqual(["paid"]);
   });
 
   it("does not settle when the refId was used for a different wallet or amount", async () => {

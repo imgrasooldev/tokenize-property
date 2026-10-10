@@ -83,6 +83,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | M-4 | Elevation | Investor money mixed with company funds | Separate trustee escrow account; platform has no withdrawal authority over it | Planned |
 | M-5 | Repudiation | Dispute over whether a payment happened | Bank batch hash recorded on-chain; ledger keeps bank references | Spec |
 | M-6 | Tampering | Tokens issued without payment, payment kept without tokens, or one payment charged or minted twice | Payment recorded in the ledger before minting; single-use `refId` per subscription (I-11); request idempotency key; refund only when the mint provably never happened (not broadcast, or reverted); unknown outcomes held for review and settled only against a matching on-chain `Minted` event (wallet and amount); per-visit reconciliation of ledger, chain and subscriptions | Prototype built and tested (web W3); production in Steps 5c–5g |
+| M-9 | Tampering / DoS | Interrupted send (crash, timeout, nonce clash) leaves money held or a leg unsettled forever | Per-signer cross-process lock for nonce selection; transaction hash and nonce recorded before broadcast; outcome decided from the chain (mined, reverted, dropped nonce, never sent) on reconciliation; late senders cannot broadcast after a refund | Prototype built and tested (web W5) |
 | M-8 | Tampering | Secondary trade settles one leg only (tokens without cash or cash without tokens), double fills under concurrency, or a buyer spends cash twice | Buy cost moved into a per-order escrow before matching (ledger refuses overdraft); sell size limited to free on-chain tokens; single matcher via advisory lock; delivery versus payment (cash moves only after the on-chain transfer is confirmed); refused/reverted transfers undo fills and return escrow; unknown outcomes held for review and resolved from the receipt. Secondary trading itself needs SECP approval: demo only | Prototype built and tested (web W4) |
 | M-7 | Tampering | Rent statement altered after publication (amounts changed off chain) | Statement hash and Merkle root on chain; investors verify their own leaf and the statement hash themselves | Prototype built (web W3, `chain/rent.py`) |
 
@@ -92,11 +93,11 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 |---|---|---|---|---|
 | API-1 | Spoofing | Account takeover (password reuse, phishing) | Passkeys or authenticator app; device binding; step-up auth for sensitive actions | Planned |
 | API-2 | Spoofing | SIM swap defeats SMS OTP | SMS never the only factor; SIM-change signals from telco where available; cooling-off on new device | Planned |
-| API-3 | Elevation | Broken access control (IDOR) | Ownership checks in guards on every route; row-level security in PostgreSQL; automated authz tests | Planned |
-| API-4 | Tampering | Injection (SQL, header, deserialisation) | ORM with parameterised queries; DTO validation with whitelisting; OWASP ASVS L2 checklist | Planned |
-| API-5 | DoS | Traffic flood | Cloudflare WAF and DDoS protection; per-user and per-IP rate limits; reads served from cache | Planned |
-| API-6 | Tampering | Replay of a write request | Idempotency keys; request signing from the mobile app; short-lived tokens | Planned |
-| API-7 | Info. disclosure | Verbose errors leak internals | Generic error responses; details only in internal logs | Planned |
+| API-3 | Elevation | Broken access control (IDOR) | Ownership checks in guards on every route; row-level security in PostgreSQL; automated authz tests | Planned (web prototype: every query scoped to the signed-in investor; independent review found no IDOR) |
+| API-4 | Tampering | Injection (SQL, header, deserialisation) | ORM with parameterised queries; DTO validation with whitelisting; OWASP ASVS L2 checklist | Planned (web prototype: parameterised SQL only, zod on every input) |
+| API-5 | DoS | Traffic flood | Cloudflare WAF and DDoS protection; per-user and per-IP rate limits; reads served from cache | Planned (web prototype: in-process rate limits, live-feed caps, shared snapshot cache) |
+| API-6 | Tampering | Replay of a write request | Idempotency keys; request signing from the mobile app; short-lived tokens | Planned (web prototype: request ids on invest, orders and top-ups; ledger idempotency keys) |
+| API-7 | Info. disclosure | Verbose errors leak internals | Generic error responses; details only in internal logs | Planned (web prototype: error page shows only a digest; server log without personal data) |
 
 ### 4.5 Ledger and data
 

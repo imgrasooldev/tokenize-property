@@ -44,6 +44,17 @@ export async function balanceOf(db: Db, code: string): Promise<bigint> {
   return BigInt(rows[0]?.balance ?? "0");
 }
 
+let chainCheck: { at: number; value: Promise<number> } | null = null;
+
+/** chainProblems, re-run at most every 10 s: a full scan of the journal on every page load is wasteful. */
+export async function chainProblemsCached(db: Db): Promise<number> {
+  if (chainCheck && Date.now() - chainCheck.at < 10_000) return chainCheck.value;
+  const value = chainProblems(db);
+  chainCheck = { at: Date.now(), value };
+  value.catch(() => (chainCheck = null));
+  return value;
+}
+
 /** Number of journals that fail the hash-chain check (0 = intact). */
 export async function chainProblems(db: Db): Promise<number> {
   const { rows } = await db.query<{ n: string }>("SELECT count(*) AS n FROM ledger.verify_chain()");

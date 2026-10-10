@@ -6,6 +6,8 @@ import { z } from "zod";
 import { MAX_TOPUP_PAISA, orderSchema, topUpSchema } from "@/lib/market-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { cancelOrder, placeOrder, topUp, type PlaceError } from "@/lib/server/market";
+import { logError } from "@/lib/server/log";
+import { take } from "@/lib/server/rate-limit";
 import { currentInvestorId } from "@/lib/server/session";
 
 async function signedIn(): Promise<InvestorRow> {
@@ -17,11 +19,12 @@ async function signedIn(): Promise<InvestorRow> {
 
 export interface MarketState {
   ok?: boolean;
-  error?: PlaceError | "input" | "generic";
+  error?: PlaceError | "input" | "generic" | "rate";
 }
 
 export async function placeOrderAction(_prev: MarketState, formData: FormData): Promise<MarketState> {
   const investor = await signedIn();
+  if (!take("order", investor.id)) return { error: "rate" };
   const parsed = orderSchema.safeParse({
     symbol: formData.get("symbol"),
     side: formData.get("side"),
@@ -33,7 +36,8 @@ export async function placeOrderAction(_prev: MarketState, formData: FormData): 
   try {
     const r = await placeOrder(investor, parsed.data);
     if ("error" in r) return { error: r.error };
-  } catch {
+  } catch (e) {
+    logError("placeOrder", e);
     return { error: "generic" };
   }
   revalidatePath("/market");
@@ -42,6 +46,7 @@ export async function placeOrderAction(_prev: MarketState, formData: FormData): 
 
 export async function topUpAction(_prev: MarketState, formData: FormData): Promise<MarketState> {
   const investor = await signedIn();
+  if (!take("topup", investor.id)) return { error: "rate" };
   const parsed = topUpSchema.safeParse({
     amount: formData.get("amount"),
     requestId: formData.get("requestId"),
@@ -50,7 +55,8 @@ export async function topUpAction(_prev: MarketState, formData: FormData): Promi
   if (!parsed.success || parsed.data.amount > MAX_TOPUP_PAISA) return { error: "input" };
   try {
     await topUp(investor, parsed.data.amount, parsed.data.requestId);
-  } catch {
+  } catch (e) {
+    logError("topUp", e);
     return { error: "generic" };
   }
   revalidatePath("/market");
@@ -61,7 +67,10 @@ const cancelSchema = z.object({ orderId: z.uuid() });
 
 export async function cancelOrderAction(formData: FormData): Promise<void> {
   const investor = await signedIn();
+  if (!take("cancel", investor.id)) return;
   const parsed = cancelSchema.safeParse({ orderId: formData.get("orderId") });
-  if (parsed.success) await cancelOrder(investor, parsed.data.orderId);
+  if (parsed.success) await cancelOrder(investor, parsed.data.orderId).catch((e: unknown) => {
+    logError("cancelOrder", e);
+  });
   revalidatePath("/market");
 }

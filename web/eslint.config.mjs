@@ -3,7 +3,7 @@ import security from "eslint-plugin-security";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["node_modules/", ".next/", "next-env.d.ts", "src/lib/abis.ts", "scripts/"] },
+  { ignores: ["node_modules/", ".next/", ".next-e2e/", "test-results/", "playwright-report/", "next-env.d.ts", "src/lib/abis.ts", "scripts/"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   security.configs.recommended,

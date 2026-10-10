@@ -69,8 +69,12 @@ def process_proof(h, proof):
 
 
 def holders(token, to_block):
-    logs = net.rpc(net.RPC_BASE, "eth_getLogs",
-                   [{"address": token, "fromBlock": "0x0", "toBlock": hex(to_block), "topics": [TRANSFER]}], timeout=30)
+    # Besu refuses eth_getLogs ranges over 5,000 blocks (rpc-max-logs-range), so read in windows.
+    logs = []
+    for start in range(0, to_block + 1, 4_000):
+        end = min(start + 3_999, to_block)
+        logs += net.rpc(net.RPC_BASE, "eth_getLogs",
+                        [{"address": token, "fromBlock": hex(start), "toBlock": hex(end), "topics": [TRANSFER]}], timeout=30)
     seen = []
     for log in logs:
         addr = "0x" + log["topics"][2][-40:]

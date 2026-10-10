@@ -1,5 +1,6 @@
 import { findProperty } from "@/lib/properties";
 import { marketSnapshot, toView } from "@/lib/server/market";
+import { keyFromForwarded, openStream } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
   const { symbol } = await params;
   const p = findProperty(symbol);
   if (p?.status !== "live") return new Response("Not found", { status: 404 });
+  const client = keyFromForwarded(request.headers.get("x-forwarded-for"));
+  const release = openStream(client);
+  if (!release) return new Response("Too many live connections", { status: 429, headers: { "Retry-After": "30" } });
 
   const encoder = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -27,6 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
       let busy = false;
       const close = () => {
         if (timer) clearInterval(timer);
+        release();
         try {
           controller.close();
         } catch {
@@ -62,6 +67,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
     },
     cancel() {
       if (timer) clearInterval(timer);
+      release();
     },
   });
   return new Response(stream, {

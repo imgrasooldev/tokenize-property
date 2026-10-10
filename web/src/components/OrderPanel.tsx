@@ -50,18 +50,19 @@ export function OrderPanel({
     paused: t.errPaused,
     chain: t.errInvestChain,
     generic: t.errInvestGeneric,
+    rate: t.errRate,
   };
 
   return (
     <div style={{ display: "grid", gap: 20, minWidth: 0 }}>
       <section className="panel">
-        <div className="seg" role="tablist" aria-label={t.side}>
-          <button type="button" role="tab" aria-selected={side === "buy"} className={side === "buy" ? "on buy" : ""} onClick={() => {
+        <div className="seg" role="group" aria-label={t.side}>
+          <button type="button" aria-pressed={side === "buy"} className={side === "buy" ? "on buy" : ""} onClick={() => {
               setSide("buy");
             }}>
             {t.buy}
           </button>
-          <button type="button" role="tab" aria-selected={side === "sell"} className={side === "sell" ? "on sell" : ""} onClick={() => {
+          <button type="button" aria-pressed={side === "sell"} className={side === "sell" ? "on sell" : ""} onClick={() => {
               setSide("sell");
             }}>
             {t.sell}
@@ -115,7 +116,7 @@ export function OrderPanel({
         <form action={topAction} className="form" noValidate>
           {topState.error && (
             <div className="alert" role="alert">
-              {topState.error === "input" ? t.errTopUp : t.errInvestGeneric}
+              {topState.error === "input" ? t.errTopUp : topState.error === "rate" ? t.errRate : t.errInvestGeneric}
             </div>
           )}
           <input type="hidden" name="requestId" value={topUpRequestId} />

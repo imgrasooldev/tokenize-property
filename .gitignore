@@ -40,6 +40,9 @@ backend/**/.env.*
 
 # Web app build output
 web/.next/
+web/.next-e2e/
+web/test-results/
+web/playwright-report/
 web/*.tsbuildinfo
 
 # Flutter

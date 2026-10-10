@@ -20,7 +20,7 @@ export function VerifyRent({ t, distributionId }: { t: Dict; distributionId: str
       {state.done &&
         (state.error ? (
           <p className="note" role="status">
-            {state.error === "chain" ? t.chainUnavailable : t.noStatement}
+            {state.error === "chain" ? t.chainUnavailable : state.error === "rate" ? t.errRate : t.noStatement}
           </p>
         ) : (
           <ul className="steps-list" role="status">

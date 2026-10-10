@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-11
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Investor website prototype W1–W4 done (web/): invest flow, portfolio, rent self-verification, demo secondary market with real-time chart. Next: W5 (polish, end-to-end tests), then backend 5c–5h.**
+- Current position: **Investor website prototype W1–W5 complete (web/): invest, portfolio, rent self-verification, demo market with real-time chart, hardening, 67 + 11 e2e tests, presenter tooling. Next: owner's gate review of the website, then backend 5c outbox (5c–5h).**
 
 ---
 
@@ -48,7 +48,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
-| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify) and W4 (demo market: cash top-up, limit orders with escrow, single matcher, DvP settlement on chain, SSE real-time candles; `npm run demo:market`) done; 61 web tests. Next W5 |
+| 7 (early) | Investor website prototype (`web/`) | **Done (prototype)**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify) W4 (demo market: cash top-up, limit orders with escrow, single matcher, DvP settlement on chain, SSE real-time candles) and W5 (record-before-broadcast sends with per-signer lock, rate limits, caching, error pages, Playwright e2e in Edge, `scripts/demo.py`, docs/demo-guide.md) done; 67 tests + 11 e2e. **Complete; awaiting owner review** |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -93,6 +93,12 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - **W4 market:** a buy order's cost sits in its own escrow account `web:order:<id>:escrow`; price improvement on partial fills stays there until the order ends. Matcher = `pg_try_advisory_lock(586586030)`; cancels wait on the same lock. Any failure before broadcast (including a missing custodial key) must fail the trade, never send it to review. Band ±10% of NAV and demo liquidity were the owner's choices (2026-10-10).
 - **Dev server speed:** the first request after editing a file includes Turbopack compile time (10–15 s); measured order + on-chain settlement is about 2–3 s, mostly the 2 s block time. viem `pollingInterval` is 250 ms (default 4 s).
 - **Stopping the dev server:** `TaskStop` on `npm run dev` leaves the `next` child on port 3100; stop the process listening on 3100. Never run `next build` while `next dev` runs (shared `.next`). `next build` rewrites `web/next-env.d.ts`; restore it before committing.
+- **Sending transactions (W5):** `send()` = simulate → per-signer advisory lock (database `postgres`, so all processes share it) → nonce → sign locally → `onSigned` records hash + nonce → broadcast. Recovery decides from the chain via `txOutcome` (success / reverted / dropped / pending / unknown). "No recorded hash" means nothing was sent, because the record step is guarded by the sending status.
+- **Besu `eth_getLogs` max range is 5,000 blocks.** Always read logs in windows (`inBlockWindows`, `rent.py`, demo console). This silently broke reconcile once the chain passed 5,000 blocks.
+- **E2E:** `npm run test:e2e` starts its own `next dev` on 3101 with `WEB_DB_NAME=property_token_test` and `NEXT_DIST_DIR=.next-e2e` (only those values are honoured). Uses the installed Edge (`channel: msedge`); no browser download. Next's route announcer has `role="alert"` and its dev-tools button matches "EN": use `.alert` and `exact: true`. Sign-up names must be letters only.
+- **X-Forwarded-For** is client-controlled; rate limits trust it only with `TRUST_PROXY=1`.
+- **Python on Windows** cannot open paths over 260 characters (the session scratchpad); copy scripts to a short path first. Bash heredocs with backticks inside Python strings break; write the script to a file instead.
+- **Presenting:** `python scripts/demo.py up --trade` (chain, DB, website, pre-compile, demo trading); `down [--all]`. Production build: pages 9–32 ms on this laptop.
 - **Grid layouts:** panels inside `.detail` need `min-inline-size: 0` or wide tables push the page past 375 px on phones.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
@@ -124,7 +130,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. **Investor website prototype**, W1–W4 done, next W5 polish + end-to-end tests (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
+1. **Investor website prototype**, W1–W5 complete; owner to review (`python scripts/demo.py up --trade`, docs/demo-guide.md). Scope was (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
 2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
 3. Hosted staging server only after Step 6 (owner agreed).
 4. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
@@ -148,6 +154,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 
 | Date | Owner asked | Outcome |
 |---|---|---|
+| 2026-10-11 | Run the app; then approved the W5 plan (Playwright with installed Edge) | Ran the demo (40 trades settled). W5: independent security review (0 critical, 1 high: unpaid delivered trade after a crash) and all findings fixed: record-before-broadcast sends with per-signer lock, dropped-tx refunds, rate limits, snapshot cache, throttled page side effects, retryable sign-up, error pages, log windows (found Besu 5,000-block limit bug). 67 tests + 11 Edge e2e; prod pages 9–32 ms; `scripts/demo.py`, docs/demo-guide.md; threat model M-9; pushed |
 | 2026-10-11 | Continue: approved the W4 plan (±10% band, demo liquidity script) | W4 built: demo cash, limit orders with per-order escrow, single matcher, DvP settlement on chain, SSE real-time candles/order book, EN/Urdu, mobile; `npm run demo:market`; 61 web tests (5 market integration incl. racing buyers and frozen seller); threat model M-8; pushed |
 | 2026-10-10 | Fetch/pull the repo and read memory (new machine); then approved 5 verified downloads + setup and the W3 plan | Cloned to `D:\property-token`, all checksums/signature verified, baseline green (121 contract tests, flow 50/50, 23 backend tests). W3 built: invest flow with ledger-first payment, single-use refId mint, safe refund/review rules, portfolio reconciliation, `chain/rent.py` + Merkle self-verify, EN/Urdu, mobile; 28 web tests incl. 5 concurrent identical submits; threat model M-6, M-7; pushed |
 | 2026-10-01 | "Property Tokenization Blockchain": explain the concept, for Pakistan | Explained SPV/REIT wrapper, tokens as claims on the legal entity, KYC whitelist, rent flow. Pakistan context: Companies Act 50-member cap for private companies, SECP REIT Regulations and sandbox, SBP 2018 circular, PVARA (2025), PKR via banks/Raast, title risk, FBR tax, Shariah structures |
@@ -181,7 +188,8 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | [docs/product-map.md](docs/product-map.md) | Websites, portals, apps and services |
 | [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network, 0003 PostgreSQL 18 + queues in PostgreSQL) |
 | [chain/README.md](chain/README.md) | Local Besu network: setup, verified downloads, secrets, production differences |
-| [web/README.md](web/README.md) | Investor website prototype: status W1–W5, run commands, sign-up/KYC design, security |
+| [web/README.md](web/README.md) | Investor website prototype: status W1–W5, run commands, flows, hardening, tests, speed |
+| [docs/demo-guide.md](docs/demo-guide.md) | 15-minute presenter script, setup and Q&A for team demos |
 | [backend/README.md](backend/README.md) | Backend packages, local PostgreSQL 18, commands, supply-chain rules |
 | [docs/findings/](docs/findings/) | Security findings with proofs and mitigations |
 | [docs/audit/ethtrust-checklist.md](docs/audit/ethtrust-checklist.md) | EthTrust [Q] self-assessment |

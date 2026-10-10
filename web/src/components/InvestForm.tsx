@@ -34,6 +34,7 @@ export function InvestForm({
     notLive: t.errNotLive,
     chain: t.errInvestChain,
     generic: t.errInvestGeneric,
+    rate: t.errRate,
   };
   const errorText = state.error ? errors[state.error] : null;
 

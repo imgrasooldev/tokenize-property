@@ -50,7 +50,18 @@ export interface Distribution {
   statementAvailable: boolean;
 }
 
+const statementCache = new Map<string, { at: number; value: Map<number, StatementFile> }>();
+
+/** Statements change only when chain/rent.py publishes one; re-read at most every 10 s. */
 function loadStatements(token: Address): Map<number, StatementFile> {
+  const hit = statementCache.get(token.toLowerCase());
+  if (hit && Date.now() - hit.at < 10_000) return hit.value;
+  const value = readStatements(token);
+  statementCache.set(token.toLowerCase(), { at: Date.now(), value });
+  return value;
+}
+
+function readStatements(token: Address): Map<number, StatementFile> {
   const out = new Map<number, StatementFile>();
   // Fixed directory inside the repository; file names are filtered by the token address below.
   // eslint-disable-next-line security/detect-non-literal-fs-filename
@@ -62,7 +73,8 @@ function loadStatements(token: Address): Map<number, StatementFile> {
     try {
       // eslint-disable-next-line security/detect-non-literal-fs-filename
       const parsed = statementFile.safeParse(JSON.parse(readFileSync(join(RENT_DIR, name), "utf8")));
-      if (parsed.success) out.set(parsed.data.id, parsed.data);
+      // The id inside the file must match the one in its name.
+      if (parsed.success && name === `${prefix}${String(parsed.data.id)}.json`) out.set(parsed.data.id, parsed.data);
     } catch {
       // A malformed statement is ignored; the chain stays the source of truth.
     }
