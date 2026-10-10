@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Inter, Noto_Naskh_Arabic } from "next/font/google";
 import type { ReactNode } from "react";
 import { Header } from "@/components/Header";
+import { investorById } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
+import { currentInvestorId } from "@/lib/server/session";
 import "./globals.css";
 
 const latin = Inter({ subsets: ["latin"], variable: "--font-latin", display: "swap" });
@@ -16,11 +18,13 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { lang, t } = await getDict();
+  const id = await currentInvestorId();
+  const investor = id ? await investorById(id).catch(() => null) : null;
   return (
     <html lang={lang} dir={lang === "ur" ? "rtl" : "ltr"} className={`${latin.variable} ${urdu.variable}`}>
       <body>
         <div className="banner">{t.demoBanner}</div>
-        <Header lang={lang} t={t} />
+        <Header lang={lang} t={t} userName={investor?.display_name ?? null} />
         {children}
         <footer className="container footer">{t.verifyOnChain}</footer>
       </body>

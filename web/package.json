@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "sync:abis": "node scripts/sync-abis.mjs",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint",
+    "setup:demo": "node scripts/setup-demo.mjs"
   },
   "dependencies": {
     "lightweight-charts": "5.2.1",

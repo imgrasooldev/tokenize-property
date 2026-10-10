@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-10
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Investor website prototype W1 done (web/). Next: W2 (demo login, sign-up, mock KYC, on-chain identity), then W3–W5, then backend 5c–5h.**
+- Current position: **Investor website prototype W1 + W2 done (web/). Next: W3 (invest: mock bank → ledger → real mint; portfolio), then W4–W5, then backend 5c–5h.**
 
 ---
 
@@ -48,7 +48,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
-| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 done (properties, live chain data, charts, EN/Urdu RTL). Next W2 login + KYC |
+| 7 (early) | Investor website prototype (`web/`) | **In progress**: W1 (properties, live chain data, charts, EN/Urdu RTL) and W2 (personas, sign-up, mock KYC, real on-chain onboarding) done. Next W3 invest + portfolio |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
 | 7 | Investor web portal, website, verification page, Flutter app | Not started |
 | Pre-launch | 2 external audits, formal verification, pen test, SECP pilot | Not started |
@@ -85,6 +85,7 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - SQL functions marked `STRICT` return NULL if any argument is NULL; this once nulled the ledger hash (caught by NOT NULL + tests).
 - **Demo Console:** `cd backend && npm run demo`, then open `http://127.0.0.1:4800`. Start Postgres and the chain first. Child Python processes must run with `-u` or their output only appears at the end. The preview tool picked another project's launch config, so start the server via a background shell and open it by URL.
 - **Web (Next.js 16):** use `src/proxy.ts`, not `middleware`; route `params` are a Promise. `next dev` auto-writes `web/AGENTS.md`, so commit it. `eslint-config-next` was dropped over a high-severity `braces` advisory. ABIs are copied from the backend by `npm run sync:abis`, and CI checks they are identical. Dev server runs on `127.0.0.1:3100`. Browser-pane screenshots can go stale when the window is hidden; reload before taking one.
+- **Web W2:** run `npm run setup:demo` once to create `web/.env.local` (session, wallet-encryption and CNIC-pepper secrets). Investor demo data lives in schema `webdemo` in the local `property_token` DB. React resets the form after a server action, so refill fields when testing. Mock NADRA rejects CNICs ending in 0.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
 
@@ -115,7 +116,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 
 ## 8. Next actions
 
-1. **Investor website prototype**, W1 done, next W2 (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
+1. **Investor website prototype**, W1 + W2 done, next W3 (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
 2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
 3. Hosted staging server only after Step 6 (owner agreed).
 3. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
@@ -149,6 +150,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-08 | Store memory in MEMORY.md; lifecycle as PDF in docs | `MEMORY.md`, `CLAUDE.md`, `docs/Development-Lifecycle.pdf`; pushed |
 | 2026-10-08 | Is all our communication in MEMORY.md? | No; added sections 9 and 10 (this log) |
 | 2026-10-08 | Continue; approved downloads of Besu 26.9.0 (192 MB) and portable JDK 25 (141 MB) | Step 4 done: 4-validator network, 50/50 end-to-end checks, outage test; dev-only 60 s timelock (ADR 0002); pushed |
+| 2026-10-10 | Continue W2, then push | W2 done and verified in the browser: Alice login; NADRA-failure path; new investor "Ayesha Test" onboarded on chain (isVerified=true via cast); duplicate CNIC refused; forged session refused; DB holds no full CNIC or phone; pushed |
 | 2026-10-10 | Push to GitHub and update MEMORY.md | Already pushed (73aeb43); added demo and website rows to the step table and this log line; pushed |
 | 2026-10-10 | Continue (website) | Showed flow and market-page layout; built W1: properties list and detail with live chain data, NAV and rent charts, English/Urdu RTL; verified in the browser; web CI job; pushed |
 | 2026-10-10 | Asked for an end-user website with a real-time trading chart (complete flow) | Explained the market needs SECP approval; offered real NAV/rent charts plus a clearly labelled demo market. Owner chose: portal + demo market, website before backend 5c–5h, English + Urdu toggle. Demo Console finished and verified in the browser (scenario 50/50, rent cycle, tamper test; security 403s); pushed |
