@@ -1,6 +1,6 @@
 # ADR 0006: Indexer and the chain read model
 
-- Status: Proposed (Step 5e plan approved by the owner 2026-10-12; implementation awaiting review)
+- Status: Accepted (owner, 2026-10-12). A `verify` mismatch becomes a Step 5f reconciliation finding that freezes payouts; the indexer itself only halts on chain mismatches.
 - Date: 2026-10-12
 - Builds on: ADR 0001 (the chain is never in the read path), ADR 0003 (PostgreSQL 18), ADR 0004 (exactly-once)
 - Addresses: threat D-3 "read model drifts from chain"
