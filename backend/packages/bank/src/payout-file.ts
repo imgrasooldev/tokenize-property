@@ -11,6 +11,8 @@ import { z } from "zod";
  *   {"type":"trailer","count":2}
  *
  * No names: the bank pays by IBAN; beneficiaryRef is the first 8 hex digits of the KYC subject id.
+ * lineNo is the batch's line number; held lines (ADR 0009, decision 2) are not in the file, so
+ * numbers increase but can have gaps. A payout return names the same lineNo.
  */
 export const PAYOUT_FORMAT = "pt-mock-payout-v1";
 
@@ -69,8 +71,10 @@ export function parsePayoutFile(text: string): PayoutFile {
   const t = trailer.parse(JSON.parse(rows.at(-1) ?? "null"));
   const lines = rows.slice(1, -1).map((r) => line.parse(JSON.parse(r)));
   if (lines.length !== h.count || t.count !== h.count) throw new Error("payout file: line count does not match header and trailer");
+  // Line numbers are the batch's own (held lines are not sent), so they increase but may have gaps.
   lines.forEach((l, i) => {
-    if (l.lineNo !== i + 1) throw new Error(`payout file: line ${String(i + 1)} is numbered ${String(l.lineNo)}`);
+    const prev = i === 0 ? 0 : (lines[i - 1]?.lineNo ?? 0);
+    if (l.lineNo <= prev) throw new Error(`payout file: line ${String(i + 1)} is numbered ${String(l.lineNo)} after ${String(prev)}`);
   });
   const total = lines.reduce((s, l) => s + BigInt(l.amountPaisa), 0n);
   if (total.toString() !== h.totalPaisa) throw new Error("payout file: lines do not add up to the total");

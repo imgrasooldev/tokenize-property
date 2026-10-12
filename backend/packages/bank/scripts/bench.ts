@@ -98,7 +98,7 @@ try {
     bank: {
       accounts: [{ account: "TRUSTEE-ESCROW-01", ledgerAccount: "bank:trustee-escrow" }],
       statements: [{ id: 1n, account: st.account, date: st.date, opening: st.openingPaisa, closing: st.closingPaisa, lines: st.lines.map((l, n) => ({ lineNo: n + 1, valueDate: l.valueDate, amount: l.amountPaisa, reference: l.reference, counterparty: l.counterparty, balance: l.balancePaisa })) }],
-      payoutFiles: new Map(),
+      payoutBatches: [],
     },
     ledger: { journals: j.rows.map((r) => ({ id: BigInt(r.id), key: r.idempotency_key, kind: r.kind, externalRef: r.external_ref, createdAt: r.created_at, postings: r.postings.map(([account, amount]) => ({ account, amount: BigInt(amount) })) })) },
   } as unknown as ReconData);

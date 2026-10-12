@@ -2,7 +2,7 @@ import { balanceOf } from "@pt/ledger";
 import { revoke } from "@pt/kyc";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BankError, decidePayoutBatch } from "../src/service.ts";
+import { BankError, decidePayoutBatch, verifyAudit } from "../src/service.ts";
 import {
   ageCoolingOff,
   cashFindings,
@@ -283,16 +283,73 @@ describe("payout batches (B-5, B-6)", () => {
     await expect(w.bank.createPayoutBatch({ token: t, distributionId: 3n, items: [{ subjectId: a.subjectId, amountPaisa: 1n }], createdBy: "operator:maker" })).rejects.toThrow(/not found/);
   });
 
-  it("refuses investors in the 72-hour cooling-off or not verified", async () => {
+  it("held payouts (ADR 0009 decision 2): investors who cannot be paid now are held, the rest is paid, a follow-up pays them later", async () => {
     const t = token();
+    const ready = await investor(w, "Ready Investor");
     const cooling = await investor(w, "Cooling Investor", { active: false });
     const revoked = await investor(w, "Revoked Investor");
+    const owed = [
+      { subjectId: ready.subjectId, amountPaisa: 5_000n },
+      { subjectId: cooling.subjectId, amountPaisa: 3_000n },
+      { subjectId: revoked.subjectId, amountPaisa: 2_000n },
+    ];
+    await rentOwed(w, t, 1n, owed);
     await revoke(w.db, revoked.subjectId, "officer:amna", "Sanctions list update, under investigation");
-    await finalizedDistribution(w, t, 1n, 2_000n);
-    const err = await w.bank
-      .createPayoutBatch({ token: t, distributionId: 1n, items: [{ subjectId: cooling.subjectId, amountPaisa: 1_000n }, { subjectId: revoked.subjectId, amountPaisa: 1_000n }], createdBy: "operator:maker" })
-      .catch((e: unknown) => e as Error);
-    expect(String(err)).toMatch(/line 1: no active payout account .*cooling-off.*line 2: investor is revoked/);
+    await finalizedDistribution(w, t, 1n, 10_000n);
+    await passRecon(w);
+
+    // Nobody payable at all: nothing to send.
+    const t0 = token();
+    await finalizedDistribution(w, t0, 1n, 3_000n);
+    await expect(w.bank.createPayoutBatch({ token: t0, distributionId: 1n, items: [{ subjectId: cooling.subjectId, amountPaisa: 3_000n }], createdBy: "operator:maker" })).rejects.toThrow(/nothing to pay/);
+
+    const batch = await w.bank.createPayoutBatch({ token: t, distributionId: 1n, items: owed, createdBy: "operator:maker" });
+    const { rows: items } = await w.db.query<{ line_no: number; held: boolean; held_reason: string | null }>(
+      "SELECT line_no, held, held_reason FROM bank.payout_items WHERE batch_id = $1 ORDER BY line_no", [batch.toString()]);
+    expect(items).toEqual([
+      { line_no: 1, held: false, held_reason: null },
+      { line_no: 2, held: true, held_reason: "no active payout account" },
+      { line_no: 3, held: true, held_reason: "investor is revoked" },
+    ]);
+    await decidePayoutBatch(w.db, batch, "operator:checker", "approve", "Held lines checked, rest is correct");
+    const escrowBefore = await escrowBalance(w);
+    const sent = await w.bank.submitPayoutBatch(batch, w.mock);
+    expect(sent.file).toContain(ready.iban);
+    expect(sent.file).not.toContain(cooling.iban);
+    expect(await escrowBalance(w)).toBe(escrowBefore - 5_000n);
+    expect(await balanceOf(w.db, `rent:payable:${ready.subjectId}`)).toBe(0n);
+    expect(await balanceOf(w.db, `rent:payable:${cooling.subjectId}`)).toBe(-3_000n); // still owed
+    expect(await balanceOf(w.db, `rent:payable:${revoked.subjectId}`)).toBe(-2_000n);
+    expect(await escrowBalance(w)).toBe(w.mock.balancePaisa);
+    expect(await cashFindings(w)).toEqual([]);
+
+    // Follow-up: only held shares, only payable investors, each once.
+    await expect(w.bank.createFollowupBatch({ parentBatchId: batch, subjectIds: [cooling.subjectId], createdBy: "operator:maker" })).rejects.toThrow(/no active payout account/);
+    await expect(w.bank.createFollowupBatch({ parentBatchId: batch, subjectIds: [ready.subjectId], createdBy: "operator:maker" })).rejects.toThrow(/no held share/);
+    await expect(w.bank.createFollowupBatch({ parentBatchId: batch, subjectIds: [revoked.subjectId], createdBy: "operator:maker" })).rejects.toThrow(/investor is revoked/);
+    await ageCoolingOff(w, cooling.subjectId);
+    const follow = await w.bank.createFollowupBatch({ parentBatchId: batch, subjectIds: [cooling.subjectId], createdBy: "operator:maker" });
+    await expect(w.bank.createFollowupBatch({ parentBatchId: batch, subjectIds: [cooling.subjectId], createdBy: "operator:maker" })).rejects.toThrow(/already in a follow-up/);
+    await expect(decidePayoutBatch(w.db, follow, "operator:maker", "approve", "approving my own batch")).rejects.toThrow(/maker-checker/);
+    await decidePayoutBatch(w.db, follow, "operator:checker", "approve", "Cooling-off over, account checked");
+    const second = await w.bank.submitPayoutBatch(follow, w.mock);
+    expect(second.file).toContain(cooling.iban);
+    expect(await balanceOf(w.db, `rent:payable:${cooling.subjectId}`)).toBe(0n);
+    const { rows: keys } = await w.db.query<{ key: string }>("SELECT j.idempotency_key AS key FROM bank.payout_batches b JOIN ledger.journal j ON j.id = b.journal_id WHERE b.id = $1", [follow.toString()]);
+    expect(keys[0]?.key).toBe(`rent:payout:${t}:1:followup:${follow.toString()}`);
+    expect(await escrowBalance(w)).toBe(w.mock.balancePaisa);
+    expect(await cashFindings(w)).toEqual([]);
+    expect(await verifyAudit(w.db)).toEqual([]);
+
+    // H-4: moving a line from held to paid afterwards is found by the audit.
+    await w.db.query("ALTER TABLE bank.payout_items DISABLE TRIGGER payout_items_append_only");
+    await w.db.query("UPDATE bank.payout_items SET held = false, held_reason = NULL, payee_id = (SELECT id FROM bank.payees WHERE subject_id = $2 LIMIT 1) WHERE batch_id = $1 AND line_no = 3", [batch.toString(), revoked.subjectId]);
+    await w.db.query("ALTER TABLE bank.payout_items ENABLE TRIGGER payout_items_append_only");
+    expect((await verifyAudit(w.db)).map((x) => x.problem)).toEqual([expect.stringMatching(/payout batch \d+ or its items changed after creation/)]);
+    await w.db.query("ALTER TABLE bank.payout_items DISABLE TRIGGER payout_items_append_only");
+    await w.db.query("UPDATE bank.payout_items SET held = true, held_reason = 'investor is revoked', payee_id = NULL WHERE batch_id = $1 AND line_no = 3", [batch.toString()]);
+    await w.db.query("ALTER TABLE bank.payout_items ENABLE TRIGGER payout_items_append_only");
+    expect(await verifyAudit(w.db)).toEqual([]);
   });
 
   it("a freeze, a changed account or a revoked investor after approval stops the submission; the ledger refuses overpaying", async () => {

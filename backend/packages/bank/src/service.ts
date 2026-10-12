@@ -207,6 +207,20 @@ export class BankService implements WebhookHandler {
   }
 
   /**
+   * H-3 (ADR 0009 decision 2): pays shares held in a submitted distribution batch to investors who
+   * can now be paid. Same maker-checker, gate and submission as any batch. Returns the batch id.
+   */
+  async createFollowupBatch(input: { parentBatchId: bigint; subjectIds: string[]; createdBy: string }): Promise<bigint> {
+    const { rows: parent } = await this.db.query<{ reference: string }>("SELECT reference FROM bank.payout_batches WHERE id = $1", [input.parentBatchId.toString()]);
+    const base = (parent[0]?.reference ?? "PTPAY-UNKNOWN").slice(0, 34);
+    const { rows } = await this.db.query<{ id: string }>(
+      "SELECT bank.create_followup_batch($1, $2, $3::jsonb, $4) AS id",
+      [`${base}-F${randomCode(4)}`, input.parentBatchId.toString(), JSON.stringify(input.subjectIds), input.createdBy],
+    );
+    return BigInt(rows[0]?.id ?? "0");
+  }
+
+  /**
    * B-5/B-6: writes the bank file of an approved batch, records its SHA-256 and books the payout in
    * one transaction, THEN sends it. Calling again after a crash rebuilds the same bytes, gets the same
    * journal back and re-sends (the bank de-duplicates by reference).

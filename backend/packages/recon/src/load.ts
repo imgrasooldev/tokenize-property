@@ -9,6 +9,7 @@ import type {
   ExpectedMint,
   LedgerJournal,
   OutboxCommand,
+  PayoutBatch,
   ReconData,
 } from "./types.ts";
 
@@ -137,9 +138,13 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
     const reconAudit = (await q<{ audit_id: string | null; problem: string }>("SELECT audit_id::text, problem FROM recon.verify_audit()"))
       .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
-    const payoutFiles = new Map((await q<{ reference: string; sha: string }>(
-      "SELECT reference, '0x' || encode(file_sha256, 'hex') AS sha FROM bank.payout_batches WHERE status = 'submitted'"))
-      .map((r) => [r.reference, r.sha]));
+    const payoutBatches: PayoutBatch[] = (await q<{ reference: string; kind: PayoutBatch["kind"]; parent: string | null; token: string; distribution_id: string; total_paisa: string; paid_paisa: string; sha: string }>(
+      `SELECT b.reference, b.kind, p.reference AS parent, b.token, b.distribution_id::text, b.total_paisa::text, b.paid_paisa::text,
+              '0x' || encode(b.file_sha256, 'hex') AS sha
+       FROM bank.payout_batches b LEFT JOIN bank.payout_batches p ON p.id = b.parent_id
+       WHERE b.status = 'submitted' ORDER BY b.id`))
+      .map((r) => ({ reference: r.reference, kind: r.kind, parentReference: r.parent, token: r.token, distributionId: BigInt(r.distribution_id),
+        totalPaisa: BigInt(r.total_paisa), paidPaisa: BigInt(r.paid_paisa), fileSha256: r.sha }));
     await client.query("COMMIT");
 
     sources = { webdemo, outboxMintCommands: mintCommands };
@@ -151,7 +156,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       chain: { issuances, distributions, readModel: { totalSupply: BigInt(token?.total_supply ?? "0"), holdings } },
       ledger: { journals },
       expectedMints,
-      bank: { accounts, statements: [...statements.values()], payoutFiles },
+      bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };
   } catch (err) {

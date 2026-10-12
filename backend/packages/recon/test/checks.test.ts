@@ -225,10 +225,27 @@ describe("checkRent (M-2)", () => {
     if (!paid) throw new Error("none");
     const pj = journal(w.data, `rent:payout:${TOKEN}:${paid.id.toString()}`);
     const fileHash = `0x${"ab".repeat(32)}`;
-    w.data.bank.payoutFiles.set(pj.externalRef ?? "", fileHash);
+    w.data.bank.payoutBatches.push({ reference: pj.externalRef ?? "", kind: "distribution", parentReference: null, token: TOKEN, distributionId: paid.id, totalPaisa: paid.totalPaisa, paidPaisa: paid.totalPaisa, fileSha256: fileHash });
     // On chain still keccak256(reference): no longer accepted once the bank file exists.
     expect(checkRent(w.data)).toEqual([expect.objectContaining({ check: "rent.payout_batch_mismatch", actual: expect.stringContaining("SHA-256 of the bank file") as unknown })]);
     paid.payoutBatchHash = fileHash;
+    expect(checkRent(w.data)).toEqual([]);
+  });
+
+  it("held shares: paid + held must equal the distribution; outstanding held shares are a warning until a follow-up pays them", () => {
+    const w = world();
+    const paid = w.data.chain.distributions.find((x) => x.status === "paid");
+    if (!paid) throw new Error("none");
+    const pj = journal(w.data, `rent:payout:${TOKEN}:${paid.id.toString()}`);
+    const held = 1n;
+    paid.payoutBatchHash = `0x${"cd".repeat(32)}`;
+    const batch = { reference: pj.externalRef ?? "", kind: "distribution" as const, parentReference: null, token: TOKEN, distributionId: paid.id, totalPaisa: paid.totalPaisa, paidPaisa: paid.totalPaisa - held, fileSha256: paid.payoutBatchHash };
+    w.data.bank.payoutBatches.push(batch);
+    // The ledger still pays the full total although the batch held a share: a mismatch.
+    expect(names(checkRent(w.data))).toEqual(["rent.payout_amount_mismatch", "rent.payout_held"]);
+    pj.postings = pj.postings.map((p) => ({ ...p, amount: p.amount > 0n ? p.amount - held : p.amount + held }));
+    expect(checkRent(w.data)).toEqual([expect.objectContaining({ check: "rent.payout_held", severity: "warning" })]);
+    w.data.bank.payoutBatches.push({ ...batch, reference: `${batch.reference}-F1`, kind: "follow_up", parentReference: batch.reference, totalPaisa: held, paidPaisa: held, fileSha256: `0x${"ef".repeat(32)}` });
     expect(checkRent(w.data)).toEqual([]);
   });
 

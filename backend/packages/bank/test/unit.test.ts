@@ -63,7 +63,8 @@ describe("payout file", () => {
   it("the parser refuses a total that does not add up, renumbered lines or extra fields", () => {
     const text = formatPayoutFile(f);
     expect(() => parsePayoutFile(text.replace('"totalPaisa":"150000"', '"totalPaisa":"150001"'))).toThrow(/add up/);
-    expect(() => parsePayoutFile(text.replace('"lineNo":2', '"lineNo":3'))).toThrow(/numbered/);
+    expect(parsePayoutFile(text.replace('"lineNo":2', '"lineNo":3')).lines.map((l) => l.lineNo)).toEqual([1, 3]); // a held line 2 is not sent
+    expect(() => parsePayoutFile(text.replace('"lineNo":2', '"lineNo":1'))).toThrow(/numbered/);
     expect(() => parsePayoutFile(text.replace('"beneficiaryRef":"00ab12cd"', '"beneficiaryRef":"00ab12cd","name":"X"'))).toThrow();
   });
 });

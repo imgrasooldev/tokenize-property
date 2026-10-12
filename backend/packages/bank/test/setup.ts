@@ -191,7 +191,7 @@ export async function cashData(w: World, statements: Statement[]): Promise<Recon
         closing: st.closingPaisa,
         lines: st.lines.map((l, n) => ({ lineNo: n + 1, valueDate: l.valueDate, amount: l.amountPaisa, reference: l.reference, counterparty: l.counterparty, balance: l.balancePaisa })),
       })),
-      payoutFiles: new Map(),
+      payoutBatches: [],
     },
     ledger: { journals },
   } as unknown as ReconData;

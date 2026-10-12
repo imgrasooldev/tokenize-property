@@ -258,12 +258,21 @@ export function checkRent(d: ReconData): Finding[] {
       else {
         // A batch submitted through the bank service is identified by its bank file's SHA-256 (ADR 0009);
         // otherwise (web prototype, mock) by keccak256 of the batch reference (ADR 0007).
-        const file = d.bank.payoutFiles.get(pj.externalRef ?? "");
-        const h = file ?? payoutBatchHash(pj.externalRef ?? "");
+        const batch = d.bank.payoutBatches.find((b) => b.kind === "distribution" && b.reference === pj.externalRef);
+        const h = batch?.fileSha256 ?? payoutBatchHash(pj.externalRef ?? "");
         if (h !== c.payoutBatchHash) {
-          out.push(f("rent.payout_batch_mismatch", subject, `${c.payoutBatchHash ?? "none"} (on chain)`, `${h} = ${file ? "SHA-256 of the bank file" : "hash"} of batch ${pj.externalRef ?? "none"}`));
+          out.push(f("rent.payout_batch_mismatch", subject, `${c.payoutBatchHash ?? "none"} (on chain)`, `${h} = ${batch ? "SHA-256 of the bank file" : "hash"} of batch ${pj.externalRef ?? "none"}`));
         }
-        if (journalTotal(pj) !== c.totalPaisa) out.push(f("rent.payout_amount_mismatch", subject, `${s(c.totalPaisa)} paisa (on chain)`, `${s(journalTotal(pj))} paisa paid out (ledger)`));
+        // Held shares (ADR 0009 decision 2) stay owed: the batch's paid part plus its held part is the distribution.
+        const held = batch ? batch.totalPaisa - batch.paidPaisa : 0n;
+        if (batch && batch.totalPaisa !== c.totalPaisa) out.push(f("rent.payout_amount_mismatch", subject, `${s(c.totalPaisa)} paisa (on chain)`, `${s(batch.totalPaisa)} paisa paid + held in batch ${batch.reference}`));
+        if (journalTotal(pj) !== c.totalPaisa - held) {
+          out.push(f("rent.payout_amount_mismatch", subject, `${s(c.totalPaisa - held)} paisa (on chain total${held ? ` minus ${s(held)} held` : ""})`, `${s(journalTotal(pj))} paisa paid out (ledger)`));
+        }
+        if (batch && held > 0n) {
+          const later = d.bank.payoutBatches.filter((b) => b.kind === "follow_up" && b.parentReference === batch.reference).reduce((sum, b) => sum + b.paidPaisa, 0n);
+          if (later < held) out.push(f("rent.payout_held", subject, "every share paid", `${s(held - later)} paisa still held (investors without an active payout account)`));
+        }
       }
     } else if (c.status === "finalized" && pj) {
       out.push(f("rent.payout_not_recorded", subject, "recordPayout on chain", `ledger payout journal ${s(pj.id)}, chain still finalized`));

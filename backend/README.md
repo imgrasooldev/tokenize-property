@@ -202,6 +202,7 @@ npm run bank:bench       # throw-away database: onboarding, webhooks, a payout b
 | B-4 | Payout account title must match the verified name; one current investor per account; usable 72 hours after registration; every change alerts; IBAN as keyed hash + sealed copy bound to the investor |
 | B-5 | Payout batches: maker-checker, reconciliation gate at approval and at submission, verified investors with active unchanged accounts, total = finalized on-chain distribution, ledger refuses overpaying |
 | B-6 | One live batch per distribution; deterministic bank file, SHA-256 recorded before sending; a retry re-sends the same bytes |
+| H-1..H-4 | Held payouts (`0010_held_payouts.sql`, Step 5h): a line that cannot be paid now (no active account, KYC not verified) is held, not sent and stays owed; a batch must pay something; follow-up batches pay held shares once each (same maker-checker and gate); the item digest covers the held flag; reconciliation warns `rent.payout_held` until paid |
 
 Measured on this laptop (`npm run bank:bench -- 1000`): KYC onboarding with the mock providers p50 10.7 ms, p99 49 ms; a Raast credit through the signed HTTP endpoint into the ledger p50 5.9 ms, p99 32 ms; a payout batch of 1,000 investors created in 0.66 s, approved in 0.07 s, submitted (bank file + ledger) in 0.51 s; the cash check on 1,001 statement lines 19 ms with zero findings.
 

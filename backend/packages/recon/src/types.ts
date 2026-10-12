@@ -53,6 +53,7 @@ export const CHECKS = {
   "rent.payout_batch_mismatch": "blocking",
   "rent.payout_amount_mismatch": "blocking",
   "rent.payout_not_recorded": "warning",
+  "rent.payout_held": "warning",
   // Integrity of the records themselves
   "integrity.ledger_chain": "blocking",
   "integrity.ledger_balances": "blocking",
@@ -131,6 +132,20 @@ export interface BankLine {
   balance: bigint;
 }
 
+export interface PayoutBatch {
+  reference: string;
+  kind: "distribution" | "follow_up";
+  /** The distribution batch a follow-up pays held shares of. */
+  parentReference: string | null;
+  token: string;
+  distributionId: bigint;
+  /** Paid + held (for a follow-up: what it pays). */
+  totalPaisa: bigint;
+  paidPaisa: bigint;
+  /** 0x-prefixed SHA-256 of the bank file. */
+  fileSha256: string;
+}
+
 export interface BankStatement {
   id: bigint;
   account: string;
@@ -175,10 +190,10 @@ export interface ReconData {
     accounts: BankAccount[];
     statements: BankStatement[];
     /**
-     * Submitted payout batches (Step 5g): batch reference -> 0x-prefixed SHA-256 of the bank file.
-     * A distribution paid through such a batch must carry this hash on chain (ADR 0009).
+     * Payout batches submitted through the bank service (ADR 0009). A distribution paid through
+     * such a batch must carry its file hash on chain, and paid + held must equal its total.
      */
-    payoutFiles: Map<string, string>;
+    payoutBatches: PayoutBatch[];
   };
   integrity: {
     ledger: { journalId: string; problem: string }[];
