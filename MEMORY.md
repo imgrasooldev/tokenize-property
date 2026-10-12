@@ -5,7 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-10-11
 - Repository: https://github.com/imgrasooldev/tokenize-property (private)
 - Local path: `D:\property-token`
-- Current position: **Investor website prototype W1–W5 complete (web/): invest, portfolio, rent self-verification, demo market with real-time chart, hardening, 67 + 11 e2e tests, presenter tooling. Next: owner's gate review of the website, then backend 5c outbox (5c–5h).**
+- Current position: **Investor website prototype W1–W5 complete (web/): invest, portfolio, rent self-verification, demo market with real-time chart, hardening, 67 + 11 e2e tests, presenter tooling. Owner approved the website gate (2026-10-12). Backend 5c outbox done; next 5d signing service + policy engine.**
 
 ---
 
@@ -46,7 +46,7 @@ Full lifecycle document: [docs/Development-Lifecycle.pdf](docs/Development-Lifec
 | 2 | Contract spec + threat model | Done (spec v0.3) |
 | 3 | Smart contracts + tests | **Done (internal)**: 121 tests, 100% coverage, Slither 0, EthTrust [Q] self-assessment, deploy verified on Anvil |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | **Done**: Besu 26.9 + portable JDK 25, 4 validators, `chain/flow.py` 50/50 checks on real blocks, validator outage and recovery |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger done (L-1..L-6 enforced in PostgreSQL, 23 backend tests). Paused for the website prototype; next 5c outbox |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | **In progress**: 5a foundation, 5b ledger, 5c outbox done (O-1..O-7 in PostgreSQL, ADR 0004, `@pt/outbox` worker, property-tested exactly-once; 49 backend tests). Next 5d signing service |
 | Demo | Live Demo Console (`backend/packages/demo-console`) | **Done**: validators, token, events, ledger; scenario/rent/tamper buttons |
 | 7 (early) | Investor website prototype (`web/`) | **Done (prototype)**: W1 (properties, live chain data, charts, EN/Urdu RTL), W2 (personas, sign-up, mock KYC, real on-chain onboarding) W3 (invest: mock Raast → ledger → real mint → settle/refund; portfolio with reconciliation; rent Merkle self-verify) W4 (demo market: cash top-up, limit orders with escrow, single matcher, DvP settlement on chain, SSE real-time candles) and W5 (record-before-broadcast sends with per-signer lock, rate limits, caching, error pages, Playwright e2e in Edge, `scripts/demo.py`, docs/demo-guide.md) done; 67 tests + 11 e2e. **Complete; awaiting owner review** |
 | 6 | Internal portals: operations, compliance, trustee (maker-checker) | Not started |
@@ -99,6 +99,8 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - **X-Forwarded-For** is client-controlled; rate limits trust it only with `TRUST_PROXY=1`.
 - **Python on Windows** cannot open paths over 260 characters (the session scratchpad); copy scripts to a short path first. Bash heredocs with backticks inside Python strings break; write the script to a file instead.
 - **Presenting:** `python scripts/demo.py up --trade` (chain, DB, website, pre-compile, demo trading); `down [--all]`. Production build: pages 9–32 ms on this laptop.
+- **Outbox (5c):** the worker decides after any error from the DATABASE state (still `claimed` = nothing sent) and then the CHAIN, never from the error type. Lease minimum 5 s. Tests fast-forward leases and backoffs with admin UPDATEs (allowed: lease fields are not protected). A deliberate mutation (retry without checking the DB) must make the property test fail; keep it that way.
+- **`0003_outbox.sql` is applied to both local DBs:** never edit it again; add 0004+.
 - **Grid layouts:** panels inside `.detail` need `min-inline-size: 0` or wide tables push the page past 375 px on phones.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
@@ -131,7 +133,7 @@ python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-de
 ## 8. Next actions
 
 1. **Investor website prototype**, W1–W5 complete; owner to review (`python scripts/demo.py up --trade`, docs/demo-guide.md). Scope was (owner's choice 2026-10-10): Next.js; pages: properties, property detail (valuation/rent charts), sign-up + mock KYC, invest (real mint on local chain + ledger), portfolio (holdings, rent, Merkle self-verify), and a **demo secondary market** (order book, real-time price chart, trades settled on the local chain) clearly labelled "DEMO: secondary trading needs SECP approval". English + Urdu (RTL) toggle. Uses a demo signer until 5d.
-2. Then backend 5c outbox, 5d signing service (replaces the demo signer), 5e–5h.
+2. Backend 5d signing service + policy engine (replaces the demo signer and the local executor), then 5e indexer, 5f reconciliation, 5g KYC/bank mocks, 5h integration. Then move the website onto the outbox.
 3. Hosted staging server only after Step 6 (owner agreed).
 4. Set GitHub branch protection on `main` (2 reviews, CI required, signed commits), Dependabot and secret scanning. **Owner action.**
 5. Report F-01 upstream to the ONCHAINID maintainers (responsible disclosure).
@@ -154,6 +156,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 
 | Date | Owner asked | Outcome |
 |---|---|---|
+| 2026-10-12 | "next continue" (website gate approved), then approved the 5c plan | Step 5c done: migration 0003_outbox.sql (O-1..O-7, roles), `@pt/outbox` (enqueue, OutboxWorker, Executor, local executor), ADR 0004; 26 new tests incl. property test (mutation-checked) and real mint on Besu; threat model M-10; pushed |
 | 2026-10-11 | Run the app; then approved the W5 plan (Playwright with installed Edge) | Ran the demo (40 trades settled). W5: independent security review (0 critical, 1 high: unpaid delivered trade after a crash) and all findings fixed: record-before-broadcast sends with per-signer lock, dropped-tx refunds, rate limits, snapshot cache, throttled page side effects, retryable sign-up, error pages, log windows (found Besu 5,000-block limit bug). 67 tests + 11 Edge e2e; prod pages 9–32 ms; `scripts/demo.py`, docs/demo-guide.md; threat model M-9; pushed |
 | 2026-10-11 | Continue: approved the W4 plan (±10% band, demo liquidity script) | W4 built: demo cash, limit orders with per-order escrow, single matcher, DvP settlement on chain, SSE real-time candles/order book, EN/Urdu, mobile; `npm run demo:market`; 61 web tests (5 market integration incl. racing buyers and frozen seller); threat model M-8; pushed |
 | 2026-10-10 | Fetch/pull the repo and read memory (new machine); then approved 5 verified downloads + setup and the W3 plan | Cloned to `D:\property-token`, all checksums/signature verified, baseline green (121 contract tests, flow 50/50, 23 backend tests). W3 built: invest flow with ledger-first payment, single-use refId mint, safe refund/review rules, portfolio reconciliation, `chain/rent.py` + Merkle self-verify, EN/Urdu, mobile; 28 web tests incl. 5 concurrent identical submits; threat model M-6, M-7; pushed |
@@ -186,7 +189,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | [docs/threat-model.md](docs/threat-model.md) | STRIDE threats and controls |
 | [docs/security-standards.md](docs/security-standards.md) | Standards baseline and per-PR definition of done |
 | [docs/product-map.md](docs/product-map.md) | Websites, portals, apps and services |
-| [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network, 0003 PostgreSQL 18 + queues in PostgreSQL) |
+| [docs/decisions/](docs/decisions/) | Architecture decision records (0001 stack, 0002 local network, 0003 PostgreSQL 18 + queues in PostgreSQL, 0004 outbox and exactly-once) |
 | [chain/README.md](chain/README.md) | Local Besu network: setup, verified downloads, secrets, production differences |
 | [web/README.md](web/README.md) | Investor website prototype: status W1–W5, run commands, flows, hardening, tests, speed |
 | [docs/demo-guide.md](docs/demo-guide.md) | 15-minute presenter script, setup and Q&A for team demos |

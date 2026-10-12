@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md) and [0003](../docs/decisions/0003-backend-data.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md) and [0004](../docs/decisions/0004-outbox.md).
 
 ## Status
 
@@ -8,8 +8,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 |---|---|---|
 | 5a | Foundation: workspace, config, logger, DB pool + migration runner, typed ABIs, CI | Done |
 | 5b | Ledger: double-entry, append-only, hash-chained | Done |
-| 5c | Outbox + jobs in PostgreSQL, idempotency | Next |
-| 5d | Signing service + policy engine | Planned |
+| 5c | Outbox + jobs in PostgreSQL, idempotency | Done |
+| 5d | Signing service + policy engine | Next |
 | 5e | Indexer → read model | Planned |
 | 5f | Reconciliation (chain vs ledger vs bank) | Planned |
 | 5g | KYC and bank/Raast mocks | Planned |
@@ -24,7 +24,36 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/db` | Connection pool with statement/idle timeouts; migration runner with checksum (tamper) detection, advisory lock and per-migration transactions |
 | `@pt/contracts` | Typed ABIs generated from `contracts/out` (CI fails on drift) |
 | `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
+| `@pt/outbox` | Outbox: `enqueue` inside the business transaction, `OutboxWorker` (leases, LISTEN/NOTIFY, record-before-broadcast, resolution from the chain), `Executor` interface; `@pt/outbox/local-executor` for the local chain only |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
+
+## Outbox (Step 5c)
+
+Commands for the chain are enqueued in the **same transaction** as the ledger entry and executed by workers; see [ADR 0004](../docs/decisions/0004-outbox.md) for the full rules and the exactly-once argument. Enforced in the database (migration `0003_outbox.sql`):
+
+| Rule | What it guarantees |
+|---|---|
+| O-1 | Command and business change commit or roll back together |
+| O-2 | Idempotent enqueue; same key with a different command is refused |
+| O-3 | Kind, payload, key, reference immutable; no deletes |
+| O-4 | Only allowed status edges; `confirmed` / `failed` final |
+| O-5 | A transaction is recorded before broadcast, only by the current lease owner of a claimed command |
+| O-6 | A recorded transaction is cleared only when proven dropped |
+| O-7 | Every change in an append-only event history |
+
+```ts
+await client.query("BEGIN");
+await postJournal(client, { /* money in */ });
+await enqueue(client, { idempotencyKey: `mint:${refId}`, kind: "issuance.mint", payload, ref, createdBy: "issuance-service" });
+await client.query("COMMIT");
+
+const worker = new OutboxWorker(pool, { workerId: "w1@host", executors: { "issuance.mint": executor } });
+await worker.start(); // LISTEN outbox + polling fallback
+```
+
+Roles: `pt_outbox_writer` (enqueue), `pt_outbox_worker` (claim/record/complete/release/resolve), `pt_outbox_operator` (decide on review, with a reason), `pt_outbox_reader`.
+
+Tests (26): database rules (idempotency, rollback, immutability, edges, concurrent claimers, lease loss, drop/revert, backoff, operator rules, roles, NOTIFY only on commit); worker outcomes with a fault-injecting fake chain; a **property test** (random faults, 1–3 workers: never two successful transactions per command, confirmed means exactly one, failed means none), verified to catch a deliberately broken worker; and end to end on Besu (ledger + command in one transaction, real mint, duplicate refId refused before sending).
 
 ## Live Demo Console
 
