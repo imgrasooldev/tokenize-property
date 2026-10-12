@@ -41,7 +41,9 @@ export type PlatformRole = "IDENTITY_OPERATOR" | "CLAIM_SIGNER" | "REGISTRAR" | 
 export type Persona = "ALICE" | "BOB";
 
 function guard(): void {
-  if (process.env.NODE_ENV === "production") {
+  // Production builds refuse, except the private IP demo server, which opts in explicitly
+  // (deploy/demo-server). assertLocalChain still runs before every signature.
+  if (process.env.NODE_ENV === "production" && process.env.WEB_DEMO_SIGNER !== "1") {
     throw new Error("The demo signer is disabled in production builds.");
   }
 }

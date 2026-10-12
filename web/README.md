@@ -26,7 +26,7 @@ npm run dev                        # http://127.0.0.1:3100
 - **Mock KYC:** name, CNIC, phone, simulated liveness. Mock NADRA rejects CNICs ending in `0` to show the failure path. One account per CNIC.
 - **Data minimisation:** the full CNIC and phone are never stored, only the last digits plus an HMAC (secret pepper) for the uniqueness check. Verified in the database: no full CNIC or phone anywhere.
 - **Real on-chain onboarding:** a new custodial wallet, then an ONCHAINID (identity operator), then KYC and AML claims signed by the claim signer, then RegistrarGuard registration. This is the same path the contract tests prove. Wallet keys are encrypted with AES-256-GCM (HSM/MPC in production).
-- **Demo signer** (`src/lib/server/demo-signer.ts`): uses local dev keys only, refuses production builds and any chain other than 586586, and checks the chain ID before every signature. Step 5d's signing service replaces it.
+- **Demo signer** (`src/lib/server/demo-signer.ts`): uses local dev keys only, refuses production builds and any chain other than 586586, and checks the chain ID before every signature. The one exception is the private IP demo server (`deploy/demo-server`), which runs a production build with the explicit opt-in `WEB_DEMO_SIGNER=1`; the chain-ID check still applies there. Step 5d's signing service replaces it.
 - **Sessions:** HMAC-signed, HttpOnly, SameSite=Strict, 8 h. Forged or expired cookies redirect to sign-in. Server actions get Next.js's built-in origin check; every input is validated with zod.
 
 ## Invest and portfolio (W3)
