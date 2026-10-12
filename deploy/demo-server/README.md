@@ -8,7 +8,7 @@ and the Live Demo Console (127.0.0.1 only).
 |---|---|
 | Server | OVH VPS-1 2027 (2 vCore, 4 GB, 40 GB NVMe), Singapore, display name `property-token-demo` |
 | Address | `http://51.79.144.40` (plain HTTP by owner decision: demo only, no domain yet) |
-| Open ports | 22 (SSH, keys only) and 80. Chain RPC, PostgreSQL and the console listen on 127.0.0.1 |
+| Open ports | 22 (SSH, keys only), 80, and 443 (opened by Ploi, unused). Chain RPC, PostgreSQL and the console listen on 127.0.0.1; Besu P2P ports are firewalled |
 | Data | Demo data only. Dev keys are generated on the server and never leave it |
 
 **Not for real users or real money.** Before that: TLS, HSM/MPC signing (ADR 0005), separate
@@ -42,6 +42,14 @@ Repository settings needed (Settings > Secrets and variables > Actions, environm
 | `DEMO_HOST` | variable | `51.79.144.40` (deploys stay skipped until this is set) |
 | `DEMO_SSH_KEY_PROPERTY` | secret | private half of `ci-deploy.pub` |
 | `DEMO_KNOWN_HOSTS` | secret | `ssh-keyscan -t ed25519 51.79.144.40` output, checked against the server |
+
+## Ploi
+
+The server is also connected to Ploi as a **Plain Server** (UFW, Supervisor, a `ploi` user and
+Ploi's root key; no nginx, PHP or database from Ploi), named `property-token-demo`. Ploi opened
+443 in UFW and installed a local-only mail relay (127.0.0.1:25/587). The app stack above stays
+managed by these scripts and systemd, not by Ploi. A config backup taken before connecting Ploi is
+at `/root/pt-backup-before-ploi.tgz`.
 
 ## Operating
 
