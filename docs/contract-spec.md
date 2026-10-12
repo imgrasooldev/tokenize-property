@@ -1,7 +1,7 @@
 # Smart Contract Specification
 
-- Version: 0.3 (compliance modules, deployment library, findings F-01 to F-03)
-- Date: 2026-10-08
+- Version: 0.4 (anchor commitment and anchor deployment, section 7; 0.3: compliance modules, deployment library, findings F-01 to F-03)
+- Date: 2026-10-12
 - Scope: contracts deployed per property on the private Besu chain, plus the public-chain anchor.
 
 This document is the source of truth for Step 3. Code and tests must match it. Any change to behaviour starts here.
@@ -204,13 +204,40 @@ Append-only record of document hashes per token: title deed, fard, valuations, i
 
 ## 7. Public-chain anchor
 
-`StateAnchor` on a public EVM chain:
+`StateAnchor` on a public EVM chain (an Ethereum L2, to be chosen by the owner; a local Anvil chain stands in until then, [ADR 0008](decisions/0008-public-anchor.md)):
 
-- `anchor(uint64 besuBlock, bytes32 besuBlockHash)`: anchor key, hourly.
+- `anchor(uint64 besuBlock, bytes32 besuBlockHash)`: anchor key, hourly. The second argument carries the **anchor commitment** of section 7.1 (the contract stores any non-zero `bytes32`; its parameter and event field keep the name `besuBlockHash`/`blockHash`).
 - `besuBlock` must be strictly greater than the last anchored block. Anchors are never overwritten.
 - Anchor key rotation: owner is a Safe on the public chain.
 
 Anyone with read access to the private chain can check that its history matches the public anchors.
+
+### 7.1 Anchor commitment (v1)
+
+One anchor covers both the private chain (threat CH-1) and the ledger head (threat D-1), without changing the contract:
+
+```
+commitment = keccak256(abi.encode(
+    bytes32 domain,            // keccak256("property-token/state-anchor/v1")
+    uint256 besuChainId,       // the private chain's chain ID
+    uint64  besuBlock,         // = the besuBlock argument
+    bytes32 besuBlockHash,     // hash of that private-chain block
+    uint64  ledgerJournalId,   // id of the newest ledger journal when anchoring (0 = empty ledger)
+    bytes32 ledgerHeadHash     // its hash-chain value (L-4); 0x00..00 for an empty ledger
+))
+```
+
+- The components are stored off-chain with each anchor (database schema `anchor`), so anyone can recompute the commitment, for example with `cast keccak $(cast abi-encode "f(bytes32,uint256,uint64,bytes32,uint64,bytes32)" ...)`.
+- A rewritten private block changes `besuBlockHash`; an edited, deleted or re-hashed ledger journal at or before `ledgerJournalId` changes `ledgerHeadHash`; an edited off-chain record no longer hashes to the public value. Each is reported by the anchor `verify` command.
+- The domain tag and the chain ID keep a commitment from being valid for another network or another format. A new format gets a new domain tag.
+- `besuBlock` comes from a finalized private block (QBFT has immediate finality). The ledger head may be read a moment later than the block; both are bound into one value, nothing more is claimed about their timing.
+
+### 7.2 Anchor deployment
+
+- Deployed only through `DeployLib.deployAnchor` and checked by `DeployLib.checkAnchor` (`script/DeployAnchor.s.sol`).
+- Never on the private chain: `deployAnchor` refuses chain ID 586586.
+- `checkAnchor` asserts: owner and anchor key are exactly the configured ones; no pending ownership transfer; nothing anchored yet; deployer, owner and anchor key are three different addresses; the owner is a contract (the Safe). Only the local stand-in chain ID **586650** (Anvil on `127.0.0.1:8650`, plus `LOCAL_DEV_NETWORK=true` in the script) accepts a plain address as owner.
+- The deployer never holds any power: the owner and the anchor key are set in the constructor.
 
 ## 8. Invariants
 
@@ -264,4 +291,4 @@ Implemented once in `contracts/script/DeployLib.sol` and used by both the produc
 1. GPL-3.0 licence of ERC-3643: legal review required.
 2. ~~Compliance modules: port or write~~ Resolved: T-REX 4.1.6 modules used unchanged and added to audit scope (section 4.3).
 3. Max balance default (10%) and retail investment limits: business and legal decision.
-4. Public chain for anchoring: Ethereum mainnet (most trusted, higher fees) or an L2 such as Base or Polygon (cheap).
+4. Public chain for anchoring: Ethereum mainnet (most trusted, higher fees) or an L2 such as Base or Polygon (cheap). The owner chose an Ethereum L2 (2026-10-12); which one is still open. Built and tested against a local Anvil stand-in (section 7, ADR 0008).

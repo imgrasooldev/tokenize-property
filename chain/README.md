@@ -40,13 +40,36 @@ python chain/net.py reset       # stop and wipe chain data (keeps keys and accou
 
 `flow.py` checks, on real blocks: deployment hand-over (I-8, I-9); go-live through the timelock; onboarding with signed KYC/AML claims; mint, transfer, trustee cap and 10% limit; attacks that must revert; pause, freeze; rent distribution with Merkle-proof verification; recovery proposal and cancel; and a validator outage with recovery. A "refused" check passes only on a real contract revert; any tooling error stops the run.
 
+## Public anchor stand-in (Step 5f-2)
+
+Until the owner picks the public chain (an Ethereum L2), a local **Anvil** chain stands in for it ([ADR 0008](../docs/decisions/0008-public-anchor.md)). It is a separate chain from Besu, as in production.
+
+| Setting | Value | Why |
+|---|---|---|
+| RPC | `127.0.0.1:8650` | Clear of Besu's 8545–8548; never exposed off the machine |
+| Chain ID | **586650** (`DeployLib.LOCAL_ANCHOR_CHAIN_ID`) | Distinct from the private chain; the only chain where the anchor owner may be a plain address and where the local dev anchor key may sign |
+| State | `chain/data/anchor/state.json`, saved every 5 s | Survives a restart (a forced stop can lose the last 5 s) |
+| Accounts | Anvil's own unlocked dev accounts: 0 deploys, 1 stands in for the owner Safe | No private key is passed to any command |
+
+```bash
+python chain/anchor.py start             # Anvil on 127.0.0.1:8650, chain 586650
+cd backend && npm run anchor:setup       # once: the anchor key in its own encrypted keystore (backend/data/keystore-anchor/)
+python chain/anchor.py deploy            # StateAnchor through DeployLib (script/DeployAnchor.s.sol) + post-deploy check; funds the anchor key
+cd backend && npm run anchor:once        # one anchor: finalized Besu block + ledger head (needs migration 0007 in the database)
+cd backend && npm run anchor:verify      # every public anchor vs Besu and the ledger
+python chain/anchor.py status            # height, contract, last anchored private block
+python chain/anchor.py stop | reset      # reset deletes the stand-in's state; the database's anchor records stay as history
+```
+
+The deployment address is read from `contracts/broadcast/DeployAnchor.s.sol/586650/run-latest.json` (not in version control). Never use chain ID 586586 for the anchor chain: `DeployLib.deployAnchor` refuses it, and so does the anchoring job.
+
 ## What is secret here
 
 | Path | Contents | In git? |
 |---|---|---|
 | `chain/network/dev-accounts.env` | 12 generated role keys (deployer, Safes, pauser, registrar, investors) | **No** |
 | `chain/network/generated/` | Validator node keys, genesis, node configs | **No** |
-| `chain/tools/`, `chain/data/` | Binaries, chain databases, logs | **No** |
+| `chain/tools/`, `chain/data/` | Binaries, chain databases, logs, anchor stand-in state | **No** |
 
 These are **local development keys only**. Never fund them on a real network, never reuse them.
 
@@ -58,7 +81,7 @@ These are **local development keys only**. Never fund them on a real network, ne
 | Role keys in a local file | Safe multisigs on hardware wallets; hot keys in HSM/MPC |
 | 60 s timelock (chain ID 586586 + `LOCAL_DEV_NETWORK=true`) | 72 h timelock, enforced by `DeployLib` |
 | Plain TCP between nodes on localhost | TLS between nodes, firewalled p2p, CIS-hardened hosts |
-| No public anchor | Hourly `StateAnchor` on a public chain |
+| Public anchor on a local Anvil stand-in (586650), anchor key in a local encrypted keystore | Hourly `StateAnchor` on a public L2, owner a Safe, anchor key in the HSM |
 
 ## Gotchas
 

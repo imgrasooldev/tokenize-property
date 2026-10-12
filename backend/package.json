@@ -32,7 +32,12 @@
     "recon:register-account": "tsx packages/recon/src/cli.ts register-account",
     "recon:status": "tsx packages/recon/src/cli.ts status",
     "recon:unfreeze": "tsx packages/recon/src/cli.ts unfreeze",
-    "recon:bench": "tsx packages/recon/scripts/bench.ts"
+    "recon:bench": "tsx packages/recon/scripts/bench.ts",
+    "anchor": "tsx packages/anchor/src/cli.ts run",
+    "anchor:once": "tsx packages/anchor/src/cli.ts once",
+    "anchor:verify": "tsx packages/anchor/src/cli.ts verify",
+    "anchor:status": "tsx packages/anchor/src/cli.ts status",
+    "anchor:setup": "tsx packages/anchor/src/cli.ts setup"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
