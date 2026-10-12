@@ -256,8 +256,13 @@ export function checkRent(d: ReconData): Finding[] {
     if (c.status === "paid") {
       if (!pj) out.push(f("rent.payout_missing", subject, "a payout batch in the ledger", "none"));
       else {
-        const h = payoutBatchHash(pj.externalRef ?? "");
-        if (h !== c.payoutBatchHash) out.push(f("rent.payout_batch_mismatch", subject, `${c.payoutBatchHash ?? "none"} (on chain)`, `${h} = hash of batch ${pj.externalRef ?? "none"}`));
+        // A batch submitted through the bank service is identified by its bank file's SHA-256 (ADR 0009);
+        // otherwise (web prototype, mock) by keccak256 of the batch reference (ADR 0007).
+        const file = d.bank.payoutFiles.get(pj.externalRef ?? "");
+        const h = file ?? payoutBatchHash(pj.externalRef ?? "");
+        if (h !== c.payoutBatchHash) {
+          out.push(f("rent.payout_batch_mismatch", subject, `${c.payoutBatchHash ?? "none"} (on chain)`, `${h} = ${file ? "SHA-256 of the bank file" : "hash"} of batch ${pj.externalRef ?? "none"}`));
+        }
         if (journalTotal(pj) !== c.totalPaisa) out.push(f("rent.payout_amount_mismatch", subject, `${s(c.totalPaisa)} paisa (on chain)`, `${s(journalTotal(pj))} paisa paid out (ledger)`));
       }
     } else if (c.status === "finalized" && pj) {

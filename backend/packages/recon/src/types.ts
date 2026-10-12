@@ -171,7 +171,15 @@ export interface ReconData {
   };
   ledger: { journals: LedgerJournal[] };
   expectedMints: Map<string, ExpectedMint>;
-  bank: { accounts: BankAccount[]; statements: BankStatement[] };
+  bank: {
+    accounts: BankAccount[];
+    statements: BankStatement[];
+    /**
+     * Submitted payout batches (Step 5g): batch reference -> 0x-prefixed SHA-256 of the bank file.
+     * A distribution paid through such a batch must carry this hash on chain (ADR 0009).
+     */
+    payoutFiles: Map<string, string>;
+  };
   integrity: {
     ledger: { journalId: string; problem: string }[];
     /** Accounts whose running balance differs from the sum of their postings (migration 0008, RF-2). */

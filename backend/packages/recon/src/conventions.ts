@@ -17,7 +17,8 @@ import type { LedgerJournal } from "./types.ts";
  *   rent:distribution:<token>:<id>   booked when the distribution is finalized; external_ref = statement hash
  *   rent:payout:<token>:<id>         the bank payout batch; credits the bank account; external_ref = batch reference
  *   On chain, recordPayout(id, payoutBatchHash) with payoutBatchHash = keccak256(utf8(batch reference)) for the
- *   mock bank; the real bank's batch-file hash replaces this in Step 5g.
+ *   mock bank. A batch submitted through the bank service uses 0x + SHA-256 of its bank file instead (ADR 0009;
+ *   checkRent reads it from bank.payout_batches).
  */
 
 export type SubscriptionPhase = "paid" | "settled" | "refunded";

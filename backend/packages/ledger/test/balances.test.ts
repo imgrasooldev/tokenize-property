@@ -62,7 +62,10 @@ describe("RF-2 running balances", () => {
     addMigrationsAfter(dir, "0007");
     await migrate(db, dir);
     const after = await db.query<{ code: string; balance: string }>("SELECT code, balance::text FROM ledger.balances ORDER BY code");
-    expect(after.rows).toEqual(before.rows);
+    // Later migrations may open new accounts (0009: bank escrow and suspense), always at zero.
+    const existed = new Set(before.rows.map((r) => r.code));
+    expect(after.rows.filter((r) => existed.has(r.code))).toEqual(before.rows);
+    expect(after.rows.filter((r) => !existed.has(r.code)).every((r) => r.balance === "0")).toBe(true);
     expect(await verifyBalances()).toEqual([]);
     expect(await verifyChain(db)).toEqual([]);
   });

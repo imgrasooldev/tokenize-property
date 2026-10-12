@@ -137,6 +137,9 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
     const reconAudit = (await q<{ audit_id: string | null; problem: string }>("SELECT audit_id::text, problem FROM recon.verify_audit()"))
       .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
+    const payoutFiles = new Map((await q<{ reference: string; sha: string }>(
+      "SELECT reference, '0x' || encode(file_sha256, 'hex') AS sha FROM bank.payout_batches WHERE status = 'submitted'"))
+      .map((r) => [r.reference, r.sha]));
     await client.query("COMMIT");
 
     sources = { webdemo, outboxMintCommands: mintCommands };
@@ -148,7 +151,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       chain: { issuances, distributions, readModel: { totalSupply: BigInt(token?.total_supply ?? "0"), holdings } },
       ledger: { journals },
       expectedMints,
-      bank: { accounts, statements: [...statements.values()] },
+      bank: { accounts, statements: [...statements.values()], payoutFiles },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };
   } catch (err) {

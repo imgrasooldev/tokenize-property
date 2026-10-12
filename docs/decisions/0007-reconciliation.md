@@ -63,7 +63,7 @@ The bank side of a rent payout is checked by the cash check (the payout journal'
 | `rent:distribution:<token>:<id>` | rent booked when the distribution is finalized | the statement hash |
 | `rent:payout:<token>:<id>` | the bank payout batch; credits the bank account | the batch reference |
 
-`paid` debits a bank account; `refunded` credits it with the same reference (matched by direction). For the mock bank, `recordPayout(id, payoutBatchHash)` uses `payoutBatchHash = keccak256(utf8(batch reference))`; the real bank's batch-file hash replaces it in Step 5g.
+`paid` debits a bank account; `refunded` credits it with the same reference (matched by direction). For the mock bank, `recordPayout(id, payoutBatchHash)` uses `payoutBatchHash = keccak256(utf8(batch reference))`; for a batch submitted through the bank service it is `0x` + SHA-256 of the bank file ([ADR 0009](0009-kyc-and-bank.md); reconciliation checks it).
 
 ### Mock bank statement (`pt-mock-bank-v1`)
 
@@ -83,7 +83,7 @@ JSON Lines: a header (`account`, `statementDate` as a PKT business day, `currenc
 
 ### Where the gate is enforced
 
-No payout path exists yet. The signing service now asks the gate for every kind named `payout.*`, `rent.*` or `distribution.*`, both when a request arrives and again when it is signed (payouts may be frozen after an approval). The kind list is deny-by-default: a future payout kind cannot skip the gate. If the gate cannot be read, the request fails and nothing is signed. The bank payout service (Step 5g) must call `recon.payouts_allowed()` before every batch.
+No payout path exists yet. The signing service now asks the gate for every kind named `payout.*`, `rent.*` or `distribution.*`, both when a request arrives and again when it is signed (payouts may be frozen after an approval). The kind list is deny-by-default: a future payout kind cannot skip the gate. If the gate cannot be read, the request fails and nothing is signed. The bank payout service (Step 5g, [ADR 0009](0009-kyc-and-bank.md)) checks the gate in the database at batch approval and again at submission, and for every suspense return.
 
 ### Commands
 

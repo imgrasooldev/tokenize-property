@@ -219,6 +219,19 @@ describe("checkRent (M-2)", () => {
     expect(names(checkRent(w.data))).toEqual(["rent.payout_amount_mismatch"]);
   });
 
+  it("a batch submitted through the bank service must carry its bank file's SHA-256 on chain (ADR 0009)", () => {
+    const w = world();
+    const paid = w.data.chain.distributions.find((x) => x.status === "paid");
+    if (!paid) throw new Error("none");
+    const pj = journal(w.data, `rent:payout:${TOKEN}:${paid.id.toString()}`);
+    const fileHash = `0x${"ab".repeat(32)}`;
+    w.data.bank.payoutFiles.set(pj.externalRef ?? "", fileHash);
+    // On chain still keccak256(reference): no longer accepted once the bank file exists.
+    expect(checkRent(w.data)).toEqual([expect.objectContaining({ check: "rent.payout_batch_mismatch", actual: expect.stringContaining("SHA-256 of the bank file") as unknown })]);
+    paid.payoutBatchHash = fileHash;
+    expect(checkRent(w.data)).toEqual([]);
+  });
+
   it("ignores rent journals of other tokens", () => {
     const w = world();
     w.data.ledger.journals.push({ id: 906n, key: `rent:distribution:0x${"bb".repeat(20)}:1`, kind: "rent_distribution", externalRef: "0x1", createdAt: AS_OF, postings: [{ account: "a", amount: 1n }, { account: "b", amount: -1n }] });

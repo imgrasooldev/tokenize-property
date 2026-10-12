@@ -132,6 +132,7 @@ export function makeWorld(spec: WorldSpec): World {
     bank: {
       accounts: [{ account: BANK, ledgerAccount: BANK_LEDGER }],
       statements: [{ id: 1n, account: BANK, date: DAY, opening: 0n, closing: lines.at(-1)?.balance ?? 0n, lines }],
+      payoutFiles: new Map(),
     },
     integrity: {
       ledger: [],

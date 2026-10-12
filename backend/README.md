@@ -13,7 +13,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5e | Indexer → read model | Done |
 | 5f | Reconciliation (chain vs ledger vs bank), payout freeze (ADR 0007) | Done |
 | 5f-2 | Public-chain anchoring of the Besu chain and the ledger head (ADR 0008) | Done on a local Anvil stand-in; public L2 pending the owner |
-| 5g | KYC and bank/Raast mocks | Planned |
+| 5g | KYC and bank: identity checks, signed Raast webhooks, payout accounts and batches, mock providers and mock bank (ADR 0009) | Done (mock providers; real NADRA, liveness, sanctions and bank pending partner contracts) |
 | 5h | Integration tests against PostgreSQL + Besu | Planned |
 
 ## Packages
@@ -30,6 +30,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/anchor` | Hourly public-chain anchor of the finalized Besu block and the ledger head (record before send, crash-safe, fail-closed alarms); `verify` checks every anchor against Besu and an independent recomputation of the ledger |
 | `@pt/indexer` | Follows the chain into the read model (schema `chain`): 4,000-block windows, parent-hash checks, one transaction per batch, halts on any mismatch; `verify` rebuilds and compares with the contracts; typed read queries |
 | `@pt/recon` | Reconciliation: one snapshot pinned to the read model's block, pure deterministic checks (issuance, supply, holdings, cash, rent, integrity), findings recorded atomically; blocking findings freeze payouts until two operators unfreeze; mock bank statement import |
+| `@pt/kyc` | KYC onboarding: NADRA, liveness and sanctions behind interfaces (realistic mocks), peppered CNIC/name hashes and sealed name (no readable personal data in the database), status derived in the database, maker-checker sanctions reviews |
+| `@pt/bank` | Bank side: signed webhook endpoint, Raast credits matched to payment codes (or suspense), payout accounts with title match and 72-hour cooling-off, maker-checker payout batches gated by reconciliation, deterministic bank file; `MockBank` plays the outside bank (own records, statements in `pt-mock-bank-v1`) |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
 ## Outbox (Step 5c)
@@ -171,6 +173,39 @@ Rules enforced in the database (`0007_anchor.sql`; roles `pt_anchor_writer`, `pt
 Measured locally: one anchor on Anvil 0.3–0.5 s end to end (preflight reads, ledger head, simulate, sign, record, broadcast, receipt; 51,060 gas); `verify` 21–32 ms for two anchors in-process (0.6 s for the CLI including connections); deploying through `forge script` 24–39 s (mostly forge start-up).
 
 Tests (35): commitment test vector shared with Solidity, network policy, broadcast parsing; ledger recomputation equal to the database digest for awkward text (quotes, control characters, Urdu, emoji, U+2028) across page boundaries; database rules A-1..A-5 including concurrent writers and admin UPDATEs; the job on a fault-injecting fake chain (crash at every point, lost broadcast, lost response, proven-dropped re-sign, pool and confirmation waits, gas cap, racing processes, rotated key, missing contract, wrong chains, production, a stolen-key anchor, a revert); a **property test** (random crashes, RPC faults, lost broadcasts, manual mining and racing processes: never two anchors for one record, never lower, never a silent skip, `verify` clean), verified to catch a deliberately broken job (broadcast before recording: minimal counterexample "crash at signed"); **tamper tests** (rewritten Besu block, edited anchor record, edited posting, full re-hash by a rogue DBA that fools `ledger.verify_chain()`, deleted journal, anchor missing on chain); and integration on a real Anvil chain (DeployLib deploy, crash recovery with the same signed transaction, verify, re-hash detected) and against the real local Besu network (read-only).
+
+## KYC and bank (Step 5g)
+
+[ADR 0009](../docs/decisions/0009-kyc-and-bank.md). Every identity and money rule is in `0009_kyc_bank.sql`; the services talk to providers, keep personal data out of the database and write the bank file.
+
+```bash
+npm run kyc:setup        # LOCAL DEV ONLY: KYC_PEPPER_V1, KYC_PEPPER_CURRENT, KYC_DATA_KEY in backend/.env.local
+npm run bank:setup       # LOCAL DEV ONLY: BANK_DATA_KEY, BANK_WEBHOOK_SECRET_K1 in backend/.env.local
+npm run bank             # webhook endpoint http://127.0.0.1:4910/v1/bank/events (BANK_PORT, BANK_ESCROW_ACCOUNT)
+npm run kyc:status -- <subjectId>
+npm run kyc:audit        # KYC audit chain (exit 3 on a problem)
+npm run bank:audit       # bank audit chain (exit 3 on a problem)
+npm run bank:bench       # throw-away database: onboarding, webhooks, a payout batch, the cash check
+```
+
+| Rule | What it guarantees |
+|---|---|
+| Y-1 | No readable CNIC, name or provider response in the database: keyed hashes (peppers in the KMS), last four digits, the name sealed with AES-256-GCM, evidence hashes |
+| Y-2 | One subject per CNIC, also across pepper versions |
+| Y-3 | Status derived in the database: NADRA match + liveness ≥ 80 + clear sanctions, recent for a new verification, valid 365 days; errors never verify nor un-verify; a sanctions hit is final |
+| Y-4 | A possible sanctions match is settled only by two different officers |
+| Y-5 / B-7 | Append-only records, hash-chained audits (`kyc.verify_audit()`, `bank.verify_audit()`) that also find edited decisions, credits and batch items |
+| Y-6 | Roles `pt_kyc_service`, `pt_kyc_officer`, `pt_kyc_reader`; the signer and bank see status only |
+| B-1 | Signed webhooks (HMAC over timestamp and raw body, 5-minute window, key rotation, 16 KB, strict schema); an event id is booked once; same id with another body → 409 and alert |
+| B-2 | Every credit is booked in the same transaction on `bank:trustee-escrow` with the Raast reference; only an exact match (code, amount, expiry, verified investor, the investor's own account) reaches an investor, everything else goes to suspense |
+| B-3 | A payment code is paid once; a Raast reference is booked once |
+| B-4 | Payout account title must match the verified name; one current investor per account; usable 72 hours after registration; every change alerts; IBAN as keyed hash + sealed copy bound to the investor |
+| B-5 | Payout batches: maker-checker, reconciliation gate at approval and at submission, verified investors with active unchanged accounts, total = finalized on-chain distribution, ledger refuses overpaying |
+| B-6 | One live batch per distribution; deterministic bank file, SHA-256 recorded before sending; a retry re-sends the same bytes |
+
+Measured on this laptop (`npm run bank:bench -- 1000`): KYC onboarding with the mock providers p50 10.7 ms, p99 49 ms; a Raast credit through the signed HTTP endpoint into the ledger p50 5.9 ms, p99 32 ms; a payout batch of 1,000 investors created in 0.66 s, approved in 0.07 s, submitted (bank file + ledger) in 0.51 s; the cash check on 1,001 statement lines 19 ms with zero findings.
+
+Tests: 22 KYC and 37 bank (see ADR 0009), including a scan of every KYC row for personal data, ten concurrent deliveries of one event, a sealed IBAN swapped between investors, and a property test where lost webhooks always show up in reconciliation and, after the bank's retry, the ledger equals the bank line by line. Three deliberate rule breaks (third-party payer accepted, suspense booked without its reference, no cooling-off) each make tests fail.
 
 ## Live Demo Console
 
