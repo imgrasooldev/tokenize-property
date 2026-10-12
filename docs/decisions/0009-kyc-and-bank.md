@@ -99,6 +99,14 @@ On chain, `recordPayout(id, payoutBatchHash)` must use **`0x` + SHA-256 of the b
 - **Name matching** is exact after normalisation (case, spaces, punctuation, Unicode forms). Common names mean title matching alone cannot prove ownership; the 72-hour cooling-off, one-account-per-investor and the change alerts limit the damage. A bank-side CNIC-to-account check (if the bank offers one) would close the gap: question for the bank.
 - **Pepper rotation** of IBAN hashes: payout accounts must be re-registered after an IBAN pepper rotation (the CNIC lookup already handles rotation).
 
+## Decisions on the open questions (2026-10-13)
+
+The owner delegated these three ("jo munasib lage"); they follow the safer option and can be revisited by a new ADR.
+
+1. **Who registers payout accounts: the investor, self-service only.** The investor enters the IBAN in the app after signing in; the bank's title must match the verified name; 72-hour cooling-off and an alert on every change (as built). Operators **cannot** register or change an investor's account: that is the classic insider redirect (M-1). An assisted change (investor lost their phone, branch visit) goes through the compliance portal (Step 6) as maker-checker by two officers, still with the 72-hour cooling-off and a notification to the old contact details.
+2. **Held payouts: pay the rest, hold the share.** An investor without an active payout account (not registered, in cooling-off, account returned, KYC not verified) no longer blocks the batch. Their line is marked **held**: it is not sent to the bank and stays owed in `rent:payable:<subject>`. The batch records paid + held = the on-chain distribution total; the ledger payout journal covers the paid part only; reconciliation checks paid + held = on-chain total and that each held amount is still owed. A held share is paid later in a follow-up batch for the same distribution once the investor has an active account, with the same gate and maker-checker. Needs migration 0010 (0009 is already applied on the demo server) and a reconciliation change: **built in Step 5h**.
+3. **KYC record retention: 10 years after the relationship ends**, as the starting assumption (Pakistan's Anti-Money Laundering Act 2010 and the SECP AML/CFT regulations require customer records to be kept for years after the relationship ends; **legal to confirm the exact period**). The CNIC copy, selfie and provider reports go to a separate encrypted document vault (Step 6 or later), never the operational database; hashes, decisions and audit chains in the database are kept for the same period.
+
 ## Consequences
 
 - No investor money is attributed, and no payout leaves escrow, without the database's rules: exact matching, verified identity, cooling-off, maker-checker, the reconciliation gate and the ledger's balance checks.
