@@ -15,18 +15,18 @@ import { formatNumber, formatPrice } from "@/lib/i18n";
 import type { MarketView } from "@/lib/market-view";
 
 function palette() {
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  // The site has one dark theme (v2 design tokens in globals.css).
   return {
-    text: dark ? "#9aa7b2" : "#5b6770",
-    grid: dark ? "#22303b" : "#eef1f4",
-    up: dark ? "#4cc27a" : "#15803d",
-    down: dark ? "#f08a7e" : "#b42318",
-    vol: dark ? "rgba(154,167,178,0.35)" : "rgba(91,103,112,0.25)",
-    nav: dark ? "#f0a34a" : "#b45309",
+    text: "#8B97AD",
+    grid: "rgba(255,255,255,0.05)",
+    up: "#3BE89B",
+    down: "#FF6B81",
+    vol: "rgba(139,92,246,0.35)",
+    nav: "#FFB547",
   };
 }
 
-export function MarketLive({ symbol, nav, initial, t, lang }: { symbol: string; nav: number; initial: MarketView; t: Dict; lang: Lang }) {
+export function MarketLive({ symbol, nav, yieldPct, initial, t, lang }: { symbol: string; nav: number; yieldPct: number; initial: MarketView; t: Dict; lang: Lang }) {
   const [view, setView] = useState(initial);
   const [live, setLive] = useState<"connecting" | "live" | "retrying">("connecting");
   const box = useRef<HTMLDivElement>(null);
@@ -122,6 +122,22 @@ export function MarketLive({ symbol, nav, initial, t, lang }: { symbol: string; 
         </div>
         <div ref={box} className="chart tall" aria-label={t.priceChart} />
         <p className="note">{t.chartNote}</p>
+        <div className="ai-box compact">
+          <div className="hd">
+            <span className="orb small" aria-hidden="true" />
+            {t.marketNote}
+            <span className="chip ai">{t.fromLiveData}</span>
+          </div>
+          <span className="ai-text">
+            {view.last === null || vsNav === null
+              ? t.marketNoteEmpty
+              : t.marketNoteText
+                  .replace("{d}", `${vsNav >= 0 ? "+" : ""}${vsNav.toFixed(2)}%`)
+                  .replace("{n}", String(Math.min(view.trades.length, 15)))
+                  .replace("{y}", ((nav * yieldPct) / view.last).toFixed(2))}{" "}
+            <span className="cite">trades</span> <span className="cite">NAV</span>
+          </span>
+        </div>
       </section>
 
       <div className="market-grid">

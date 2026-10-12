@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { cancelOrderAction } from "@/app/actions/market";
 import { MarketLive } from "@/components/MarketLive";
 import { OrderPanel } from "@/components/OrderPanel";
+import { PortalShell, PublicPage } from "@/components/Shell";
 import { formatNumber, formatPrice, loc } from "@/lib/i18n";
 import { priceBand } from "@/lib/market-rules";
 import { PROPERTIES } from "@/lib/properties";
@@ -17,10 +19,23 @@ export const dynamic = "force-dynamic";
 export default async function MarketPage() {
   const { lang, t } = await getDict();
   const p = PROPERTIES.find((x) => x.status === "live");
-  if (!p) return <main className="container narrow">{t.comingSoon}</main>;
-
   const id = await currentInvestorId();
   const investor = id ? await investorById(id) : null;
+  const frame = (title: ReactNode, body: ReactNode) =>
+    investor ? (
+      <PortalShell active="market" title={title}>
+        {body}
+      </PortalShell>
+    ) : (
+      <PublicPage active="market">
+        <main id="main" className="wrap page">
+          <h1 className="page-title">{title}</h1>
+          {body}
+        </main>
+      </PublicPage>
+    );
+  if (!p) return frame(t.navMarket, <p className="note">{t.comingSoon}</p>);
+
   // Picks up anything left crossing or held for review (e.g. after a restart); throttled, non-blocking.
   nudgeMatcher(p.symbol);
   const view = toView(await marketSnapshot(p.symbol));
@@ -31,21 +46,21 @@ export default async function MarketPage() {
   const band = priceBand(p.navPkr);
   const rs = (paisa: string | bigint) => Number(paisa) / 100;
 
-  return (
-    <main className="container">
-      <div className="alert demo" role="note" style={{ marginBlockStart: 18 }}>
+  return frame(
+    <>
+      {loc(p.name, lang)} <span className="mu sym">· {p.symbol}</span>
+    </>,
+    <>
+      <div className="alert demo" role="note">
         <strong>{t.demo}:</strong> {t.marketDemo}
       </div>
-      <h1 style={{ marginBlock: "18px 4px" }}>
-        {loc(p.name, lang)} <span className="meta">· {p.symbol}</span>
-      </h1>
-      <p className="meta">
+      <p className="meta market-sub">
         {t.navToday}: {formatPrice(p.navPkr, lang)} · {t.bandShort}: {formatPrice(rs(band.min), lang)} – {formatPrice(rs(band.max), lang)}
       </p>
 
-      <div className="detail">
-        <div style={{ display: "grid", gap: 20, alignContent: "start", minWidth: 0 }}>
-          <MarketLive symbol={p.symbol} nav={p.navPkr} initial={view} t={t} lang={lang} />
+      <div className="market-layout">
+        <div className="stack">
+          <MarketLive symbol={p.symbol} nav={p.navPkr} yieldPct={p.yieldPct} initial={view} t={t} lang={lang} />
 
           {investor && (
             <section className="panel">
@@ -70,8 +85,8 @@ export default async function MarketPage() {
                           <td>
                             <span className={`chip ${o.side === "buy" ? "green" : "red"}`}>{o.side === "buy" ? t.buy : t.sell}</span>
                           </td>
-                          <td>{formatPrice(rs(o.price_paisa), lang)}</td>
-                          <td>
+                          <td className="mono">{formatPrice(rs(o.price_paisa), lang)}</td>
+                          <td className="mono">
                             {formatNumber(BigInt(o.filled), lang)} / {formatNumber(BigInt(o.tokens), lang)}
                           </td>
                           <td title={o.note ?? undefined}>
@@ -112,8 +127,8 @@ export default async function MarketPage() {
                       {trades.map((tr) => (
                         <tr key={tr.id}>
                           <td>{tr.buyer_id === investor.id ? t.bought : t.soldTrade}</td>
-                          <td>{formatPrice(rs(tr.price_paisa), lang)}</td>
-                          <td>{formatNumber(BigInt(tr.tokens), lang)}</td>
+                          <td className="mono">{formatPrice(rs(tr.price_paisa), lang)}</td>
+                          <td className="mono">{formatNumber(BigInt(tr.tokens), lang)}</td>
                           <td title={tr.note ?? undefined}>
                             <span className={`chip ${tr.status === "settled" ? "green" : tr.status === "failed" ? "gray" : "amber"}`}>
                               {tr.status === "settled" ? t.tradeSettled : tr.status === "failed" ? t.tradeFailed : t.subReview}
@@ -130,7 +145,7 @@ export default async function MarketPage() {
           )}
         </div>
 
-        <aside style={{ display: "grid", gap: 20, alignContent: "start", minWidth: 0 }}>
+        <aside className="stack">
           {!investor ? (
             <section className="panel">
               <p className="note">{t.marketSignIn}</p>
@@ -166,6 +181,6 @@ export default async function MarketPage() {
           </section>
         </aside>
       </div>
-    </main>
+    </>,
   );
 }

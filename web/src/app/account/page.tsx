@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PortalShell, Sample } from "@/components/Shell";
 import { tokenAbi } from "@/lib/abis";
 import { formatNumber } from "@/lib/i18n";
 import { latestDeployment } from "@/lib/server/chain";
@@ -31,9 +32,27 @@ export default async function AccountPage() {
     : [t.stepNadra, t.stepLiveness, t.stepIdentity, t.stepClaims, t.stepRegistered];
 
   return (
-    <main className="container narrow">
-      <h1>{t.accountTitle}</h1>
-      <div className="detail" style={{ paddingBlockStart: 0 }}>
+    <PortalShell active="account" title={t.accountTitle}>
+      <div className="kpi-strip">
+        <div>
+          <small>{t.kycStatus}</small>
+          <b className={investor.kyc_status === "verified" ? "up" : "am"}>{status}</b>
+        </div>
+        <div>
+          <small>{t.chainIdentity}</small>
+          <b className={verified ? "up" : "dn"}>{verified ? "✓" : "✗"}</b>
+        </div>
+        <div>
+          <small>{t.holdings}</small>
+          <b>{balance === null ? "—" : formatNumber(balance, lang)}</b>
+        </div>
+        <div>
+          <small>{t.custody}</small>
+          <b className="small-b">{t.custodial}</b>
+        </div>
+      </div>
+
+      <div className="detail">
         <section className="panel">
           <h2>{investor.display_name}</h2>
           <dl className="kv" style={{ marginBlockStart: 12 }}>
@@ -62,17 +81,40 @@ export default async function AccountPage() {
             {t.custodyNote}
           </p>
         </section>
-        <section className="panel">
-          <h2>{t.howVerified}</h2>
-          <ol className="steps-list">
-            {steps.map((s) => (
-              <li key={s}>
-                <span className="chip green">✓</span> {s}
-              </li>
-            ))}
-          </ol>
-        </section>
+        <div className="stack">
+          <section className="panel">
+            <h2>{t.howVerified}</h2>
+            <div className="timeline">
+              {steps.map((s) => (
+                <div className="ti two" key={s}>
+                  <span className="chip green">✓</span>
+                  <span>{s}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="panel">
+            <div className="row-between">
+              <h2>{t.bankSecurity}</h2>
+              <Sample t={t} soon />
+            </div>
+            <div className="checks">
+              <div className="check">
+                <i className="wait">…</i>
+                {t.passkeyFact1}
+              </div>
+              <div className="check">
+                <i className="wait">…</i>
+                {t.bankLink}
+              </div>
+              <div className="check">
+                <i className="wait">…</i>
+                {t.passkeyFact2}
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
-    </main>
+    </PortalShell>
   );
 }

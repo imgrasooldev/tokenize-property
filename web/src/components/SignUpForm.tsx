@@ -28,7 +28,7 @@ export function SignUpForm({ t }: { t: Dict }) {
   };
 
   return (
-    <form action={action} className="panel form" noValidate>
+    <form action={action} className="form" noValidate>
       {errorText && (
         <div className="alert" role="alert">
           {errorText}
@@ -55,6 +55,14 @@ export function SignUpForm({ t }: { t: Dict }) {
         </span>
         {fieldError("phone")}
       </label>
+      <div className="selfie" aria-hidden="true">
+        <div className="scan" />
+        <svg width="90" height="110" viewBox="0 0 90 110" fill="none" stroke="#22E3F0" strokeOpacity=".7" strokeWidth="1.5">
+          <ellipse cx="45" cy="46" rx="28" ry="36" strokeDasharray="4 5" />
+          <path d="M8 108c4-18 18-26 37-26s33 8 37 26" />
+        </svg>
+        <span className="chip cy selfie-tag">{t.selfieSimulated}</span>
+      </div>
       <label className="check">
         <input type="checkbox" name="liveness" />
         <span>{t.liveness}</span>
