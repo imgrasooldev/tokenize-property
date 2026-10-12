@@ -1,0 +1,22 @@
+[Unit]
+Description=Property Token demo: 4 Besu validators and PostgreSQL (local dev network 586586)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# net.py and pg.py start detached processes and record their pids, as in development, so the
+# demo console's node stop/start actions keep working.
+ExecStart=/usr/bin/python3 backend/scripts/pg.py start
+ExecStart=/usr/bin/python3 chain/net.py start
+ExecStop=/usr/bin/python3 chain/net.py stop
+ExecStop=/usr/bin/python3 backend/scripts/pg.py stop
+KillMode=none
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

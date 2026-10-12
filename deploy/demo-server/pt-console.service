@@ -1,0 +1,15 @@
+[Unit]
+Description=Property Token Live Demo Console (127.0.0.1:4800 only; reach it through an SSH tunnel)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+ExecStart=/usr/bin/npm run demo
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

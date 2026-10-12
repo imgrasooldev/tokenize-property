@@ -1,0 +1,18 @@
+[Unit]
+Description=Property Token demo website (Next.js production build on 127.0.0.1:3100)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/web
+Environment=NODE_ENV=production
+Environment=WEB_PLAIN_HTTP=1
+Environment=TRUST_PROXY=1
+Environment=NODE_OPTIONS=--max-old-space-size=384
+ExecStart=/usr/bin/npx next start --hostname 127.0.0.1 --port 3100
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

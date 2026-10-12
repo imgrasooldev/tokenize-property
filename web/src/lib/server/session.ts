@@ -12,7 +12,8 @@ export async function startSession(investorId: string): Promise<void> {
   (await cookies()).set(COOKIE, `${payload}.${hmac("session", payload)}`, {
     httpOnly: true,
     sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
+    // WEB_PLAIN_HTTP=1 only for the private IP demo server, which has no TLS yet (owner decision).
+    secure: process.env.NODE_ENV === "production" && process.env.WEB_PLAIN_HTTP !== "1",
     path: "/",
     maxAge: TTL_SECONDS,
   });

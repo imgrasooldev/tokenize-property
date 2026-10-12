@@ -9,7 +9,8 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   // HTTPS only in production (the local prototype is plain HTTP on 127.0.0.1).
-  ...(process.env.NODE_ENV === "production"
+  // Not on the plain-HTTP IP demo server (WEB_PLAIN_HTTP=1), where browsers would ignore it anyway.
+  ...(process.env.NODE_ENV === "production" && process.env.WEB_PLAIN_HTTP !== "1"
     ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]
     : []),
 ];

@@ -1,0 +1,46 @@
+name: Deploy demo
+
+# Updates the private IP demo server after CI passes on main (or by hand). The server pulls the
+# exact commit from this public repository; the CI key may only run deploy/demo-server/update.sh.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Skipped until the repository variable DEMO_HOST is set (Settings > Secrets and variables).
+    if: vars.DEMO_HOST != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: demo
+    timeout-minutes: 20
+    steps:
+      - name: SSH key and pinned host key
+        env:
+          DEMO_SSH_KEY: ${{ secrets.DEMO_SSH_KEY }}
+          DEMO_KNOWN_HOSTS: ${{ secrets.DEMO_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEMO_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEMO_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Update the server to this commit
+        env:
+          DEMO_HOST: ${{ vars.DEMO_HOST }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes "ubuntu@$DEMO_HOST" "$SHA"
+      - name: Smoke test from outside
+        env:
+          DEMO_HOST: ${{ vars.DEMO_HOST }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://$DEMO_HOST/login")
+          echo "GET /login -> $code"
+          test "$code" = 200
