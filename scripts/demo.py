@@ -1,6 +1,6 @@
 """One command for team presentations: start or stop the whole local demo.
 
-    python scripts/demo.py up            # chain, PostgreSQL, website on http://127.0.0.1:3100
+    python scripts/demo.py up            # chain, PostgreSQL, website (3100) and Live Demo Console (4800)
     python scripts/demo.py up --trade    # ... plus demo trading in the market (about 5 minutes)
     python scripts/demo.py status
     python scripts/demo.py down          # stop website and demo trading; chain and DB keep running
@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 RUN = ROOT / "chain" / "data" / "demo"  # git-ignored
 URL = "http://127.0.0.1:3100"
+CONSOLE = "http://127.0.0.1:4800"
+BACKEND = ROOT / "backend"
 
 
 def run(*args):
@@ -37,12 +39,12 @@ def up_ok(url, timeout=3):
         return False
 
 
-def start_bg(name, cmd):
+def start_bg(name, cmd, cwd=WEB):
     """Starts a detached process with its output in chain/data/demo/<name>.log."""
     RUN.mkdir(parents=True, exist_ok=True)
     log = open(RUN / f"{name}.log", "ab")
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-    proc = subprocess.Popen(cmd, cwd=WEB, stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
+    proc = subprocess.Popen(cmd, cwd=cwd, stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
                             start_new_session=os.name != "nt")
     (RUN / f"{name}.pid").write_text(str(proc.pid))
     return proc
@@ -70,11 +72,11 @@ def cmd_up(args):
         sys.exit("web/.env.local is missing: run `npm run setup:demo` in web/ once.")
     if not (ROOT / "contracts" / "broadcast" / "Deploy.s.sol" / "586586" / "run-latest.json").exists():
         sys.exit("No deployment on the local chain yet: run `python chain/flow.py` once.")
-    print("1/3 chain")
+    print("1/4 chain")
     run("chain/net.py", "start")
-    print("2/3 PostgreSQL")
+    print("2/4 PostgreSQL")
     run("backend/scripts/pg.py", "start")
-    print("3/3 website")
+    print("3/4 website")
     if up_ok(f"{URL}/login"):
         print(f"    already running on {URL}")
     else:
@@ -89,15 +91,25 @@ def cmd_up(args):
         for path in ("/", "/market", "/properties/GPF3", "/login", "/signup"):
             up_ok(f"{URL}{path}", timeout=120)
         print(f"    ready on {URL}  (log: chain/data/demo/web.log)")
+    print("4/4 Live Demo Console")
+    if up_ok(CONSOLE):
+        print(f"    already running on {CONSOLE}")
+    else:
+        npm = shutil.which("npm") or "npm"
+        start_bg("console", [npm, "run", "demo"], cwd=BACKEND)
+        deadline = time.time() + 60
+        while time.time() < deadline and not up_ok(CONSOLE):
+            time.sleep(1)
+        print(f"    {'ready on ' + CONSOLE if up_ok(CONSOLE) else 'did not start; see chain/data/demo/console.log'}")
     if "--trade" in args:
         npm = shutil.which("npm") or "npm"
         start_bg("trade", [npm, "run", "demo:market", "--", "40", "8"])
         print("    demo trading started (40 trades, 8 s apart; log: chain/data/demo/trade.log)")
-    print(f"\nOpen {URL}  -  sign in as Alice or Bob  -  presenter guide: docs/demo-guide.md")
+    print(f"\nWebsite {URL}  -  Console {CONSOLE}  -  sign in as Alice or Bob  -  guide: docs/demo-guide.md")
 
 
 def cmd_down(args):
-    for name in ("trade", "web"):
+    for name in ("trade", "console", "web"):
         print(f"{name}: {'stopped' if stop_bg(name) else 'not started by this script'}")
     if "--all" in args:
         run("backend/scripts/pg.py", "stop")
@@ -108,6 +120,7 @@ def cmd_status(_args):
     run("chain/net.py", "status")
     run("backend/scripts/pg.py", "status")
     print(f"website: {'up' if up_ok(f'{URL}/login') else 'down'} ({URL})")
+    print(f"console: {'up' if up_ok(CONSOLE) else 'down'} ({CONSOLE})")
 
 
 COMMANDS = {"up": cmd_up, "down": cmd_down, "status": cmd_status}

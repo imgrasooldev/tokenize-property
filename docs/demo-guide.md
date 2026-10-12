@@ -12,7 +12,7 @@ Then, before each presentation:
 python scripts/demo.py up --trade
 ```
 
-This starts the chain, PostgreSQL and the website on http://127.0.0.1:3100, compiles the main pages so nothing is slow on stage, and starts about five minutes of demo trading so the market chart is moving. Afterwards: `python scripts/demo.py down` (add `--all` to stop the chain and database too).
+This starts the chain, PostgreSQL, the website on http://127.0.0.1:3100 and the Live Demo Console on http://127.0.0.1:4800, compiles the main pages so nothing is slow on stage, and starts about five minutes of demo trading so the market chart is moving. Afterwards: `python scripts/demo.py down` (add `--all` to stop the chain and database too).
 
 ## The script
 
