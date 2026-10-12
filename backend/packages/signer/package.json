@@ -1,0 +1,10 @@
+{
+  "name": "@pt/signer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./executor": "./src/executor.ts"
+  }
+}

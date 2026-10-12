@@ -17,7 +17,11 @@
     "migrate": "tsx packages/db/src/cli.ts",
     "gen:abis": "tsx packages/contracts/scripts/gen-abis.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "demo": "tsx packages/demo-console/src/server.ts"
+    "demo": "tsx packages/demo-console/src/server.ts",
+    "signer": "tsx packages/signer/src/cli.ts serve",
+    "signer:setup": "tsx packages/signer/src/cli.ts setup",
+    "signer:decide": "tsx packages/signer/src/cli.ts decide",
+    "signer:audit": "tsx packages/signer/src/cli.ts audit"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

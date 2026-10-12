@@ -48,6 +48,17 @@ export class TransientError extends Error {
   override name = "TransientError";
 }
 
+/** Nothing was sent; the command is waiting (e.g. for maker-checker approval). Does not use up an attempt. */
+export class DeferredError extends Error {
+  override name = "DeferredError";
+  constructor(
+    message: string,
+    readonly retryAfterSeconds = 60,
+  ) {
+    super(message);
+  }
+}
+
 /**
  * Executes one kind of command on the chain. Contract:
  *  - `submit` signs the transaction, calls `record(signed)` and broadcasts ONLY if record returned
@@ -285,7 +296,8 @@ export class OutboxWorker {
       // Decide from the database, not the error: if nothing was recorded, nothing was sent.
       const now = await getCommand(this.pool, cmd.id);
       if (now?.status === "claimed" && now.leaseOwner === this.opts.workerId) {
-        await this.release(cmd.id, message(e), !(e instanceof RefusedError));
+        if (e instanceof DeferredError) await this.defer(cmd.id, message(e), e.retryAfterSeconds);
+        else await this.release(cmd.id, message(e), !(e instanceof RefusedError));
       } else {
         this.opts.onError?.(`command ${cmd.id.toString()} after submission`, e);
         // Submitted: the lease will expire and the chain will decide.
@@ -339,6 +351,10 @@ export class OutboxWorker {
 
   private async release(id: bigint, error: string, retryable: boolean): Promise<void> {
     await this.pool.query("SELECT outbox.release($1, $2, $3, $4)", [id.toString(), this.opts.workerId, error, retryable]);
+  }
+
+  private async defer(id: bigint, reason: string, seconds: number): Promise<void> {
+    await this.pool.query("SELECT outbox.defer($1, $2, $3, $4)", [id.toString(), this.opts.workerId, reason, seconds]);
   }
 
   private async resolve(id: bigint, outcome: "reverted" | "dropped" | "review", detail: string): Promise<void> {

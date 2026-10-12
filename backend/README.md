@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md) and [0004](../docs/decisions/0004-outbox.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md) and [0005](../docs/decisions/0005-signing-service.md).
 
 ## Status
 
@@ -9,8 +9,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5a | Foundation: workspace, config, logger, DB pool + migration runner, typed ABIs, CI | Done |
 | 5b | Ledger: double-entry, append-only, hash-chained | Done |
 | 5c | Outbox + jobs in PostgreSQL, idempotency | Done |
-| 5d | Signing service + policy engine | Next |
-| 5e | Indexer → read model | Planned |
+| 5d | Signing service + policy engine | Done |
+| 5e | Indexer → read model | Next |
 | 5f | Reconciliation (chain vs ledger vs bank) | Planned |
 | 5g | KYC and bank/Raast mocks | Planned |
 | 5h | Integration tests against PostgreSQL + Besu | Planned |
@@ -25,6 +25,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/contracts` | Typed ABIs generated from `contracts/out` (CI fails on drift) |
 | `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
 | `@pt/outbox` | Outbox: `enqueue` inside the business transaction, `OutboxWorker` (leases, LISTEN/NOTIFY, record-before-broadcast, resolution from the chain), `Executor` interface; `@pt/outbox/local-executor` for the local chain only |
+| `@pt/signer` | Signing service: key custody behind `KeyProvider` (encrypted keystore locally, HSM/MPC in production), deny-by-default policy engine, maker-checker, nonce reservations, hash-chained audit, HMAC-authenticated internal API, outbox `signerExecutor` |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
 ## Outbox (Step 5c)
@@ -54,6 +55,21 @@ await worker.start(); // LISTEN outbox + polling fallback
 Roles: `pt_outbox_writer` (enqueue), `pt_outbox_worker` (claim/record/complete/release/resolve), `pt_outbox_operator` (decide on review, with a reason), `pt_outbox_reader`.
 
 Tests (26): database rules (idempotency, rollback, immutability, edges, concurrent claimers, lease loss, drop/revert, backoff, operator rules, roles, NOTIFY only on commit); worker outcomes with a fault-injecting fake chain; a **property test** (random faults, 1–3 workers: never two successful transactions per command, confirmed means exactly one, failed means none), verified to catch a deliberately broken worker; and end to end on Besu (ledger + command in one transaction, real mint, duplicate refId refused before sending).
+
+## Signing service (Step 5d)
+
+```bash
+npm run signer:setup     # LOCAL DEV ONLY: encrypted keystore from the dev Issuance key, first mint policy (maker + checker)
+npm run signer           # 127.0.0.1:4900, HMAC-authenticated
+npm run signer:decide -- <requestId> <operator> approve "<reason>"   # maker-checker approval
+npm run signer:audit     # verify the audit hash chain
+```
+
+Rules enforced in the database (`0004_signer.sql`): S-1 no key material in the database, S-2 versioned policies activated by a second operator, S-3 approvals by distinct operators who are not the requester, S-4 nonce reservations without duplicates or gaps, S-5 hash-chained append-only audit. The service signs but never broadcasts; the outbox records first, then broadcasts (ADR 0004/0005).
+
+Measured locally: the signer's own work p50 6.2 ms / p99 8.9 ms; a full signature over HTTP including Besu reads p50 29 ms / p99 37 ms (before fixing gas limits per policy: p50 738 ms).
+
+Tests (35): keystore (round trip, wrong passphrase, tampering, no key in output), policy (every deny path), service flows on a scratch database (idempotency, payload conflict, two-operator approval, rejection, unverified/paused/simulation denials without nonce use, daily limit, 30 concurrent requests get gap-free unique nonces, release and reuse, dropped re-sign, audit tamper detection, immutability), HTTP auth (forged, stale, replayed, tampered, wrong path, oversized, non-JSON), and end to end on Besu through the outbox (small mint, deferred large mint approved by two operators, unverified recipient refused with nothing signed).
 
 ## Live Demo Console
 

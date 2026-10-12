@@ -67,11 +67,12 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
 | K-1 | Elevation | Theft of a multisig signer key | Hardware wallets; 3-of-5 / 2-of-3 thresholds; signers in different cities and organisations; quarterly rotation drill | Planned |
-| K-2 | Elevation | API compromise used to sign transactions | API holds no keys; signing service is a separate process in a separate network zone, reachable only via mTLS | Planned |
-| K-3 | Tampering | Signing service signs a malicious transaction | Policy engine: allowed contracts and functions only, amount and rate limits, maker-checker for anything non-routine | Planned |
-| K-4 | Repudiation | Nobody knows who approved a signature | Every signing request logged with requester, approvers and payload hash in the append-only audit log | Planned |
+| K-2 | Elevation | API compromise used to sign transactions | API holds no keys; signing service is a separate process in a separate network zone, reachable only via mTLS | Built (Step 5d): separate `@pt/signer` process, HMAC-authenticated internal API on 127.0.0.1, replay and skew protection; mTLS and network zoning in production |
+| K-3 | Tampering | Signing service signs a malicious transaction | Policy engine: allowed contracts and functions only, amount and rate limits, maker-checker for anything non-routine | Built and tested (Step 5d): deny-by-default policies (target, function, chain, per-command and daily limits, verified recipient, cap, simulation), maker-checker approvals by distinct operators, policy changes also maker-checker (ADR 0005) |
+| K-4 | Repudiation | Nobody knows who approved a signature | Every signing request logged with requester, approvers and payload hash in the append-only audit log | Built and tested (Step 5d): hash-chained `signer.audit`, tamper detection |
 | K-5 | Elevation | Departing employee keeps access | Same-day key revocation and Safe owner rotation; monthly access review | Planned |
-| K-6 | Info. disclosure | Keys leak via code, logs or backups | Keys only in HSM/MPC in production; gitleaks in CI; secrets in Vault; log redaction | Planned |
+| K-7 | Tampering | Nonce reuse or gaps stall or double-send transactions | Database nonce reservations under a lock; released and stale nonces reused lowest first; dropped transactions proven before re-signing | Built and tested (Step 5d) |
+| K-6 | Info. disclosure | Keys leak via code, logs or backups | Keys only in HSM/MPC in production; gitleaks in CI; secrets in Vault; log redaction | Partly built: local keys AES-256-GCM encrypted at rest (scrypt), never in JSON or logs, DB holds addresses only; HSM/MPC planned |
 
 ### 4.3 Money flows (bank, Raast)
 
