@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Create account (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.wrapx{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start;padding:20px 0 60px}
+.selfie{height:200px;border-radius:16px;border:1px dashed rgba(34,227,240,.4);display:grid;place-items:center;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(34,227,240,.08),transparent 60%)}
+.scan{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 12px var(--cyan);animation:scan 2.2s ease-in-out infinite}
+@keyframes scan{0%{top:10%}50%{top:88%}100%{top:10%}}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="wrap"><nav class="pubnav"><a class="logo" href="site-home.html"><svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>Property Token</a><div class="sp"></div><span class="chip">EN · اردو</span><a class="btn sm" href="site-login.html">I have an account</a></nav>
+<div class="steps" style="margin:6px 0 10px"><div class="stp done"><b>✓</b>Phone</div><span class="ln"></span><div class="stp now"><b>2</b>CNIC + NADRA</div><span class="ln"></span><div class="stp"><b>3</b>Selfie</div><span class="ln"></span><div class="stp"><b>4</b>On-chain identity</div><span class="ln"></span><div class="stp"><b>5</b>Bank account</div></div>
+
+<div class="wrapx">
+  <div class="glass" style="padding:24px">
+    <h1 style="font-size:28px">Verify your identity</h1><p class="mu" style="margin:6px 0 20px">About 3 minutes. We never store your full CNIC; only the last digits and a one-way fingerprint.</p>
+    <div class="field"><label>Full name (as on CNIC)</label><div class="input">Ayesha Malik</div></div>
+    <div class="field"><label>CNIC number</label><div class="input mono focus">35202-1234567-1<span class="sp"></span><span class="chip ok">✓ NADRA match</span></div></div>
+    <div class="field"><label>Mobile</label><div class="input mono">0300-1234567<span class="sp"></span><span class="chip ok">✓ verified</span></div></div>
+    <div class="field"><label>Selfie liveness</label><div class="selfie"><div class="scan"></div><svg width="90" height="110" viewBox="0 0 90 110" fill="none" stroke="#22E3F0" stroke-opacity=".7" stroke-width="2"><ellipse cx="45" cy="45" rx="30" ry="38"/><path d="M10 110c4-20 18-30 35-30s31 10 35 30"/></svg><span class="chip cy" style="position:absolute;bottom:12px">Turn your head slowly…</span></div></div>
+    <label class="check" style="margin:16px 0"><i>✓</i>I accept the terms and the risk statement</label>
+    <a class="btn prime block" href="portal-dashboard.html">Verify and create my account →</a>
+  </div>
+
+  <div class="grid" style="gap:16px">
+    <div class="glass" style="padding:20px"><b class="sg">What happens on the blockchain</b>
+      <div class="timeline" style="margin-top:10px">
+        <div class="ti"><span class="chip ok" style="padding:2px 6px">1</span><span>A custodial wallet is created for you (keys in an HSM, never on this device)</span><span class="mono di">0x9a4c…</span></div>
+        <div class="ti"><span class="chip ok" style="padding:2px 6px">2</span><span>Your ONCHAINID identity is deployed</span><span class="mono di">ONCHAINID</span></div>
+        <div class="ti"><span class="chip ok" style="padding:2px 6px">3</span><span>KYC and AML claims are signed by the claim issuer</span><span class="mono di">topic 1, 2</span></div>
+        <div class="ti"><span class="chip cy" style="padding:2px 6px">4</span><span>You are registered for Pakistan (586) in the token's identity registry</span><span class="mono di">RegistrarGuard</span></div>
+      </div></div>
+    <div class="ai-box"><div class="hd"><span class="orb"></span>Why do you need my CNIC?</div><p style="font-size:13.5px;color:#C3CCDB;line-height:1.65">Property tokens are securities; only identified Pakistani investors can hold them <span class="cite">SECP rules</span>. The token checks your verified identity on every transfer <span class="cite">ERC-3643</span>.</p></div>
+    <div class="glass" style="padding:20px"><b class="sg">Your data</b><div style="display:grid;gap:10px;margin-top:12px;font-size:13px"><div class="check"><i>✓</i>Full CNIC and phone never stored</div><div class="check"><i>✓</i>Encrypted at rest and in transit</div><div class="check"><i>✓</i>Delete your data on request (after legal retention)</div></div></div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

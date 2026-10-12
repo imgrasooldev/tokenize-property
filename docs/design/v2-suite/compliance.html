@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Compliance (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.face{width:100%;aspect-ratio:1;border-radius:14px;background:radial-gradient(circle at 50% 40%,#2a3352,#0D1838);display:grid;place-items:center;border:1px solid var(--stroke)}
+.score{font-family:"JetBrains Mono";font-size:34px;font-weight:600}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="index.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a>
+  <div class="sect">OPERATIONS</div>
+  <a class="nav" href="ops-overview.html">◉ Overview</a><a class="nav" href="ops-approvals.html">✓ Approvals <span class="badge">3</span></a><a class="nav" href="ops-overview.html#outbox">⇶ Outbox</a><a class="nav" href="ops-audit.html">⛓ Audit</a>
+  <div class="sect">COMPLIANCE</div><a class="nav on" href="compliance.html">◎ KYC queue <span class="badge">7</span></a><a class="nav" href="#aml">⚠ AML alerts</a><a class="nav" href="#freeze">❄ Freezes</a>
+  <div class="sect">TRUSTEE</div><a class="nav" href="trustee.html">▦ Register</a><a class="nav" href="trustee.html#dist">₨ Distributions</a><a class="nav" href="trustee.html#docs">▤ Documents</a>
+  <div class="who"><div class="av">SN</div><div><b>Sara Naqvi</b><div class="cy" style="font-size:11.5px">Compliance officer · MLRO</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Compliance</h1><span class="env">INTERNAL · VPN + SSO</span><span class="sp"></span><div class="tabs"><span class="on">KYC 7</span><span>AML 2</span><span>Freezes 1</span></div></div>
+  <div class="content grid" style="gap:16px">
+    <div class="grid g4">
+      <div class="card"><div class="label">KYC waiting</div><div class="big" style="color:var(--amber)">7</div><div class="mu mono" style="font-size:11.5px">oldest 3 h · SLA 24 h</div></div>
+      <div class="card"><div class="label">Auto-cleared today</div><div class="big up">41</div><div class="mu mono" style="font-size:11.5px">NADRA + liveness + lists</div></div>
+      <div class="card"><div class="label">Open AML alerts</div><div class="big dn">2</div><div class="mu mono" style="font-size:11.5px">1 high · 1 medium</div></div>
+      <div class="card"><div class="label">Frozen wallets</div><div class="big">1</div><div class="mu mono" style="font-size:11.5px">on chain · freezePartial</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1.3fr;align-items:start">
+      <div class="glass" style="padding:6px 6px 0"><table class="t"><tr><th>Applicant</th><th>Risk</th><th>Reason</th><th class="n">Age</th></tr>
+        <tr style="background:rgba(34,227,240,.06)"><td><b>Usman Tariq</b><div class="di mono" style="font-size:11px">35202-•••••••-3</div></td><td><span class="chip warn">medium</span></td><td>Name mismatch (bank)</td><td class="n">3h</td></tr>
+        <tr><td><b>Hina Javed</b><div class="di mono" style="font-size:11px">42101-•••••••-8</div></td><td><span class="chip ok">low</span></td><td>Selfie retake</td><td class="n">2h</td></tr>
+        <tr><td><b>Kamran Ali</b><div class="di mono" style="font-size:11px">37405-•••••••-1</div></td><td><span class="chip bad">high</span></td><td>PEP list partial match</td><td class="n">1h</td></tr>
+        <tr><td><b>Zara Malik</b><div class="di mono" style="font-size:11px">61101-•••••••-6</div></td><td><span class="chip ok">low</span></td><td>Address proof</td><td class="n">40m</td></tr></table></div>
+      <div class="glass" style="padding:20px"><div class="row"><b class="sg" style="font-size:18px">Usman Tariq</b><span class="chip warn">medium risk</span><span class="sp"></span><span class="mono di" style="font-size:11px">case KYC-2291</span></div>
+        <div class="grid" style="grid-template-columns:120px 1fr;gap:16px;margin-top:14px"><div class="face"><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#8B97AD" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+          <div style="display:grid;gap:8px;font-size:13px"><div class="check"><i>✓</i>NADRA Verisys: CNIC valid, photo match 97%</div><div class="check"><i>✓</i>Liveness passed</div><div class="check"><i>✓</i>Sanctions (UN, NACTA): no match</div><div class="check"><i class="wait">!</i>Bank title "M. Usman" vs CNIC "Usman Tariq"</div><div class="check"><i>✓</i>Source of funds: salary slip</div></div></div>
+        <div class="ai-box" style="margin-top:14px"><div class="hd"><span class="orb"></span>Compliance assistant</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">The bank title is an abbreviation of the CNIC name; IBAN check by the bank confirms the same CNIC <span class="cite">IBAN-CNIC link</span>. Similar cases were approved 18 of 18 times <span class="cite">case history</span>.</p><p class="di" style="font-size:11px;margin-top:6px">Suggestion only. An officer decides.</p></div>
+        <div class="row" style="margin-top:14px;gap:10px"><a class="btn ok" href="#">✓ Approve · register ONCHAINID</a><a class="btn" href="#">Ask for document</a><a class="btn no" href="#">Reject</a></div>
+        <p class="di" style="font-size:11.5px;margin-top:8px">Approving adds a KYC claim to the investor's identity on chain. No personal data goes on chain.</p></div>
+    </div>
+    <div class="grid g2">
+      <div class="glass" style="padding:18px" id="aml"><b class="sg">AML alerts</b><table class="t" style="margin-top:8px"><tr><th>Alert</th><th>Rule</th><th>Status</th></tr>
+        <tr><td><b>Rapid in-out</b> · 0x3C44…93BC</td><td class="mono">AML-07 buy+sell &lt; 24 h, Rs 40 L</td><td><span class="chip bad">high · open</span></td></tr>
+        <tr><td><b>Structuring</b> · 0x90F7…b906</td><td class="mono">AML-03 5 × Rs 9.9 L</td><td><span class="chip warn">medium · reviewing</span></td></tr></table></div>
+      <div class="glass" style="padding:18px" id="freeze"><b class="sg">Freezes</b><table class="t" style="margin-top:8px"><tr><th>Wallet</th><th>Tokens</th><th>Order</th><th></th></tr>
+        <tr><td class="mono">0x15d3…6A65</td><td class="mono">1,200 GPF3</td><td>FMU request #44</td><td><span class="chip">❄ frozen · tx 0x0f2e…</span></td></tr></table>
+        <p class="di" style="font-size:11.5px;margin-top:10px">Freeze and unfreeze also go through the signer: two approvals, audited.</p></div>
+    </div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

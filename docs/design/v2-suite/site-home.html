@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Home (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>
+.hero{display:grid;grid-template-columns:1.02fr 1fr;gap:40px;padding:40px 0 20px;align-items:center;min-height:600px}
+.hero h1{font-size:64px;line-height:1.02;letter-spacing:-2px;margin:18px 0 16px}
+.lead{font-size:18px;line-height:1.6;color:#A9B4C8;max-width:560px}
+.netwrap{position:relative;height:540px}#net{position:absolute;inset:0;width:100%;height:100%}
+.core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:240px;padding:16px;text-align:center}
+.ring{width:110px;height:110px;margin:2px auto 10px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(from 0deg,var(--cyan),var(--violet),var(--pink),var(--cyan));animation:spin 8s linear infinite}
+.ring:after{content:"";position:absolute;inset:3px;border-radius:50%;background:#0A0F1E}.ring span{position:relative;z-index:2;animation:spin 8s linear infinite reverse;font-family:"Space Grotesk";font-size:26px;font-weight:700}
+.orbit{position:absolute;padding:12px 14px;font-size:12.5px;min-width:180px;animation:bob 6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-10px)}}
+.orbit h5{font-size:10.5px;color:var(--muted);font-weight:500;letter-spacing:.4px;margin-bottom:5px}
+section{padding:70px 0}
+.prop{overflow:hidden;transition:.3s}.prop .art{height:200px;position:relative;background:radial-gradient(120% 90% at 50% 100%,#13204A 0%,#070B18 70%)}
+.prop .tags{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between}
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;position:relative}
+.pipe:before{content:"";position:absolute;left:8%;right:8%;top:40px;height:2px;background:linear-gradient(90deg,var(--cyan),var(--violet),var(--pink));opacity:.5}
+.ps{text-align:center}.ps .ic{width:80px;height:80px;margin:0 auto 14px;border-radius:22px;display:grid;place-items:center;background:#0B1226;border:1px solid var(--stroke2);position:relative;z-index:1;font-size:26px;box-shadow:0 0 30px -10px var(--violet)}
+.ps h4{font-size:15.5px;margin-bottom:4px}.ps p{font-size:13px;color:var(--muted)}
+</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="rail"><div class="wrap"><span class="row"><span class="dot"></span>Network healthy</span><span class="nodes"><i></i><i></i><i></i><i></i></span><span>Block <b class="mono" data-block>#24,230</b></span><span>Finality <b>2.0 s</b></span><span>GPF3 <b>Rs 503.00</b> <span class="up">+0.60%</span></span><span>Ledger <b class="up">intact</b></span><span>Last anchor <b class="mono">0x9f3c…a71e</b></span></div></div>
+<div class="wrap"><nav class="pubnav">
+  <a class="logo" href="site-home.html"><svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="url(#lg)" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" x2="32" y1="0" y2="32"><stop stop-color="#22E3F0"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs></svg>Property Token</a>
+  <div class="links"><a class="on" href="site-home.html">Home</a><a href="site-properties.html">Properties</a><a href="portal-market.html">Market</a><a href="#how">How it works</a><a href="#proof">Proofs</a></div>
+  <div class="sp"></div><div class="cmdk">✦ Ask AI or search…<kbd>Ctrl K</kbd></div><span class="chip">EN · اردو</span>
+  <a class="btn sm" href="site-login.html">Sign in</a><a class="btn prime sm" href="site-signup.html">Get started</a>
+</nav></div>
+
+<div class="wrap hero">
+  <div>
+    <span class="chip"><span class="dot"></span>Live on a 4-validator Besu network · ERC-3643</span>
+    <h1>Real estate,<br><span class="grad">verified by math.</span><br>Explained by AI.</h1>
+    <p class="lead">Own fractions of trustee-held buildings in Pakistan from Rs 5,000. Every token, trade and rupee of rent is provable on chain, and an AI analyst explains each property in English or Urdu.</p>
+    <div class="row" style="margin:28px 0 22px"><a class="btn prime" href="site-signup.html">Start investing →</a><a class="btn" href="site-property.html#ai">✦ Ask the AI analyst</a></div>
+    <div class="row" style="flex-wrap:wrap"><span class="chip ok">✓ Merkle-verified rent</span><span class="chip ok">✓ On-chain KYC identity</span><span class="chip ok">✓ Hash-chained ledger</span><span class="chip ok">✓ Trustee register 1:1</span></div>
+  </div>
+  <div class="netwrap"><canvas id="net"></canvas>
+    <div class="core glass"><div class="ring"><span>GPF3</span></div><div class="sg" style="font-size:22px;font-weight:700">Rs 503.00</div><span class="mu" style="font-size:12px">Gulberg Plaza · NAV 500 · <span class="up">+0.60%</span></span></div>
+    <div class="orbit glass" style="left:0;top:40px"><h5>✦ AI RISK SCORE</h5><b class="sg" style="font-size:17px">82 / 100</b> <span class="mu">low</span><div class="bar" style="margin-top:7px"><i style="width:82%"></i></div></div>
+    <div class="orbit glass" style="right:0;top:90px;animation-delay:.8s"><h5><span class="dot"></span> BLOCK FINALISED</h5><b class="mono" data-block>#24,230</b><div class="mono di" style="font-size:11px">4/4 validators · 2.0 s</div></div>
+    <div class="orbit glass" style="left:20px;bottom:40px;animation-delay:1.6s"><h5>RENT VERIFIED ON CHAIN</h5><b class="sg" style="font-size:17px">Rs 25,000.00</b><div class="mono cy" style="font-size:11px">root 0xa1a1…6622 ✓</div></div>
+    <div class="orbit glass" style="right:20px;bottom:20px"><h5>TRADE SETTLED (DvP)</h5><b class="sg" style="font-size:17px">40 GPF3 @ 503</b><div class="mono di" style="font-size:11px">tokens first, cash after</div></div>
+  </div>
+</div>
+
+<div class="wrap"><div class="glass grid g5" style="gap:0;overflow:hidden;padding:0">
+  <div style="padding:18px 20px;border-right:1px solid var(--stroke)"><div class="label">Value tokenised</div><div class="big">Rs 31.7 Cr</div></div>
+  <div style="padding:18px 20px;border-right:1px solid var(--stroke)"><div class="label">Verified investors</div><div class="big">1,240</div></div>
+  <div style="padding:18px 20px;border-right:1px solid var(--stroke)"><div class="label">Rent distributed</div><div class="big">Rs 4.3M</div></div>
+  <div style="padding:18px 20px;border-right:1px solid var(--stroke)"><div class="label">Avg. rent yield</div><div class="big up">9.2%</div></div>
+  <div style="padding:18px 20px"><div class="label">Trades settled on chain</div><div class="big">3,812</div></div>
+</div></div>
+
+<section><div class="wrap">
+  <div class="row" style="align-items:end;margin-bottom:26px"><div><div class="kicker">// TOKENISED PROPERTIES</div><h2 style="font-size:40px;margin-top:8px">Buildings with a <span class="grad">public heartbeat.</span></h2></div><div class="sp"></div><a class="btn" href="site-properties.html">All properties →</a></div>
+  <div class="grid g3">
+    <a class="prop glass tilt" href="site-property.html"><div class="art"><svg viewBox="0 0 400 200" width="100%" height="200"><polygon points="200,24 280,64 280,176 200,196 120,176 120,64" fill="#1B2A5A" stroke="#22E3F0" stroke-opacity=".6"/><polygon points="200,24 280,64 200,104 120,64" fill="#24366E" stroke="#22E3F0"/><line x1="200" y1="104" x2="200" y2="196" stroke="#22E3F0" stroke-opacity=".6"/><g fill="#22E3F0"><rect x="134" y="90" width="10" height="5"/><rect x="152" y="100" width="10" height="5" opacity=".4"/><rect x="170" y="110" width="10" height="5"/><rect x="134" y="116" width="10" height="5" opacity=".6"/><rect x="152" y="126" width="10" height="5"/><rect x="134" y="142" width="10" height="5"/></g><g fill="#8B5CF6"><rect x="214" y="110" width="10" height="5"/><rect x="232" y="100" width="10" height="5" opacity=".5"/><rect x="250" y="90" width="10" height="5"/><rect x="214" y="136" width="10" height="5"/><rect x="250" y="116" width="10" height="5"/></g></svg>
+      <div class="tags"><span class="chip"><span class="dot"></span>Live · Lahore</span><span class="chip ai">AI 82</span></div></div>
+      <div style="padding:16px 18px"><h3 style="font-size:19px">Gulberg Plaza, Floor 3</h3><div class="mu" style="font-size:13px">Grade-A office · bank tenant</div>
+        <div class="grid g3" style="margin:14px 0;gap:8px"><div class="card" style="padding:9px 10px"><div class="label">Price</div><b class="sg">Rs 503</b></div><div class="card" style="padding:9px 10px"><div class="label">Yield</div><b class="sg up">9.2%</b></div><div class="card" style="padding:9px 10px"><div class="label">Min.</div><b class="sg">Rs 5k</b></div></div>
+        <div class="bar"><i style="width:63%"></i></div><div class="row mono di" style="font-size:11px;margin-top:8px"><span>63% minted</span><span class="sp"></span><span>0x1028…a2b8 ✓</span></div></div></a>
+    <a class="prop glass tilt" href="site-properties.html"><div class="art"><svg viewBox="0 0 400 200" width="100%" height="200"><polygon points="90,100 200,60 310,100 310,176 200,198 90,176" fill="#20304F" stroke="#2EF2B5" stroke-opacity=".5"/><polygon points="90,100 200,60 310,100 200,140" fill="#2A3D63" stroke="#2EF2B5" stroke-opacity=".6"/><g fill="#2EF2B5" fill-opacity=".75"><polygon points="105,130 140,118 140,150 105,162"/><polygon points="150,115 185,103 185,135 150,147"/></g></svg>
+      <div class="tags"><span class="chip">Opens 15 Nov · Karachi</span><span class="chip ai">AI 77</span></div></div>
+      <div style="padding:16px 18px"><h3 style="font-size:19px">DHA Phase 6 Retail</h3><div class="mu" style="font-size:13px">Retail · pharmacy chain</div>
+        <div class="grid g3" style="margin:14px 0;gap:8px"><div class="card" style="padding:9px 10px"><div class="label">Price</div><b class="sg">Rs 500</b></div><div class="card" style="padding:9px 10px"><div class="label">Yield</div><b class="sg up">8.4%</b></div><div class="card" style="padding:9px 10px"><div class="label">Waitlist</div><b class="sg">312</b></div></div>
+        <div class="bar"><i style="width:3%"></i></div><div class="row mono di" style="font-size:11px;margin-top:8px"><span>trustee review</span><span class="sp"></span><span>pending mint</span></div></div></a>
+    <a class="prop glass tilt" href="site-properties.html"><div class="art"><svg viewBox="0 0 400 200" width="100%" height="200"><polygon points="200,14 250,40 250,180 200,198 150,180 150,40" fill="#2A1B55" stroke="#8B5CF6" stroke-opacity=".7"/><polygon points="200,14 250,40 200,66 150,40" fill="#3A2775" stroke="#F472B6" stroke-opacity=".6"/><g stroke="#F472B6" stroke-opacity=".8"><path d="M158 84L196 102M158 108L196 126M158 132L196 150M158 156L196 174"/><path d="M204 102L242 84M204 126L242 108M204 150L242 132M204 174L242 156" stroke="#8B5CF6"/></g></svg>
+      <div class="tags"><span class="chip">Opens Dec · Islamabad</span><span class="chip ai">AI 79</span></div></div>
+      <div style="padding:16px 18px"><h3 style="font-size:19px">Blue Area Office, Floor 2</h3><div class="mu" style="font-size:13px">Office · telecom tenant</div>
+        <div class="grid g3" style="margin:14px 0;gap:8px"><div class="card" style="padding:9px 10px"><div class="label">Price</div><b class="sg">Rs 500</b></div><div class="card" style="padding:9px 10px"><div class="label">Yield</div><b class="sg up">8.9%</b></div><div class="card" style="padding:9px 10px"><div class="label">Waitlist</div><b class="sg">188</b></div></div>
+        <div class="bar"><i style="width:2%"></i></div><div class="row mono di" style="font-size:11px;margin-top:8px"><span>valuation uploaded</span><span class="sp"></span><span>pending mint</span></div></div></a>
+  </div>
+</div></section>
+
+<section id="how" style="padding-top:20px"><div class="wrap">
+  <div class="kicker">// HOW IT WORKS</div><h2 style="font-size:40px;margin:8px 0 34px">From your bank to the <span class="grad">blockchain</span>.</h2>
+  <div class="pipe">
+    <div class="ps"><div class="ic">◉</div><h4>Verify</h4><p>NADRA KYC, 3 minutes</p></div>
+    <div class="ps"><div class="ic">✦</div><h4>Understand</h4><p>AI explains, with sources</p></div>
+    <div class="ps"><div class="ic">⇄</div><h4>Pay</h4><p>Raast to trustee escrow</p></div>
+    <div class="ps"><div class="ic">⬡</div><h4>Mint</h4><p>Signed by policy + 2 approvals</p></div>
+    <div class="ps"><div class="ic">₨</div><h4>Earn</h4><p>Monthly rent, provable</p></div>
+  </div>
+</div></section>
+
+<section id="proof" style="padding-top:20px"><div class="wrap grid" style="grid-template-columns:1.3fr .7fr">
+  <div class="glass" style="padding:20px"><div class="row" style="margin-bottom:12px"><b class="sg">Live blocks</b><span class="sp"></span><span class="chip ok"><span class="dot"></span>streaming</span></div><div class="blkrow" data-blocks></div>
+    <div style="margin-top:14px" class="timeline">
+      <div class="ti"><span class="chip cy" style="padding:2px 6px">⇄</span><span>40 GPF3 traded at Rs 503.00 · delivery versus payment</span><span class="mono di">0xb9f3…054a</span></div>
+      <div class="ti"><span class="chip warn" style="padding:2px 6px">₨</span><span>Rent distribution #3 · Rs 100,000 · Merkle root published</span><span class="mono di">0xa1a1…6622</span></div>
+      <div class="ti"><span class="chip ok" style="padding:2px 6px">⬡</span><span>60 GPF3 minted · approved by ops + trustee</span><span class="mono di">0x67bc…e9c9</span></div>
+    </div></div>
+  <div class="glass" style="padding:20px"><b class="sg">Verify your rent in one click</b>
+    <div style="display:grid;gap:12px;margin:16px 0">
+      <div class="check"><i>✓</i>Statement matches the on-chain hash</div><div class="check"><i>✓</i>Your share is in distribution #3</div>
+      <div class="check"><i>✓</i>1 paisa more is rejected</div><div class="check"><i>✓</i>Ledger, chain and bank reconciled</div></div>
+    <a class="btn prime block" href="portal-rent.html">Verify my share</a></div>
+</div></section>
+
+<footer class="pub"><div class="wrap row"><span>Prototype · sample figures · test money · not an offer. AI is informational and never investment advice. Secondary trading needs SECP approval.</span><span class="sp"></span><a href="index.html" class="cy">All screens →</a></div></footer>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

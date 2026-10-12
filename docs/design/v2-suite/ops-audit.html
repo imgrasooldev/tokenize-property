@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Audit (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.chain{display:grid;gap:0}.link{display:grid;grid-template-columns:70px 1fr 220px;gap:14px;align-items:center;border:1px solid var(--stroke);border-radius:12px;padding:12px 14px;background:rgba(13,24,56,.5)}
+.join{height:18px;width:2px;background:linear-gradient(var(--cyan),var(--violet));margin-left:48px}.link .h{font-family:"JetBrains Mono";font-size:11px;color:var(--dim);line-height:1.6}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="index.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a>
+  <div class="sect">OPERATIONS</div>
+  <a class="nav" href="ops-overview.html">◉ Overview</a><a class="nav" href="ops-approvals.html">✓ Approvals <span class="badge">3</span></a><a class="nav" href="ops-overview.html#outbox">⇶ Outbox</a><a class="nav on" href="ops-audit.html">⛓ Audit</a>
+  <div class="sect">COMPLIANCE</div><a class="nav" href="compliance.html">◎ KYC queue <span class="badge">7</span></a><a class="nav" href="compliance.html#aml">⚠ AML alerts</a><a class="nav" href="compliance.html#freeze">❄ Freezes</a>
+  <div class="sect">TRUSTEE</div><a class="nav" href="trustee.html">▦ Register</a><a class="nav" href="trustee.html#dist">₨ Distributions</a><a class="nav" href="trustee.html#docs">▤ Documents</a>
+  <div class="who"><div class="av">AU</div><div><b>External auditor</b><div class="cy" style="font-size:11.5px">read-only role</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Audit trail</h1><span class="env">INTERNAL · VPN + SSO</span><span class="sp"></span><div class="tabs"><span class="on">Signer</span><span>Ledger</span><span>Policies</span></div><a class="btn sm" href="#">Export evidence pack</a></div>
+  <div class="content grid" style="gap:16px">
+    <div class="grid g4">
+      <div class="card"><div class="label">Signer audit</div><div class="big up">Intact ✓</div><div class="mu mono" style="font-size:11.5px">2,317 entries · verified 12:10</div></div>
+      <div class="card"><div class="label">Ledger chain</div><div class="big up">Intact ✓</div><div class="mu mono" style="font-size:11.5px">4,812 entries</div></div>
+      <div class="card"><div class="label">Anchored on chain</div><div class="big">#24,180</div><div class="mu mono" style="font-size:11.5px">daily head hash</div></div>
+      <div class="card"><div class="label">Edits possible</div><div class="big">None</div><div class="mu mono" style="font-size:11.5px">append-only · no UPDATE grant</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1.3fr .7fr;align-items:start">
+      <div class="glass" style="padding:18px"><div class="row"><b class="sg">Signer audit · request 3f1c…5f60</b><span class="sp"></span><span class="mono di" style="font-size:11px">each entry hashes the one before</span></div>
+        <div class="chain" style="margin-top:12px">
+          <div class="link"><span class="chip cy">#2313</span><div><b>request.created</b> · issuance.mint · 20,000 GPF3<div class="h">actor outbox-worker · policy issuance.mint v2</div></div><div class="h">prev 0x41c0…77de<br>hash <span class="cy">0x8e12…a9f0</span></div></div>
+          <div class="join"></div>
+          <div class="link"><span class="chip cy">#2314</span><div><b>policy.evaluated</b> · allowed, needs 2 approvals<div class="h">6 checks passed · simulation ok</div></div><div class="h">prev 0x8e12…a9f0<br>hash <span class="cy">0x1b77…02c3</span></div></div>
+          <div class="join"></div>
+          <div class="link"><span class="chip ok">#2315</span><div><b>approval.granted</b> · Ana Siddiqui (operations)<div class="h">YubiKey 5C · serial ••7731</div></div><div class="h">prev 0x1b77…02c3<br>hash <span class="cy">0xd4e9…6b18</span></div></div>
+          <div class="join"></div>
+          <div class="link"><span class="chip warn">#2316</span><div><b>approval.denied</b> · Ana Siddiqui tried a 2nd approval<div class="h">rule: approvers must be different people</div></div><div class="h">prev 0xd4e9…6b18<br>hash <span class="cy">0x63af…e541</span></div></div>
+          <div class="join"></div>
+          <div class="link" style="border-style:dashed"><span class="chip">next</span><div class="di">waiting: trustee approval → signed → broadcast → confirmed</div><div></div></div>
+        </div></div>
+      <div class="grid" style="gap:16px">
+        <div class="glass" style="padding:18px"><b class="sg">Tamper test</b><p class="mu" style="font-size:13px;margin-top:8px">Change one byte of entry #2314 and run the verifier:</p>
+          <div class="diff" style="font-family:'JetBrains Mono';font-size:12px;background:rgba(0,0,0,.35);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:10px;line-height:1.8">signer.verify_audit()<br><span class="dn">✗ broken at #2315: prev_hash mismatch</span></div>
+          <p class="di" style="font-size:11.5px;margin-top:8px">Any change after the fact is detected, and the daily head hash is anchored on chain.</p></div>
+        <div class="ai-box"><div class="hd"><span class="orb"></span>Audit assistant</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">In October, 96 signing requests: 94 confirmed, 2 rejected by checkers, 0 signed without policy <span class="cite">audit Oct</span>. No person approved their own request <span class="cite">approval rule</span>.</p></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

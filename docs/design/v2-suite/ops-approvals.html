@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Approvals (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.req{border:1px solid var(--stroke);border-radius:14px;padding:14px;display:grid;gap:4px;cursor:pointer}.req.sel{border-color:rgba(34,227,240,.6);background:rgba(34,227,240,.05);box-shadow:0 0 30px -12px var(--cyan)}
+.diff{font-family:"JetBrains Mono";font-size:12px;background:rgba(0,0,0,.35);border:1px solid var(--stroke);border-radius:12px;padding:12px;line-height:1.8;overflow:auto}
+.sig{display:flex;gap:10px}.sig div{flex:1;border:1px dashed var(--stroke);border-radius:12px;padding:12px;font-size:12.5px}.sig .y{border-style:solid;border-color:rgba(59,232,155,.4);background:rgba(59,232,155,.05)}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="index.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a>
+  <div class="sect">OPERATIONS</div>
+  <a class="nav" href="ops-overview.html">◉ Overview</a><a class="nav on" href="ops-approvals.html">✓ Approvals <span class="badge">3</span></a><a class="nav" href="ops-overview.html#outbox">⇶ Outbox</a><a class="nav" href="ops-audit.html">⛓ Audit</a>
+  <div class="sect">COMPLIANCE</div><a class="nav" href="compliance.html">◎ KYC queue <span class="badge">7</span></a><a class="nav" href="compliance.html#aml">⚠ AML alerts</a><a class="nav" href="compliance.html#freeze">❄ Freezes</a>
+  <div class="sect">TRUSTEE</div><a class="nav" href="trustee.html">▦ Register</a><a class="nav" href="trustee.html#dist">₨ Distributions</a><a class="nav" href="trustee.html#docs">▤ Documents</a>
+  <div class="who"><div class="av">MR</div><div><b>M. Rehman</b><div class="cy" style="font-size:11.5px">Trustee officer · hardware key ✓</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Signing approvals</h1><span class="env">INTERNAL · VPN + SSO</span><span class="sp"></span><div class="tabs"><span class="on">Waiting 3</span><span>Approved</span><span>Rejected</span></div></div>
+  <div class="content grid" style="grid-template-columns:.8fr 1.2fr;gap:16px;align-items:start">
+    <div style="display:grid;gap:10px">
+      <div class="req sel"><div class="row"><b>Mint 20,000 GPF3</b><span class="sp"></span><span class="chip warn">1 / 2</span></div><span class="mu" style="font-size:12.5px">to Alice Khan · Rs 1.00 cr · Raast paid</span><span class="mono di" style="font-size:11px">req 3f1c…5f60 · 7 min ago</span></div>
+      <div class="req"><div class="row"><b>Mint 15,000 GPF3</b><span class="sp"></span><span class="chip warn">0 / 2</span></div><span class="mu" style="font-size:12.5px">to Bilal Ahmed · Rs 75.0 lakh</span><span class="mono di" style="font-size:11px">req 9a20…11c4 · 3 min ago</span></div>
+      <div class="req"><div class="row"><b>Policy change</b><span class="sp"></span><span class="chip ai">policy v3</span></div><span class="mu" style="font-size:12.5px">issuance.mint: single-approval limit Rs 50 L → 40 L</span><span class="mono di" style="font-size:11px">proposed by Ana Siddiqui · 1 h ago</span></div>
+    </div>
+    <div class="grid" style="gap:16px">
+      <div class="glass" style="padding:20px"><div class="row"><b class="sg" style="font-size:18px">Mint 20,000 GPF3 to Alice Khan</b><span class="sp"></span><span class="chip ok">policy: allowed with 2 approvals</span></div>
+        <dl class="kv" style="margin-top:12px"><dt>Contract</dt><dd class="mono">GPF3 token · 0x5FbD…0aa3</dd><dt>Function</dt><dd class="mono">mint(0x70997970…79C8, 20000e18)</dd><dt>Guard refId</dt><dd class="mono cy">0x7a3e…c210 (single use)</dd><dt>Payment</dt><dd class="mono">RAAST-4F1A9C2E7B10 · Rs 1,00,00,000 ✓ bank</dd><dt>Ledger</dt><dd class="mono">journal #4,812 · subscription_paid</dd><dt>Gas limit</dt><dd class="mono">800,000 (fixed by policy)</dd></dl>
+        <b class="sg" style="display:block;margin-top:16px">Policy checks</b>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;font-size:13px"><div class="check"><i>✓</i>Target is an allowed token</div><div class="check"><i>✓</i>Investor verified on ONCHAINID</div><div class="check"><i>✓</i>Holding after ≤ 10% cap</div><div class="check"><i>✓</i>Trustee cap has room</div><div class="check"><i>✓</i>Simulation succeeds</div><div class="check"><i>✓</i>Payment matches amount</div></div>
+        <b class="sg" style="display:block;margin-top:16px">Exact bytes to be signed</b>
+        <div class="diff" style="margin-top:8px"><span class="di">to</span>    0x5FbDB2315678afecb367f032d93F642f64180aa3<br><span class="di">data</span>  0x40c10f19 0000…70997970c51812dc3a010c7d01b50e0d17dc79c8 0000…0043c33c1937564800000<br><span class="di">nonce</span> 214 (reserved) · <span class="di">chainId</span> 586586<br><span class="di">hash</span>  <span class="cy">0x9d41…e077</span></div>
+        <b class="sg" style="display:block;margin-top:16px">Approvals (different people required)</b>
+        <div class="sig" style="margin-top:8px"><div class="y"><b class="up">✓ Ana Siddiqui</b><div class="di">Operations · YubiKey · 12:11:02</div></div><div><b>You · M. Rehman</b><div class="di">Trustee · waiting for your decision</div></div></div>
+        <div class="row" style="margin-top:16px;gap:10px"><a class="btn ok" href="#">✓ Approve with hardware key</a><a class="btn no" href="#">Reject</a><span class="sp"></span><span class="di" style="font-size:11.5px">Your approval is recorded in the signer audit chain.</span></div></div>
+      <div class="ai-box"><div class="hd"><span class="orb"></span>Review assistant</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">Payment and amount match exactly <span class="cite">bank feed</span>. This is Alice's largest purchase so far, 4× her previous total <span class="cite">ledger</span>; KYC source-of-funds was refreshed on 20 Sep <span class="cite">KYC file</span>. No AML alerts are open.</p><p class="di" style="font-size:11px;margin-top:6px">Read-only. The decision is yours.</p></div>
+    </div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

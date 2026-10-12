@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Trustee (v2 suite)</title><link rel="stylesheet" href="style.css"></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="index.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a>
+  <div class="sect">OPERATIONS</div>
+  <a class="nav" href="ops-overview.html">◉ Overview</a><a class="nav" href="ops-approvals.html">✓ Approvals <span class="badge">3</span></a><a class="nav" href="ops-overview.html#outbox">⇶ Outbox</a><a class="nav" href="ops-audit.html">⛓ Audit</a>
+  <div class="sect">COMPLIANCE</div><a class="nav" href="compliance.html">◎ KYC queue <span class="badge">7</span></a><a class="nav" href="compliance.html#aml">⚠ AML alerts</a><a class="nav" href="compliance.html#freeze">❄ Freezes</a>
+  <div class="sect">TRUSTEE</div><a class="nav on" href="trustee.html">▦ Register</a><a class="nav" href="#dist">₨ Distributions</a><a class="nav" href="#docs">▤ Documents</a>
+  <div class="who"><div class="av">MR</div><div><b>M. Rehman</b><div class="cy" style="font-size:11.5px">Trustee officer · hardware key ✓</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Trustee · Gulberg Plaza, Floor 3</h1><span class="env">INTERNAL · VPN + SSO</span><span class="sp"></span><span class="chip mono cy">GPF3</span></div>
+  <div class="content grid" style="gap:16px">
+    <div class="grid g4">
+      <div class="card"><div class="label">Tokens issued</div><div class="big">632,104</div><div class="mu mono" style="font-size:11.5px">cap 1,000,000 · 63%</div><div class="bar" style="margin-top:8px"><i style="width:63%"></i></div></div>
+      <div class="card"><div class="label">Escrow balance</div><div class="big">Rs 31.6 cr</div><div class="mu mono" style="font-size:11.5px">SCB ••6702 · matches ✓</div></div>
+      <div class="card"><div class="label">Investors</div><div class="big">1,284</div><div class="mu mono" style="font-size:11.5px">largest 9.8% (cap 10%)</div></div>
+      <div class="card"><div class="label">Next distribution</div><div class="big" style="color:var(--amber)">#4</div><div class="mu mono" style="font-size:11.5px">record 12:30 · Rs 3.0 L</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1.2fr .8fr;align-items:start">
+      <div class="glass" style="padding:6px 6px 0"><div class="row" style="padding:12px 12px 4px"><b class="sg">Register of holders</b><span class="sp"></span><span class="chip ok">ledger = chain ✓</span></div>
+        <table class="t"><tr><th>Holder</th><th>Wallet</th><th class="n">Tokens</th><th class="n">Share</th><th>Status</th></tr>
+          <tr><td><b>Alice Khan</b></td><td class="mono">0x7099…79C8</td><td class="n">5,099</td><td class="n">0.81%</td><td><span class="chip ok">verified</span></td></tr>
+          <tr><td><b>Bilal Ahmed</b></td><td class="mono">0x3C44…93BC</td><td class="n">61,950</td><td class="n">9.80%</td><td><span class="chip warn">near cap</span></td></tr>
+          <tr><td><b>Fatima Shah</b></td><td class="mono">0x90F7…b906</td><td class="n">22,400</td><td class="n">3.54%</td><td><span class="chip ok">verified</span></td></tr>
+          <tr><td><b>Omar Farooq</b></td><td class="mono">0x15d3…6A65</td><td class="n">1,200</td><td class="n">0.19%</td><td><span class="chip">❄ frozen</span></td></tr></table></div>
+      <div class="ai-box"><div class="hd"><span class="orb"></span>Trustee assistant</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">Every token on chain is backed by a matched Raast payment in escrow <span class="cite">reconciliation 12:10</span>. Bilal Ahmed is 0.2% from the holding cap; the contract will block any transfer that crosses it <span class="cite">MaxBalance module</span>.</p></div>
+    </div>
+    <div class="glass" style="padding:18px" id="dist"><div class="row"><b class="sg">Distribution #4 · November 2026</b><span class="sp"></span><div class="steps"><div class="stp done"><b>✓</b>Rent in</div><span class="ln"></span><div class="stp done"><b>✓</b>Statement</div><span class="ln"></span><div class="stp now"><b>3</b>Publish root</div><span class="ln"></span><div class="stp"><b>4</b>Pay out</div></div></div>
+      <div class="grid g3" style="margin-top:14px"><dl class="kv"><dt>Rent received</dt><dd class="mono">Rs 3,00,000.00</dd><dt>Fees</dt><dd class="mono">Rs 0 (demo)</dd><dt>Per token</dt><dd class="mono">Rs 0.4746</dd></dl>
+        <dl class="kv"><dt>Record block</dt><dd class="mono">#24,600 (12:30)</dd><dt>Holders</dt><dd class="mono">1,283 (frozen excluded)</dd><dt>Merkle root</dt><dd class="mono cy">0xc4d2…91ab</dd></dl>
+        <div style="display:grid;gap:8px;font-size:13px"><div class="check"><i>✓</i>Sum of leaves = rent received</div><div class="check"><i>✓</i>Statement PDF hashed</div><div class="check"><i class="wait">…</i>Publish needs ops + trustee</div></div></div>
+      <div class="row" style="margin-top:14px;gap:10px"><a class="btn prime" href="ops-approvals.html">Approve publish</a><a class="btn" href="#">Download statement</a></div></div>
+    <div class="glass" style="padding:18px" id="docs"><b class="sg">Documents · hashes on chain</b><table class="t" style="margin-top:8px"><tr><th>Document</th><th>SHA-256</th><th>On chain</th><th>Signed by</th></tr>
+      <tr><td>Trust deed</td><td class="mono">0x8b1e…a04c</td><td><span class="chip ok">✓ block 1,204</span></td><td>Trustee · Sponsor</td></tr>
+      <tr><td>Valuation report 2026</td><td class="mono">0x2fa9…7710</td><td><span class="chip ok">✓ block 19,880</span></td><td>PBA valuer</td></tr>
+      <tr><td>Rent statement Oct 2026</td><td class="mono">0x5e5e…1f20</td><td><span class="chip ok">✓ block 24,101</span></td><td>Trustee</td></tr></table></div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

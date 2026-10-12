@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Operations (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.val{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.val div{border:1px solid rgba(59,232,155,.3);background:rgba(59,232,155,.05);border-radius:12px;padding:12px}
+.val b{display:block;font-family:"JetBrains Mono";font-size:12px}.val small{font-family:"JetBrains Mono";font-size:10.5px;color:var(--dim)}
+.lane{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.lane div{border:1px solid var(--stroke);border-radius:12px;padding:12px;text-align:center}.lane b{display:block;font-family:"JetBrains Mono";font-size:22px}.lane small{font-size:11px;color:var(--mu)}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="index.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a>
+  <div class="sect">OPERATIONS</div>
+  <a class="nav on" href="ops-overview.html">◉ Overview</a><a class="nav" href="ops-approvals.html">✓ Approvals <span class="badge">3</span></a><a class="nav" href="ops-overview.html#outbox">⇶ Outbox</a><a class="nav" href="ops-audit.html">⛓ Audit</a>
+  <div class="sect">COMPLIANCE</div><a class="nav" href="compliance.html">◎ KYC queue <span class="badge">7</span></a><a class="nav" href="compliance.html#aml">⚠ AML alerts</a><a class="nav" href="compliance.html#freeze">❄ Freezes</a>
+  <div class="sect">TRUSTEE</div><a class="nav" href="trustee.html">▦ Register</a><a class="nav" href="trustee.html#dist">₨ Distributions</a><a class="nav" href="trustee.html#docs">▤ Documents</a>
+  <div class="who"><div class="av">AS</div><div><b>Ana Siddiqui</b><div class="cy" style="font-size:11.5px">Ops lead · hardware key ✓</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Operations overview</h1><span class="env">INTERNAL · VPN + SSO</span><span class="sp"></span><span class="chip"><span class="dot"></span>Block <b class="mono" data-block style="margin-left:4px">#24,230</b></span><span class="mono mu" style="font-size:12px">PKT <b data-clock></b></span></div>
+  <div class="content grid" style="gap:16px">
+    <div class="grid g5">
+      <div class="card"><div class="label">Chain</div><div class="big up">Healthy</div><div class="mu mono" style="font-size:11.5px">4/4 validators · 2.0 s</div></div>
+      <div class="card"><div class="label">Outbox backlog</div><div class="big">3</div><div class="mu mono" style="font-size:11.5px">oldest 41 s</div></div>
+      <div class="card"><div class="label">Signer p99</div><div class="big">37 ms</div><div class="mu mono" style="font-size:11.5px">p50 29 ms · HSM ok</div></div>
+      <div class="card"><div class="label">Awaiting approval</div><div class="big" style="color:var(--amber)">3</div><div class="mu mono" style="font-size:11.5px">Rs 2.4 cr total</div></div>
+      <div class="card"><div class="label">Reconciliation</div><div class="big up">4 / 4 ✓</div><div class="mu mono" style="font-size:11.5px">last run 12:10</div></div>
+    </div>
+    <div class="glass" style="padding:16px"><div class="row"><b class="sg">Live blocks · QBFT chain 586586</b><span class="sp"></span><span class="mono di" style="font-size:11px">sample feed</span></div><div class="blkrow" data-blocks style="margin-top:10px"></div></div>
+    <div class="grid" style="grid-template-columns:1.1fr .9fr;align-items:start">
+      <div class="glass" style="padding:18px" id="outbox"><div class="row"><b class="sg">Outbox pipeline</b><span class="sp"></span><span class="chip ok">exactly-once ✓</span></div>
+        <div class="lane" style="margin-top:12px"><div><b>1</b><small>pending</small></div><div><b style="color:var(--amber)">2</b><small>awaiting approval</small></div><div><b class="cy">0</b><small>signed</small></div><div><b class="cy">0</b><small>broadcast</small></div><div><b class="up">918</b><small>confirmed</small></div></div>
+        <table class="t" style="margin-top:12px"><tr><th>#</th><th>Command</th><th>Status</th><th class="n">Age</th></tr>
+          <tr><td class="mono">919</td><td>issuance.mint · GPF3 · 20,000</td><td><span class="chip warn">deferred · 1/2 approvals</span></td><td class="n">7m</td></tr>
+          <tr><td class="mono">920</td><td>issuance.mint · GPF3 · 15,000</td><td><span class="chip warn">deferred · 0/2</span></td><td class="n">3m</td></tr>
+          <tr><td class="mono">921</td><td>distribution.publish · #4</td><td><span class="chip">pending · lease free</span></td><td class="n">41s</td></tr>
+          <tr><td class="mono">918</td><td>issuance.mint · GPF3 · 1,000</td><td><span class="chip ok">confirmed · block 24,188</span></td><td class="n">2d</td></tr></table></div>
+      <div class="grid" style="gap:16px">
+        <div class="glass" style="padding:18px"><b class="sg">Validators</b><div class="val" style="margin-top:12px"><div><b class="up">● val-1</b><small>Karachi · peers 3</small></div><div><b class="up">● val-2</b><small>Lahore · peers 3</small></div><div><b class="up">● val-3</b><small>Islamabad · peers 3</small></div><div><b class="up">● val-4</b><small>Trustee DC · peers 3</small></div></div></div>
+        <div class="glass" style="padding:18px"><b class="sg">Reconciliation</b><div style="display:grid;gap:10px;margin-top:12px"><div class="check"><i>✓</i>Ledger tokens = chain totalSupply</div><div class="check"><i>✓</i>Escrow cash = bank statement</div><div class="check"><i>✓</i>Ledger hash chain verified (4,812 entries)</div><div class="check"><i>✓</i>Signer audit chain verified</div></div></div>
+        <div class="ai-box"><div class="hd"><span class="orb"></span>Ops assistant</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">Two large mints wait for the trustee <span class="cite">outbox 919, 920</span>. Nothing is stuck: no lease older than 60 s, no dropped transactions <span class="cite">nonce check</span>. Distribution #4 publishes after the 12:30 record block.</p><p class="di" style="font-size:11px;margin-top:6px">Read-only. The assistant cannot approve or sign.</p></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

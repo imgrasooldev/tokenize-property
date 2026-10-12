@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Invest (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.raast{border:1px solid rgba(46,242,181,.35);border-radius:16px;padding:16px;background:rgba(46,242,181,.05)}
+.qr{width:120px;height:120px;border-radius:12px;background:#fff;display:grid;place-items:center}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="site-home.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>Property Token</a>
+  <div class="sect">INVESTOR</div>
+  <a class="nav" href="portal-dashboard.html">◧ Portfolio</a><a class="nav on" href="portal-invest.html">⬡ Invest</a><a class="nav" href="portal-market.html">⇄ Market</a><a class="nav" href="portal-rent.html">₨ Rent and proofs</a><a class="nav" href="site-properties.html">⌂ Properties</a>
+  <div class="who"><div class="av">AK</div><div><b>Alice Khan</b><div class="up" style="font-size:11.5px">✓ KYC verified on chain</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>Invest in Gulberg Plaza, Floor 3</h1><span class="chip mono cy">GPF3</span><span class="sp"></span><div class="steps"><div class="stp done"><b>✓</b>Amount</div><span class="ln"></span><div class="stp done"><b>✓</b>Pay</div><span class="ln"></span><div class="stp now"><b>3</b>Issue</div><span class="ln"></span><div class="stp"><b>4</b>Done</div></div></div>
+  <div class="content grid" style="grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+    <div class="grid" style="gap:16px">
+      <div class="glass" style="padding:20px"><b class="sg">1 · Amount</b>
+        <div class="field" style="margin-top:12px"><label>Tokens</label><div class="input mono">20,000<span class="sp"></span><span class="di">Rs 500.00 each</span></div></div>
+        <dl class="kv"><dt>You pay</dt><dd class="mono">Rs 1,00,00,000</dd><dt>Monthly rent (est.)</dt><dd class="mono up">Rs 76,667</dd><dt>Holding after</dt><dd class="mono">25,099 / 100,000 (10% cap)</dd></dl>
+        <div style="display:grid;gap:8px;margin-top:14px;font-size:13px"><div class="check"><i>✓</i>Verified investor on chain</div><div class="check"><i>✓</i>Within 10% holding limit</div><div class="check"><i>✓</i>Within trustee cap (367,896 left)</div><div class="check"><i class="wait">!</i>Above Rs 50 lakh: two officers approve before issue</div></div></div>
+      <div class="raast"><b class="sg">2 · Pay with Raast</b>
+        <div class="row" style="margin-top:12px;align-items:start;gap:16px"><div class="qr"><svg width="96" height="96" viewBox="0 0 24 24" fill="#05070F"><path d="M2 2h8v8H2zM4 4v4h4V4zM14 2h8v8h-8zm2 2v4h4V4zM2 14h8v8H2zm2 2v4h4v-4zM14 14h2v2h-2zM18 14h4v2h-4zM14 18h2v4h-2zM18 18h2v2h-2zM20 20h2v2h-2z"/></svg></div>
+          <dl class="kv" style="flex:1"><dt>To</dt><dd>Trustee escrow · CDC</dd><dt>IBAN</dt><dd class="mono">PK36 SCBL 0000 0011 2345 6702</dd><dt>Reference</dt><dd class="mono cy">RAAST-4F1A9C2E7B10</dd><dt>Status</dt><dd><span class="chip ok">✓ received 12:04:18</span></dd></dl></div>
+        <p class="di" style="font-size:11.5px;margin-top:10px">Money goes to the trustee's escrow, never to the platform. Recorded in the ledger before any token exists.</p></div>
+    </div>
+    <div class="grid" style="gap:16px">
+      <div class="glass" style="padding:20px"><b class="sg">3 · Issuing your tokens</b>
+        <div class="timeline" style="margin-top:10px">
+          <div class="ti"><span class="check"><i>✓</i></span><span><b>Payment recorded in the ledger</b><div class="di mono" style="font-size:11px">journal #4,812 · subscription_paid</div></span><span class="mono di">12:04:19</span></div>
+          <div class="ti"><span class="check"><i>✓</i></span><span><b>Mint command queued (outbox)</b><div class="di mono" style="font-size:11px">same transaction as the ledger entry · refId 0x7a3e…</div></span><span class="mono di">12:04:19</span></div>
+          <div class="ti"><span class="check"><i>✓</i></span><span><b>Policy checks passed</b><div class="di mono" style="font-size:11px">target · limits · verified · cap · simulation</div></span><span class="mono di">12:04:19</span></div>
+          <div class="ti"><span class="check"><i>✓</i></span><span><b>Operations officer approved</b><div class="di mono" style="font-size:11px">Ana Siddiqui · hardware key</div></span><span class="mono di">12:11:02</span></div>
+          <div class="ti"><span class="check"><i class="wait">…</i></span><span><b>Waiting for the trustee's approval</b><div class="di mono" style="font-size:11px">1 of 2 approvals · usually under 30 minutes</div></span><span class="chip warn">pending</span></div>
+          <div class="ti"><span class="check"><i style="background:rgba(255,255,255,.05);color:var(--dim)">5</i></span><span class="di">Signed in the HSM, recorded, broadcast, confirmed in ~2 s</span><span></span></div>
+        </div></div>
+      <div class="ai-box"><div class="hd"><span class="orb"></span>Why is there a wait?</div><p style="font-size:13.5px;line-height:1.65;color:#C3CCDB">Issues above Rs 50 lakh need a second person, the trustee, to approve <span class="cite">policy issuance.mint v2</span>. Your money is safe in escrow meanwhile, and if the issue is rejected it is refunded in full <span class="cite">ADR 0004</span>.</p></div>
+      <div class="glass" style="padding:16px"><div class="row"><b class="sg">Receipt</b><span class="sp"></span><span class="chip">PDF</span></div><dl class="kv" style="margin-top:10px"><dt>Subscription</dt><dd class="mono">sub_8f2c…41</dd><dt>Ledger</dt><dd class="mono">journal #4,812</dd><dt>Outbox</dt><dd class="mono">command #918</dd><dt>Signer request</dt><dd class="mono">req 3f1c…5f60</dd></dl></div>
+    </div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

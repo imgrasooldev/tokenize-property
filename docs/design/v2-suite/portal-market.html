@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Market (v2 suite)</title><link rel="stylesheet" href="style.css">
+<style>.book td{font-family:"JetBrains Mono";font-size:12.5px;padding:5px 10px;position:relative}.book td i{position:absolute;top:3px;bottom:3px;right:0;border-radius:3px;opacity:.16}
+.book .a td:first-child{color:var(--down)}.book .a i{background:var(--down)}.book .b td:first-child{color:var(--up)}.book .b i{background:var(--up)}
+.demo{border:1px solid rgba(255,181,71,.35);background:rgba(255,181,71,.07);color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13px}</style></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="site-home.html"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>Property Token</a>
+  <div class="sect">INVESTOR</div>
+  <a class="nav" href="portal-dashboard.html">◧ Portfolio</a><a class="nav" href="portal-invest.html">⬡ Invest</a><a class="nav on" href="portal-market.html">⇄ Market</a><a class="nav" href="portal-rent.html">₨ Rent and proofs</a>
+  <div class="who"><div class="av">AK</div><div><b>Alice Khan</b><div class="up" style="font-size:11.5px">✓ KYC verified on chain</div></div></div>
+</aside>
+<div class="main">
+  <div class="top"><h1>GPF3 market</h1><span class="chip ok"><span class="dot"></span>Live</span><span class="sp"></span><span class="mono mu" style="font-size:12px">PKT <b data-clock></b></span></div>
+  <div class="content grid" style="gap:16px">
+    <div class="demo"><b>DEMO:</b> secondary trading needs SECP approval and a licensed broker. Test money only.</div>
+    <div class="grid" style="grid-template-columns:1.5fr .75fr .75fr;gap:16px;align-items:start">
+      <div class="glass" style="padding:16px"><div class="row"><b class="sg" style="font-size:30px;white-space:nowrap">Rs 503.00</b><span class="up mono">+0.60%</span><span class="mono di">NAV 500 · band 450–550</span><span class="sp"></span><div class="tabs"><span>1m</span><span class="on">5m</span><span>1h</span></div></div>
+        <svg viewBox="0 0 700 260" width="100%" height="260" id="cdl"><g stroke="rgba(255,255,255,.05)"><path d="M0 50H700M0 110H700M0 170H700M0 230H700"/></g><path d="M0 130H700" stroke="#F5C46B" stroke-dasharray="5 5"/></svg>
+        <div class="ai-box" style="padding:12px;margin-top:8px"><div class="hd" style="margin:0 0 4px"><span class="orb" style="width:18px;height:18px"></span>Market note</div><span style="font-size:13px;color:#C3CCDB">Trading 0.6% above NAV; last 12 trades within ±1.2% <span class="cite">trades 24h</span>. Rent yield at this price: 9.15% <span class="cite">rent 12m</span>.</span></div></div>
+      <div class="glass" style="padding:14px"><b class="sg">Order book</b><table class="book" style="width:100%;margin-top:8px;border-collapse:collapse">
+        <tr class="a"><td>506.00</td><td style="text-align:right">75<i style="width:75%"></i></td></tr><tr class="a"><td>505.00</td><td style="text-align:right">22<i style="width:22%"></i></td></tr><tr class="a"><td>504.50</td><td style="text-align:right">50<i style="width:50%"></i></td></tr>
+        <tr><td colspan="2" style="text-align:center;color:var(--cyan);padding:8px">503.00 · spread 2.50</td></tr>
+        <tr class="b"><td>502.00</td><td style="text-align:right">20<i style="width:20%"></i></td></tr><tr class="b"><td>501.50</td><td style="text-align:right">65<i style="width:65%"></i></td></tr><tr class="b"><td>500.00</td><td style="text-align:right">90<i style="width:90%"></i></td></tr></table>
+        <b class="sg" style="display:block;margin-top:14px">Recent trades</b><table class="t" style="margin-top:4px"><tr><td class="mono up">503.00</td><td class="n">40</td><td class="mono di">0xb9f3…</td></tr><tr><td class="mono dn">502.50</td><td class="n">25</td><td class="mono di">0x6e63…</td></tr><tr><td class="mono up">503.25</td><td class="n">71</td><td class="mono di">0x359d…</td></tr></table></div>
+      <div class="glass" style="padding:14px">
+        <div class="tabs" style="width:100%;display:grid;grid-template-columns:1fr 1fr"><span class="on" style="text-align:center;color:var(--up)">Buy</span><span style="text-align:center">Sell</span></div>
+        <div class="field" style="margin-top:12px"><label>Limit price (Rs)</label><div class="input mono">503.00</div></div>
+        <div class="field"><label>Tokens</label><div class="input mono focus">200</div></div>
+        <dl class="kv"><dt>Total</dt><dd class="mono">Rs 1,00,600</dd><dt>Rent / month</dt><dd class="mono up">+Rs 767</dd><dt>Cash after</dt><dd class="mono">Rs 47,66,155</dd></dl>
+        <div style="display:grid;gap:7px;margin:12px 0;font-size:12.5px"><div class="check"><i>✓</i>Inside ±10% band</div><div class="check"><i>✓</i>Under 10% holding cap</div><div class="check"><i>✓</i>Cash reserved in escrow</div></div>
+        <a class="btn prime block" href="#">Place buy · settles on chain</a>
+        <p class="di" style="font-size:11px;margin-top:8px">Tokens move first; cash leaves escrow only after the chain confirms.</p></div>
+    </div>
+    <div class="glass" style="padding:6px 6px 0"><table class="t"><tr><th>My orders</th><th class="n">Price</th><th>Filled</th><th>Status</th><th></th></tr>
+      <tr><td><span class="chip ok">Buy</span></td><td class="n">500.00</td><td class="mono">0 / 60</td><td>Open · escrow Rs 30,000</td><td><span class="btn sm">Cancel</span></td></tr>
+      <tr><td><span class="chip bad">Sell</span></td><td class="n">503.00</td><td class="mono">40 / 40</td><td><span class="chip ok">Settled</span> <span class="mono di">0xb9f3…054a</span></td><td></td></tr></table></div>
+  </div>
+</div></div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script>
+<script>(function(){const s=document.getElementById('cdl');let p=500,x=8,h='';for(let i=0;i<42;i++){const o=p,c=Math.max(496,Math.min(506,o+(Math.random()-.44)*1.4));const hi=Math.max(o,c)+Math.random()*.6,lo=Math.min(o,c)-Math.random()*.6;const y=v=>240-((v-495)/12)*220,col=c>=o?'#3BE89B':'#FF6B81';h+=`<line x1="${x+5}" x2="${x+5}" y1="${y(hi)}" y2="${y(lo)}" stroke="${col}"/><rect x="${x}" y="${Math.min(y(o),y(c))}" width="10" height="${Math.max(1.5,Math.abs(y(o)-y(c)))}" fill="${col}"/>`;p=c;x+=16;}s.insertAdjacentHTML('beforeend',h);})();</script>
+</body></html>
