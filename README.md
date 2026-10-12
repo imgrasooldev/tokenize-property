@@ -29,7 +29,7 @@ Each step ends with a review. The next step starts only after approval.
 | 2 | Contract spec and threat model | Done (spec v0.3) |
 | 3 | Smart contracts + unit, fuzz and invariant tests + Slither | Done (internal): 121 tests, 100% coverage, Slither clean, EthTrust [Q] self-assessment, deploy script verified on Anvil. External audits pending |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | Done: 4-validator Besu 26.9 network (`chain/`), 50-check end-to-end flow on real blocks, validator outage tested |
-| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | In progress: 5a foundation done (see `backend/README.md`) |
+| 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | In progress: 5a foundation, 5b ledger, 5c outbox, 5d signing service, 5e indexer and 5f reconciliation done (see `backend/README.md`) |
 | 6 | Admin panel (maker-checker) | Not started |
 | 7 | Flutter investor app | Not started |
 

@@ -1,0 +1,187 @@
+import type { Deployment } from "@pt/indexer";
+import type pg from "pg";
+import type { ChainState } from "./chain.ts";
+import type {
+  BankStatement,
+  ChainDistribution,
+  ChainIssuance,
+  DistributionStatus,
+  ExpectedMint,
+  LedgerJournal,
+  OutboxCommand,
+  ReconData,
+} from "./types.ts";
+
+export interface LoadOptions {
+  deployment: Deployment;
+  chain: ChainState;
+  slaMinutes: number;
+  /**
+   * The indexer's full verification (rebuild from the chain + contract state, ADR 0006). Its
+   * problems become blocking findings. null = not run (recorded in the summary).
+   */
+  verifyIndexer: (() => Promise<{ pinnedBlock: bigint; problems: string[] }>) | null;
+}
+
+export interface Loaded {
+  data: ReconData;
+  timings: { snapshotMs: number; chainMs: number; verifyMs: number };
+  /** Facts for the run summary. */
+  sources: { webdemo: boolean; outboxMintCommands: number };
+}
+
+const lower = (x: string): string => x.toLowerCase();
+
+/**
+ * Reads everything a run compares:
+ *  1. one REPEATABLE READ snapshot of the database (read model, ledger, outbox, bank, audits), so
+ *     every database fact is from the same instant; the read model's cursor is the pinned block P;
+ *  2. the contracts' own totalSupply and balanceOf at block P (the read model is exactly block P);
+ *  3. optionally the indexer's full verify.
+ * Nothing is written.
+ */
+export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
+  const d = o.deployment;
+  const t0 = performance.now();
+  const client = await pool.connect();
+  let snap: Omit<ReconData, "chain" | "integrity"> & {
+    chain: Omit<ReconData["chain"], "onChain">;
+    integrity: Omit<ReconData["integrity"], "indexer"> & { halted: string | null };
+  };
+  let sources: Loaded["sources"];
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const q = async <T extends pg.QueryResultRow>(sql: string, params: unknown[] = []): Promise<T[]> => (await client.query<T>(sql, params)).rows;
+
+    const [{ now } = { now: new Date() }] = await q<{ now: Date }>("SELECT now() AS now");
+    const cursor = (await q<{ block_number: string; halt_reason: string | null }>(
+      "SELECT block_number, halt_reason FROM chain.cursors WHERE deployment = $1", [d.id]))[0];
+    if (!cursor) throw new Error(`deployment ${d.id} is not indexed (run the indexer first)`);
+    const pinned = BigInt(cursor.block_number);
+
+    const token = (await q<{ total_supply: string }>("SELECT total_supply::text FROM chain.tokens WHERE deployment = $1", [d.id]))[0];
+    const holdings = new Map((await q<{ holder: string; balance: string }>(
+      "SELECT holder, balance::text FROM chain.holdings WHERE token = $1 AND balance > 0", [lower(d.contracts.token)]))
+      .map((r) => [r.holder, BigInt(r.balance)]));
+    const issuances: ChainIssuance[] = (await q<{ ref_id: string; kind: "mint" | "burn"; account: string; amount: string; block_number: string; tx_hash: string; block_time: Date }>(
+      `SELECT i.ref_id, i.kind, i.account, i.amount::text, i.block_number, i.tx_hash, b.block_time
+       FROM chain.issuances i JOIN chain.blocks b ON b.number = i.block_number
+       WHERE i.deployment = $1 ORDER BY i.block_number, i.log_index`, [d.id]))
+      .map((r) => ({ refId: r.ref_id, kind: r.kind, account: r.account, amount: BigInt(r.amount), blockNumber: BigInt(r.block_number), blockTime: r.block_time, txHash: r.tx_hash }));
+    const distributions: ChainDistribution[] = d.contracts.distributions
+      ? (await q<{ id: string; token: string; total_paisa: string; statement_hash: string; status: DistributionStatus; payout_batch_hash: string | null }>(
+        `SELECT id::text, token, total_paisa::text, statement_hash, status, payout_batch_hash FROM chain.distributions WHERE registry = $1`,
+        [lower(d.contracts.distributions)]))
+        .map((r) => ({ id: BigInt(r.id), token: r.token, totalPaisa: BigInt(r.total_paisa), statementHash: r.statement_hash, status: r.status, payoutBatchHash: r.payout_batch_hash }))
+      : [];
+
+    const accounts = (await q<{ account: string; ledger_account: string }>("SELECT account, ledger_account FROM recon.bank_accounts ORDER BY account"))
+      .map((r) => ({ account: r.account, ledgerAccount: r.ledger_account }));
+    const journals: LedgerJournal[] = (await q<{ id: string; idempotency_key: string; kind: string; external_ref: string | null; created_at: Date; postings: [string, string][] }>(
+      `WITH linked AS (
+         SELECT id FROM ledger.journal
+         WHERE idempotency_key LIKE 'web:sub:%' OR idempotency_key LIKE 'sub:%' OR idempotency_key LIKE 'rent:%'
+         UNION
+         SELECT p.journal_id FROM ledger.postings p JOIN ledger.accounts a ON a.id = p.account_id WHERE a.code = ANY($1)
+       )
+       SELECT j.id, j.idempotency_key, j.kind, j.external_ref, j.created_at,
+              json_agg(json_build_array(a.code, p.amount::text) ORDER BY p.id) AS postings
+       FROM ledger.journal j
+       JOIN ledger.postings p ON p.journal_id = j.id
+       JOIN ledger.accounts a ON a.id = p.account_id
+       WHERE j.id IN (SELECT id FROM linked)
+       GROUP BY j.id ORDER BY j.id`, [accounts.map((a) => a.ledgerAccount)]))
+      .map((r) => ({ id: BigInt(r.id), key: r.idempotency_key, kind: r.kind, externalRef: r.external_ref, createdAt: r.created_at,
+        postings: r.postings.map(([account, amount]) => ({ account, amount: BigInt(amount) })) }));
+
+    const expectedMints = new Map<string, ExpectedMint>();
+    let mintCommands = 0;
+    const outbox: OutboxCommand[] = [];
+    for (const c of await q<{ id: string; kind: string; status: string; updated_at: Date; last_error: string | null; payload: Record<string, unknown> }>(
+      "SELECT id, kind, status, updated_at, last_error, payload FROM outbox.commands WHERE kind = 'issuance.mint' OR status NOT IN ('confirmed', 'failed') ORDER BY id")) {
+      if (c.status !== "confirmed" && c.status !== "failed") {
+        outbox.push({ id: BigInt(c.id), kind: c.kind, status: c.status as OutboxCommand["status"], updatedAt: c.updated_at, lastError: c.last_error });
+      }
+      const p = c.payload;
+      if (c.kind !== "issuance.mint" || typeof p.refId !== "string" || typeof p.to !== "string" || typeof p.amount !== "string") continue;
+      if (typeof p.issuance === "string" && d.contracts.issuance && lower(p.issuance) !== lower(d.contracts.issuance)) continue;
+      mintCommands++;
+      const refId = lower(p.refId);
+      const prev = expectedMints.get(refId);
+      expectedMints.set(refId, prev ? { ...prev, commands: prev.commands + 1 } : { refId, to: lower(p.to), amount: BigInt(p.amount), source: "outbox", commands: 1 });
+    }
+    // The web prototype's subscription register (schema webdemo), read-only, when it exists.
+    const webdemo = (await q<{ ok: boolean }>("SELECT to_regclass('webdemo.subscriptions') IS NOT NULL AND to_regclass('webdemo.investors') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (webdemo) {
+      for (const r of await q<{ ref_id: string; tokens: string; wallet: string }>(
+        "SELECT s.ref_id, s.tokens::text, lower(i.wallet_address) AS wallet FROM webdemo.subscriptions s JOIN webdemo.investors i ON i.id = s.investor_id")) {
+        if (!expectedMints.has(lower(r.ref_id))) expectedMints.set(lower(r.ref_id), { refId: lower(r.ref_id), to: r.wallet, amount: BigInt(r.tokens), source: "webdemo", commands: 0 });
+      }
+    }
+
+    const statements = new Map<string, BankStatement>();
+    for (const r of await q<{ id: string; account: string; statement_date: string; opening_paisa: string; closing_paisa: string }>(
+      "SELECT id, account, statement_date::text, opening_paisa::text, closing_paisa::text FROM recon.bank_statements ORDER BY account, statement_date")) {
+      statements.set(r.id, { id: BigInt(r.id), account: r.account, date: r.statement_date, opening: BigInt(r.opening_paisa), closing: BigInt(r.closing_paisa), lines: [] });
+    }
+    for (const r of await q<{ statement_id: string; line_no: number; value_date: string; amount_paisa: string; reference: string; counterparty: string; balance_paisa: string }>(
+      "SELECT statement_id, line_no, value_date::text, amount_paisa::text, reference, counterparty, balance_paisa::text FROM recon.bank_lines ORDER BY statement_id, line_no")) {
+      statements.get(r.statement_id)?.lines.push({ lineNo: r.line_no, valueDate: r.value_date, amount: BigInt(r.amount_paisa), reference: r.reference, counterparty: r.counterparty, balance: BigInt(r.balance_paisa) });
+    }
+
+    const ledgerProblems = (await q<{ journal_id: string; problem: string }>("SELECT journal_id::text, problem FROM ledger.verify_chain()"))
+      .map((r) => ({ journalId: r.journal_id, problem: r.problem }));
+    const signerAudit = (await q<{ audit_id: string; problem: string }>("SELECT audit_id::text, problem FROM signer.verify_audit()"))
+      .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
+    const reconAudit = (await q<{ audit_id: string | null; problem: string }>("SELECT audit_id::text, problem FROM recon.verify_audit()"))
+      .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
+    await client.query("COMMIT");
+
+    sources = { webdemo, outboxMintCommands: mintCommands };
+    snap = {
+      asOf: now,
+      slaMs: o.slaMinutes * 60_000,
+      deployment: { id: d.id, token: lower(d.contracts.token) },
+      pinnedBlock: pinned,
+      chain: { issuances, distributions, readModel: { totalSupply: BigInt(token?.total_supply ?? "0"), holdings } },
+      ledger: { journals },
+      expectedMints,
+      bank: { accounts, statements: [...statements.values()] },
+      integrity: { ledger: ledgerProblems, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+  const t1 = performance.now();
+
+  // The contracts at the pinned block. Before the deployment block nothing exists yet.
+  const deployed = snap.pinnedBlock >= d.fromBlock;
+  const holders = [...snap.chain.readModel.holdings.keys()];
+  const [totalSupply, balances, head] = await Promise.all([
+    deployed ? o.chain.totalSupply(d.contracts.token, snap.pinnedBlock) : Promise.resolve(0n),
+    deployed ? o.chain.balances(d.contracts.token, holders, snap.pinnedBlock) : Promise.resolve(new Map<string, bigint>()),
+    o.chain.head(),
+  ]);
+  const t2 = performance.now();
+
+  let verify: ReconData["integrity"]["indexer"]["verify"] = { ran: false, pinnedBlock: null, problems: [] };
+  if (o.verifyIndexer) {
+    const v = await o.verifyIndexer();
+    verify = { ran: true, pinnedBlock: v.pinnedBlock, problems: v.problems };
+  }
+  const t3 = performance.now();
+
+  const { halted, ...integrity } = snap.integrity;
+  return {
+    data: {
+      ...snap,
+      chain: { ...snap.chain, onChain: { totalSupply, balances: new Map([...balances].map(([h, b]) => [lower(h), b])) } },
+      integrity: { ...integrity, indexer: { halted, lagBlocks: head - snap.pinnedBlock, verify } },
+    },
+    timings: { snapshotMs: Math.round(t1 - t0), chainMs: Math.round(t2 - t1), verifyMs: Math.round(t3 - t2) },
+    sources,
+  };
+}

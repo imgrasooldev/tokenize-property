@@ -26,7 +26,13 @@
     "indexer:verify": "tsx packages/indexer/src/cli.ts verify",
     "indexer:status": "tsx packages/indexer/src/cli.ts status",
     "indexer:bench": "tsx packages/indexer/scripts/bench.ts",
-    "indexer:reset-local": "tsx packages/indexer/src/cli.ts reset-local"
+    "indexer:reset-local": "tsx packages/indexer/src/cli.ts reset-local",
+    "recon": "tsx packages/recon/src/cli.ts run",
+    "recon:import-bank": "tsx packages/recon/src/cli.ts import-bank",
+    "recon:register-account": "tsx packages/recon/src/cli.ts register-account",
+    "recon:status": "tsx packages/recon/src/cli.ts status",
+    "recon:unfreeze": "tsx packages/recon/src/cli.ts unfreeze",
+    "recon:bench": "tsx packages/recon/scripts/bench.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

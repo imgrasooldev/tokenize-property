@@ -4,7 +4,7 @@ import { createPublicClient, http, keccak256, type Hex } from "viem";
 import { identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
 import { z } from "zod";
 import type { KeyProvider } from "./keystore.ts";
-import { evaluateMint, KINDS, mintPayload, parseRule, type Decision, type MintRule } from "./policy.ts";
+import { evaluateMint, isPayoutKind, KINDS, mintPayload, parseRule, type Decision, type MintRule } from "./policy.ts";
 
 /**
  * Signing service (Step 5d). The only component that can sign platform transactions:
@@ -85,6 +85,18 @@ interface RequestRow {
 }
 
 const LOCK_KIND = 586_586_070;
+
+/**
+ * The reconciliation payout gate (ADR 0007) for a kind: null when the kind is not a payout or
+ * payouts are allowed, otherwise the reason for the denial. If the gate cannot be read the query
+ * fails and so does the request: nothing is signed (fail closed).
+ */
+export async function payoutGateDenial(c: pg.ClientBase, kind: string): Promise<string | null> {
+  if (!isPayoutKind(kind)) return null;
+  const { rows } = await c.query<{ allowed: boolean; reason: string }>("SELECT allowed, reason FROM recon.payout_gate()");
+  const gate = rows[0];
+  return gate?.allowed === true ? null : `payouts are not allowed by reconciliation: ${gate?.reason ?? "gate unavailable"}`;
+}
 
 function payloadHash(kind: string, payload: unknown): Buffer {
   return createHash("sha256").update(JSON.stringify([kind, payload])).digest();
@@ -185,6 +197,11 @@ export class SignerService {
       }
     }
 
+    const frozen = await payoutGateDenial(c, input.kind);
+    if (frozen) {
+      await this.audit(c, requestedBy, "request.denied", null, { commandRef: input.commandRef, kind: input.kind, reason: frozen });
+      return { status: "denied", reason: frozen };
+    }
     const policy = await this.activePolicy(c, input.kind);
     const decision: Decision = policy
       ? await this.evaluate(c, policy.rule, input.payload, null)
@@ -231,6 +248,12 @@ export class SignerService {
    * change between approval and signing (the approval itself stays).
    */
   private async sign(c: pg.ClientBase, req: RequestRow, requestedBy: string, fresh?: Decision): Promise<SignResult> {
+    // Re-checked at signing time: payouts may have been frozen after the request was approved.
+    const frozen = await payoutGateDenial(c, req.kind);
+    if (frozen) {
+      await this.audit(c, requestedBy, "request.denied_at_sign", req.id, { reason: frozen });
+      return { status: "denied", requestId: req.id, reason: frozen };
+    }
     const policy = await this.activePolicy(c, req.kind);
     if (!policy) return { status: "denied", requestId: req.id, reason: `no active policy for ${req.kind}` };
     const decision = fresh ?? (await this.evaluate(c, policy.rule, req.payload, req.id));
