@@ -7,7 +7,7 @@ A four-validator **Hyperledger Besu QBFT** network on one machine: a small copy 
 | Validators | 4 (QBFT) | Tolerates 1 faulty or offline validator, like production |
 | Block time | 2 s, immediate finality | No re-orgs: "confirmed" means confirmed |
 | Chain ID | **586586** (reserved for local dev only) | Unlocks a 60 s timelock for testing; never use it anywhere else |
-| Peering | Static nodes, discovery off, node allow-list | Only the four known validators can connect |
+| Peering | Static nodes, discovery off, node allow-list, P2P bound to 127.0.0.1 (`p2p-interface`) | Only the four known validators can connect, and only from this machine |
 | RPC | `127.0.0.1:8545`–`8548`, APIs `ETH,NET,WEB3,QBFT,TXPOOL` | No ADMIN, DEBUG or PERSONAL; never exposed off the machine |
 | Gas price | 0 (`zeroBaseFee`, `min-gas-price=0`) | The native coin has no value on a private chain |
 | EVM | Cancun from genesis | Matches `evm_version` in `contracts/foundry.toml` |

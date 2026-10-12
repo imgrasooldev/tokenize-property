@@ -34,9 +34,31 @@ export async function scratchDatabase(): Promise<{
     client,
     settings,
     drop: async () => {
+      // A backend can still be closing when end() resolves. Terminating it then sends this client
+      // an error event; without a listener Node treats it as an uncaught exception (flaky CI).
+      client.on("error", ignoreTerminated);
       await client.end();
-      await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
+      await dropWhenFree(admin, name);
       await admin.end();
     },
   };
+}
+
+/** 57P01 = admin_shutdown: the expected result of dropping a database with connections left. */
+function ignoreTerminated(e: Error & { code?: string }): void {
+  if (e.code !== "57P01") throw e;
+}
+
+/** Drops the database once its sessions have closed; FORCE only as a last resort. */
+async function dropWhenFree(admin: pg.Client, name: string): Promise<void> {
+  for (let i = 0; i < 40; i++) {
+    try {
+      await admin.query(`DROP DATABASE ${name}`);
+      return;
+    } catch (e) {
+      if ((e as { code?: string }).code !== "55006") throw e; // 55006 = object_in_use
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
+  await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
 }

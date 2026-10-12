@@ -217,6 +217,7 @@ data-path="{(DATA / f'node{i}').as_posix()}"
 genesis-file="{(GENERATED / 'genesis.json').as_posix()}"
 node-private-key-file="{(nd / 'key').as_posix()}"
 p2p-host="{HOST}"
+p2p-interface="{HOST}"
 p2p-port={P2P_BASE + i - 1}
 discovery-enabled=false
 static-nodes-file="{(GENERATED / 'static-nodes.json').as_posix()}"
@@ -252,9 +253,21 @@ def is_running(i: int) -> bool:
         return False
 
 
+def upgrade_node_configs():
+    """Adds settings introduced after a network was generated (keys and genesis stay as they are)."""
+    for i in range(1, NODES + 1):
+        cfg = node_dir(i) / "config.toml"
+        text = cfg.read_text()
+        # P2P listens on localhost only; before this line Besu bound P2P to all interfaces.
+        if "p2p-interface=" not in text:
+            cfg.write_text(text.replace(f'p2p-host="{HOST}"\n', f'p2p-host="{HOST}"\np2p-interface="{HOST}"\n', 1))
+            print(f"node{i}: config upgraded (p2p-interface={HOST}); restart the node to apply")
+
+
 def cmd_start(args):
     if not (GENERATED / "genesis.json").exists():
         sys.exit("Run `python chain/net.py setup` first.")
+    upgrade_node_configs()
     for i in parse_nodes(args):
         if is_running(i):
             print(f"node{i} already running")
