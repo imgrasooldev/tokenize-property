@@ -315,7 +315,12 @@ def cmd_stop(args):
             except ProcessLookupError:
                 pass
         pf.unlink()
-        print(f"node{i} stopped")
+        # Wait until the node has really shut down: a `start` right after a `stop` would otherwise
+        # see the still-answering RPC, report "already running" and leave the node down.
+        deadline = time.time() + 60
+        while is_running(i) and time.time() < deadline:
+            time.sleep(1)
+        print(f"node{i} stopped" if not is_running(i) else f"node{i}: still shutting down after 60 s")
 
 
 def cmd_status(_args):
