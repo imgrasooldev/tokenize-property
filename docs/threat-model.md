@@ -107,7 +107,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 |---|---|---|---|---|
 | D-1 | Tampering | Ledger rows edited or deleted | Append-only enforced by DB permissions and triggers; each entry hash-chained to the previous one; hourly hash anchored | Built, tested (anchoring pending, Step 5f) |
 | D-2 | Info. disclosure | Database dump leaks CNICs and bank details | Field-level encryption with KMS; KYC data in a separate database; encrypted backups | Planned |
-| D-3 | Tampering | Read model drifts from chain | Indexer re-checks by block hash; daily full rebuild comparison; UI shows "pending" until confirmed | Planned |
+| D-3 | Tampering | Read model drifts from chain | Indexer checks every header's parent hash and every log's block hash, and halts (fail closed) on any mismatch; one transaction per batch with a compare-and-set cursor (exactly-once); contract invariants re-checked while deriving; `indexer:verify` rebuilds from the chain with an independent implementation and compares with `balanceOf` and other views at a pinned block; UI shows "pending" until confirmed ([ADR 0006](decisions/0006-indexer.md)) | Built, tested (daily verify scheduling and alert wiring in production pending; website moves onto the read model in 5h) |
 | D-4 | DoS | Data loss | Point-in-time recovery; backups in two locations; quarterly restore drill | Planned |
 | D-5 | Info. disclosure | Breach of personal data | Data minimisation; retention limits; breach-response runbook; confirm Pakistan data-localisation rules | Planned |
 

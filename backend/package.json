@@ -21,7 +21,12 @@
     "signer": "tsx packages/signer/src/cli.ts serve",
     "signer:setup": "tsx packages/signer/src/cli.ts setup",
     "signer:decide": "tsx packages/signer/src/cli.ts decide",
-    "signer:audit": "tsx packages/signer/src/cli.ts audit"
+    "signer:audit": "tsx packages/signer/src/cli.ts audit",
+    "indexer": "tsx packages/indexer/src/cli.ts run",
+    "indexer:verify": "tsx packages/indexer/src/cli.ts verify",
+    "indexer:status": "tsx packages/indexer/src/cli.ts status",
+    "indexer:bench": "tsx packages/indexer/scripts/bench.ts",
+    "indexer:reset-local": "tsx packages/indexer/src/cli.ts reset-local"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
