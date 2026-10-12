@@ -16,6 +16,8 @@ git fetch --quiet origin main
 git merge-base --is-ancestor "$SHA" origin/main || { echo "$SHA is not on main" >&2; exit 4; }
 git checkout --quiet --force --detach "$SHA"
 git submodule update --init --recursive --quiet
+# Continue with this commit's own copy of the script, so new deploy steps apply immediately.
+if [ -z "${PT_UPDATE_REEXEC:-}" ]; then PT_UPDATE_REEXEC=1 exec bash "$0" "$SHA"; fi
 
 echo "== backend dependencies and migrations"
 (cd backend && npm ci --ignore-scripts --no-audit --no-fund --silent && npm run --silent migrate)
