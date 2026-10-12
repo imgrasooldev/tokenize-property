@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md) and [0005](../docs/decisions/0005-signing-service.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md) and [0006](../docs/decisions/0006-indexer.md).
 
 ## Status
 
@@ -10,8 +10,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5b | Ledger: double-entry, append-only, hash-chained | Done |
 | 5c | Outbox + jobs in PostgreSQL, idempotency | Done |
 | 5d | Signing service + policy engine | Done |
-| 5e | Indexer → read model | Next |
-| 5f | Reconciliation (chain vs ledger vs bank) | Planned |
+| 5e | Indexer → read model | Done |
+| 5f | Reconciliation (chain vs ledger vs bank) | Next |
 | 5g | KYC and bank/Raast mocks | Planned |
 | 5h | Integration tests against PostgreSQL + Besu | Planned |
 
@@ -26,6 +26,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
 | `@pt/outbox` | Outbox: `enqueue` inside the business transaction, `OutboxWorker` (leases, LISTEN/NOTIFY, record-before-broadcast, resolution from the chain), `Executor` interface; `@pt/outbox/local-executor` for the local chain only |
 | `@pt/signer` | Signing service: key custody behind `KeyProvider` (encrypted keystore locally, HSM/MPC in production), deny-by-default policy engine, maker-checker, nonce reservations, hash-chained audit, HMAC-authenticated internal API, outbox `signerExecutor` |
+| `@pt/indexer` | Follows the chain into the read model (schema `chain`): 4,000-block windows, parent-hash checks, one transaction per batch, halts on any mismatch; `verify` rebuilds and compares with the contracts; typed read queries |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
 ## Outbox (Step 5c)
@@ -70,6 +71,44 @@ Rules enforced in the database (`0004_signer.sql`): S-1 no key material in the d
 Measured locally: the signer's own work p50 6.2 ms / p99 8.9 ms; a full signature over HTTP including Besu reads p50 29 ms / p99 37 ms (before fixing gas limits per policy: p50 738 ms).
 
 Tests (35): keystore (round trip, wrong passphrase, tampering, no key in output), policy (every deny path), service flows on a scratch database (idempotency, payload conflict, two-operator approval, rejection, unverified/paused/simulation denials without nonce use, daily limit, 30 concurrent requests get gap-free unique nonces, release and reuse, dropped re-sign, audit tamper detection, immutability), HTTP auth (forged, stale, replayed, tampered, wrong path, oversized, non-JSON), and end to end on Besu through the outbox (small mint, deferred large mint approved by two operators, unverified recipient refused with nothing signed).
+
+## Indexer and read model (Step 5e)
+
+```bash
+npm run indexer                          # follow the local chain into schema chain (Ctrl+C to stop; crash-safe)
+npm run indexer:status                   # cursor, lag, halt state
+npm run indexer:verify                   # rebuild from the chain + compare with balanceOf etc. at a pinned block (exit 1 on any difference)
+npm run indexer:reset-local -- --yes     # LOCAL DEV ONLY, after `python chain/net.py reset`
+npm run indexer:bench                    # synthetic speed test in a throw-away database
+```
+
+Settings: `CHAIN_RPC_URL`, `CHAIN_ID`, `INDEXER_DEPLOYMENT_FILE` (default: the local DeployLib broadcast), `PG_DATABASE`. Exit code 3 means **halted**: the chain no longer matches what was indexed. Investigate first; usually rebuild into a fresh database. Rules enforced in the database (`0005_indexer.sql`), see [ADR 0006](../docs/decisions/0006-indexer.md):
+
+| Rule | What it guarantees |
+|---|---|
+| C-1 | Events, derived tables and cursor commit in one transaction; the cursor moves by compare-and-set (exactly-once) |
+| C-2 | Each batch links to the previous one by parent hash; a block number never has two hashes |
+| C-3 | History is append-only; derived rows are never deleted; nothing is truncated |
+| C-4 | `pt_chain_writer` only calls the API functions; `pt_chain_reader` only reads |
+| C-5 | Contract invariants re-checked (no negative balance or supply, refId once, distribution and recovery state machines, documents) |
+| C-6 | A halted deployment refuses all batches until an administrator clears it, with a recorded reason |
+| C-7 | `NOTIFY chain_events` at commit only; `chain_alert` on a halt |
+
+Reads (`holders`, `portfolio`, `transfersOf`, `distributionsOf`, `indexStatus`) are in `@pt/indexer`.
+
+Measured locally:
+- Catch-up on the real chain: 41,011 blocks in 8.9 s, about 4,600 blocks/s (another run 2,700 blocks/s). The header checks dominate.
+- `verify`: 10.5 s.
+- Reads on the real chain: p95 1.2–4.1 ms.
+- Synthetic (`indexer:bench`): apply 620–1,030 events/s. Reads with 110,050 events and 10,000 holders, p95: top-50 holders 17–20 ms (one earlier run: 106 ms), portfolio 2.5 ms, transfers 6–10 ms, distributions 4–7 ms.
+
+Tests (27):
+- decoding and deployment parsing;
+- database rules: roles, append-only, compare-and-set, halts, NOTIFY on commit;
+- 4,000-block windows, event-count splitting, invariant halts, racing indexers, follow mode;
+- every chain-mismatch halt: rewritten history, replaced tip, broken header link, wrong log block hash, wrong chain ID;
+- a **property test**: random valid event sequences in random batch splits, with crashes before and after COMMIT and racing indexers, must give exactly the reference model's state, with no duplicates. Disabling the compare-and-set makes it fail with the minimal counterexample "race";
+- end to end on Besu (read-only): catch-up, `verify` against a rebuild and the contracts' views, read latency.
 
 ## Live Demo Console
 

@@ -15,7 +15,7 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 | `docs/` | Specs, threat model, architecture decisions (`docs/decisions/`) |
 | `contracts/` | Solidity contracts and Foundry tests |
 | `chain/` | Local 4-validator Besu QBFT network: `net.py` (setup/start/stop/status), `flow.py` (end-to-end checks) |
-| `backend/` | TypeScript workspace: config, logger, DB + migrations, typed ABIs; ledger, outbox, signing service, indexer next |
+| `backend/` | TypeScript workspace: config, logger, DB + migrations, typed ABIs; ledger, outbox, signing service, indexer (read model) |
 | `admin/` | Admin panel (Next.js) |
 | `mobile/` | Investor app (Flutter) |
 
