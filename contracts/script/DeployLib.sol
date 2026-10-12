@@ -12,6 +12,7 @@ import {RecoveryGuard} from "../src/guards/RecoveryGuard.sol";
 import {RegistrarGuard} from "../src/guards/RegistrarGuard.sol";
 import {DistributionRegistry} from "../src/registries/DistributionRegistry.sol";
 import {DocumentRegistry} from "../src/registries/DocumentRegistry.sol";
+import {StateAnchor} from "../src/anchor/StateAnchor.sol";
 
 import {
     ITokenFull,
@@ -41,6 +42,9 @@ library DeployLib {
     uint256 internal constant LOCAL_DEV_CHAIN_ID = 586_586;
     /// On the local dev network only, a short delay is allowed so go-live can be exercised end to end.
     uint256 internal constant LOCAL_DEV_MIN_TIMELOCK_DELAY = 60 seconds;
+    /// Chain ID of the local Anvil chain that stands in for the public anchor chain (chain/anchor.py).
+    /// Only there may the StateAnchor owner be a plain address instead of a Safe.
+    uint256 internal constant LOCAL_ANCHOR_CHAIN_ID = 586_650;
     uint256 internal constant TOPIC_KYC = 1;
     uint256 internal constant TOPIC_AML = 2;
 
@@ -86,6 +90,16 @@ library DeployLib {
         RegistrarGuard registrarGuard;
         DistributionRegistry distributions;
         DocumentRegistry documents;
+    }
+
+    /// Public-chain anchor (contract-spec.md section 7.2).
+    struct AnchorConfig {
+        /// Address sending the deployment transaction. Never holds any power over the anchor.
+        address deployer;
+        /// Safe on the public chain: rotates the anchor key.
+        address owner;
+        /// Hot key (HSM in production) that writes the hourly anchors.
+        address anchorer;
     }
 
     function deploy(Config memory c) internal returns (Deployment memory d) {
@@ -290,6 +304,28 @@ library DeployLib {
         require(mc.isModuleBound(address(d.countryModule)), "country module not bound");
         require(mc.isModuleBound(address(d.maxBalanceModule)), "max balance module not bound");
         require(d.token.paused(), "token must stay paused until go-live");
+    }
+
+    // ------------------------------------------------------------------ public-chain anchor
+
+    /// @notice Deploys StateAnchor on the public chain. Owner and anchor key are set in the
+    ///         constructor, so the deployer never holds any power.
+    function deployAnchor(AnchorConfig memory c) internal returns (StateAnchor anchor) {
+        require(block.chainid != LOCAL_DEV_CHAIN_ID, "DeployLib: anchor must not live on the private chain");
+        anchor = new StateAnchor(c.owner, c.anchorer);
+    }
+
+    /// @notice Post-deploy check for StateAnchor. Reverts with the first failure.
+    function checkAnchor(AnchorConfig memory c, StateAnchor anchor) internal view {
+        require(block.chainid != LOCAL_DEV_CHAIN_ID, "anchor: on the private chain");
+        require(anchor.owner() == c.owner, "anchor: owner");
+        require(anchor.pendingOwner() == address(0), "anchor: pending owner");
+        require(anchor.anchorer() == c.anchorer, "anchor: anchor key");
+        require(anchor.lastAnchoredBlock() == 0, "anchor: not fresh");
+        require(c.owner != c.deployer && c.anchorer != c.deployer && c.anchorer != c.owner, "anchor: keys must differ");
+        if (block.chainid != LOCAL_ANCHOR_CHAIN_ID) {
+            require(c.owner.code.length > 0, "anchor: owner must be a Safe");
+        }
     }
 
     // ------------------------------------------------------------------ helpers

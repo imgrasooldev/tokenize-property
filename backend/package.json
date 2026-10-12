@@ -26,7 +26,12 @@
     "indexer:verify": "tsx packages/indexer/src/cli.ts verify",
     "indexer:status": "tsx packages/indexer/src/cli.ts status",
     "indexer:bench": "tsx packages/indexer/scripts/bench.ts",
-    "indexer:reset-local": "tsx packages/indexer/src/cli.ts reset-local"
+    "indexer:reset-local": "tsx packages/indexer/src/cli.ts reset-local",
+    "anchor": "tsx packages/anchor/src/cli.ts run",
+    "anchor:once": "tsx packages/anchor/src/cli.ts once",
+    "anchor:verify": "tsx packages/anchor/src/cli.ts verify",
+    "anchor:status": "tsx packages/anchor/src/cli.ts status",
+    "anchor:setup": "tsx packages/anchor/src/cli.ts setup"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

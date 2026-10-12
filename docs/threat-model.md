@@ -105,7 +105,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
-| D-1 | Tampering | Ledger rows edited or deleted | Append-only enforced by DB permissions and triggers; each entry hash-chained to the previous one; hourly hash anchored | Built, tested (anchoring pending, Step 5f) |
+| D-1 | Tampering | Ledger rows edited or deleted | Append-only enforced by DB permissions and triggers; each entry hash-chained to the previous one; the ledger head is bound into the hourly public anchor commitment, and `anchor:verify` recomputes the hash chain from the rows independently of the database functions, so an edit even with a full re-hash by a superuser is detected ([ADR 0008](decisions/0008-public-anchor.md)) | Built, tested on a local Anvil stand-in (public L2 not chosen yet; daily verify scheduling and alerting pending) |
 | D-2 | Info. disclosure | Database dump leaks CNICs and bank details | Field-level encryption with KMS; KYC data in a separate database; encrypted backups | Planned |
 | D-3 | Tampering | Read model drifts from chain | Indexer checks every header's parent hash and every log's block hash, and halts (fail closed) on any mismatch; one transaction per batch with a compare-and-set cursor (exactly-once); contract invariants re-checked while deriving; `indexer:verify` rebuilds from the chain with an independent implementation and compares with `balanceOf` and other views at a pinned block; UI shows "pending" until confirmed ([ADR 0006](decisions/0006-indexer.md)) | Built, tested (daily verify scheduling and alert wiring in production pending; website moves onto the read model in 5h) |
 | D-4 | DoS | Data loss | Point-in-time recovery; backups in two locations; quarterly restore drill | Planned |
@@ -126,7 +126,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
-| CH-1 | Tampering | Validators collude to rewrite history | 4 validators run by separate organisations (platform, trustee, auditor, backup); hourly public-chain anchor makes rewrites detectable | Spec |
+| CH-1 | Tampering | Validators collude to rewrite history | 4 validators run by separate organisations (platform, trustee, auditor, backup); hourly anchor of a finalized block hash on a public chain (`StateAnchor`, commitment in spec 7.1); `anchor:verify` compares every anchor with the private chain and reports any rewritten block ([ADR 0008](decisions/0008-public-anchor.md)) | Built, tested on a local Anvil stand-in against the local Besu network (public L2 and the HSM anchor key pending) |
 | CH-2 | DoS | Validators go offline | QBFT tolerates 1 of 4 failing; monitoring and runbook for validator recovery | Built, tested locally (`chain/flow.py` stops and restarts a validator) |
 | CH-3 | Elevation | Unauthorised node joins network | Permissioned node allowlist; static peering, discovery off; TLS between nodes | Allow-list and static peering built locally; TLS planned |
 | INF-1 | Elevation | Lateral movement after one service is breached | Private subnets; mTLS between services; signing service and DB not internet-reachable | Planned |

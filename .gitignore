@@ -56,3 +56,5 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 contracts/broadcast/*/586586/
+# Local anchor stand-in (chain/anchor.py, Anvil chain 586650)
+contracts/broadcast/*/586650/

@@ -12,6 +12,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5d | Signing service + policy engine | Done |
 | 5e | Indexer → read model | Done |
 | 5f | Reconciliation (chain vs ledger vs bank) | Next |
+| 5f-2 | Public-chain anchoring of the Besu chain and the ledger head (ADR 0008) | Done on a local Anvil stand-in; public L2 pending the owner |
 | 5g | KYC and bank/Raast mocks | Planned |
 | 5h | Integration tests against PostgreSQL + Besu | Planned |
 
@@ -26,6 +27,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/ledger` | Typed access to the ledger (bigint amounts, typed errors). The rules themselves live in the database |
 | `@pt/outbox` | Outbox: `enqueue` inside the business transaction, `OutboxWorker` (leases, LISTEN/NOTIFY, record-before-broadcast, resolution from the chain), `Executor` interface; `@pt/outbox/local-executor` for the local chain only |
 | `@pt/signer` | Signing service: key custody behind `KeyProvider` (encrypted keystore locally, HSM/MPC in production), deny-by-default policy engine, maker-checker, nonce reservations, hash-chained audit, HMAC-authenticated internal API, outbox `signerExecutor` |
+| `@pt/anchor` | Hourly public-chain anchor of the finalized Besu block and the ledger head (record before send, crash-safe, fail-closed alarms); `verify` checks every anchor against Besu and an independent recomputation of the ledger |
 | `@pt/indexer` | Follows the chain into the read model (schema `chain`): 4,000-block windows, parent-hash checks, one transaction per batch, halts on any mismatch; `verify` rebuilds and compares with the contracts; typed read queries |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
@@ -110,6 +112,34 @@ Tests (27):
 - a **property test**: random valid event sequences in random batch splits, with crashes before and after COMMIT and racing indexers, must give exactly the reference model's state, with no duplicates. Disabling the compare-and-set makes it fail with the minimal counterexample "race";
 - end to end on Besu (read-only): catch-up, `verify` against a rebuild and the contracts' views, read latency.
 
+## Public-chain anchoring (Step 5f-2)
+
+Every hour the job anchors one **commitment** on the public chain: `keccak256(abi.encode(domain, besuChainId, besuBlock, besuBlockHash, ledgerJournalId, ledgerHeadHash))` (spec section 7.1, [ADR 0008](../docs/decisions/0008-public-anchor.md)). Until the owner picks the L2, the public chain is a local Anvil stand-in (`python chain/anchor.py`, `127.0.0.1:8650`, chain ID 586650; see [chain/README.md](../chain/README.md)).
+
+```bash
+npm run anchor:setup     # LOCAL DEV ONLY: anchor key in its own encrypted keystore (backend/data/keystore-anchor/)
+npm run anchor:once      # finish the open anchor, or anchor the finalized Besu block + ledger head now
+npm run anchor           # every ANCHOR_INTERVAL_SECONDS (default 3600) until Ctrl+C; exit code 3 = alarm
+npm run anchor:verify    # every public anchor vs Besu and the ledger recomputed from its rows (exit 1 on a mismatch)
+npm run anchor:status    # the anchor records in this database
+```
+
+Settings: `ANCHOR_RPC_URL` (default `http://127.0.0.1:8650`), `ANCHOR_CHAIN_ID` (586650), `ANCHOR_CONTRACT` (default: the local DeployAnchor broadcast), `ANCHOR_ALLOW_CHAIN_ID` (required for any other chain), `ANCHOR_CONFIRMATIONS` (required for any other chain), `ANCHOR_BESU_CONFIRMATIONS` (0: QBFT is final), `ANCHOR_INTERVAL_SECONDS`, `ANCHOR_RETRY_SECONDS`, `ANCHOR_GAS_LIMIT`, `ANCHOR_MAX_GAS_PRICE_WEI`, `ANCHOR_LOG_WINDOW` (2,000), `ANCHOR_KEYSTORE_DIR`, `ANCHOR_KEYSTORE_PASSPHRASE`, plus `CHAIN_RPC_URL`/`CHAIN_ID` for Besu and `PG_*`. The network policy refuses chain 586586, the private chain's own ID, the stand-in in production, and any public chain unless it is explicitly allowed **and** the key is in a production key provider (the local keystore can only sign on the stand-in).
+
+Rules enforced in the database (`0007_anchor.sql`; roles `pt_anchor_writer`, `pt_anchor_reader`):
+
+| Rule | What it guarantees |
+|---|---|
+| A-1 | Anchor inputs (chains, contract, block, hashes, ledger head, commitment) never change |
+| A-2 | Never a lower block; the ledger head never moves backwards; one private chain per contract; at most one open anchor per contract |
+| A-3 | Record before send: the signed raw transaction is stored before broadcast; after a crash the SAME bytes are re-broadcast; only allowed status edges; failures carry a reason |
+| A-4 | No DELETE/TRUNCATE; every change in the append-only `anchor.history` |
+| A-5 | The writer only calls the API functions; the reader only reads |
+
+Measured locally: one anchor on Anvil 0.3–0.5 s end to end (preflight reads, ledger head, simulate, sign, record, broadcast, receipt; 51,060 gas); `verify` 21–32 ms for two anchors in-process (0.6 s for the CLI including connections); deploying through `forge script` 24–39 s (mostly forge start-up).
+
+Tests (35): commitment test vector shared with Solidity, network policy, broadcast parsing; ledger recomputation equal to the database digest for awkward text (quotes, control characters, Urdu, emoji, U+2028) across page boundaries; database rules A-1..A-5 including concurrent writers and admin UPDATEs; the job on a fault-injecting fake chain (crash at every point, lost broadcast, lost response, proven-dropped re-sign, pool and confirmation waits, gas cap, racing processes, rotated key, missing contract, wrong chains, production, a stolen-key anchor, a revert); a **property test** (random crashes, RPC faults, lost broadcasts, manual mining and racing processes: never two anchors for one record, never lower, never a silent skip, `verify` clean), verified to catch a deliberately broken job (broadcast before recording: minimal counterexample "crash at signed"); **tamper tests** (rewritten Besu block, edited anchor record, edited posting, full re-hash by a rogue DBA that fools `ledger.verify_chain()`, deleted journal, anchor missing on chain); and integration on a real Anvil chain (DeployLib deploy, crash recovery with the same signed transaction, verify, re-hash detected) and against the real local Besu network (read-only).
+
 ## Live Demo Console
 
 ```bash
@@ -137,7 +167,7 @@ Enforced by PostgreSQL, so a bug in a service cannot break them:
 | L-5 | Idempotency: identical retry returns the same journal; a different payload is refused | `L-5 idempotency` |
 | L-6 | Protected accounts cannot be overdrawn (no overpaying an investor) | `L-6 no overdraft` |
 
-Writes are serialised by an advisory lock to keep the chain linear (tested with 30 concurrent writers). A superuser can still disable triggers; that is why the chain head will be anchored on-chain (Step 5f) and production DBA access is separated and audited.
+Writes are serialised by an advisory lock to keep the chain linear (tested with 30 concurrent writers). A superuser can still disable triggers; that is why the chain head is anchored on a public chain every hour (Step 5f-2, `npm run anchor:verify` finds even a full re-hash) and production DBA access is separated and audited.
 
 ## Local PostgreSQL 18
 
