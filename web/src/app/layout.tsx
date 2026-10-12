@@ -1,14 +1,10 @@
-import type { Metadata } from "next";
-import { Inter, Noto_Naskh_Arabic } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Header } from "@/components/Header";
-import { investorById } from "@/lib/server/db";
+import { PulseProvider } from "@/components/live/PulseProvider";
 import { getDict } from "@/lib/server/lang";
-import { currentInvestorId } from "@/lib/server/session";
+import { chainPulse } from "@/lib/server/pulse";
+import { display, mono, sans, urdu } from "./fonts";
 import "./globals.css";
-
-const latin = Inter({ subsets: ["latin"], variable: "--font-latin", display: "swap" });
-const urdu = Noto_Naskh_Arabic({ subsets: ["arabic"], variable: "--font-urdu", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Property Token · Investor prototype",
@@ -16,17 +12,28 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#05070F",
+  colorScheme: "dark",
+};
+
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { lang, t } = await getDict();
-  const id = await currentInvestorId();
-  const investor = id ? await investorById(id).catch(() => null) : null;
+  const pulse = await chainPulse();
   return (
-    <html lang={lang} dir={lang === "ur" ? "rtl" : "ltr"} className={`${latin.variable} ${urdu.variable}`}>
+    <html
+      lang={lang}
+      dir={lang === "ur" ? "rtl" : "ltr"}
+      data-scroll-behavior="smooth"
+      className={`${sans.variable} ${display.variable} ${mono.variable} ${urdu.variable}`}
+    >
       <body>
-        <div className="banner">{t.demoBanner}</div>
-        <Header lang={lang} t={t} userName={investor?.display_name ?? null} />
-        {children}
-        <footer className="container footer">{t.verifyOnChain}</footer>
+        <div className="aurora" aria-hidden="true" />
+        <div className="gridbg" aria-hidden="true" />
+        <div className="banner" role="note">
+          {t.demoBanner}
+        </div>
+        <PulseProvider initial={pulse}>{children}</PulseProvider>
       </body>
     </html>
   );

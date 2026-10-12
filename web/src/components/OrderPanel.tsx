@@ -103,6 +103,27 @@ export function OrderPanel({
             <dt>{side === "buy" ? t.cashAvailable : t.tokensAvailable}</dt>
             <dd>{side === "buy" ? formatPrice(cash, lang) : freeTokens.toLocaleString(lang === "ur" ? "ur-PK" : "en-PK")}</dd>
           </dl>
+          <div className="checks compact">
+            <div className="check">
+              <i className={p > 0 && p >= band.min && p <= band.max ? "" : "no"}>{p > 0 && p >= band.min && p <= band.max ? "✓" : "!"}</i>
+              {t.preBand}
+            </div>
+            <div className="check">
+              <i className={n >= 10 ? "" : "no"}>{n >= 10 ? "✓" : "!"}</i>
+              {t.preMin}
+            </div>
+            {side === "buy" ? (
+              <div className="check">
+                <i className={p * n > 0 && p * n <= cash ? "" : "no"}>{p * n > 0 && p * n <= cash ? "✓" : "!"}</i>
+                {t.preCash}
+              </div>
+            ) : (
+              <div className="check">
+                <i className={n > 0 && n <= freeTokens ? "" : "no"}>{n > 0 && n <= freeTokens ? "✓" : "!"}</i>
+                {t.preTokens}
+              </div>
+            )}
+          </div>
           <button type="submit" className={`btn ${side === "sell" ? "sell" : ""}`} disabled={pending || p === 0 || n === 0}>
             {pending ? t.matching : side === "buy" ? t.placeBuy : t.placeSell}
           </button>

@@ -10,13 +10,13 @@ export interface HistoryPoint {
 }
 
 function theme() {
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  // The site has one dark theme (v2 design tokens in globals.css).
   return {
-    text: dark ? "#9aa7b2" : "#5b6770",
-    grid: dark ? "#22303b" : "#eef1f4",
-    line: dark ? "#2bb3a5" : "#0f766e",
-    fill: dark ? "rgba(43,179,165,0.18)" : "rgba(15,118,110,0.14)",
-    bar: dark ? "#f0a34a" : "#b45309",
+    text: "#8B97AD",
+    grid: "rgba(255,255,255,0.05)",
+    line: "#22E3F0",
+    fill: "rgba(34,227,240,0.22)",
+    bar: "rgba(139,92,246,0.75)",
   };
 }
 

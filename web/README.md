@@ -79,6 +79,27 @@ Portfolio (`/portfolio`): live balances, investment history with tx hashes and a
 
 **Presenting:** `python scripts/demo.py up --trade` starts everything and pre-compiles the pages; script and Q&A in [docs/demo-guide.md](../docs/demo-guide.md).
 
+## Design (v2, 2026-10-12)
+
+The site follows the approved v2 design: `docs/design/mockup-home-v2.html` (main source) and `docs/design/v2-suite/` for the other screens, with the ticker strip, "bank to blockchain" flow, rent proof, returns calculator and final call to action from `mockup-home-v11.html`, and dashboard density from `mockup-home-v7.html`. The mockups are read-only references; nothing in `docs/design/` is used at runtime.
+
+| Page | Mockup | Shell |
+|---|---|---|
+| `/` | mockup-home-v2 (+ v11 parts) | public: live status rail + navigation |
+| `/properties` (new list page) | site-properties | public |
+| `/properties/[symbol]` (detail + invest form) | site-property, portal-invest | public |
+| `/login`, `/signup` | site-login, site-signup | public (minimal header) |
+| `/portfolio` (with rent and proofs at `#rent`) | portal-dashboard, portal-rent | investor app (sidebar) |
+| `/market` | portal-market | investor app when signed in, public otherwise |
+| `/account` | investor portal page | investor app |
+
+- **Real data only.** The status rail, block row, ticker, home stats, hero cards and events come from the chain and the test database: `src/lib/server/pulse.ts` (latest blocks, QBFT validator count, live token price and supply, ledger hash-chain check) served publicly at `GET /api/chain/pulse` (no personal data, one shared value per second, stale-while-revalidate so pages never wait), and `src/lib/server/site-stats.ts` (verified investors, settled trades, latest issuance and trade without identities, rent distributions on chain).
+- **Everything that is not real is labelled.** AI analyst answers, AI risk scores (`src/lib/sample-ai.ts`), the map, document hashes and the trust-structure card carry a visible "Sample" chip; features not built yet (AI search box, passkeys, bank linking, tax certificate, filters, public anchor) carry "Coming soon" and are disabled. AI text always says it is informational and never investment advice. Catalogue figures stay marked "Sample property".
+- **Fonts** are self-hosted with `next/font/local` (`src/app/fonts.ts`): Latin subsets of Inter, Space Grotesk and JetBrains Mono, and the Arabic subset of Noto Nastaliq Urdu, all from the `@fontsource-variable/*` 5.3.0 packages under the SIL Open Font License 1.1 (files and licences in `src/fonts/`; no new npm dependency). Nastaliq is not preloaded and is used only in Urdu mode, so English pages never download it. The CSP is unchanged (`font-src 'self'`, no external URLs, no inline scripts).
+- **Motion** lives in client components (`src/components/live/`): one network canvas (max 36 nodes, DPR capped at 1.5, about 30 fps, stops when hidden or off screen), CSS-only ticker (pauses on hover/focus), count-up figures, and 2-second polling of the pulse while the tab is visible. `prefers-reduced-motion` turns all animation off (the canvas draws one still frame; the ticker becomes a static, scrollable row). The aurora background uses soft gradients with a transform animation only (no blur filter); cards avoid `backdrop-filter`.
+- **Urdu:** RTL layout uses logical CSS properties throughout; Nastaliq with taller line heights and no letter-spacing (it breaks Arabic joins).
+- **Weight** (production build, first visit, English home, 1440 px): 307 KB transferred before → 297 KB after; JavaScript 461 KB → 478 KB decoded. The first Urdu visit adds the 239 KB Nastaliq font (Naskh before: about 30–45 KB). Server time (median of 9, this laptop): `/login` 15 ms, `/properties` 20 ms, `/properties/GPF3` 26 ms, `/market` 39 ms, `/` 46 ms (was 32 ms; the page now carries the full v2 home), `/api/chain/pulse` 11 ms.
+
 ## Security
 
 - Per-request nonce-based Content-Security-Policy (`src/proxy.ts`); `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, restrictive `Permissions-Policy`, no `X-Powered-By`.
