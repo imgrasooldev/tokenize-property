@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md) and [0006](../docs/decisions/0006-indexer.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md), [0006](../docs/decisions/0006-indexer.md) and [0007](../docs/decisions/0007-reconciliation.md).
 
 ## Status
 
@@ -11,7 +11,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5c | Outbox + jobs in PostgreSQL, idempotency | Done |
 | 5d | Signing service + policy engine | Done |
 | 5e | Indexer → read model | Done |
-| 5f | Reconciliation (chain vs ledger vs bank) | Next |
+| 5f | Reconciliation (chain vs ledger vs bank), payout freeze | Done (awaiting lead review); public-chain anchoring is 5f-2 |
 | 5g | KYC and bank/Raast mocks | Planned |
 | 5h | Integration tests against PostgreSQL + Besu | Planned |
 
@@ -27,6 +27,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/outbox` | Outbox: `enqueue` inside the business transaction, `OutboxWorker` (leases, LISTEN/NOTIFY, record-before-broadcast, resolution from the chain), `Executor` interface; `@pt/outbox/local-executor` for the local chain only |
 | `@pt/signer` | Signing service: key custody behind `KeyProvider` (encrypted keystore locally, HSM/MPC in production), deny-by-default policy engine, maker-checker, nonce reservations, hash-chained audit, HMAC-authenticated internal API, outbox `signerExecutor` |
 | `@pt/indexer` | Follows the chain into the read model (schema `chain`): 4,000-block windows, parent-hash checks, one transaction per batch, halts on any mismatch; `verify` rebuilds and compares with the contracts; typed read queries |
+| `@pt/recon` | Reconciliation: one snapshot pinned to the read model's block, pure deterministic checks (issuance, supply, holdings, cash, rent, integrity), findings recorded atomically; blocking findings freeze payouts until two operators unfreeze; mock bank statement import |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
 ## Outbox (Step 5c)
@@ -109,6 +110,37 @@ Tests (27):
 - every chain-mismatch halt: rewritten history, replaced tip, broken header link, wrong log block hash, wrong chain ID;
 - a **property test**: random valid event sequences in random batch splits, with crashes before and after COMMIT and racing indexers, must give exactly the reference model's state, with no duplicates. Disabling the compare-and-set makes it fail with the minimal counterexample "race";
 - end to end on Besu (read-only): catch-up, `verify` against a rebuild and the contracts' views, read latency.
+
+## Reconciliation (Step 5f)
+
+```bash
+npm run recon:register-account -- TRUSTEE-ESCROW-01 web:bank:subscriptions ops-ali   # once per bank account
+npm run recon:import-bank -- statement.jsonl --by ops-ali    # mock format pt-mock-bank-v1 (src/bank.ts)
+npm run recon                       # one run; exit 0 = clean, 1 = findings (blocking ones freeze payouts), 2 = error
+npm run recon -- --json             # the same as JSON; --no-verify skips the indexer rebuild; --sla-minutes 30
+npm run recon:status                # payout gate, latest runs, open unfreeze requests, audit chain
+npm run recon:unfreeze -- --request ops-ali "<reason>"            # maker
+npm run recon:unfreeze -- --approve <id> ops-sara "<reason>"      # checker: a different operator, after a passed run
+npm run recon:bench -- 10000        # synthetic speed test in a throw-away database
+```
+
+Settings as for the indexer (`CHAIN_RPC_URL`, `CHAIN_ID`, `INDEXER_DEPLOYMENT_FILE`, `PG_DATABASE`). A run takes one REPEATABLE READ snapshot, pins the read model's cursor block P, reads `totalSupply` and every holder's `balanceOf` at P, optionally runs the indexer's `verify`, applies the checks and stores the findings with the result in one transaction. Checks, conventions, mock bank format and data gaps: [ADR 0007](../docs/decisions/0007-reconciliation.md). Rules enforced in the database (`0006_recon.sql`):
+
+| Rule | What it guarantees |
+|---|---|
+| R-1 | Runs, findings, statements, gate events, audit: append-only; a run finishes once, with all its findings |
+| R-2 | Any blocking finding freezes payouts in the same transaction; nothing unfreezes automatically |
+| R-3 | Unfreeze = request + approval by two different operators with reasons, bound to the current freeze, 24 h expiry, only after a later passed run |
+| R-4 | `recon.payouts_allowed()`: not frozen AND latest run passed AND less than 26 hours old (deny by default) |
+| R-5 | Statements imported once; opening + lines = closing; reference unique per account and direction |
+| R-6 | Hash-chained audit; `recon.verify_audit()` recomputes runs, findings and statements and finds direct inserts |
+| R-7 | Roles `pt_recon_writer`, `pt_recon_operator`, `pt_recon_reader`; `pt_signer` and `pt_outbox_worker` may only ask the gate |
+
+The signing service denies every `payout.*`, `rent.*` and `distribution.*` kind unless the gate allows payouts (checked on request and again at signing).
+
+Measured: real local chain (44,463 blocks, 116 mints) full run 10.9 s, of which the indexer `verify` is 10.7 s (checks 29 ms); synthetic 10,000 subscriptions / 20,000 journals / 10,000 mints / 10,000 bank lines: 2.4–3.7 s without the rebuild, 6.6 s with it.
+
+Tests: checks per area (SLA edges, warnings, determinism, truncation), a **property test** (random consistent worlds give zero findings; each of 24 injected discrepancy kinds is detected under the right check name; mutation-checked), database rules (gate, freeze, maker-checker, expiry, stale requests, roles, append-only, audit tamper detection independent of TimeZone), mock statement parser, an end-to-end run on a fake chain indexed by the real indexer (clean → freeze → unfreeze → error → tamper), the signer's payout gate, and a read-only run on the local Besu chain.
 
 ## Live Demo Console
 

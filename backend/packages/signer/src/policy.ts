@@ -57,6 +57,17 @@ export type Decision =
 export const KINDS = ["issuance.mint"] as const;
 export type Kind = (typeof KINDS)[number];
 
+/**
+ * Kinds that move money out or settle rent (none exist yet). Whatever their own policy says, they
+ * are denied unless reconciliation allows payouts (recon.payout_gate(), ADR 0007): not frozen, and
+ * the latest run passed within 26 hours. Deny by default, so a future payout kind cannot forget it.
+ */
+const PAYOUT_KIND = /^(payout|rent|distribution)\./;
+
+export function isPayoutKind(kind: string): boolean {
+  return PAYOUT_KIND.test(kind);
+}
+
 export function parseRule(kind: string, rule: unknown): MintRule {
   if (kind !== "issuance.mint") throw new Error(`no policy schema for kind ${kind}`);
   return mintRule.parse(rule);
