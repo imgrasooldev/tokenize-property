@@ -88,6 +88,8 @@ log_connections = on
 log_disconnections = on
 log_statement = 'ddl'
 log_min_duration_statement = 500
+# TCP on 127.0.0.1 only: no Unix socket (distribution packages point it at a root-owned directory).
+unix_socket_directories = ''
 """)
     # Only password-authenticated TCP connections from this machine.
     (DATA / "pg_hba.conf").write_text(
