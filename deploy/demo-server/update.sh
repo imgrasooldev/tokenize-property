@@ -29,6 +29,13 @@ git checkout --quiet -- web/next-env.d.ts 2>/dev/null || true
 sudo systemctl start pt-web
 sudo systemctl restart pt-console
 
+echo "== design mockups -> /mockups/ and nginx config"
+sudo bash deploy/demo-server/publish-mockups.sh
+if ! sudo cmp -s deploy/demo-server/nginx.conf /etc/nginx/sites-available/property-token; then
+  sudo cp deploy/demo-server/nginx.conf /etc/nginx/sites-available/property-token
+  sudo nginx -t && sudo systemctl reload nginx
+fi
+
 echo "== smoke test"
 for i in $(seq 1 30); do
   code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/login || true)

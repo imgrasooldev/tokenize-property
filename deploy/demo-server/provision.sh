@@ -71,6 +71,7 @@ echo "== nginx: port 80 -> website on 127.0.0.1:3100"
 cp "$APP/deploy/demo-server/nginx.conf" /etc/nginx/sites-available/property-token
 ln -sf /etc/nginx/sites-available/property-token /etc/nginx/sites-enabled/property-token
 rm -f /etc/nginx/sites-enabled/default
+bash "$APP/deploy/demo-server/publish-mockups.sh"
 nginx -t && systemctl reload nginx
 
 echo "== systemd units"
