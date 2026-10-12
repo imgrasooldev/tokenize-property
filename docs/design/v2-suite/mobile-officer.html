@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token · Officer app (v2 suite)</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css"></head>
+<body><div class="aurora"></div><div class="gridbg"></div>
+<div class="board">
+<nav class="pubnav" style="padding:0"><a class="logo" href="index.html"><svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>PT Control</a><div class="sp"></div><a class="chip" href="mobile-app.html">← Investor app</a><span class="env">INTERNAL · managed devices only</span></nav>
+<h1 style="font-size:38px;margin-top:22px">Officer mobile app</h1>
+<p class="mu" style="max-width:780px;margin-top:8px">For operations, trustee and compliance officers on company-managed phones. Approvals still need two different people, and every approval is signed with a hardware key over NFC, so a stolen phone alone cannot approve anything. Every action lands in the hash-chained audit.</p>
+<h2 class="grp" style="color:var(--pink)">Approve on the go</h2>
+<div class="phones">
+  <!-- Inbox -->
+  <div class="ph-wrap"><div class="phone"><div class="scr"><div class="island"></div><div class="sbar"><span>12:14</span><i>🔒 5G ▮▮▮</i></div>
+    <div class="body">
+      <div class="ttl"><div class="av" style="width:36px;height:36px">MR</div><div style="flex:1"><b style="display:block">M. Rehman</b><small class="cy" style="font-size:11px">Trustee officer</small></div><span class="ic">⚙</span></div>
+      <div class="grid g3" style="gap:8px"><div class="card" style="padding:10px;text-align:center"><b class="mono am" style="font-size:20px">3</b><small class="di" style="font-size:10.5px;display:block">waiting</small></div><div class="card" style="padding:10px;text-align:center"><b class="mono up" style="font-size:20px">4/4</b><small class="di" style="font-size:10.5px;display:block">validators</small></div><div class="card" style="padding:10px;text-align:center"><b class="mono up" style="font-size:20px">✓</b><small class="di" style="font-size:10.5px;display:block">reconciled</small></div></div>
+      <div class="row"><b class="sg">Waiting for you</b></div>
+      <div class="lst">
+        <div class="li" style="border-color:rgba(34,227,240,.5);background:rgba(34,227,240,.06)"><span class="ic">⬡</span><div class="t"><b>Mint 20,000 GPF3</b><small>Alice Khan · Rs 1.00 cr · 7 min</small></div><span class="chip warn">1/2</span></div>
+        <div class="li"><span class="ic">⬡</span><div class="t"><b>Mint 15,000 GPF3</b><small>Bilal Ahmed · Rs 75 L · 3 min</small></div><span class="chip warn">0/2</span></div>
+        <div class="li"><span class="ic">₨</span><div class="t"><b>Publish distribution #4</b><small>Rs 3.0 L · 1,283 holders</small></div><span class="chip warn">0/2</span></div>
+        <div class="li"><span class="ic">⚖</span><div class="t"><b>Policy v3</b><small>Single-approval limit 50 L → 40 L</small></div><span class="chip ai">policy</span></div></div>
+    </div>
+    <div class="tabbar" style="grid-template-columns:repeat(4,1fr)"><a class="on"><span>✓</span>Approvals</a><a><span>◉</span>Health</a><a><span>⛓</span>Audit</a><a><span>☰</span>More</a></div><div class="hb"></div></div></div><div class="ph-cap"><b>Approvals inbox</b>Everything waiting, with approval counts</div></div>
+
+  <!-- Detail -->
+  <div class="ph-wrap"><div class="phone"><div class="scr"><div class="island"></div><div class="sbar"><span>12:15</span><i>🔒 5G ▮▮▮</i></div>
+    <div class="body">
+      <div class="ttl"><span class="ic">←</span><h3 style="font-size:19px">Mint 20,000 GPF3</h3><span class="chip warn">1/2</span></div>
+      <dl class="kv" style="font-size:12.5px"><dt>To</dt><dd>Alice Khan · 0x7099…79C8</dd><dt>Payment</dt><dd class="mono">Rs 1,00,00,000 ✓ bank</dd><dt>Ledger</dt><dd class="mono">journal #4,812</dd><dt>refId</dt><dd class="mono cy">0x7a3e…c210</dd><dt>Tx hash</dt><dd class="mono cy">0x9d41…e077</dd></dl>
+      <div style="display:grid;gap:7px;font-size:12.5px"><div class="check"><i>✓</i>Investor verified on chain</div><div class="check"><i>✓</i>Holding after ≤ 10% cap</div><div class="check"><i>✓</i>Payment matches amount</div><div class="check"><i>✓</i>Simulation succeeds</div></div>
+      <div class="li" style="border-color:rgba(59,232,155,.4)"><span class="ic up">✓</span><div class="t"><b>Ana Siddiqui</b><small>Operations · 12:11:02 · YubiKey</small></div></div>
+      <div class="ai-box" style="padding:12px"><div class="hd" style="margin:0 0 4px"><span class="orb" style="width:16px;height:16px"></span>Review assistant</div><span style="font-size:12px;color:#C3CCDB">4× her previous total; source of funds refreshed 20 Sep <span class="cite">KYC</span>. No AML alerts.</span></div>
+      <div class="grid g2" style="gap:8px;margin-top:auto;margin-bottom:30px"><a class="btn no">Reject</a><a class="btn ok">Approve</a></div>
+    </div><div class="hb"></div></div></div><div class="ph-cap"><b>Request detail</b>Exact transaction, checks, who approved</div></div>
+
+  <!-- NFC key -->
+  <div class="ph-wrap"><div class="phone"><div class="scr"><div class="island"></div><div class="sbar"><span>12:15</span><i>🔒 5G ▮▮▮</i></div>
+    <div class="body"><div class="ttl"><span class="ic">←</span><h3 style="font-size:19px">Mint 20,000 GPF3</h3></div></div>
+    <div class="dim-bg"></div>
+    <div class="sheet" style="text-align:center"><div class="grab"></div><b class="sg" style="font-size:19px">Hold your security key to the phone</b>
+      <div class="nfc"><svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#22E3F0" stroke-width="1.5"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 15h4"/></svg></div>
+      <div style="display:grid;gap:8px;font-size:12.5px;text-align:left"><div class="check"><i>✓</i>Face ID: M. Rehman</div><div class="check"><i class="wait">…</i>YubiKey signs tx hash 0x9d41…e077</div><div class="check"><i>✓</i>You are not the first approver</div></div>
+      <p class="di" style="font-size:11px;margin-top:12px">Your approval goes into the signer audit chain. The phone never holds the platform's signing key.</p></div>
+    <div class="hb"></div></div></div><div class="ph-cap"><b>Hardware key</b>Face ID plus NFC key tap to approve</div></div>
+
+  <!-- Health / alert -->
+  <div class="ph-wrap"><div class="phone"><div class="scr"><div class="island"></div><div class="sbar"><span>02:07</span><i>🔒 5G ▮▮▮</i></div>
+    <div class="body">
+      <div class="ttl"><h3>System health</h3><span class="chip warn">1 alert</span></div>
+      <div class="li" style="border-color:rgba(255,181,71,.55);background:rgba(255,181,71,.07)"><span class="ic am">⚠</span><div class="t"><b>val-3 Islamabad not producing</b><small>since 02:03 · chain still final with 3 of 4</small></div></div>
+      <div class="grid g2" style="gap:8px"><div class="card" style="padding:12px"><small class="di" style="font-size:10.5px">BLOCK TIME</small><b class="mono up" style="display:block">2.0 s</b></div><div class="card" style="padding:12px"><small class="di" style="font-size:10.5px">OUTBOX</small><b class="mono" style="display:block">0 stuck</b></div><div class="card" style="padding:12px"><small class="di" style="font-size:10.5px">SIGNER P99</small><b class="mono" style="display:block">37 ms</b></div><div class="card" style="padding:12px"><small class="di" style="font-size:10.5px">AUDIT</small><b class="mono up" style="display:block">intact</b></div></div>
+      <div class="blkrow" data-blocks style="transform:scale(.8);transform-origin:left top;width:125%"></div>
+      <div class="ai-box" style="padding:12px"><div class="hd" style="margin:0 0 4px"><span class="orb" style="width:16px;height:16px"></span>Ops assistant</div><span style="font-size:12px;color:#C3CCDB">QBFT tolerates one faulty validator of four <span class="cite">consensus</span>. Runbook RB-3: restart the val-3 container, then check peers.</span></div>
+      <div class="grid g2" style="gap:8px;margin-top:auto;margin-bottom:8px"><a class="btn">Open runbook</a><a class="btn prime">Acknowledge</a></div>
+    </div>
+    <div class="tabbar" style="grid-template-columns:repeat(4,1fr)"><a><span>✓</span>Approvals</a><a class="on"><span>◉</span>Health</a><a><span>⛓</span>Audit</a><a><span>☰</span>More</a></div><div class="hb"></div></div></div><div class="ph-cap"><b>Health and alerts</b>On-call alert with runbook</div></div>
+</div>
+</div>
+<div class="suite-label">v2 suite · <a href="index.html">all screens</a></div>
+<script src="app.js"></script></body></html>

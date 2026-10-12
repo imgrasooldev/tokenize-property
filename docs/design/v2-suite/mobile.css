@@ -1,0 +1,41 @@
+/* Mobile app mockups: phone frames and mobile components, on top of style.css */
+.board{position:relative;z-index:2;max-width:1680px;margin:0 auto;padding:28px 40px 80px}
+.board h2.grp{font-size:14px;letter-spacing:.14em;text-transform:uppercase;margin:34px 0 18px}
+.phones{display:flex;flex-wrap:wrap;gap:34px 30px}
+.ph-wrap{display:grid;gap:12px;justify-items:center}
+.ph-cap{font-size:13px;color:var(--muted);text-align:center;max-width:340px}.ph-cap b{color:var(--text);display:block;font-size:14px}
+.phone{width:360px;height:760px;border-radius:52px;padding:10px;background:linear-gradient(145deg,#2a2f3d,#0b0e16 40%,#1d2230);box-shadow:0 40px 80px -30px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08),0 0 60px -20px rgba(34,227,240,.25)}
+.scr{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:radial-gradient(120% 60% at 20% 0%,#1a1442 0%,transparent 60%),radial-gradient(90% 50% at 100% 20%,rgba(34,227,240,.12),transparent 60%),#05070F;display:flex;flex-direction:column}
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:30px;border-radius:20px;background:#000;z-index:5}
+.sbar{height:48px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 28px 0;font:600 13px Inter;z-index:4}
+.sbar i{font-style:normal;font-size:11px;letter-spacing:1px}
+.body{flex:1;overflow:hidden;padding:6px 18px 0;display:flex;flex-direction:column;gap:12px;position:relative}
+.ttl{display:flex;align-items:center;gap:10px}.ttl h3{font:600 22px "Space Grotesk";flex:1}
+.ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:var(--glass2);border:1px solid var(--stroke);font-size:15px;flex:none}
+.tabbar{flex:none;height:78px;display:grid;grid-template-columns:repeat(5,1fr);padding:8px 10px 20px;border-top:1px solid var(--stroke);background:rgba(5,7,15,.85);backdrop-filter:blur(14px)}
+.tabbar a{display:grid;justify-items:center;gap:3px;font-size:10px;color:var(--dim)}.tabbar a span{font-size:18px}
+.tabbar a.on{color:var(--cyan)}.tabbar a.mid span{width:46px;height:46px;margin-top:-20px;border-radius:16px;display:grid;place-items:center;color:#05070F;background:linear-gradient(135deg,var(--cyan),var(--violet));box-shadow:0 10px 30px -8px var(--cyan)}
+.hb{height:5px;width:130px;border-radius:4px;background:rgba(255,255,255,.55);position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:6}
+.hero-card{border-radius:24px;padding:18px;background:linear-gradient(135deg,rgba(34,227,240,.18),rgba(139,92,246,.22) 60%,rgba(244,114,182,.14));border:1px solid rgba(34,227,240,.3);position:relative;overflow:hidden}
+.hero-card:after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(34,227,240,.35),transparent 70%)}
+.m-big{font:600 30px "Space Grotesk";letter-spacing:-.5px}
+.lst{display:grid;gap:8px}.li{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--glass);border:1px solid var(--stroke)}
+.li .t{flex:1;min-width:0}.li .t b{display:block;font-size:14px}.li .t small{font-size:11.5px;color:var(--muted)}
+.ask{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;border:1px solid rgba(139,92,246,.45);background:rgba(139,92,246,.1);font-size:13px;color:#C9BFFF}
+.sheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;padding:16px 18px 34px;background:#0D1226;border-top:1px solid var(--stroke2);box-shadow:0 -30px 60px rgba(0,0,0,.6);z-index:7}
+.sheet .grab{width:40px;height:5px;border-radius:4px;background:var(--stroke2);margin:0 auto 14px}
+.dim-bg{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:6}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.keypad span{height:48px;display:grid;place-items:center;font:500 22px Inter;border-radius:14px}
+.seg{display:grid;grid-auto-flow:column;gap:4px;padding:4px;border-radius:12px;background:var(--glass);border:1px solid var(--stroke)}.seg span{text-align:center;padding:7px;border-radius:9px;font-size:12.5px;color:var(--muted)}.seg span.on{background:var(--glass2);color:var(--text)}
+.bubble{max-width:82%;padding:10px 13px;border-radius:18px;font-size:13px;line-height:1.55}.bubble.me{align-self:flex-end;background:linear-gradient(135deg,#22E3F0,#8B5CF6);color:#05070F;border-bottom-right-radius:6px}
+.bubble.ai{align-self:flex-start;background:var(--glass2);border:1px solid var(--stroke);border-bottom-left-radius:6px}
+.notif{border-radius:20px;padding:12px 14px;background:rgba(30,36,56,.78);backdrop-filter:blur(20px);border:1px solid var(--stroke);display:flex;gap:10px;font-size:12.5px}
+.notif .ap{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:linear-gradient(135deg,#0D1838,#1B1347);border:1px solid rgba(34,227,240,.4)}
+.ring{width:220px;height:220px;border-radius:50%;margin:0 auto;position:relative;display:grid;place-items:center}
+.ring:before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--teal) 0 72%,rgba(255,255,255,.08) 72%);-webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%)}
+.scanbox{height:200px;border-radius:20px;position:relative;border:2px solid rgba(34,227,240,.6);box-shadow:0 0 40px -10px var(--cyan) inset;overflow:hidden;background:linear-gradient(160deg,#0f1a33,#070b17)}
+.scanbox .line{position:absolute;left:0;right:0;height:2px;background:var(--cyan);box-shadow:0 0 18px var(--cyan);top:40%;animation:scan 2.4s ease-in-out infinite alternate}
+@keyframes scan{from{top:8%}to{top:90%}}
+.nfc{width:150px;height:150px;border-radius:50%;margin:8px auto;display:grid;place-items:center;position:relative}
+.nfc:before,.nfc:after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--cyan);opacity:.6;animation:ping 2s ease-out infinite}.nfc:after{animation-delay:1s}
+@keyframes ping{from{transform:scale(.6);opacity:.8}to{transform:scale(1.25);opacity:0}}
