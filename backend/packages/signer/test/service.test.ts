@@ -163,16 +163,20 @@ describe("nonces (S-4)", () => {
 
 describe("speed", () => {
   it("the signer's own work (policy, database, nonce, signature, audit) has p99 under 50 ms", async () => {
+    // Warm-up runs are not counted, and there are enough samples that p99 is not simply the single
+    // slowest run: with 40 samples one garbage-collection pause on a shared CI runner failed CI.
+    const WARMUP = 10;
+    const SAMPLES = 200;
     const times: number[] = [];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < WARMUP + SAMPLES; i++) {
       const t = performance.now();
       const r = await svc().request({ commandRef: ref(), kind: "issuance.mint", payload: mint("1") }, "bench");
-      times.push(performance.now() - t);
+      if (i >= WARMUP) times.push(performance.now() - t);
       if (r.status === "signed") await svc().release(r.requestId, "bench");
     }
     times.sort((a, b) => a - b);
-    const p50 = times[20] ?? 0;
-    const p99 = times[39] ?? 0;
+    const p50 = times[Math.ceil(SAMPLES * 0.5) - 1] ?? 0;
+    const p99 = times[Math.ceil(SAMPLES * 0.99) - 1] ?? 0;
     process.stdout.write(`signer own work: p50 ${p50.toFixed(1)} ms, p99 ${p99.toFixed(1)} ms\n`);
     expect(p99).toBeLessThan(50);
   });
