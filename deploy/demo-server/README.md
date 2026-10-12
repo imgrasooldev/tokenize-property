@@ -40,7 +40,7 @@ Repository settings needed (Settings > Secrets and variables > Actions, environm
 | Name | Kind | Value |
 |---|---|---|
 | `DEMO_HOST` | variable | `51.79.144.40` (deploys stay skipped until this is set) |
-| `DEMO_SSH_KEY` | secret | private half of `ci-deploy.pub` |
+| `DEMO_SSH_KEY_PROPERTY` | secret | private half of `ci-deploy.pub` |
 | `DEMO_KNOWN_HOSTS` | secret | `ssh-keyscan -t ed25519 51.79.144.40` output, checked against the server |
 
 ## Operating

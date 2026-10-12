@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: SSH key and pinned host key
         env:
-          DEMO_SSH_KEY: ${{ secrets.DEMO_SSH_KEY }}
+          DEMO_SSH_KEY: ${{ secrets.DEMO_SSH_KEY_PROPERTY }}
           DEMO_KNOWN_HOSTS: ${{ secrets.DEMO_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
