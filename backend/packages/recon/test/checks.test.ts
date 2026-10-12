@@ -274,6 +274,15 @@ describe("runChecks", () => {
     expect(found.at(-1)?.subject).toBe("(25 more not listed)");
   });
 
+  it("a running balance that differs from its postings is a blocking finding (RF-2)", () => {
+    const w = world();
+    w.data.integrity.ledgerBalances.push({ code: "web:investor:x:cash", cached: "-1000000", actual: "-100" });
+    const found = runChecks(w.data).filter((x) => x.check === "integrity.ledger_balances");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.severity).toBe("blocking");
+    expect(found[0]?.actual).toContain("-1000000");
+  });
+
   it("truncates long text to the database limits", () => {
     const w = world();
     w.data.integrity.indexer.verify.problems.push("x".repeat(2_000));

@@ -1,3 +1,6 @@
+import { copyFileSync, mkdtempSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readEnvFile } from "@pt/config";
 import pg from "pg";
@@ -61,4 +64,25 @@ async function dropWhenFree(admin: pg.Client, name: string): Promise<void> {
     }
   }
   await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
+}
+
+/**
+ * A temporary copy of the migrations directory holding only the files up to and including
+ * `last` (e.g. "0007"), to build a database as it was before a later migration and then upgrade it.
+ */
+export function migrationsUpTo(last: string): string {
+  const src = fileURLToPath(new URL("../migrations", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "pt-migrations-upto-"));
+  for (const f of readdirSync(src)) {
+    if (f.endsWith(".sql") && f.slice(0, 4) <= last) copyFileSync(join(src, f), join(dir, f));
+  }
+  return dir;
+}
+
+/** Adds the remaining migrations (after `last`) to a directory made by `migrationsUpTo`. */
+export function addMigrationsAfter(dir: string, last: string): void {
+  const src = fileURLToPath(new URL("../migrations", import.meta.url));
+  for (const f of readdirSync(src)) {
+    if (f.endsWith(".sql") && f.slice(0, 4) > last) copyFileSync(join(src, f), join(dir, f));
+  }
 }

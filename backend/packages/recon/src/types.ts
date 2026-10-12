@@ -55,6 +55,7 @@ export const CHECKS = {
   "rent.payout_not_recorded": "warning",
   // Integrity of the records themselves
   "integrity.ledger_chain": "blocking",
+  "integrity.ledger_balances": "blocking",
   "integrity.signer_audit": "blocking",
   "integrity.recon_audit": "blocking",
   "integrity.indexer_halted": "blocking",
@@ -173,6 +174,8 @@ export interface ReconData {
   bank: { accounts: BankAccount[]; statements: BankStatement[] };
   integrity: {
     ledger: { journalId: string; problem: string }[];
+    /** Accounts whose running balance differs from the sum of their postings (migration 0008, RF-2). */
+    ledgerBalances: { code: string; cached: string | null; actual: string }[];
     signerAudit: { auditId: string; problem: string }[];
     reconAudit: { auditId: string | null; problem: string }[];
     indexer: { halted: string | null; lagBlocks: bigint | null; verify: { ran: boolean; pinnedBlock: bigint | null; problems: string[] } };

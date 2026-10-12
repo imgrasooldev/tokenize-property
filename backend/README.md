@@ -197,7 +197,7 @@ Enforced by PostgreSQL, so a bug in a service cannot break them:
 | L-3 | Service roles cannot touch tables; writes only via validated `SECURITY DEFINER` functions | `writer role ... only the validated functions` |
 | L-4 | SHA-256 hash chain over every journal and its postings; `verify_chain()` finds tampering | `detects a change made by ... a rogue DBA` |
 | L-5 | Idempotency: identical retry returns the same journal; a different payload is refused | `L-5 idempotency` |
-| L-6 | Protected accounts cannot be overdrawn (no overpaying an investor) | `L-6 no overdraft` |
+| L-6 | Protected accounts cannot be overdrawn (no overpaying an investor). Since migration 0008 the check reads a forward-only running balance per account, so write cost does not grow with history; `ledger.verify_balances()` proves the running balances equal the postings and reconciliation blocks payouts if not | `L-6 no overdraft`, `balances.test.ts` |
 
 Writes are serialised by an advisory lock to keep the chain linear (tested with 30 concurrent writers). A superuser can still disable triggers; that is why the chain head is anchored on a public chain every hour (Step 5f-2, `npm run anchor:verify` finds even a full re-hash) and production DBA access is separated and audited.
 

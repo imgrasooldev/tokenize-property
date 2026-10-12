@@ -127,6 +127,36 @@ describe("C-1..C-7 database rules", () => {
     expect(rows).toEqual([{ action: "halt", actor: "test" }, { action: "clear", actor: "ops-lead" }]);
   });
 
+  it("RF-3: NULL or malformed batch arguments are refused and the cursor does not move", async () => {
+    // Before migration 0008 a NULL p_events passed validation (jsonb_typeof(NULL) <> 'array' is
+    // NULL, not true) and the cursor advanced past events that were never recorded.
+    const d = deploy([]);
+    const ix = await indexer(d);
+    const c = await ix.cursor();
+    const [next] = await chain.headers(d.fromBlock, d.fromBlock);
+    if (!next) throw new Error("no block");
+    const goodBlock = { number: next.number.toString(), hash: next.hash, parentHash: next.parentHash, timestamp: "1" };
+    const call = (blocks: string | null, events: string | null, toHash: string | null = next.hash) =>
+      admin.query("SELECT chain.apply_batch($1, $2, $3, $4, $5::jsonb, $6::jsonb)", [
+        d.id, c.blockNumber.toString(), next.number.toString(), toHash, blocks, events,
+      ]);
+    const oneBlock = JSON.stringify([goodBlock]);
+    const event = { blockNumber: next.number.toString(), logIndex: 0, blockHash: next.hash, address: d.contracts.token, txHash: next.hash, txIndex: 0, topics: [], data: "0x" };
+
+    await rejectsWithCode(call(oneBlock, null), "23514"); // NULL events
+    await rejectsWithCode(call(null, "[]"), "23514"); // NULL blocks
+    await rejectsWithCode(call(oneBlock, "[]", null), "23514"); // NULL target hash
+    await rejectsWithCode(call(JSON.stringify([{ ...goodBlock, number: undefined }]), "[]"), "23514"); // block without number
+    await rejectsWithCode(call(JSON.stringify([{ ...goodBlock, timestamp: undefined }]), "[]"), "23514"); // block without timestamp
+    await rejectsWithCode(call(oneBlock, JSON.stringify([{ ...event, blockNumber: undefined }])), "23514"); // event without block
+    await rejectsWithCode(call(oneBlock, JSON.stringify([{ ...event, logIndex: undefined }])), "23514"); // event without log index
+    await rejectsWithCode(call(oneBlock, JSON.stringify([{ ...event, blockHash: undefined }])), "23514"); // event without block hash
+    expect((await ix.cursor()).blockNumber).toBe(c.blockNumber);
+
+    await call(oneBlock, "[]"); // the well-formed batch still applies
+    expect((await ix.cursor()).blockNumber).toBe(next.number);
+  });
+
   it("registration is idempotent and refuses different settings or another chain", async () => {
     const d = deploy([]);
     await indexer(d);

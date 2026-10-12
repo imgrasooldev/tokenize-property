@@ -131,6 +131,8 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
 
     const ledgerProblems = (await q<{ journal_id: string; problem: string }>("SELECT journal_id::text, problem FROM ledger.verify_chain()"))
       .map((r) => ({ journalId: r.journal_id, problem: r.problem }));
+    const ledgerBalances = await q<{ code: string; cached: string | null; actual: string }>(
+      "SELECT code, cached::text, actual::text FROM ledger.verify_balances()");
     const signerAudit = (await q<{ audit_id: string; problem: string }>("SELECT audit_id::text, problem FROM signer.verify_audit()"))
       .map((r) => ({ auditId: r.audit_id, problem: r.problem }));
     const reconAudit = (await q<{ audit_id: string | null; problem: string }>("SELECT audit_id::text, problem FROM recon.verify_audit()"))
@@ -147,7 +149,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       ledger: { journals },
       expectedMints,
       bank: { accounts, statements: [...statements.values()] },
-      integrity: { ledger: ledgerProblems, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
+      integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

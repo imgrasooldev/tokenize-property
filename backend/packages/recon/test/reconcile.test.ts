@@ -190,6 +190,8 @@ describe("reconcile end to end (fake chain, real database)", () => {
     expect(r.status).toBe("failed");
     expect(new Set(r.findings.map((f) => f.check))).toEqual(new Set([
       "holdings.balance_mismatch", "holdings.missing_holder", "rent.statement_hash_mismatch", "integrity.ledger_chain",
+      // Since 0008 the edited posting also no longer matches its account's running balance.
+      "integrity.ledger_balances",
       // The tampered posting is subscription 1's payment: the settlement and the bank no longer agree.
       "issuance.settlement_mismatch", "cash.amount_mismatch", "cash.closing_mismatch",
     ]));

@@ -277,6 +277,9 @@ export function checkIntegrity(d: ReconData): Finding[] {
   const out: Finding[] = [];
   const i = d.integrity;
   for (const p of i.ledger) out.push(f("integrity.ledger_chain", `journal ${p.journalId}`, "intact hash chain", p.problem));
+  for (const b of i.ledgerBalances) {
+    out.push(f("integrity.ledger_balances", `ledger account ${b.code}`, `running balance = sum of postings (${b.actual})`, `running balance ${b.cached ?? "missing"}`));
+  }
   for (const p of i.signerAudit) out.push(f("integrity.signer_audit", `signer audit ${p.auditId}`, "intact hash chain", p.problem));
   for (const p of i.reconAudit) out.push(f("integrity.recon_audit", `recon audit ${p.auditId ?? "-"}`, "intact hash chain", p.problem));
   if (i.indexer.halted) out.push(f("integrity.indexer_halted", `deployment ${d.deployment.id}`, "indexer following the chain", i.indexer.halted));

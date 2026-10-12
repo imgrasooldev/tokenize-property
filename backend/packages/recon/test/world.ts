@@ -135,6 +135,7 @@ export function makeWorld(spec: WorldSpec): World {
     },
     integrity: {
       ledger: [],
+      ledgerBalances: [],
       signerAudit: [],
       reconAudit: [],
       indexer: { halted: null, lagBlocks: 0n, verify: { ran: true, pinnedBlock: block + 10n, problems: [] } },
