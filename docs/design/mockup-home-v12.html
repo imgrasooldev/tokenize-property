@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v12 (customer website, amber chain + AI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#06070A;--p:#0C0F14;--p2:#121720;--line:#1C232E;--line2:#2A3443;--t:#E6EBF2;--m:#8A94A5;--d:#525D6E;--a:#FFB020;--a2:#FFD27A;--g:#22D17B;--v:#B48CFF}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"IBM Plex Sans",sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font-family:"IBM Plex Mono",monospace}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1220px;margin:0 auto;padding:0 32px;position:relative;z-index:2}
+.am{color:var(--a)}.up{color:var(--g)}
+#neural{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.55}
+.vign{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(70% 60% at 50% 30%,transparent,rgba(6,7,10,.85))}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 21px;border-radius:9px;font-weight:600;font-size:15px;border:1px solid var(--line2);background:var(--p2);transition:.2s}
+.btn:hover{border-color:var(--a)}
+.btn.a{background:var(--a);color:#0A0700;border-color:var(--a);box-shadow:0 12px 34px -12px rgba(255,176,32,.7)}
+.btn.sm{padding:9px 15px;font-size:14px}
+.chip{display:inline-flex;gap:8px;align-items:center;font-family:"IBM Plex Mono";font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #4A3A12;background:#1A1407;color:var(--a)}
+.ld{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);animation:pl 1.5s infinite}
+@keyframes pl{50%{opacity:.3}}
+
+.tape{position:relative;z-index:3;border-bottom:1px solid var(--line);background:#040507;overflow:hidden;white-space:nowrap;font-family:"IBM Plex Mono";font-size:12.5px;color:var(--m)}
+.tape .row{display:inline-flex;gap:36px;padding:9px 0;animation:mv 45s linear infinite}
+.tape b{color:var(--t);font-weight:500}
+@keyframes mv{to{transform:translateX(-50%)}}
+nav{position:sticky;top:0;z-index:20;background:rgba(6,7,10,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:30px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:.3px}
+.brand i{width:30px;height:30px;border-radius:7px;background:var(--a);color:#000;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;box-shadow:0 0 20px rgba(255,176,32,.45)}
+.links{display:flex;gap:26px;color:var(--m);font-size:14.5px}
+.sp{flex:1}
+
+.hero{padding:80px 0 40px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center}
+h1{font-size:66px;line-height:1.03;letter-spacing:-2px;font-weight:700;margin:22px 0 20px}
+.lead{font-size:18.5px;line-height:1.6;color:var(--m);max-width:560px}
+.ask{margin-top:28px;border:1px solid var(--line2);border-radius:14px;background:rgba(12,15,20,.85);overflow:hidden;max-width:580px}
+.ask .in{display:flex;align-items:center;gap:10px;padding:14px 16px;font-size:15px;border-bottom:1px solid var(--line)}
+.ask .in .k{font-family:"IBM Plex Mono";color:var(--v)}
+.ask .in kbd{margin-left:auto;font-family:"IBM Plex Mono";font-size:11px;color:var(--d);border:1px solid var(--line2);border-radius:5px;padding:1px 6px}
+.ask .out{padding:14px 16px;font-size:14.5px;line-height:1.6;color:#C4CCD8;min-height:96px}
+.src{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--a);border:1px solid #4A3A12;border-radius:5px;padding:0 5px;margin-left:2px}
+.caret{display:inline-block;width:8px;height:16px;background:var(--v);vertical-align:-2px;animation:pl 1s steps(1) infinite}
+.cta{display:flex;gap:12px;margin-top:26px}
+
+.chain{position:relative;height:560px}
+.blocks{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;justify-content:center;align-items:center}
+.cb{width:340px;border:1px solid var(--line2);border-radius:14px;background:linear-gradient(180deg,#10141C,#0A0D12);padding:14px 16px;position:relative;font-family:"IBM Plex Mono";font-size:12px;color:var(--m);animation:drop .7s cubic-bezier(.2,.9,.3,1.2)}
+.cb:after{content:"";position:absolute;left:50%;bottom:-15px;width:2px;height:14px;background:linear-gradient(var(--a),transparent)}
+.cb:last-child:after{display:none}
+.cb.new{border-color:var(--a);box-shadow:0 0 0 1px rgba(255,176,32,.3),0 20px 50px -20px rgba(255,176,32,.6)}
+.cb .h{display:flex;justify-content:space-between;color:var(--t);font-size:13px;margin-bottom:6px}
+.cb .h b{color:var(--a)}
+.cb .tx{display:flex;gap:8px;align-items:center;margin-top:4px;color:#B9C2CF}
+.tag{font-size:10px;padding:2px 6px;border-radius:4px}
+.tag.m{background:#0D2A1C;color:var(--g)}.tag.t{background:#0F2236;color:#5FB4FF}.tag.r{background:#2A2110;color:var(--a)}.tag.k{background:#211A3A;color:var(--v)}
+@keyframes drop{from{opacity:0;transform:translateY(-24px) scale(.96)}}
+.side{position:absolute;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:rgba(12,15,20,.92);font-size:12.5px;min-width:170px}
+.side small{display:block;font-family:"IBM Plex Mono";font-size:10.5px;color:var(--d);text-transform:uppercase;margin-bottom:4px}
+.side b{font-family:"IBM Plex Mono";font-size:17px}
+
+.stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(4,5,7,.85);position:relative;z-index:2}
+.stats .wrap{display:grid;grid-template-columns:repeat(5,1fr)}
+.stats div.s{padding:26px 20px;border-right:1px solid var(--line)}.stats div.s:last-child{border:0}
+.stats small{font-family:"IBM Plex Mono";font-size:11px;color:var(--d);text-transform:uppercase}
+.stats b{display:block;font-family:"IBM Plex Mono";font-size:28px;font-weight:600;margin-top:6px}
+
+section{padding:100px 0;position:relative;z-index:2}
+.lbl{font-family:"IBM Plex Mono";font-size:12.5px;color:var(--a)}
+h2{font-size:46px;letter-spacing:-1.4px;line-height:1.07;margin-top:12px}
+.sub{font-size:17px;color:var(--m);line-height:1.6;max-width:560px;margin-top:14px}
+.sh{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:40px}
+
+.props{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.prop{border:1px solid var(--line);border-radius:16px;background:var(--p);overflow:hidden;transition:.25s}
+.prop:hover{border-color:var(--a);transform:translateY(-4px);box-shadow:0 30px 60px -30px rgba(255,176,32,.35)}
+.prop .art{height:190px;position:relative;background:radial-gradient(90% 80% at 50% 100%,#1D1608,#0A0C10);border-bottom:1px solid var(--line)}
+.prop .row1{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between}
+.prop .sym{font-family:"IBM Plex Mono";font-size:11.5px;padding:3px 8px;border-radius:5px;background:#000;border:1px solid var(--line2)}
+.prop .ai{font-family:"IBM Plex Mono";font-size:11px;padding:3px 8px;border-radius:5px;background:#211A3A;color:var(--v);border:1px solid #3A2C66}
+.prop .b{padding:18px}
+.prop h3{font-size:19px}.prop .loc{color:var(--m);font-size:13.5px;margin-top:3px}
+.prop .kv{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.prop .kv div{padding:9px 10px;border-right:1px solid var(--line)}.prop .kv div:last-child{border:0}
+.prop .kv small{display:block;font-family:"IBM Plex Mono";font-size:10px;color:var(--d);text-transform:uppercase}.prop .kv b{font-family:"IBM Plex Mono";font-size:14.5px}
+.prop .hash{display:flex;justify-content:space-between;margin-top:12px;font-family:"IBM Plex Mono";font-size:11px;color:var(--d)}
+.prop .hash b{color:var(--a);font-weight:500}
+.pg{height:5px;border-radius:9px;background:var(--p2);overflow:hidden;margin-top:12px}.pg i{display:block;height:100%;background:linear-gradient(90deg,var(--a),var(--a2));box-shadow:0 0 10px var(--a)}
+
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.fs{background:var(--p);padding:26px 22px;position:relative}
+.fs .n{font-family:"IBM Plex Mono";font-size:12.5px;color:var(--a)}
+.fs h4{font-size:19px;margin:12px 0 8px}.fs p{color:var(--m);font-size:14.5px;line-height:1.6}
+.fs pre{margin-top:16px;font-family:"IBM Plex Mono";font-size:11.5px;color:#9BA6B6;background:#07090C;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap}
+.fs pre .k{color:var(--v)}.fs pre .s{color:var(--g)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.term{border:1px solid var(--line);border-radius:16px;background:#040507;padding:22px;font-family:"IBM Plex Mono";font-size:13px;line-height:1.95;color:var(--m)}
+.term .c{color:var(--a)}.term .o{color:var(--g)}.term .w{color:var(--t)}.term .p{color:var(--v)}
+.calc{border:1px solid var(--line);border-radius:16px;background:var(--p);padding:26px}
+.amt{font-family:"IBM Plex Mono";font-size:42px;font-weight:600;margin:6px 0 16px}
+input[type=range]{width:100%;accent-color:#FFB020}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:18px}
+.res div{background:var(--p2);padding:14px 16px}.res small{display:block;font-family:"IBM Plex Mono";font-size:10.5px;color:var(--d);text-transform:uppercase}.res b{font-family:"IBM Plex Mono";font-size:21px}
+.fine{font-size:12px;color:var(--d);margin-top:12px}
+
+.faq{max-width:900px}
+.q{border-bottom:1px solid var(--line);padding:22px 0}
+.q h4{font-size:17.5px;display:flex;justify-content:space-between}.q h4 span{font-family:"IBM Plex Mono";color:var(--a)}
+.q p{color:var(--m);font-size:15px;line-height:1.65;margin-top:10px}
+.final{text-align:center;padding:110px 0;position:relative;z-index:2;border-top:1px solid var(--line);background:radial-gradient(50% 70% at 50% 100%,rgba(255,176,32,.14),transparent 70%)}
+.final h2{font-size:58px}
+footer{border-top:1px solid var(--line);padding:44px 0;color:var(--d);font-size:13px;position:relative;z-index:2}
+.mock-label{position:fixed;right:14px;bottom:14px;z-index:30;font-family:"IBM Plex Mono";font-size:11px;padding:7px 11px;border-radius:6px;background:var(--a);color:#000}
+</style>
+</head>
+<body>
+<canvas id="neural"></canvas><div class="vign"></div>
+
+<div class="tape"><div class="row">
+  <span>GPF3 <b>503.00</b> <span class="up">▲0.60%</span></span><span>NAV <b>500.00</b></span><span>YIELD <b>9.20%</b></span><span>BLOCK <b id="tb">#24,220</b></span><span>VALIDATORS <b class="up">4/4</b></span><span>LEDGER <b class="up">INTACT</b></span><span>DHA6 <b class="am">OPENS 15 NOV</b></span><span>AI <b style="color:var(--v)">ONLINE</b></span>
+  <span>GPF3 <b>503.00</b> <span class="up">▲0.60%</span></span><span>NAV <b>500.00</b></span><span>YIELD <b>9.20%</b></span><span>BLOCK <b>#24,220</b></span><span>VALIDATORS <b class="up">4/4</b></span><span>LEDGER <b class="up">INTACT</b></span><span>DHA6 <b class="am">OPENS 15 NOV</b></span><span>AI <b style="color:var(--v)">ONLINE</b></span>
+</div></div>
+
+<nav><div class="wrap">
+  <a class="brand" href="#"><i>PT</i>PROPERTY TOKEN</a>
+  <div class="links"><a href="#props">Properties</a><a href="#flow">How it works</a><a href="#proof">Proof</a><a href="#faq">FAQ</a></div>
+  <div class="sp"></div>
+  <a class="btn sm" href="#">EN · اردو</a><a class="btn sm" href="#">Sign in</a><a class="btn sm a" href="#">Start investing</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <span class="chip"><span class="ld"></span>BLOCKCHAIN-RECORDED · AI-EXPLAINED · TRUSTEE-HELD</span>
+    <h1>Real estate,<br>rebuilt on <span class="am">blockchain</span><br>and <span style="color:var(--v)">AI</span>.</h1>
+    <p class="lead">Own tokens of Pakistan's best rented buildings from Rs 5,000. The blockchain records who owns what; the AI explains every property in plain English or Urdu.</p>
+    <div class="ask">
+      <div class="in"><span class="k">✦ ask</span><span style="color:var(--t)">How safe is Gulberg Plaza's rent?</span><kbd>↵</kbd></div>
+      <div class="out" id="ans"></div>
+    </div>
+    <div class="cta"><a class="btn a" href="#">Create free account →</a><a class="btn" href="#props">Browse tokens</a></div>
+  </div>
+  <div class="chain">
+    <div class="blocks" id="blocks"></div>
+    <div class="side" style="left:-70px;top:0px"><small>Token GPF3</small><b>Rs 503.00</b> <span class="up mono" style="font-size:12px">+0.6%</span></div>
+    <div class="side" style="right:-80px;top:110px"><small>Finality</small><b>2.0 s</b><div class="mono" style="font-size:11px;color:var(--d);margin-top:3px">4 independent validators</div></div>
+    <div class="side" style="right:-70px;bottom:20px"><small style="color:var(--v)">✦ AI risk score</small><b>82 / 100</b><div class="mono" style="font-size:11px;color:var(--d);margin-top:3px">low · 5 factors · sourced</div></div>
+  </div>
+</div></header>
+
+<div class="stats"><div class="wrap">
+  <div class="s"><small>Value tokenised</small><b>Rs 31.7 Cr</b></div>
+  <div class="s"><small>Investors (KYC)</small><b>1,240</b></div>
+  <div class="s"><small>Rent paid</small><b>Rs 4.3M</b></div>
+  <div class="s"><small>Avg. yield</small><b class="am">9.2%</b></div>
+  <div class="s"><small>Blocks finalised</small><b id="sb">24,220</b></div>
+</div></div>
+
+<section id="props"><div class="wrap">
+  <div class="sh"><div><div class="lbl">// TOKENS</div><h2>Buildings, tokenised.</h2></div><p class="sub">Each token is a regulated security on the blockchain, matched one-to-one with the trustee's register, with an AI summary of every lease and risk.</p></div>
+  <div class="props">
+    <a class="prop" href="#"><div class="art"><svg viewBox="0 0 380 190" width="100%" height="190"><polygon points="190,24 262,60 262,170 190,190 118,170 118,60" fill="#1A1508" stroke="#FFB020" stroke-opacity=".75"/><polygon points="190,24 262,60 190,96 118,60" fill="#2A200A" stroke="#FFB020"/><line x1="190" y1="96" x2="190" y2="190" stroke="#FFB020" stroke-opacity=".7"/><g fill="#FFB020"><rect x="130" y="84" width="9" height="5"/><rect x="148" y="93" width="9" height="5" opacity=".4"/><rect x="166" y="102" width="9" height="5"/><rect x="130" y="108" width="9" height="5" opacity=".6"/><rect x="148" y="117" width="9" height="5"/><rect x="166" y="126" width="9" height="5" opacity=".5"/><rect x="130" y="132" width="9" height="5"/><rect x="148" y="141" width="9" height="5"/></g><g fill="#FFD27A" opacity=".8"><rect x="206" y="102" width="9" height="5"/><rect x="224" y="93" width="9" height="5"/><rect x="242" y="84" width="9" height="5" opacity=".5"/><rect x="206" y="126" width="9" height="5"/><rect x="242" y="108" width="9" height="5"/></g></svg>
+      <div class="row1"><span class="sym">GPF3</span><span class="ai">✦ AI 82 · low risk</span></div></div>
+      <div class="b"><h3>Gulberg Plaza, Floor 3</h3><div class="loc">Lahore · Office · bank tenant</div>
+        <div class="kv"><div><small>Price</small><b>503.00</b></div><div><small>Yield</small><b class="up">9.2%</b></div><div><small>Lease</small><b>2034</b></div></div>
+        <div class="pg"><i style="width:63%"></i></div>
+        <div class="hash"><span>63% minted</span><span>contract <b>0x1028…a2b8</b></span></div></div></a>
+    <a class="prop" href="#"><div class="art"><svg viewBox="0 0 380 190" width="100%" height="190"><polygon points="86,96 190,56 294,96 294,166 190,190 86,166" fill="#14120A" stroke="#FFB020" stroke-opacity=".6"/><polygon points="86,96 190,56 294,96 190,136" fill="#241C0A" stroke="#FFB020" stroke-opacity=".8"/><line x1="190" y1="136" x2="190" y2="190" stroke="#FFB020" stroke-opacity=".6"/><g fill="#FFB020" fill-opacity=".7"><polygon points="102,124 140,110 140,142 102,156"/><polygon points="148,107 180,95 180,127 148,139"/></g></svg>
+      <div class="row1"><span class="sym">DHA6</span><span class="ai">✦ AI 77</span></div></div>
+      <div class="b"><h3>DHA Phase 6 Retail</h3><div class="loc">Karachi · Retail · pharmacy chain</div>
+        <div class="kv"><div><small>Price</small><b>500.00</b></div><div><small>Yield</small><b class="up">8.4%</b></div><div><small>Lease</small><b>2035</b></div></div>
+        <div class="pg"><i style="width:2%"></i></div>
+        <div class="hash"><span>opens 15 Nov · 312 waiting</span><span><b>pending mint</b></span></div></div></a>
+    <a class="prop" href="#"><div class="art"><svg viewBox="0 0 380 190" width="100%" height="190"><polygon points="190,10 236,34 236,168 190,190 144,168 144,34" fill="#15120A" stroke="#FFB020" stroke-opacity=".7"/><polygon points="190,10 236,34 190,58 144,34" fill="#26200C" stroke="#FFD27A"/><g stroke="#FFB020" stroke-opacity=".7"><path d="M151 74L186 92M151 96L186 114M151 118L186 136M151 140L186 158"/><path d="M194 92L229 74M194 114L229 96M194 136L229 118M194 158L229 140" stroke="#FFD27A"/></g></svg>
+      <div class="row1"><span class="sym">BAO2</span><span class="ai">✦ AI 79</span></div></div>
+      <div class="b"><h3>Blue Area Office, Floor 2</h3><div class="loc">Islamabad · Office · telecom tenant</div>
+        <div class="kv"><div><small>Price</small><b>500.00</b></div><div><small>Yield</small><b class="up">8.9%</b></div><div><small>Lease</small><b>2033</b></div></div>
+        <div class="pg"><i style="width:1%"></i></div>
+        <div class="hash"><span>opens Dec · 188 waiting</span><span><b>pending mint</b></span></div></div></a>
+  </div>
+</div></section>
+
+<section id="flow" style="padding-top:20px"><div class="wrap">
+  <div class="sh"><div><div class="lbl">// HOW IT WORKS</div><h2>Your money, step by step,<br>on the record.</h2></div></div>
+  <div class="flow">
+    <div class="fs"><span class="n">01 · VERIFY</span><h4>Who you are</h4><p>NADRA KYC in 3 minutes. Your verified identity is registered on the blockchain.</p><pre><span class="k">identity</span>.verify(cnic)
+→ <span class="s">KYC ✓ AML ✓</span></pre></div>
+    <div class="fs"><span class="n">02 · UNDERSTAND</span><h4>What you buy</h4><p>The AI reads the lease and valuation and answers your questions with sources.</p><pre><span class="k">ai</span>.ask("risks?")
+→ <span class="s">3 sources cited</span></pre></div>
+    <div class="fs"><span class="n">03 · OWN</span><h4>Pay and receive</h4><p>Raast to the trustee; the smart contract then issues your tokens, exactly once.</p><pre><span class="k">token</span>.mint(you, 100)
+→ <span class="s">confirmed 2.0 s</span></pre></div>
+    <div class="fs"><span class="n">04 · EARN</span><h4>Rent and proof</h4><p>Monthly rent to your bank, with a proof you can check on the blockchain.</p><pre><span class="k">rent</span>.verify(you)
+→ <span class="s">Rs 25,000 ✓</span></pre></div>
+  </div>
+</div></section>
+
+<section id="proof" style="padding-top:20px"><div class="wrap two">
+  <div class="term">
+    <div><span class="c">$</span> <span class="w">verify --rent sep-2026 --investor me</span></div>
+    <div><span class="o">✓</span> statement hash = on-chain hash</div>
+    <div><span class="o">✓</span> Merkle proof valid · your share Rs 25,000.00</div>
+    <div><span class="o">✓</span> 1 paisa more → rejected</div>
+    <div style="margin-top:10px"><span class="c">$</span> <span class="w">verify --ownership GPF3</span></div>
+    <div><span class="o">✓</span> trustee register = 63,497 = token supply</div>
+    <div><span class="o">✓</span> ledger · chain · bank reconciled 12:00</div>
+    <div style="margin-top:10px"><span class="p">✦</span> <span class="w">ai explain --why-trust</span></div>
+    <div>Ownership and rent are recorded on a chain run by 4 separate organisations; nobody, including the platform, can change them quietly.</div>
+  </div>
+  <div class="calc">
+    <div class="lbl">// RETURNS</div>
+    <p style="color:var(--m);font-size:13px;margin-top:10px">You invest</p>
+    <div class="amt" id="amt">Rs 250,000</div>
+    <input type="range" min="5000" max="2000000" step="5000" value="250000" id="rng" aria-label="Investment amount">
+    <div class="res"><div><small>Monthly rent</small><b class="am" id="m">Rs 1,917</b></div><div><small>Yearly rent</small><b id="y">Rs 23,000</b></div><div><small>Tokens</small><b id="t">497</b></div><div><small>5-year rent</small><b id="f">Rs 115,000</b></div></div>
+    <p class="fine">At GPF3's current 9.2% yield. Illustration only; rent and prices can go down.</p>
+  </div>
+</div></section>
+
+<section id="faq" style="padding-top:20px"><div class="wrap">
+  <div class="lbl">// FAQ</div><h2 style="margin-bottom:20px">Questions, answered.</h2>
+  <div class="faq">
+    <div class="q"><h4>Is this cryptocurrency?<span>+</span></h4><p>No. The blockchain only records ownership. Your money moves in PKR, through banks and Raast.</p></div>
+    <div class="q"><h4>What does the AI do?<span>+</span></h4><p>It explains leases, valuations, risks and your rent, with sources for every claim. It never tells you what to buy.</p></div>
+    <div class="q"><h4>Do I own the building?<span>+</span></h4><p>You own units in the trust that owns it; the trustee's register and the tokens always match.</p></div>
+    <div class="q"><h4>Can I sell?<span>+</span></h4><p>Yes, with a sell order on the market. Secondary trading needs SECP approval before launch.</p></div>
+  </div>
+</div></section>
+
+<div class="final"><div class="wrap">
+  <div class="lbl">// START</div>
+  <h2>Your first token is<br><span class="am">Rs 5,000 away.</span></h2>
+  <div class="cta" style="justify-content:center"><a class="btn a" href="#">Create free account →</a><a class="btn" href="#">✦ Ask the AI</a></div>
+</div></div>
+<footer><div class="wrap">Prototype on a local test network. Sample figures and test money; not an offer. The AI advisor is a design concept: sourced, informational, never investment advice. Secondary trading needs SECP approval.</div></footer>
+<div class="mock-label">mockup v12 · customer website · amber chain + AI</div>
+
+<script>
+(function(){
+  const c=document.getElementById('neural'),x=c.getContext('2d'),dpr=devicePixelRatio||1;let W,H,N=[];
+  function size(){W=c.width=innerWidth*dpr;H=c.height=innerHeight*dpr;N=[];const cols=9,rows=6;
+    for(let i=0;i<cols;i++)for(let j=0;j<rows;j++)N.push({x:(i+.5)/cols*W+(Math.random()-.5)*60*dpr,y:(j+.5)/rows*H+(Math.random()-.5)*60*dpr,p:Math.random()*6});}
+  size();addEventListener('resize',size);
+  function f(t){x.clearRect(0,0,W,H);
+    for(let i=0;i<N.length;i++)for(let j=i+1;j<N.length;j++){const a=N[i],b=N[j],d=Math.hypot(a.x-b.x,a.y-b.y);if(d>W/7)continue;
+      const s=(Math.sin(t/900+a.p+b.p)+1)/2;x.strokeStyle=`rgba(255,176,32,${.05+.12*s})`;x.lineWidth=dpr;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke();}
+    for(const n of N){const s=(Math.sin(t/700+n.p)+1)/2;x.fillStyle=`rgba(180,140,255,${.25+.5*s})`;x.beginPath();x.arc(n.x,n.y,(1.5+s*1.5)*dpr,0,7);x.fill();}
+    requestAnimationFrame(f);}
+  requestAnimationFrame(f);
+
+  const box=document.getElementById('blocks');let h=24216;
+  const kinds=[['m','MINT','100 GPF3 → investor'],['t','TRADE','40 GPF3 @ 503.00 · DvP'],['r','RENT','dist #3 · root 0xa1a1…'],['k','KYC','identity registered'],['t','TRADE','25 GPF3 @ 502.50']];
+  function add(first){h++;const k=kinds[h%kinds.length];const el=document.createElement('div');el.className='cb'+(first?'':' new');
+    el.innerHTML=`<div class="h"><span>BLOCK <b>#${h.toLocaleString()}</b></span><span>✓ 4/4</span></div><div>hash 0x${((h*2654435761)>>>0).toString(16)}…${(h%97).toString(16)}</div><div class="tx"><span class="tag ${k[0]}">${k[1]}</span>${k[2]}</div>`;
+    box.prepend(el);[...box.children].slice(1).forEach(e=>e.classList.remove('new'));while(box.children.length>4)box.lastChild.remove();
+    document.getElementById('tb').textContent='#'+h.toLocaleString();document.getElementById('sb').textContent=h.toLocaleString();}
+  for(let i=0;i<4;i++)add(true);setInterval(()=>add(false),2600);
+
+  const ans=document.getElementById('ans');const full='Fairly secure. The tenant is a bank on a 10-year lease <span class="src">lease §4</span>, rent rises 10% every two years <span class="src">lease §5.1</span>, and the trustee holds 6 months of rent in reserve <span class="src">trust deed §9</span>. Prices can still move <span class="src">risk §2</span>.';
+  const plain=full.replace(/<[^>]+>/g,'');let i=0;
+  function type(){i+=2;if(i>=plain.length){ans.innerHTML=full;setTimeout(()=>{i=0;type();},7000);return;}ans.innerHTML=plain.slice(0,i)+'<span class="caret"></span>';setTimeout(type,20);}
+  setTimeout(type,600);
+
+  const r=document.getElementById('rng'),fmt=n=>'Rs '+Math.round(n).toLocaleString('en-PK');
+  function upd(){const v=+r.value,y=v*0.092;document.getElementById('amt').textContent=fmt(v);document.getElementById('m').textContent=fmt(y/12);document.getElementById('y').textContent=fmt(y);document.getElementById('t').textContent=Math.floor(v/503).toLocaleString('en-PK');document.getElementById('f').textContent=fmt(y*5);}
+  r.addEventListener('input',upd);upd();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v7 (terminal pro light)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F5F7FA;--card:#FFFFFF;--line:#E4E8EE;--line2:#D5DBE4;--t:#0F172A;--m:#64748B;--d:#94A3B8;
+  --blue:#2563EB;--blue2:#DBE7FF;--up:#059669;--upbg:#E6F6EF;--dn:#E11D48;--dnbg:#FDECEF;--violet:#7C3AED;--vbg:#F1EAFE;--amber:#D97706}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--bg);color:var(--t);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",monospace}
+a{color:inherit;text-decoration:none}
+.up{color:var(--up)}.dn{color:var(--dn)}
+header{display:flex;align-items:center;gap:20px;height:56px;padding:0 18px;background:var(--card);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:15.5px;letter-spacing:-.3px}
+.brand i{width:28px;height:28px;border-radius:8px;background:var(--t);color:#fff;display:grid;place-items:center;font-style:normal;font-size:11px}
+.nav{display:flex;gap:2px}.nav a{padding:7px 12px;border-radius:8px;color:var(--m);font-weight:500}.nav a.on{background:#EEF2F8;color:var(--t)}
+.search{flex:1;max-width:460px;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;color:var(--d);background:var(--bg)}
+.search kbd{margin-left:auto;font-family:"JetBrains Mono";font-size:11px;border:1px solid var(--line2);border-radius:5px;padding:0 6px;background:#fff}
+.sp{flex:1}
+.net{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--m)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 0 3px var(--upbg)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;font-weight:600;border:1px solid var(--line2);background:#fff}
+.btn.p{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.ai{background:var(--vbg);color:var(--violet);border-color:#E2D4FD}
+
+.shell{display:grid;grid-template-columns:250px 1fr 340px;gap:12px;padding:12px;min-height:calc(100vh - 56px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.ch{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-weight:700;font-size:13.5px}
+.ch small{font-weight:500;color:var(--d)}
+.ch .r{margin-left:auto;display:flex;gap:2px}
+.seg span{padding:3px 8px;border-radius:6px;color:var(--m);font-size:11.5px;font-weight:600}.seg span.on{background:#EEF2F8;color:var(--t)}
+
+.watch .row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:10px 8px;border-radius:10px;cursor:pointer}
+.watch .row.on{background:#F1F5FB;box-shadow:inset 3px 0 0 var(--blue)}
+.watch b{font-size:13.5px}.watch small{color:var(--m);font-size:11.5px}
+.watch .px{text-align:right;font-family:"JetBrains Mono";font-weight:600}
+.badge{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px}
+.badge.up{background:var(--upbg)}.badge.ipo{background:#FEF3E2;color:var(--amber)}
+.mini{width:100%;height:26px;margin-top:4px}
+
+.hero{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+.hero h1{font-size:22px;letter-spacing:-.5px}
+.hero .meta{color:var(--m);font-size:12.5px}
+.big{display:flex;align-items:baseline;gap:12px;margin:8px 0 2px}
+.big b{font-size:36px;font-weight:800;letter-spacing:-1px;font-family:"JetBrains Mono"}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+.kpis div{padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.kpis small{display:block;color:var(--d);font-size:11px}.kpis b{font-family:"JetBrains Mono";font-size:14px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.book td{padding:4px 8px;font-family:"JetBrains Mono";font-size:12px;position:relative}
+.book table{width:100%;border-collapse:collapse}
+.book .lvl{position:absolute;top:3px;bottom:3px;right:0;border-radius:3px;z-index:0}
+.book td span{position:relative;z-index:1}
+.book .a .lvl{background:var(--dnbg)}.book .b .lvl{background:var(--upbg)}
+.book .a td:first-child{color:var(--dn)}.book .b td:first-child{color:var(--up)}
+.book td:last-child{text-align:right}
+.trades .t{display:grid;grid-template-columns:70px 1fr 60px 90px;padding:6px 4px;border-bottom:1px dashed var(--line);font-family:"JetBrains Mono";font-size:12px}
+.trades .t span:last-child{color:var(--blue);text-align:right}
+
+.side{display:flex;flex-direction:column;gap:12px}
+.tabs2{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:10px;padding:3px;margin-bottom:12px}
+.tabs2 span{text-align:center;padding:8px;border-radius:8px;font-weight:700;color:var(--m)}.tabs2 span.on{background:#fff;color:var(--up);box-shadow:0 1px 4px rgba(15,23,42,.08)}
+.field{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.field small{color:var(--m)}.field b{font-family:"JetBrains Mono";font-size:14px}
+.quick{display:flex;gap:6px;margin-bottom:10px}.quick span{flex:1;text-align:center;padding:6px;border-radius:8px;background:var(--bg);font-weight:600;font-size:12px;color:var(--m)}
+.sum{display:flex;justify-content:space-between;margin:6px 0;color:var(--m)}.sum b{color:var(--t);font-family:"JetBrains Mono"}
+.go{width:100%;justify-content:center;padding:12px;background:var(--up);color:#fff;border-color:var(--up);font-size:14px}
+.note{font-size:11.5px;color:var(--d);margin-top:8px;line-height:1.5}
+
+.copilot{background:linear-gradient(180deg,#FBF8FF,#fff);border-color:#E9DDFC}
+.copilot .q{background:var(--t);color:#fff;border-radius:12px 12px 4px 12px;padding:9px 12px;margin-left:auto;width:fit-content;max-width:90%;font-size:12.5px}
+.copilot .a{background:#fff;border:1px solid #EDE4FD;border-radius:12px 12px 12px 4px;padding:10px 12px;margin-top:8px;font-size:12.5px;line-height:1.55}
+.cite{font-family:"JetBrains Mono";font-size:10.5px;color:var(--violet);background:var(--vbg);border-radius:5px;padding:0 5px;margin-left:2px}
+.ask{display:flex;align-items:center;gap:8px;border:1px solid #E2D4FD;border-radius:10px;padding:8px 10px;margin-top:10px;color:var(--d)}
+.ask span{margin-left:auto;width:26px;height:26px;border-radius:8px;background:var(--violet);color:#fff;display:grid;place-items:center}
+.proof .p{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:12.5px}
+.proof .p i{width:22px;height:22px;border-radius:7px;background:var(--upbg);color:var(--up);display:grid;place-items:center;font-style:normal;font-weight:800;font-size:12px}
+.proof .p small{margin-left:auto;font-family:"JetBrains Mono";color:var(--d);font-size:11px}
+
+.port{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.mock-label{position:fixed;right:14px;bottom:14px;font-family:"JetBrains Mono";font-size:11px;padding:7px 11px;border-radius:8px;background:var(--t);color:#fff;z-index:9}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#"><i>PT</i>Property Token <span class="badge" style="background:#EEF2F8;color:var(--m)">PRO</span></a>
+  <div class="nav"><a class="on" href="#">Trade</a><a href="#">Explore</a><a href="#">Portfolio</a><a href="#">Rent</a><a href="#">Proofs</a></div>
+  <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Search properties, or ask the copilot…</span><kbd>Ctrl K</kbd></div>
+  <div class="sp"></div>
+  <div class="net"><span class="dot"></span>4/4 validators · block <b class="mono" id="blk">24,190</b></div>
+  <a class="btn ai" href="#">✦ Copilot</a>
+  <a class="btn" href="#">EN · اردو</a>
+  <a class="btn p" href="#">Deposit</a>
+</header>
+
+<div class="shell">
+  <aside class="side">
+    <div class="card watch">
+      <div class="ch">Watchlist <small>3</small></div>
+      <div class="row on"><div><b>GPF3</b><br><small>Gulberg Plaza · Lahore</small></div><div class="px">503.00<br><span class="badge up up">+0.60%</span></div>
+        <svg class="mini" viewBox="0 0 200 26" style="grid-column:span 2"><path d="M0 20 L20 18 L40 21 L60 14 L80 16 L100 10 L120 12 L140 7 L160 9 L180 4 L200 5" fill="none" stroke="#059669" stroke-width="2"/></svg></div>
+      <div class="row"><div><b>DHA6</b><br><small>DHA Ph 6 · Karachi</small></div><div class="px">500.00<br><span class="badge ipo">IPO 15 Nov</span></div></div>
+      <div class="row"><div><b>BAO2</b><br><small>Blue Area · Islamabad</small></div><div class="px">500.00<br><span class="badge ipo">IPO Dec</span></div></div>
+    </div>
+    <div class="card">
+      <div class="ch">Your position</div>
+      <div class="sum"><span>Holdings</span><b>5,099 GPF3</b></div>
+      <div class="sum"><span>Value</span><b>Rs 2,564,797</b></div>
+      <div class="sum"><span>Unrealised</span><b class="up">+Rs 15,297</b></div>
+      <div class="sum"><span>Rent received</span><b>Rs 249,995</b></div>
+      <div class="sum"><span>Cash</span><b>Rs 4,866,755</b></div>
+    </div>
+    <div class="card proof">
+      <div class="ch">Proofs <small>live</small></div>
+      <div class="p"><i>✓</i>Ledger hash chain<small>intact</small></div>
+      <div class="p"><i>✓</i>Register = supply<small>63,497</small></div>
+      <div class="p"><i>✓</i>Rent #3 root<small>0xa1a1…</small></div>
+      <div class="p"><i>✓</i>Bank reconciled<small>12:00</small></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="card">
+      <div class="hero"><div><h1>Gulberg Plaza, Floor 3 <span class="mono" style="color:var(--d);font-size:14px">GPF3</span></h1><div class="meta">Lahore · Grade-A office · bank tenant to 2034 · trustee-held</div></div>
+        <div class="sp"></div><span class="badge up up" style="font-size:12px;padding:5px 10px">● Live market</span></div>
+      <div class="big"><b>Rs 503.00</b><span class="up mono" style="font-weight:600">+3.00 (+0.60%)</span><span class="mono" style="color:var(--d)">NAV 500.00 · premium 0.60%</span>
+        <div class="sp"></div><div class="seg"><span>1H</span><span class="on">1D</span><span>1W</span><span>1M</span><span>1Y</span></div></div>
+      <svg viewBox="0 0 900 260" width="100%" height="260">
+        <defs><linearGradient id="fa" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#2563EB" stop-opacity=".18"/><stop offset="1" stop-color="#2563EB" stop-opacity="0"/></linearGradient></defs>
+        <g stroke="#EEF2F6"><path d="M0 50H900M0 110H900M0 170H900M0 230H900"/></g>
+        <rect x="0" y="118" width="900" height="34" fill="#F59E0B" opacity=".07"/>
+        <path d="M0 135 H900" stroke="#D97706" stroke-dasharray="5 6"/>
+        <path id="area" fill="url(#fa)"/><path id="line" fill="none" stroke="#2563EB" stroke-width="2.4" stroke-linejoin="round"/>
+        <g id="vol" fill="#CBD5E1"></g>
+        <text x="8" y="130" font-family="JetBrains Mono" font-size="11" fill="#D97706">NAV 500 ± band</text>
+      </svg>
+      <div class="kpis">
+        <div><small>Rent yield</small><b>9.20%</b></div><div><small>24h volume</small><b>699</b></div><div><small>Spread</small><b>2.50</b></div>
+        <div><small>Register issued</small><b>63%</b></div><div><small>Next rent</small><b>1 Nov</b></div><div><small>Settles in</small><b>~2.4 s</b></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card book"><div class="ch">Order book <small>DvP · price-time</small></div>
+        <table>
+          <tr class="a"><td><span>505.50</span></td><td><span>40</span><i class="lvl" style="width:40%"></i></td></tr>
+          <tr class="a"><td><span>505.00</span></td><td><span>22</span><i class="lvl" style="width:22%"></i></td></tr>
+          <tr class="a"><td><span>504.50</span></td><td><span>50</span><i class="lvl" style="width:50%"></i></td></tr>
+          <tr><td colspan="2" style="text-align:center;color:var(--m);padding:6px;font-family:Inter;font-size:11.5px">spread 2.50 · last 503.00</td></tr>
+          <tr class="b"><td><span>502.00</span></td><td><span>20</span><i class="lvl" style="width:20%"></i></td></tr>
+          <tr class="b"><td><span>501.50</span></td><td><span>65</span><i class="lvl" style="width:65%"></i></td></tr>
+          <tr class="b"><td><span>500.00</span></td><td><span>90</span><i class="lvl" style="width:90%"></i></td></tr>
+        </table></div>
+      <div class="card trades"><div class="ch">Recent trades <small>settled on chain</small><div class="r"><span class="dot"></span></div></div>
+        <div id="tape"></div></div>
+    </div>
+  </main>
+
+  <aside class="side">
+    <div class="card">
+      <div class="tabs2"><span class="on">Buy</span><span>Sell</span></div>
+      <div class="field"><small>Limit price</small><b>503.00</b></div>
+      <div class="field"><small>Tokens</small><b>100</b></div>
+      <div class="quick"><span>25%</span><span>50%</span><span>75%</span><span>Max</span></div>
+      <div class="sum"><span>Total</span><b>Rs 50,300.00</b></div>
+      <div class="sum"><span>Est. monthly rent</span><b>Rs 383</b></div>
+      <div class="sum"><span>Holding after</span><b>5,199 / 100,000</b></div>
+      <a class="btn go" href="#">Buy GPF3</a>
+      <p class="note">Tokens arrive on chain first; cash leaves escrow only after. Demo market: secondary trading needs SECP approval.</p>
+    </div>
+    <div class="card copilot">
+      <div class="ch" style="color:var(--violet)">✦ Copilot <small>cites sources · not advice</small></div>
+      <div class="q">Is 503 a fair price?</div>
+      <div class="a">It is 0.6% above the latest NAV of 500 <span class="cite">valuation 09/26</span>. The last 12 trades ranged 489–505 <span class="cite">trades 24h</span>. At 503 the rent yield is 9.15% <span class="cite">rent 12m</span>. Whether that suits you depends on your goals.</div>
+      <div class="ask">Ask about this property…<span>↑</span></div>
+    </div>
+  </aside>
+</div>
+<div class="mock-label">mockup v7 · terminal pro light</div>
+<script>
+(function(){
+  let p=500,pts=[];for(let i=0;i<=90;i++){p=Math.max(495,Math.min(507,p+(Math.random()-.46)*1.3));pts.push(p);}
+  const y=v=>240-((v-494)/14)*220,x=i=>i*10;
+  const d=pts.map((v,i)=>`${i?'L':'M'}${x(i)} ${y(v).toFixed(1)}`).join(' ');
+  document.getElementById('line').setAttribute('d',d);document.getElementById('area').setAttribute('d',d+` L900 260 L0 260Z`);
+  document.getElementById('vol').innerHTML=pts.map((v,i)=>`<rect x="${x(i)-3}" y="${260-Math.random()*26}" width="6" height="30"/>`).join('');
+  const tape=document.getElementById('tape');let price=503;
+  function add(){price=Math.round((price+(Math.random()-.5)*1.5)*4)/4;const q=10+Math.floor(Math.random()*90);const t=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi'});
+    const el=document.createElement('div');el.className='t';const up=Math.random()>.5;
+    el.innerHTML=`<span>${t}</span><span class="${up?'up':'dn'}">${price.toFixed(2)}</span><span>${q}</span><span>0x${Math.random().toString(16).slice(2,6)}…</span>`;
+    tape.prepend(el);while(tape.children.length>7)tape.lastChild.remove();}
+  for(let i=0;i<7;i++)add();setInterval(add,2500);
+  let b=24190;setInterval(()=>{b++;document.getElementById('blk').textContent=b.toLocaleString();},2000);
+})();
+</script>
+</body>
+</html>

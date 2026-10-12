@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v4 (pro terminal)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07090D;--p:#0D1117;--p2:#121823;--line:#1E2633;--line2:#2A3546;--t:#D7DEE8;--m:#7D8899;--d:#4E5868;
+  --amber:#FFB020;--green:#22D17B;--red:#FF4D5E;--blue:#3BA4FF;--violet:#A78BFA}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"IBM Plex Sans",sans-serif;background:var(--bg);color:var(--t);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",monospace}
+a{color:inherit;text-decoration:none}
+.up{color:var(--green)}.dn{color:var(--red)}.am{color:var(--amber)}
+.top{display:flex;align-items:center;gap:18px;padding:0 16px;height:48px;border-bottom:1px solid var(--line);background:#05070A}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;letter-spacing:.2px}
+.brand i{width:22px;height:22px;background:var(--amber);color:#000;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:800;border-radius:4px}
+.menu{display:flex;gap:2px}.menu a{padding:6px 10px;border-radius:6px;color:var(--m);font-weight:500}.menu a.on{background:var(--p2);color:var(--t)}
+.search{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:var(--p);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--d)}
+.search kbd{margin-left:auto;font-family:"IBM Plex Mono";font-size:11px;border:1px solid var(--line2);border-radius:4px;padding:0 5px}
+.sp{flex:1}
+.stat{display:flex;gap:16px;color:var(--m);font-size:12px}.stat b{color:var(--t);font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:6px;font-weight:600;border:1px solid var(--line2);background:var(--p2)}
+.btn.am{background:var(--amber);color:#000;border-color:var(--amber)}
+.tape{display:flex;gap:28px;padding:7px 16px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;font-size:12px;color:var(--m);background:#05070A}
+.tape b{color:var(--t)}
+
+.hero{display:grid;grid-template-columns:1fr 1.25fr;gap:0;border-bottom:1px solid var(--line)}
+.pitch{padding:46px 40px;border-right:1px solid var(--line);background:linear-gradient(180deg,#0B0F16,#07090D)}
+.tagx{display:inline-flex;gap:8px;align-items:center;font-family:"IBM Plex Mono";font-size:11px;color:var(--amber);border:1px solid #4A3A12;background:#1A1407;padding:4px 8px;border-radius:4px}
+h1{font-size:48px;line-height:1.05;letter-spacing:-1.2px;font-weight:700;margin:18px 0 14px}
+h1 span{color:var(--amber)}
+.pitch p{font-size:15px;line-height:1.6;color:var(--m);max-width:470px}
+.cta{display:flex;gap:10px;margin:24px 0}
+.cta .btn{padding:11px 16px;font-size:14px}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:22px}
+.facts div{padding:12px 14px;border-right:1px solid var(--line)}.facts div:last-child{border:0}
+.facts small{display:block;color:var(--d);font-size:11px;margin-bottom:4px;font-family:"IBM Plex Mono";text-transform:uppercase}
+.facts b{font-size:18px;font-family:"IBM Plex Mono"}
+
+.term{display:grid;grid-template-columns:1.5fr 1fr;grid-template-rows:auto auto;gap:1px;background:var(--line)}
+.panel{background:var(--p);padding:12px 14px}
+.ph{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--m)}
+.ph b{color:var(--t);font-size:13px}
+.ph .tabs{margin-left:auto;display:flex;gap:2px}.ph .tabs span{padding:2px 7px;border-radius:4px;font-family:"IBM Plex Mono";font-size:11px}.ph .tabs span.on{background:var(--p2);color:var(--t)}
+.quote{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.quote b{font-family:"IBM Plex Mono";font-size:30px;font-weight:600}
+.book table{width:100%;border-collapse:collapse;font-family:"IBM Plex Mono";font-size:12px}
+.book td{padding:3px 6px;position:relative}
+.book td:last-child{text-align:right;color:var(--m)}
+.book .bar{position:absolute;top:2px;bottom:2px;right:0;opacity:.18}
+.book tr.a .bar{background:var(--red)}.book tr.b .bar{background:var(--green)}
+.book tr.a td:first-child{color:var(--red)}.book tr.b td:first-child{color:var(--green)}
+.book .mid{text-align:center;color:var(--amber);padding:6px;font-size:12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.signals .s{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
+.signals .s:last-child{border:0}
+.sig{font-family:"IBM Plex Mono";font-size:10.5px;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.sig.ai{background:#211A3A;color:var(--violet)}.sig.ch{background:#0E2236;color:var(--blue)}.sig.ok{background:#0D2A1C;color:var(--green)}
+.signals p{color:var(--t);line-height:1.45}.signals small{color:var(--d);font-family:"IBM Plex Mono";font-size:11px}
+
+section{padding:26px 16px}
+.h2{display:flex;align-items:end;justify-content:space-between;margin-bottom:12px}
+.h2 h2{font-size:22px;letter-spacing:-.3px}
+.h2 small{color:var(--d);font-family:"IBM Plex Mono"}
+.grid3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.heat{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:4px}
+.cell{border-radius:4px;padding:10px 8px;min-height:68px;font-family:"IBM Plex Mono";font-size:11px;display:flex;flex-direction:column;justify-content:space-between}
+.cell b{font-size:13px;font-family:"IBM Plex Sans"}
+.screener table{width:100%;border-collapse:collapse;font-size:12.5px}
+.screener th{text-align:left;color:var(--d);font-weight:500;font-family:"IBM Plex Mono";font-size:11px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.screener td{padding:9px 8px;border-bottom:1px solid var(--line)}
+.screener td.n{font-family:"IBM Plex Mono";text-align:right}
+.screener th.n{text-align:right}
+.spark{width:70px;height:20px}
+.pill{font-size:10.5px;padding:2px 6px;border-radius:4px;font-family:"IBM Plex Mono"}
+.pill.l{background:#0D2A1C;color:var(--green)}.pill.s{background:#2A2110;color:var(--amber)}
+.mock-label{position:fixed;right:14px;bottom:14px;font-family:"IBM Plex Mono";font-size:11px;padding:6px 10px;border-radius:6px;background:var(--amber);color:#000;z-index:9}
+footer{padding:16px;color:var(--d);font-size:11.5px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="#"><i>PT</i>PROPERTY TOKEN <span class="mono" style="color:var(--d);font-weight:400">/ terminal</span></a>
+  <div class="menu"><a class="on" href="#">Markets</a><a href="#">Screener</a><a href="#">Portfolio</a><a href="#">Proofs</a><a href="#">Research</a></div>
+  <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Search GPF3, yield above 9%…</span><kbd>/</kbd></div>
+  <div class="sp"></div>
+  <div class="stat"><span>BLK <b class="mono" id="blk">24,182</b></span><span>VAL <b class="up">4/4</b></span><span>PKT <b class="mono" id="clk">12:04:18</b></span></div>
+  <a class="btn" href="#">EN · اردو</a><a class="btn am" href="#">Open account</a>
+</div>
+<div class="tape mono">
+  <span>GPF3 <b>503.00</b> <span class="up">+0.60%</span></span><span>VOL <b>699</b></span><span>BID <b class="up">502.00</b> ASK <b class="dn">504.50</b></span><span>NAV <b>500.00</b></span><span>YIELD <b>9.20%</b></span><span>DHA6 <b class="am">IPO 15-NOV</b></span><span>BAO2 <b class="am">IPO DEC</b></span><span>KIBOR 6M <b>11.4%</b></span><span>LEDGER <b class="up">INTACT</b></span>
+</div>
+
+<div class="hero">
+  <div class="pitch">
+    <span class="tagx">● LIVE · ERC-3643 · 4-VALIDATOR QBFT · 2.0 S FINALITY</span>
+    <h1>The property market,<br>with <span>a ticker.</span></h1>
+    <p>Trade fractions of trustee-held buildings with an order book, live depth and on-chain settlement. Rent pays monthly to your bank; every figure on this screen is verifiable.</p>
+    <div class="cta"><a class="btn am" href="#">Start trading from Rs 5,000</a><a class="btn" href="#">View the terminal →</a></div>
+    <div class="facts">
+      <div><small>Settlement</small><b>~2.4 s</b></div>
+      <div><small>Rent yield</small><b>9.2%</b></div>
+      <div><small>Min. order</small><b>10 tok</b></div>
+    </div>
+    <p class="mono" style="font-size:11px;color:var(--d);margin-top:14px">DEMO · secondary trading needs SECP approval</p>
+  </div>
+
+  <div class="term">
+    <div class="panel">
+      <div class="ph"><b>GPF3</b>Gulberg Plaza F3 · Lahore<div class="tabs"><span>1m</span><span class="on">5m</span><span>1h</span><span>1d</span></div></div>
+      <div class="quote"><b>503.00</b><span class="up mono">+3.00 (+0.60%)</span><span class="mono" style="color:var(--d)">vs NAV 500.00</span></div>
+      <svg viewBox="0 0 560 230" width="100%" height="230">
+        <g stroke="#1E2633"><path d="M0 40H560M0 90H560M0 140H560M0 190H560"/></g>
+        <path d="M0 124 H560" stroke="#FFB020" stroke-dasharray="4 5" stroke-width="1"/>
+        <g id="candles"></g>
+        <g fill="#7D8899" font-family="IBM Plex Mono" font-size="10"><text x="530" y="38">506</text><text x="530" y="88">504</text><text x="530" y="121" fill="#FFB020">NAV</text><text x="530" y="188">498</text></g>
+      </svg>
+    </div>
+    <div class="panel book">
+      <div class="ph"><b>Order book</b><span class="mono">spread 2.50</span></div>
+      <table>
+        <tr class="a"><td>506.00</td><td>75<i class="bar" style="width:75%"></i></td></tr>
+        <tr class="a"><td>505.50</td><td>40<i class="bar" style="width:40%"></i></td></tr>
+        <tr class="a"><td>505.00</td><td>22<i class="bar" style="width:22%"></i></td></tr>
+        <tr class="a"><td>504.50</td><td>50<i class="bar" style="width:50%"></i></td></tr>
+        <tr><td colspan="2" class="mid">503.00 last · 4/4 signed</td></tr>
+        <tr class="b"><td>502.00</td><td>20<i class="bar" style="width:20%"></i></td></tr>
+        <tr class="b"><td>501.50</td><td>65<i class="bar" style="width:65%"></i></td></tr>
+        <tr class="b"><td>500.00</td><td>90<i class="bar" style="width:90%"></i></td></tr>
+        <tr class="b"><td>498.00</td><td>60<i class="bar" style="width:60%"></i></td></tr>
+      </table>
+    </div>
+    <div class="panel signals">
+      <div class="ph"><b>Signals</b><span class="mono">AI + chain</span></div>
+      <div class="s"><span class="sig ai">AI</span><p>GPF3 trades 0.6% above NAV; last 12 trades within ±1.2% of NAV.<br><small>source: trades 24h, valuation 2026-09</small></p><small>12:03</small></div>
+      <div class="s"><span class="sig ch">CHAIN</span><p>Distribution #3 published · Rs 100,000 · root 0xa1a1…6622<br><small>DistributionRegistry · block 24,101</small></p><small>11:58</small></div>
+      <div class="s"><span class="sig ok">RECON</span><p>Ledger, chain and bank reconciled · 0 differences<br><small>hourly job · anchored 0x9f3c…a71e</small></p><small>11:00</small></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><b>Quick trade</b><span class="mono">cash Rs 4,866,755</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px"><span class="btn" style="justify-content:center;background:#0D2A1C;border-color:#14532D;color:var(--green)">BUY</span><span class="btn" style="justify-content:center">SELL</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" class="mono">
+        <div class="btn" style="justify-content:space-between">PX <b>503.00</b></div><div class="btn" style="justify-content:space-between">QTY <b>100</b></div>
+      </div>
+      <div class="mono" style="display:flex;justify-content:space-between;margin:10px 0;color:var(--m)"><span>Total</span><b style="color:var(--t)">Rs 50,300.00</b></div>
+      <a class="btn am" style="width:100%;justify-content:center" href="#">Place order · settles on chain</a>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="h2"><h2>Market map</h2><small>size = value · colour = vs NAV</small></div>
+  <div class="grid3">
+    <div class="panel">
+      <div class="heat">
+        <div class="cell" style="grid-column:span 3;grid-row:span 2;background:#0F3A26"><b>GPF3</b><span>Lahore · office</span><span class="up">+0.60%</span></div>
+        <div class="cell" style="grid-column:span 3;background:#1F2A3A"><b>BAO2</b><span class="am">IPO Dec</span></div>
+        <div class="cell" style="grid-column:span 2;background:#1F2A3A"><b>DHA6</b><span class="am">IPO 15 Nov</span></div>
+        <div class="cell" style="background:#14202E"><b>+</b><span>soon</span></div>
+      </div>
+    </div>
+    <div class="panel screener" style="grid-column:span 2">
+      <table>
+        <tr><th>Symbol</th><th>Property</th><th class="n">Price</th><th class="n">vs NAV</th><th class="n">Yield</th><th class="n">Lease</th><th>7d</th><th>Status</th></tr>
+        <tr><td><b>GPF3</b></td><td>Gulberg Plaza F3 · Lahore</td><td class="n">503.00</td><td class="n up">+0.60%</td><td class="n">9.20%</td><td class="n">2034</td><td><svg class="spark" viewBox="0 0 70 20"><path d="M0 14 L10 12 L20 15 L30 9 L40 11 L50 6 L60 8 L70 4" fill="none" stroke="#22D17B" stroke-width="1.6"/></svg></td><td><span class="pill l">LIVE</span></td></tr>
+        <tr><td><b>DHA6</b></td><td>DHA Ph 6 Retail · Karachi</td><td class="n">500.00</td><td class="n">—</td><td class="n">8.40%</td><td class="n">2035</td><td></td><td><span class="pill s">IPO</span></td></tr>
+        <tr><td><b>BAO2</b></td><td>Blue Area F2 · Islamabad</td><td class="n">500.00</td><td class="n">—</td><td class="n">8.90%</td><td class="n">2033</td><td></td><td><span class="pill s">IPO</span></td></tr>
+      </table>
+      <p class="mono" style="color:var(--d);font-size:11px;margin-top:10px">Every price links to its trade on chain · every yield links to the rent ledger</p>
+    </div>
+  </div>
+</section>
+<footer class="mono">Prototype on a local test network. Sample figures and test money; not an offer. AI signals are a design concept: informational, sourced, never advice. Secondary trading needs SECP approval.</footer>
+<div class="mock-label">mockup v4 · pro terminal</div>
+<script>
+(function(){
+  const g=document.getElementById('candles');let p=500,x=6,html='';
+  for(let i=0;i<34;i++){const o=p,c=Math.max(497,Math.min(506,o+(Math.random()-.45)*1.6));const hi=Math.max(o,c)+Math.random()*.7,lo=Math.min(o,c)-Math.random()*.7;
+    const y=v=>230-((v-496)/11)*200;const up=c>=o,col=up?'#22D17B':'#FF4D5E';
+    html+=`<line x1="${x+5}" x2="${x+5}" y1="${y(hi)}" y2="${y(lo)}" stroke="${col}"/><rect x="${x}" y="${Math.min(y(o),y(c))}" width="10" height="${Math.max(1.5,Math.abs(y(o)-y(c)))}" fill="${col}"/>`;p=c;x+=15;}
+  g.innerHTML=html;
+  let b=24182;setInterval(()=>{b++;document.getElementById('blk').textContent=b.toLocaleString();},2000);
+  setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi'});},1000);
+})();
+</script>
+</body>
+</html>

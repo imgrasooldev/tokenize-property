@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v10 (terminal-style customer website, light)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F6F4EF;--white:#FFFFFF;--ink:#111317;--m:#5D646F;--d:#9AA0A9;--line:#DEDAD1;--amber:#E0900A;--amber2:#FFF1D6;--green:#0E9F6E;--gbg:#E3F5EC;--navy:#111827}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"IBM Plex Sans",sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",monospace}
+.serif{font-family:"IBM Plex Serif",serif}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px}
+.up{color:var(--green)}.am{color:var(--amber)}
+.tape{background:var(--navy);color:#AEB4BF;font-family:"IBM Plex Mono";font-size:12.5px;white-space:nowrap;overflow:hidden}
+.tape .row{display:inline-flex;gap:36px;padding:8px 0;animation:mv 45s linear infinite}
+.tape b{color:#fff;font-weight:500}.tape .u{color:#3BE59A}.tape .a{color:#FFC14D}
+@keyframes mv{to{transform:translateX(-50%)}}
+nav{position:sticky;top:0;z-index:10;background:rgba(246,244,239,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:30px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.brand i{width:30px;height:30px;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;border-radius:7px;font-family:"IBM Plex Mono"}
+.links{display:flex;gap:26px;color:var(--m);font-size:14.5px}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 20px;border-radius:10px;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--white);transition:.2s}
+.btn:hover{border-color:var(--ink)}
+.btn.ink{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.am{background:var(--amber);color:#fff;border-color:var(--amber)}
+.btn.sm{padding:9px 15px;font-size:14px}
+
+.hero{padding:80px 0 50px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:60px;align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:"IBM Plex Mono";font-size:12.5px;padding:6px 12px;border-radius:999px;background:var(--white);border:1px solid var(--line)}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px var(--gbg)}
+h1{font-family:"IBM Plex Serif";font-weight:600;font-size:66px;line-height:1.04;letter-spacing:-1.8px;margin:24px 0 20px}
+h1 em{font-style:normal;background:linear-gradient(transparent 62%,var(--amber2) 62%)}
+.lead{font-size:19px;line-height:1.6;color:var(--m);max-width:540px}
+.cta{display:flex;gap:12px;margin:30px 0 28px}
+.trust{display:flex;gap:22px;font-size:14px;color:var(--m);flex-wrap:wrap}
+.trust span:before{content:"✓ ";color:var(--green);font-weight:700}
+
+.ticket{background:var(--white);border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 60px -30px rgba(17,19,23,.25);overflow:hidden}
+.tk-h{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.tk-h .sym{font-family:"IBM Plex Mono";font-size:12px;padding:4px 8px;border-radius:6px;background:var(--ink);color:#fff}
+.tk-h b{font-size:15px}.tk-h small{color:var(--m);font-size:12.5px;display:block}
+.tk-h .live{margin-left:auto;font-family:"IBM Plex Mono";font-size:11.5px;color:var(--green);background:var(--gbg);padding:4px 8px;border-radius:6px}
+.tk-b{padding:18px}
+.px{display:flex;align-items:baseline;gap:12px}.px b{font-family:"IBM Plex Mono";font-size:38px;font-weight:600}
+.tk-g{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.tk-g div{padding:12px 18px;border-right:1px solid var(--line)}.tk-g div:last-child{border:0}
+.tk-g small{display:block;font-family:"IBM Plex Mono";font-size:10.5px;color:var(--d);text-transform:uppercase}
+.tk-g b{font-family:"IBM Plex Mono";font-size:16px}
+.tk-cta{display:flex;gap:8px;padding:0 18px 18px}.tk-cta .btn{flex:1;justify-content:center}
+.receipt{margin:0 18px 18px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;font-family:"IBM Plex Mono";font-size:12px;color:var(--m);line-height:1.8}
+.receipt b{color:var(--ink)}
+
+.logos{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--white)}
+.logos .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
+.logos div{padding:26px 22px;border-right:1px solid var(--line)}.logos div:last-child{border:0}
+.logos small{font-family:"IBM Plex Mono";font-size:11px;color:var(--d);text-transform:uppercase}
+.logos b{display:block;font-family:"IBM Plex Mono";font-size:30px;font-weight:600;margin-top:6px}
+
+section{padding:96px 0}
+.label{font-family:"IBM Plex Mono";font-size:12.5px;color:var(--amber);font-weight:600}
+h2{font-family:"IBM Plex Serif";font-weight:600;font-size:46px;letter-spacing:-1.2px;line-height:1.08;margin-top:12px}
+.sub{font-size:17px;color:var(--m);line-height:1.6;max-width:540px;margin-top:14px}
+.sec-h{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:40px}
+
+.list{background:var(--white);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.li{display:grid;grid-template-columns:120px 1.6fr 1fr 1fr 1fr 1.2fr 150px;align-items:center;gap:16px;padding:18px 22px;border-bottom:1px solid var(--line);transition:.2s}
+.li:last-child{border:0}
+.li:hover{background:#FBFAF6}
+.li.hd{font-family:"IBM Plex Mono";font-size:11px;color:var(--d);text-transform:uppercase;padding:12px 22px;background:#FBFAF6}
+.thumb{width:100px;height:64px;border-radius:10px;overflow:hidden;background:#EEE9DE}
+.li h4{font-size:16.5px}.li small{color:var(--m);font-size:13px}
+.li .n{font-family:"IBM Plex Mono";font-size:15px}
+.bar{height:6px;border-radius:9px;background:#EEE9DE;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--amber)}
+.tag{font-family:"IBM Plex Mono";font-size:11px;padding:3px 8px;border-radius:6px}
+.tag.l{background:var(--gbg);color:var(--green)}.tag.s{background:var(--amber2);color:#9A5B00}
+
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.step{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:26px}
+.step .k{font-family:"IBM Plex Mono";font-size:13px;color:var(--amber);font-weight:600}
+.step h4{font-family:"IBM Plex Serif";font-size:21px;margin:12px 0 8px}
+.step p{color:var(--m);font-size:14.5px;line-height:1.6}
+
+.calc{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:center}
+.cbox{background:var(--ink);color:#fff;border-radius:20px;padding:28px}
+.cbox label{font-family:"IBM Plex Mono";font-size:12px;color:#9AA0A9}
+.amt{font-family:"IBM Plex Mono";font-size:44px;font-weight:600;margin:6px 0 16px}
+input[type=range]{width:100%;accent-color:#FFC14D}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.res div{background:#1C1F26;border-radius:12px;padding:14px 16px}
+.res small{display:block;font-family:"IBM Plex Mono";font-size:10.5px;color:#9AA0A9;text-transform:uppercase}
+.res b{font-family:"IBM Plex Mono";font-size:22px}
+.res .h b{color:#FFC14D}
+.fine{font-size:12px;color:#8E949D;margin-top:14px}
+
+.proof{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.pf{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:24px}
+.pf .ic{width:44px;height:44px;border-radius:12px;background:var(--gbg);color:var(--green);display:grid;place-items:center;font-size:20px;margin-bottom:14px}
+.pf h4{font-size:17px;margin-bottom:8px}.pf p{color:var(--m);font-size:14.5px;line-height:1.6}
+.pf .hash{display:block;margin-top:14px;font-family:"IBM Plex Mono";font-size:11.5px;color:var(--d);padding-top:12px;border-top:1px dashed var(--line)}
+.pf .s{display:inline-block;margin-top:10px;font-family:"IBM Plex Mono";font-size:11px;padding:3px 8px;border-radius:6px;background:var(--amber2);color:#9A5B00}
+
+.faq{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.q{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:22px}
+.q h4{font-size:16.5px}.q p{color:var(--m);font-size:14.5px;line-height:1.6;margin-top:8px}
+.final{margin:0 32px;border-radius:28px;background:var(--ink);color:#fff;text-align:center;padding:84px 20px}
+.final h2{color:#fff;font-size:54px}
+.final .lead{margin:16px auto 0;color:#AEB4BF}
+footer{padding:50px 0;color:var(--m);font-size:13px}
+footer .g{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:30px}
+footer h5{color:var(--ink);font-size:13px;margin-bottom:10px}footer li{list-style:none;margin:7px 0}
+footer .disc{margin-top:30px;padding-top:20px;border-top:1px solid var(--line);line-height:1.6;color:var(--d)}
+.mock-label{position:fixed;right:14px;bottom:14px;font-family:"IBM Plex Mono";font-size:11px;padding:7px 11px;border-radius:7px;background:var(--ink);color:#fff;z-index:20}
+</style>
+</head>
+<body>
+<div class="tape"><div class="row">
+  <span>GPF3 <b>503.00</b> <span class="u">▲0.60%</span></span><span>NAV <b>500.00</b></span><span>YIELD <b>9.20%</b></span><span>DHA6 <span class="a">OPENS 15 NOV</span></span><span>BAO2 <span class="a">OPENS DEC</span></span><span>RENT PAID 2026 <b>Rs 4.3M</b></span><span>LEDGER <span class="u">INTACT</span></span>
+  <span>GPF3 <b>503.00</b> <span class="u">▲0.60%</span></span><span>NAV <b>500.00</b></span><span>YIELD <b>9.20%</b></span><span>DHA6 <span class="a">OPENS 15 NOV</span></span><span>BAO2 <span class="a">OPENS DEC</span></span><span>RENT PAID 2026 <b>Rs 4.3M</b></span><span>LEDGER <span class="u">INTACT</span></span>
+</div></div>
+
+<nav><div class="wrap">
+  <a class="brand" href="#"><i>PT</i>Property Token</a>
+  <div class="links"><a href="#props">Properties</a><a href="#how">How it works</a><a href="#calc">Returns</a><a href="#safe">Safety</a><a href="#faq">FAQ</a></div>
+  <div class="sp"></div>
+  <a class="btn sm" href="#">EN · اردو</a><a class="btn sm" href="#">Sign in</a><a class="btn sm ink" href="#">Get started</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <span class="eyebrow"><span class="dot"></span>Gulberg Plaza is open · 63% funded</span>
+    <h1>Invest in property like you'd <em>buy a stock</em>.</h1>
+    <p class="lead">Own a share of Pakistan's best rented offices and shops from Rs 5,000. Monthly rent in your bank. Live prices. Sell when you want.</p>
+    <div class="cta"><a class="btn am" href="#">Create free account →</a><a class="btn" href="#props">See properties</a></div>
+    <div class="trust"><span>Independent trustee</span><span>NADRA-verified</span><span>Rent via Raast</span></div>
+  </div>
+  <div class="ticket">
+    <div class="tk-h"><span class="sym">GPF3</span><div><b>Gulberg Plaza, Floor 3</b><small>Lahore · Office · bank tenant</small></div><span class="live">● LIVE</span></div>
+    <div class="tk-b">
+      <div class="px"><b>Rs 503.00</b><span class="up mono">+0.60%</span></div>
+      <svg viewBox="0 0 460 120" width="100%" height="120">
+        <path d="M0 90 L35 86 L70 92 L105 72 L140 78 L175 60 L210 66 L245 50 L280 56 L315 40 L350 44 L385 30 L420 34 L460 20" fill="none" stroke="#111317" stroke-width="2.2"/>
+        <path d="M0 74 H460" stroke="#E0900A" stroke-dasharray="4 5"/><text x="4" y="68" font-family="IBM Plex Mono" font-size="10" fill="#E0900A">NAV 500</text>
+      </svg>
+    </div>
+    <div class="tk-g"><div><small>Rent yield</small><b>9.2%</b></div><div><small>Min.</small><b>Rs 5,000</b></div><div><small>Lease to</small><b>2034</b></div></div>
+    <div class="receipt">Last rent paid: <b>1 Oct</b> · Rs 3.83 per token<br>Your share is provable on chain ✓</div>
+    <div class="tk-cta"><a class="btn ink" href="#">Invest</a><a class="btn" href="#">Details</a></div>
+  </div>
+</div></header>
+
+<div class="logos"><div class="wrap">
+  <div><small>Property value</small><b>Rs 31.7 Cr</b></div>
+  <div><small>Investors</small><b>1,240</b></div>
+  <div><small>Rent paid out</small><b>Rs 4.3M</b></div>
+  <div><small>Avg. yield</small><b class="am">9.2%</b></div>
+</div></div>
+
+<section id="props"><div class="wrap">
+  <div class="sec-h"><div><div class="label">PROPERTIES</div><h2>Today's listings.</h2></div><p class="sub">Every building is valued independently, rented to a real tenant and held by a trustee.</p></div>
+  <div class="list">
+    <div class="li hd"><span></span><span>Property</span><span>Price</span><span>Yield</span><span>Lease</span><span>Funded</span><span></span></div>
+    <div class="li"><div class="thumb"><svg viewBox="0 0 100 64" width="100" height="64"><rect width="100" height="64" fill="#E7E1D3"/><rect x="36" y="8" width="28" height="56" fill="#111317"/><g fill="#FFC14D"><rect x="40" y="14" width="5" height="3"/><rect x="48" y="14" width="5" height="3"/><rect x="56" y="14" width="5" height="3"/><rect x="40" y="22" width="5" height="3"/><rect x="56" y="22" width="5" height="3"/><rect x="48" y="30" width="5" height="3"/><rect x="40" y="38" width="5" height="3"/><rect x="56" y="38" width="5" height="3"/></g></svg></div>
+      <div><h4>Gulberg Plaza, Floor 3</h4><small>Lahore · Office</small></div><span class="n">Rs 503.00</span><span class="n up">9.2%</span><span class="n">2034</span><div><span class="mono" style="font-size:13px">63%</span><div class="bar"><i style="width:63%"></i></div></div><div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="tag l">LIVE</span><a class="btn sm ink" href="#">Invest</a></div></div>
+    <div class="li"><div class="thumb"><svg viewBox="0 0 100 64" width="100" height="64"><rect width="100" height="64" fill="#E8EEE9"/><rect x="18" y="30" width="64" height="34" fill="#fff" stroke="#111317"/><rect x="18" y="26" width="64" height="6" fill="#E0900A"/><g fill="#111317"><rect x="24" y="38" width="14" height="18"/><rect x="43" y="38" width="14" height="18"/><rect x="62" y="38" width="14" height="18"/></g></svg></div>
+      <div><h4>DHA Phase 6 Retail</h4><small>Karachi · Retail</small></div><span class="n">Rs 500.00</span><span class="n up">8.4%</span><span class="n">2035</span><div><span class="mono" style="font-size:13px">waitlist 312</span><div class="bar"><i style="width:2%"></i></div></div><div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="tag s">15 NOV</span><a class="btn sm" href="#">Notify</a></div></div>
+    <div class="li"><div class="thumb"><svg viewBox="0 0 100 64" width="100" height="64"><rect width="100" height="64" fill="#E3E8EF"/><rect x="40" y="4" width="20" height="60" fill="#111827"/><g stroke="#FFC14D"><path d="M42 12H58M42 20H58M42 28H58M42 36H58M42 44H58M42 52H58"/></g><rect x="60" y="26" width="12" height="38" fill="#374151"/><rect x="28" y="32" width="12" height="32" fill="#374151"/></svg></div>
+      <div><h4>Blue Area Office, Floor 2</h4><small>Islamabad · Office</small></div><span class="n">Rs 500.00</span><span class="n up">8.9%</span><span class="n">2033</span><div><span class="mono" style="font-size:13px">waitlist 188</span><div class="bar"><i style="width:1%"></i></div></div><div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="tag s">DEC</span><a class="btn sm" href="#">Notify</a></div></div>
+  </div>
+</div></section>
+
+<section id="how" style="padding-top:10px"><div class="wrap">
+  <div class="sec-h"><div><div class="label">HOW IT WORKS</div><h2>Four steps to monthly rent.</h2></div></div>
+  <div class="steps">
+    <div class="step"><span class="k">01</span><h4>Verify</h4><p>CNIC and a selfie, checked with NADRA in about three minutes.</p></div>
+    <div class="step"><span class="k">02</span><h4>Choose</h4><p>Read the lease, valuation and rent history of each building.</p></div>
+    <div class="step"><span class="k">03</span><h4>Pay</h4><p>Raast from your bank to the trustee. Tokens arrive after payment.</p></div>
+    <div class="step"><span class="k">04</span><h4>Earn</h4><p>Rent lands in your bank monthly. Sell on the market any time.</p></div>
+  </div>
+</div></section>
+
+<section id="calc" style="padding-top:10px"><div class="wrap calc">
+  <div><div class="label">RETURNS</div><h2>See what your money could earn.</h2>
+    <p class="sub">Based on Gulberg Plaza's current rent yield of 9.2%. Rent is not guaranteed; prices can go down as well as up.</p>
+    <div class="cta"><a class="btn ink" href="#">Start with Rs 5,000</a><a class="btn" href="#">Read the risks</a></div></div>
+  <div class="cbox">
+    <label>YOU INVEST</label>
+    <div class="amt" id="amt">Rs 250,000</div>
+    <input type="range" min="5000" max="2000000" step="5000" value="250000" id="rng" aria-label="Investment amount">
+    <div class="res">
+      <div class="h"><small>Monthly rent</small><b id="m">Rs 1,917</b></div>
+      <div><small>Yearly rent</small><b id="y">Rs 23,000</b></div>
+      <div><small>Tokens</small><b id="t">497</b></div>
+      <div><small>5-year rent</small><b id="f">Rs 115,000</b></div>
+    </div>
+    <p class="fine">Illustration only. Not investment advice.</p>
+  </div>
+</div></section>
+
+<section id="safe" style="padding-top:10px"><div class="wrap">
+  <div class="sec-h"><div><div class="label">SAFETY</div><h2>Built so you never have to<br>take our word for it.</h2></div></div>
+  <div class="proof">
+    <div class="pf"><div class="ic">⛨</div><h4>Held by a trustee</h4><p>The building and your money sit with an independent, regulated trustee. Not with us.</p><span class="s">SECP SANDBOX PENDING</span></div>
+    <div class="pf"><div class="ic">✓</div><h4>Rent you can verify</h4><p>Each month's rent list has a fingerprint on the blockchain. Check your share in one click.</p><span class="hash">root 0xa1a1…6622 · block #24,101</span></div>
+    <div class="pf"><div class="ic">≡</div><h4>Records nobody can edit</h4><p>Every payment and every token is in a tamper-evident ledger, reconciled with the bank hourly.</p><span class="hash">ledger hash chain · intact</span></div>
+  </div>
+</div></section>
+
+<section id="faq" style="padding-top:10px"><div class="wrap">
+  <div class="label">FAQ</div><h2 style="margin-bottom:30px">Good questions.</h2>
+  <div class="faq">
+    <div class="q"><h4>Do I really own the building?</h4><p>You own units in the trust that owns it. The trustee's register and your tokens always match.</p></div>
+    <div class="q"><h4>How is rent paid?</h4><p>Monthly, to your own bank account via Raast, in Pakistani rupees.</p></div>
+    <div class="q"><h4>Can I sell any time?</h4><p>Yes, by placing a sell order; it completes when a buyer matches your price. Trading needs SECP approval before launch.</p></div>
+    <div class="q"><h4>Is this halal?</h4><p>Income comes from rent, not interest. A Shariah review of the structure is planned before launch.</p></div>
+  </div>
+</div></section>
+
+<div class="final">
+  <div class="label" style="color:#FFC14D">GET STARTED</div>
+  <h2>Your first token is Rs 5,000 away.</h2>
+  <p class="lead">Create an account in three minutes. No fees to sign up.</p>
+  <div class="cta" style="justify-content:center"><a class="btn am" href="#">Create free account →</a></div>
+</div>
+
+<footer><div class="wrap">
+  <div class="g">
+    <div><a class="brand" href="#"><i>PT</i>Property Token</a><p style="margin-top:12px;max-width:320px;line-height:1.6">Fractional ownership of income-producing buildings in Pakistan, held by an independent trustee.</p></div>
+    <div><h5>Invest</h5><ul><li>Properties</li><li>Market</li><li>Returns</li></ul></div>
+    <div><h5>Safety</h5><ul><li>How we protect you</li><li>Verify rent</li><li>Audits</li></ul></div>
+    <div><h5>Company</h5><ul><li>About</li><li>Risks</li><li>Contact</li></ul></div>
+  </div>
+  <p class="disc">Prototype. Sample properties, sample figures, test money; not an offer. Property values and rent can go down. Secondary trading needs SECP approval.</p>
+</div></footer>
+<div class="mock-label">mockup v10 · terminal-style website · light</div>
+<script>
+(function(){
+  const r=document.getElementById('rng'),fmt=n=>'Rs '+Math.round(n).toLocaleString('en-PK');
+  function upd(){const v=+r.value,y=v*0.092;document.getElementById('amt').textContent=fmt(v);document.getElementById('m').textContent=fmt(y/12);
+    document.getElementById('y').textContent=fmt(y);document.getElementById('t').textContent=Math.floor(v/503).toLocaleString('en-PK');document.getElementById('f').textContent=fmt(y*5);}
+  r.addEventListener('input',upd);upd();
+})();
+</script>
+</body>
+</html>

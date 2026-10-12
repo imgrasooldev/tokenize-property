@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v11 (customer website, neon chain + AI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#04050C;--glass:rgba(255,255,255,.045);--stroke:rgba(255,255,255,.1);--stroke2:rgba(255,255,255,.18);--t:#EAF0FF;--m:#8E9AB8;--d:#5A6584;
+  --c:#28E7FF;--v:#8B5CFF;--p:#FF5BD8;--g:#3CFFB0;--gold:#FFD27A}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:Sora,sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font-family:"JetBrains Mono",monospace}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1220px;margin:0 auto;padding:0 32px;position:relative;z-index:2}
+.bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(40% 30% at 15% 10%,rgba(139,92,255,.28),transparent 70%),radial-gradient(35% 30% at 85% 15%,rgba(40,231,255,.2),transparent 70%),radial-gradient(40% 30% at 50% 100%,rgba(255,91,216,.12),transparent 70%)}
+.gridfx{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:60px 60px;mask-image:linear-gradient(180deg,#000,transparent 60%)}
+.grad{background:linear-gradient(90deg,var(--c),var(--v) 50%,var(--p));-webkit-background-clip:text;background-clip:text;color:transparent}
+.glass{background:var(--glass);border:1px solid var(--stroke);border-radius:22px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;font-weight:600;font-size:15px;border:1px solid var(--stroke2);background:var(--glass);transition:.25s}
+.btn:hover{border-color:var(--c);box-shadow:0 0 0 4px rgba(40,231,255,.08)}
+.btn.g{background:linear-gradient(135deg,var(--c),var(--v));border:0;color:#04050C;box-shadow:0 14px 40px -12px rgba(40,231,255,.6)}
+.btn.sm{padding:10px 16px;font-size:14px;border-radius:12px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--stroke2);background:var(--glass);font-size:12.5px;color:var(--m)}
+.ld{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);animation:pl 1.6s infinite}
+@keyframes pl{50%{opacity:.35}}
+
+nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:rgba(4,5,12,.6);border-bottom:1px solid var(--stroke)}
+nav .wrap{display:flex;align-items:center;gap:30px;height:72px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo svg{filter:drop-shadow(0 0 10px rgba(40,231,255,.7))}
+.links{display:flex;gap:26px;font-size:14.5px;color:var(--m)}
+.sp{flex:1}
+
+.hero{position:relative;min-height:760px;display:flex;align-items:center}
+.hero .wrap{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center;width:100%}
+h1{font-size:72px;line-height:1;letter-spacing:-3px;font-weight:800;margin:24px 0 22px}
+.lead{font-size:18.5px;line-height:1.65;color:#AAB5D3;max-width:540px}
+.cta{display:flex;gap:12px;margin:32px 0 30px}
+.trust{display:flex;gap:10px;flex-wrap:wrap}
+.trust span{font-size:12.5px;color:var(--m);padding:7px 11px;border:1px solid var(--stroke);border-radius:10px}
+.trust b{color:var(--g)}
+.globe{position:relative;height:640px}
+#globe{position:absolute;inset:0;width:100%;height:100%}
+.float{position:absolute;padding:13px 15px;min-width:200px;font-size:12.5px;animation:bob 6s ease-in-out infinite}
+.float h5{font-size:10.5px;letter-spacing:1px;color:var(--m);font-weight:500;margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.float b{font-size:17px}
+@keyframes bob{50%{transform:translateY(-10px)}}
+
+.strip{border-top:1px solid var(--stroke);border-bottom:1px solid var(--stroke);background:rgba(255,255,255,.015);overflow:hidden;position:relative;z-index:2}
+.strip .row{display:flex;gap:14px;padding:16px 0;width:max-content;animation:mv 40s linear infinite}
+@keyframes mv{to{transform:translateX(-50%)}}
+.blk{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--stroke);border-radius:12px;font-size:12.5px;white-space:nowrap}
+.blk .mono{color:var(--d)}.blk b{color:var(--c)}
+.link{width:22px;height:2px;align-self:center;background:linear-gradient(90deg,var(--c),var(--v))}
+
+section{padding:110px 0;position:relative;z-index:2}
+.kick{font-family:"JetBrains Mono";font-size:12.5px;color:var(--c);letter-spacing:1px}
+h2{font-size:50px;letter-spacing:-2px;line-height:1.05;font-weight:800;margin-top:12px}
+.sub{font-size:17px;color:var(--m);line-height:1.65;max-width:560px;margin-top:16px}
+.sec-h{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:46px}
+
+.ai{display:grid;grid-template-columns:.85fr 1.15fr;gap:40px;align-items:center}
+.orbwrap{position:relative;height:420px;display:grid;place-items:center}
+.orb{width:220px;height:220px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,rgba(255,255,255,.0) 22%),conic-gradient(from 0deg,var(--c),var(--v),var(--p),var(--c));filter:blur(.3px);animation:spin 10s linear infinite,breathe 4s ease-in-out infinite;box-shadow:0 0 80px rgba(139,92,255,.6),0 0 160px rgba(40,231,255,.3)}
+.orb2{position:absolute;width:300px;height:300px;border-radius:50%;border:1px dashed rgba(40,231,255,.35);animation:spin 30s linear infinite reverse}
+.orb3{position:absolute;width:380px;height:380px;border-radius:50%;border:1px solid rgba(139,92,255,.2)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{50%{box-shadow:0 0 120px rgba(255,91,216,.6),0 0 200px rgba(40,231,255,.35)}}
+.chat{padding:24px}
+.msg{padding:13px 16px;border-radius:16px;font-size:14.5px;line-height:1.6;margin-top:12px;max-width:92%}
+.me{background:rgba(139,92,255,.18);border:1px solid rgba(139,92,255,.4);margin-left:auto;width:fit-content}
+.bot{background:rgba(255,255,255,.05);border:1px solid var(--stroke)}
+.src{font-family:"JetBrains Mono";font-size:10.5px;color:var(--c);border:1px solid rgba(40,231,255,.35);border-radius:6px;padding:0 5px;margin-left:3px}
+.caret{display:inline-block;width:8px;height:16px;background:var(--c);vertical-align:-2px;animation:pl 1s steps(1) infinite}
+.sugg{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.sugg span{font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--stroke2);color:var(--m)}
+.fine{font-size:11.5px;color:var(--d);margin-top:14px}
+
+.tokens{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;perspective:1000px}
+.tk{position:relative;border-radius:24px;padding:1px;background:linear-gradient(135deg,rgba(40,231,255,.6),rgba(139,92,255,.4),rgba(255,91,216,.5));transition:transform .2s;transform-style:preserve-3d}
+.tk .in{border-radius:23px;background:linear-gradient(160deg,#0D1024,#070814);overflow:hidden;height:100%}
+.tk .art{height:230px;position:relative;overflow:hidden}
+.tk .shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.14) 45%,transparent 60%);background-size:250% 100%;animation:sh 4s linear infinite;mix-blend-mode:screen}
+@keyframes sh{from{background-position:150% 0}to{background-position:-100% 0}}
+.tk .top{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between}
+.tk .id{font-family:"JetBrains Mono";font-size:11px;padding:4px 8px;border-radius:7px;background:rgba(0,0,0,.5);border:1px solid var(--stroke2)}
+.tk .b{padding:18px 20px 20px}
+.tk h3{font-size:20px;letter-spacing:-.5px}
+.tk .loc{font-size:13px;color:var(--m);margin-top:4px}
+.tk .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0 12px}
+.tk .kv div{border:1px solid var(--stroke);border-radius:12px;padding:9px 10px}
+.tk .kv small{display:block;font-size:10.5px;color:var(--d)}.tk .kv b{font-size:15px}
+.tk .meta{display:flex;justify-content:space-between;font-family:"JetBrains Mono";font-size:11px;color:var(--d);border-top:1px dashed var(--stroke2);padding-top:12px}
+.tk .meta b{color:var(--c);font-weight:500}
+.bar{height:5px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:12px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--g),var(--c));box-shadow:0 0 12px var(--c)}
+
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;position:relative}
+.pipe:before{content:"";position:absolute;left:8%;right:8%;top:46px;height:2px;background:linear-gradient(90deg,var(--c),var(--v),var(--p));opacity:.5}
+.pipe .dotrun{position:absolute;top:41px;left:8%;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 18px var(--c),0 0 30px var(--v);animation:run 5s linear infinite}
+@keyframes run{to{left:91%}}
+.ps{text-align:center;padding:0 6px}
+.ps .ic{width:92px;height:92px;margin:0 auto 18px;border-radius:26px;display:grid;place-items:center;background:#0B0E20;border:1px solid var(--stroke2);position:relative;z-index:1;box-shadow:0 0 40px -12px var(--v)}
+.ps h4{font-size:16.5px;margin-bottom:6px}.ps p{font-size:13.5px;color:var(--m);line-height:1.55}
+.ps code{display:inline-block;margin-top:10px;font-family:"JetBrains Mono";font-size:11px;color:var(--c);padding:3px 8px;border:1px solid rgba(40,231,255,.25);border-radius:6px}
+
+.proof{display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:center}
+.merkle{padding:26px}
+.calc{padding:28px}
+.amt{font-size:46px;font-weight:800;letter-spacing:-1.5px;margin:6px 0 16px}
+input[type=range]{width:100%;accent-color:#28E7FF}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.res div{border:1px solid var(--stroke);border-radius:14px;padding:14px}
+.res small{display:block;font-size:11.5px;color:var(--d)}.res b{font-size:22px}
+
+.faq{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.q{padding:22px}.q h4{font-size:16.5px}.q p{font-size:14.5px;color:var(--m);line-height:1.65;margin-top:8px}
+.final{text-align:center;padding:120px 0;position:relative;z-index:2}
+.final h2{font-size:64px}
+footer{border-top:1px solid var(--stroke);padding:44px 0;color:var(--d);font-size:13px;position:relative;z-index:2}
+footer .g{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:30px}footer h5{color:var(--t);margin-bottom:10px}footer li{list-style:none;margin:7px 0}
+.mock-label{position:fixed;right:14px;bottom:14px;z-index:30;font-family:"JetBrains Mono";font-size:11px;padding:7px 11px;border-radius:9px;background:rgba(4,5,12,.9);border:1px solid var(--stroke2);color:var(--c)}
+</style>
+</head>
+<body>
+<div class="bgfx"></div><div class="gridfx"></div>
+
+<nav><div class="wrap">
+  <a class="logo" href="#"><svg width="30" height="30" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="url(#lgx)" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="url(#lgx)"/><defs><linearGradient id="lgx" x1="0" x2="32" y1="0" y2="32"><stop stop-color="#28E7FF"/><stop offset="1" stop-color="#8B5CFF"/></linearGradient></defs></svg>Property Token</a>
+  <div class="links"><a href="#props">Properties</a><a href="#ai">AI advisor</a><a href="#how">How it works</a><a href="#proof">Proof</a><a href="#faq">FAQ</a></div>
+  <div class="sp"></div>
+  <span class="chip"><span class="ld"></span>Block <b class="mono" id="nb" style="color:var(--t)">#24,210</b></span>
+  <a class="btn sm" href="#">EN · اردو</a><a class="btn sm g" href="#">Start investing</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <span class="chip"><span class="ld"></span>Real estate on a 4-validator blockchain · AI-explained</span>
+    <h1>Own property.<br><span class="grad">On-chain.</span><br>AI-guided.</h1>
+    <p class="lead">Buy tokens of trustee-held buildings in Pakistan from Rs 5,000. Every token lives on the blockchain, every rupee of rent is provable, and an AI advisor explains each property in English or Urdu.</p>
+    <div class="cta"><a class="btn g" href="#">Create free account →</a><a class="btn" href="#ai">✦ Ask the AI</a></div>
+    <div class="trust"><span><b>✓</b> Trustee-held</span><span><b>✓</b> NADRA KYC</span><span><b>✓</b> ERC-3643 security token</span><span><b>✓</b> Rent via Raast</span></div>
+  </div>
+  <div class="globe">
+    <canvas id="globe"></canvas>
+    <div class="float glass" style="left:10px;top:70px"><h5><span class="ld"></span>LIVE TOKEN · GPF3</h5><b>Rs 503.00</b> <span class="mono" style="color:var(--g);font-size:12px">+0.60%</span></div>
+    <div class="float glass" style="right:0;top:200px;animation-delay:1s"><h5>✦ AI SAYS</h5><span style="font-size:13px;line-height:1.5;display:block;max-width:220px">“Bank tenant, 10-year lease, rent rises 10% every 2 years.”</span></div>
+    <div class="float glass" style="left:40px;bottom:70px;animation-delay:2s"><h5>RENT VERIFIED ON CHAIN</h5><b>Rs 25,000</b> <span class="mono" style="color:var(--c);font-size:11px">root 0xa1a1… ✓</span></div>
+  </div>
+</div></header>
+
+<div class="strip"><div class="row" id="strip"></div></div>
+
+<section id="props"><div class="wrap">
+  <div class="sec-h"><div><div class="kick">// TOKENISED PROPERTIES</div><h2>Every building is a <span class="grad">token</span>.</h2></div><p class="sub">Each token is a regulated security on the blockchain, backed one-to-one by the trustee's register.</p></div>
+  <div class="tokens">
+    <a class="tk tilt" href="#"><div class="in">
+      <div class="art"><svg viewBox="0 0 380 230" width="100%" height="230" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="t1" x1="0" x2="1"><stop stop-color="#1E2A6B"/><stop offset="1" stop-color="#0E1338"/></linearGradient></defs><rect width="380" height="230" fill="#070A1C"/><circle cx="190" cy="250" r="160" fill="#28E7FF" opacity=".08"/><polygon points="190,30 270,72 270,200 190,226 110,200 110,72" fill="url(#t1)" stroke="#28E7FF" stroke-opacity=".7"/><polygon points="190,30 270,72 190,114 110,72" fill="#2B3C8F" stroke="#28E7FF"/><line x1="190" y1="114" x2="190" y2="226" stroke="#28E7FF" stroke-opacity=".7"/><g fill="#28E7FF"><rect x="124" y="98" width="10" height="5"/><rect x="144" y="108" width="10" height="5" opacity=".4"/><rect x="164" y="118" width="10" height="5"/><rect x="124" y="124" width="10" height="5" opacity=".6"/><rect x="144" y="134" width="10" height="5"/><rect x="164" y="144" width="10" height="5" opacity=".5"/><rect x="124" y="150" width="10" height="5"/><rect x="144" y="160" width="10" height="5"/></g><g fill="#8B5CFF"><rect x="206" y="118" width="10" height="5"/><rect x="226" y="108" width="10" height="5" opacity=".5"/><rect x="246" y="98" width="10" height="5"/><rect x="206" y="144" width="10" height="5" opacity=".6"/><rect x="226" y="134" width="10" height="5"/><rect x="246" y="124" width="10" height="5"/></g></svg>
+        <div class="shine"></div><div class="top"><span class="id">GPF3 · #0x1028…a2b8</span><span class="chip" style="padding:4px 10px;background:rgba(0,0,0,.5)"><span class="ld"></span>Live</span></div></div>
+      <div class="b"><h3>Gulberg Plaza, Floor 3</h3><div class="loc">Lahore · Office · bank tenant</div>
+        <div class="kv"><div><small>Price</small><b>Rs 503</b></div><div><small>Yield</small><b style="color:var(--g)">9.2%</b></div><div><small>AI score</small><b style="color:var(--c)">82</b></div></div>
+        <div class="bar"><i style="width:63%"></i></div>
+        <div class="meta"><span>63% minted</span><span>standard <b>ERC-3643</b></span></div></div></div></a>
+    <a class="tk tilt" href="#"><div class="in">
+      <div class="art"><svg viewBox="0 0 380 230" width="100%" height="230" preserveAspectRatio="xMidYMid slice"><rect width="380" height="230" fill="#0A0718"/><circle cx="190" cy="250" r="160" fill="#FF5BD8" opacity=".08"/><polygon points="80,110 190,64 300,110 300,196 190,226 80,196" fill="#1C1240" stroke="#FF5BD8" stroke-opacity=".7"/><polygon points="80,110 190,64 300,110 190,156" fill="#2E1E66" stroke="#FF5BD8"/><line x1="190" y1="156" x2="190" y2="226" stroke="#FF5BD8" stroke-opacity=".7"/><g fill="#FF5BD8" fill-opacity=".7"><polygon points="98,140 140,124 140,160 98,176"/><polygon points="148,121 182,108 182,144 148,157"/></g></svg>
+        <div class="shine"></div><div class="top"><span class="id">DHA6 · pending mint</span><span class="chip" style="padding:4px 10px;background:rgba(0,0,0,.5)">Opens 15 Nov</span></div></div>
+      <div class="b"><h3>DHA Phase 6 Retail</h3><div class="loc">Karachi · Retail · pharmacy chain</div>
+        <div class="kv"><div><small>Price</small><b>Rs 500</b></div><div><small>Yield</small><b style="color:var(--g)">8.4%</b></div><div><small>AI score</small><b style="color:var(--c)">77</b></div></div>
+        <div class="bar"><i style="width:3%"></i></div>
+        <div class="meta"><span>312 on waitlist</span><span>trustee <b>reviewing</b></span></div></div></div></a>
+    <a class="tk tilt" href="#"><div class="in">
+      <div class="art"><svg viewBox="0 0 380 230" width="100%" height="230" preserveAspectRatio="xMidYMid slice"><rect width="380" height="230" fill="#060B18"/><circle cx="190" cy="250" r="160" fill="#3CFFB0" opacity=".07"/><polygon points="190,16 244,44 244,200 190,226 136,200 136,44" fill="#0F2A2A" stroke="#3CFFB0" stroke-opacity=".7"/><polygon points="190,16 244,44 190,72 136,44" fill="#174040" stroke="#3CFFB0"/><g stroke="#3CFFB0" stroke-opacity=".7"><path d="M144 90L186 110M144 115L186 135M144 140L186 160M144 165L186 185"/><path d="M194 110L236 90M194 135L236 115M194 160L236 140M194 185L236 165" stroke="#28E7FF"/></g></svg>
+        <div class="shine"></div><div class="top"><span class="id">BAO2 · pending mint</span><span class="chip" style="padding:4px 10px;background:rgba(0,0,0,.5)">Opens Dec</span></div></div>
+      <div class="b"><h3>Blue Area Office, Floor 2</h3><div class="loc">Islamabad · Office · telecom tenant</div>
+        <div class="kv"><div><small>Price</small><b>Rs 500</b></div><div><small>Yield</small><b style="color:var(--g)">8.9%</b></div><div><small>AI score</small><b style="color:var(--c)">79</b></div></div>
+        <div class="bar"><i style="width:2%"></i></div>
+        <div class="meta"><span>188 on waitlist</span><span>valuation <b>uploaded</b></span></div></div></div></a>
+  </div>
+</div></section>
+
+<section id="ai" style="padding-top:40px"><div class="wrap ai">
+  <div class="orbwrap"><div class="orb3"></div><div class="orb2"></div><div class="orb"></div></div>
+  <div>
+    <div class="kick">// AI ADVISOR</div><h2>Ask anything.<br><span class="grad">Get answers with proof.</span></h2>
+    <div class="chat glass" style="margin-top:26px">
+      <div class="msg me">Kya Gulberg Plaza mein paisa lagana safe hai?</div>
+      <div class="msg bot" id="ans"></div>
+      <div class="sugg"><span>What if the tenant leaves?</span><span>Compare with a bank deposit</span><span>اردو میں سمجھائیں</span></div>
+      <p class="fine">AI explains using the lease, valuation and chain data, cites every source, and never tells you what to buy.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="how" style="padding-top:40px"><div class="wrap">
+  <div class="sec-h"><div><div class="kick">// HOW IT WORKS</div><h2>From your bank to the <span class="grad">blockchain</span>.</h2></div></div>
+  <div class="pipe"><div class="dotrun"></div>
+    <div class="ps"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#28E7FF" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><h4>Verify</h4><p>NADRA KYC in 3 minutes</p><code>identity.verified</code></div>
+    <div class="ps"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#5FB4FF" stroke-width="1.6"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></div><h4>Pay</h4><p>Raast to trustee escrow</p><code>ledger.paid</code></div>
+    <div class="ps"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8B5CFF" stroke-width="1.6"><path d="M8 4L4 8l4 4M16 12l4 4-4 4M14 4l-4 16"/></svg></div><h4>Mint</h4><p>Smart contract issues tokens</p><code>token.mint()</code></div>
+    <div class="ps"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#C45BFF" stroke-width="1.6"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M16 13h2M3 10h18"/></svg></div><h4>Hold</h4><p>Tokens in your wallet</p><code>balanceOf(you)</code></div>
+    <div class="ps"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FF5BD8" stroke-width="1.6"><path d="M12 3v18M17 8c0-2-2-3-5-3s-5 1-5 3 2 3 5 3 5 1 5 3-2 3-5 3-5-1-5-3"/></svg></div><h4>Earn</h4><p>Monthly rent, provable</p><code>merkle.verify()</code></div>
+  </div>
+</div></section>
+
+<section id="proof" style="padding-top:40px"><div class="wrap proof">
+  <div class="merkle glass">
+    <div class="kick">// PROOF OF RENT</div>
+    <h3 style="font-size:24px;margin:10px 0 6px">Your rent, cryptographically proven</h3>
+    <p style="color:var(--m);font-size:14.5px;line-height:1.6">Each month's rent list is folded into one fingerprint on the blockchain. Your share proves itself in one click, without showing anyone else's.</p>
+    <svg viewBox="0 0 520 230" width="100%" height="230" style="margin-top:12px">
+      <g stroke="#28E7FF" stroke-opacity=".5" fill="none"><path d="M260 40 L150 105M260 40 L370 105M150 105 L95 170M150 105 L205 170M370 105 L315 170M370 105 L425 170"/></g>
+      <g font-family="JetBrains Mono" font-size="11" text-anchor="middle">
+        <rect x="200" y="20" width="120" height="36" rx="10" fill="#1B1347" stroke="#8B5CFF"/><text x="260" y="43" fill="#EAF0FF">root 0xa1a1…</text>
+        <rect x="95" y="88" width="110" height="34" rx="10" fill="#0D1838" stroke="#28E7FF"/><text x="150" y="110" fill="#8E9AB8">0x5e…</text>
+        <rect x="315" y="88" width="110" height="34" rx="10" fill="#0D1838" stroke="#28E7FF" stroke-opacity=".4"/><text x="370" y="110" fill="#5A6584">0x7c…</text>
+        <rect x="45" y="154" width="100" height="40" rx="10" fill="rgba(60,255,176,.12)" stroke="#3CFFB0"/><text x="95" y="172" fill="#3CFFB0">YOU</text><text x="95" y="186" fill="#3CFFB0">Rs 25,000</text>
+        <rect x="155" y="154" width="100" height="40" rx="10" fill="#0D1838" stroke="#28E7FF"/><text x="205" y="178" fill="#8E9AB8">0x3b…</text>
+        <rect x="265" y="154" width="100" height="40" rx="10" fill="#0D1838" stroke="#28E7FF" stroke-opacity=".3"/><text x="315" y="178" fill="#5A6584">0x91…</text>
+        <rect x="375" y="154" width="100" height="40" rx="10" fill="#0D1838" stroke="#28E7FF" stroke-opacity=".3"/><text x="425" y="178" fill="#5A6584">0xd2…</text>
+      </g>
+    </svg>
+    <a class="btn g" style="margin-top:10px" href="#">Verify my rent ✓</a>
+  </div>
+  <div class="calc glass">
+    <div class="kick">// RETURNS</div>
+    <p style="color:var(--m);font-size:13px;margin-top:10px">You invest</p>
+    <div class="amt" id="amt">Rs 250,000</div>
+    <input type="range" min="5000" max="2000000" step="5000" value="250000" id="rng" aria-label="Investment amount">
+    <div class="res">
+      <div><small>Monthly rent</small><b class="grad" id="m">Rs 1,917</b></div>
+      <div><small>Yearly rent</small><b id="y">Rs 23,000</b></div>
+      <div><small>Tokens</small><b id="t">497</b></div>
+      <div><small>5-year rent</small><b id="f">Rs 115,000</b></div>
+    </div>
+    <p class="fine">At GPF3's current 9.2% yield. Illustration only; rent and prices can go down.</p>
+  </div>
+</div></section>
+
+<section id="faq" style="padding-top:40px"><div class="wrap">
+  <div class="kick">// FAQ</div><h2 style="margin-bottom:34px">Questions, answered.</h2>
+  <div class="faq">
+    <div class="q glass"><h4>Is this crypto?</h4><p>No. Tokens are regulated security tokens recording ownership. Money only moves in PKR through banks and Raast.</p></div>
+    <div class="q glass"><h4>Do I really own the building?</h4><p>You own units in the trust that owns it. The trustee's register and the tokens always match.</p></div>
+    <div class="q glass"><h4>Can the AI tell me what to buy?</h4><p>No. It explains documents and data with sources. Decisions stay yours.</p></div>
+    <div class="q glass"><h4>What if the platform shuts down?</h4><p>The trustee holds the building and the register; the blockchain keeps the record. Your ownership does not depend on us.</p></div>
+  </div>
+</div></section>
+
+<div class="final"><div class="wrap">
+  <div class="kick">// GET STARTED</div>
+  <h2>Your first token is<br><span class="grad">Rs 5,000 away.</span></h2>
+  <div class="cta" style="justify-content:center"><a class="btn g" href="#">Create free account →</a><a class="btn" href="#ai">✦ Ask the AI first</a></div>
+</div></div>
+
+<footer><div class="wrap"><div class="g">
+  <div><a class="logo" href="#">Property Token</a><p style="margin-top:12px;max-width:320px;line-height:1.6">Tokenised, trustee-held real estate in Pakistan. Prototype: sample figures and test money; not an offer. AI advisor is a design concept and never gives investment advice.</p></div>
+  <div><h5>Invest</h5><ul><li>Properties</li><li>Returns</li><li>Market</li></ul></div>
+  <div><h5>Technology</h5><ul><li>Blockchain</li><li>AI advisor</li><li>Proofs</li></ul></div>
+  <div><h5>Company</h5><ul><li>About</li><li>Risks</li><li>Contact</li></ul></div>
+</div></div></footer>
+<div class="mock-label">mockup v11 · customer website · neon chain + AI</div>
+
+<script>
+(function(){
+  const c=document.getElementById('globe'),x=c.getContext('2d');let W,H,R,pts=[],rot=0;const dpr=devicePixelRatio||1;
+  function size(){const r=c.getBoundingClientRect();W=c.width=r.width*dpr;H=c.height=r.height*dpr;R=Math.min(W,H)*.36;}
+  size();addEventListener('resize',size);
+  for(let i=0;i<220;i++){const u=Math.random(),v=Math.random();pts.push({th:2*Math.PI*u,ph:Math.acos(2*v-1)});}
+  const links=[];for(let i=0;i<120;i++)links.push([Math.random()*pts.length|0,Math.random()*pts.length|0]);
+  function proj(p){const sx=Math.sin(p.ph)*Math.cos(p.th+rot),sy=Math.cos(p.ph),sz=Math.sin(p.ph)*Math.sin(p.th+rot);const tilt=.35;
+    const y2=sy*Math.cos(tilt)-sz*Math.sin(tilt),z2=sy*Math.sin(tilt)+sz*Math.cos(tilt);return{x:W/2+sx*R,y:H/2+y2*R,z:z2};}
+  function frame(){x.clearRect(0,0,W,H);rot+=.0025;
+    const g=x.createRadialGradient(W/2,H/2,R*.2,W/2,H/2,R*1.25);g.addColorStop(0,'rgba(139,92,255,.18)');g.addColorStop(1,'rgba(4,5,12,0)');x.fillStyle=g;x.beginPath();x.arc(W/2,H/2,R*1.25,0,7);x.fill();
+    x.strokeStyle='rgba(40,231,255,.18)';x.lineWidth=dpr;x.beginPath();x.arc(W/2,H/2,R,0,7);x.stroke();
+    const P=pts.map(proj);
+    for(const [a,b] of links){const p=P[a],q=P[b];if(p.z<0||q.z<0)continue;const d=Math.hypot(p.x-q.x,p.y-q.y);if(d>R*.7)continue;
+      x.strokeStyle=`rgba(40,231,255,${.25*(1-d/(R*.7))})`;x.beginPath();x.moveTo(p.x,p.y);x.quadraticCurveTo((p.x+q.x)/2,(p.y+q.y)/2-30*dpr,q.x,q.y);x.stroke();}
+    for(const p of P){const a=p.z>0?.9:.18;x.fillStyle=p.z>0?`rgba(139,92,255,${a})`:`rgba(40,231,255,${a})`;x.beginPath();x.arc(p.x,p.y,(p.z>0?2:1.2)*dpr,0,7);x.fill();}
+    const t=(Date.now()/900)%1;const p=P[7],q=P[55];if(p.z>0&&q.z>0){x.fillStyle='#3CFFB0';x.shadowColor='#3CFFB0';x.shadowBlur=14*dpr;x.beginPath();x.arc(p.x+(q.x-p.x)*t,p.y+(q.y-p.y)*t,3*dpr,0,7);x.fill();x.shadowBlur=0;}
+    requestAnimationFrame(frame);}
+  frame();
+
+  const strip=document.getElementById('strip');let h=24180,html='';
+  for(let k=0;k<2;k++)for(let i=0;i<14;i++){const n=h+i;html+=`<div class="blk"><span class="mono">BLOCK</span><b>#${n.toLocaleString()}</b><span class="mono">0x${((n*2654435761)>>>0).toString(16).slice(0,6)}…</span><span style="color:#3CFFB0">✓ 4/4</span></div>${i<13?'<div class="link"></div>':''}`;}
+  strip.innerHTML=html;
+  let nb=24210;setInterval(()=>{nb++;document.getElementById('nb').textContent='#'+nb.toLocaleString();},2000);
+
+  const ans=document.getElementById('ans');const full='Overall it looks low-risk for property, but not risk-free. The tenant is a bank on a 10-year lease <span class="src">lease §4</span>, rent rises 10% every two years <span class="src">lease §5.1</span>, and the trustee keeps 6 months of rent in reserve <span class="src">trust deed §9</span>. Prices can still fall and selling depends on buyers <span class="src">risk §2</span>.';
+  const plain=full.replace(/<[^>]+>/g,'');let i=0;
+  function type(){i+=2;if(i>=plain.length){ans.innerHTML=full;setTimeout(()=>{i=0;type();},6000);return;}ans.innerHTML=plain.slice(0,i)+'<span class="caret"></span>';setTimeout(type,18);}
+  const io=new IntersectionObserver(e=>{if(e[0].isIntersecting){type();io.disconnect();}});io.observe(ans);
+
+  const r=document.getElementById('rng'),fmt=n=>'Rs '+Math.round(n).toLocaleString('en-PK');
+  function upd(){const v=+r.value,y=v*0.092;document.getElementById('amt').textContent=fmt(v);document.getElementById('m').textContent=fmt(y/12);document.getElementById('y').textContent=fmt(y);document.getElementById('t').textContent=Math.floor(v/503).toLocaleString('en-PK');document.getElementById('f').textContent=fmt(y*5);}
+  r.addEventListener('input',upd);upd();
+
+  document.querySelectorAll('.tilt').forEach(el=>{el.addEventListener('mousemove',e=>{const b=el.getBoundingClientRect(),dx=(e.clientX-b.left)/b.width-.5,dy=(e.clientY-b.top)/b.height-.5;el.style.transform=`rotateX(${(-dy*8).toFixed(2)}deg) rotateY(${(dx*10).toFixed(2)}deg) translateY(-4px)`;});el.addEventListener('mouseleave',()=>{el.style.transform='';});});
+})();
+</script>
+</body>
+</html>

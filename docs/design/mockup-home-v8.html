@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v8 (command center)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#030507;--p:#0A0E13;--p2:#0F151C;--line:#18212B;--line2:#243140;--t:#DCE7F2;--m:#7A8A9C;--d:#4A5868;
+  --neon:#00F5A0;--cyan:#00D9FF;--amber:#FFB547;--red:#FF4D6D;--violet:#9D7BFF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--bg);color:var(--t);font-size:13px;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",monospace}
+.sg{font-family:"Space Grotesk"}
+.up{color:var(--neon)}.dn{color:var(--red)}
+.scan{position:fixed;inset:0;pointer-events:none;z-index:50;background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px)}
+.glow{text-shadow:0 0 12px rgba(0,245,160,.55)}
+.app{display:grid;grid-template-columns:62px 1fr;min-height:100vh}
+.rail{border-right:1px solid var(--line);background:#05080B;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px}
+.rail .logo{width:36px;height:36px;border-radius:10px;background:conic-gradient(from 210deg,var(--neon),var(--cyan),var(--violet),var(--neon));display:grid;place-items:center;margin-bottom:14px;box-shadow:0 0 24px rgba(0,245,160,.35)}
+.rail .logo b{width:30px;height:30px;border-radius:8px;background:#05080B;display:grid;place-items:center;font-family:"Space Grotesk";font-size:12px}
+.rail a{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:var(--d)}
+.rail a.on{background:var(--p2);color:var(--neon);box-shadow:inset 2px 0 0 var(--neon)}
+.main{display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:18px;height:50px;padding:0 16px;border-bottom:1px solid var(--line);background:#05080B}
+.ws{display:flex;gap:4px}.ws span{padding:6px 12px;border-radius:8px;color:var(--m);font-weight:500}.ws span.on{background:var(--p2);color:var(--t)}
+.sp{flex:1}
+.stat{display:flex;gap:18px;font-size:12px;color:var(--m)}.stat b{color:var(--t)}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:4px 9px;border-radius:999px;border:1px solid var(--line2);font-size:11.5px;color:var(--m)}
+.ld{width:6px;height:6px;border-radius:50%;background:var(--neon);box-shadow:0 0 10px var(--neon);animation:bl 1.4s infinite}
+@keyframes bl{50%{opacity:.35}}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;font-weight:600;border:1px solid var(--line2);background:var(--p2);color:var(--t)}
+.btn.n{background:var(--neon);color:#00140C;border-color:var(--neon);box-shadow:0 0 24px -6px var(--neon)}
+
+.grid{display:grid;grid-template-columns:1.55fr 1fr 330px;grid-template-rows:auto auto;gap:10px;padding:10px}
+.w{background:var(--p);border:1px solid var(--line);border-radius:12px;padding:12px 14px;position:relative}
+.wh{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--m);font-family:"JetBrains Mono";text-transform:uppercase;letter-spacing:.6px}
+.wh b{color:var(--t);font-family:Inter;text-transform:none;letter-spacing:0;font-size:13px}
+.wh .r{margin-left:auto;display:flex;gap:4px}
+.wh .r span{padding:2px 7px;border-radius:5px;font-size:10.5px}.wh .r span.on{background:var(--p2);color:var(--t)}
+
+.cmd{grid-column:1 / span 2;background:linear-gradient(180deg,#0D1520,#0A0E13);border-color:#1F3346;box-shadow:0 0 0 1px rgba(0,217,255,.08),0 30px 80px -40px rgba(0,217,255,.4)}
+.prompt{display:flex;align-items:center;gap:12px;font-size:16px;padding:6px 4px 14px;border-bottom:1px solid var(--line)}
+.prompt .k{color:var(--cyan);font-family:"JetBrains Mono"}
+.caret{display:inline-block;width:9px;height:18px;background:var(--cyan);vertical-align:-3px;animation:bl 1s steps(1) infinite}
+.answer{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;padding-top:14px}
+.answer p{line-height:1.65;color:#B8C6D6;font-size:13.5px}
+.cite{font-family:"JetBrains Mono";font-size:10.5px;color:var(--cyan);border:1px solid rgba(0,217,255,.3);border-radius:5px;padding:0 5px;margin-left:2px}
+.cmp{width:100%;border-collapse:collapse;font-size:12.5px}
+.cmp th{color:var(--d);font-weight:500;text-align:left;padding:5px 6px;font-family:"JetBrains Mono";font-size:10.5px;border-bottom:1px solid var(--line)}
+.cmp td{padding:7px 6px;border-bottom:1px solid var(--line)}
+.cmp td.n{font-family:"JetBrains Mono";text-align:right}
+.act{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.act span{font-family:"JetBrains Mono";font-size:11px;padding:5px 9px;border-radius:7px;border:1px solid var(--line2);color:var(--m)}
+.act span b{color:var(--cyan);font-weight:500}
+
+.order{grid-row:1 / span 2;grid-column:3}
+.side2{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#05080B;padding:3px;border-radius:9px;margin-bottom:10px}
+.side2 span{text-align:center;padding:8px;border-radius:7px;font-weight:700;color:var(--m)}.side2 span.on{background:rgba(0,245,160,.12);color:var(--neon)}
+.f{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line2);border-radius:9px;margin-bottom:8px}
+.f small{color:var(--m)}.f b{font-family:"JetBrains Mono"}
+.ln{display:flex;justify-content:space-between;margin:6px 0;color:var(--m)}.ln b{color:var(--t);font-family:"JetBrains Mono"}
+.check{display:flex;gap:8px;align-items:center;font-size:12px;color:#9FB2C5;margin:5px 0}
+.check i{color:var(--neon);font-style:normal}
+.tapew{margin-top:12px}
+.tape .t{display:grid;grid-template-columns:62px 58px 34px 1fr;gap:6px;padding:5px 0;font-family:"JetBrains Mono";font-size:11.5px;border-bottom:1px dashed var(--line);animation:fl .8s}
+@keyframes fl{from{background:rgba(0,245,160,.12)}}
+.tape .t span:last-child{text-align:right;color:var(--d)}
+
+.chart{grid-column:1}
+.q{display:flex;align-items:baseline;gap:12px}
+.q b{font-family:"Space Grotesk";font-size:34px;letter-spacing:-.5px}
+.ind{display:flex;gap:6px;margin-left:auto}.ind span{font-family:"JetBrains Mono";font-size:10.5px;padding:3px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--m)}.ind span.on{border-color:rgba(0,245,160,.4);color:var(--neon)}
+.right2{grid-column:2;display:grid;gap:10px}
+.cal{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.cal div{border:1px solid var(--line);border-radius:8px;padding:8px 6px;text-align:center}
+.cal small{display:block;font-family:"JetBrains Mono";font-size:10px;color:var(--d)}
+.cal b{font-family:"JetBrains Mono";font-size:12px}
+.cal .paid{border-color:rgba(0,245,160,.35);background:rgba(0,245,160,.06)}.cal .paid b{color:var(--neon)}
+.cal .next{border-color:rgba(255,181,71,.5);background:rgba(255,181,71,.07)}.cal .next b{color:var(--amber)}
+.ex .e{display:grid;grid-template-columns:58px 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;align-items:center}
+.tag{font-family:"JetBrains Mono";font-size:10px;padding:2px 6px;border-radius:5px;text-align:center}
+.tag.m{background:rgba(0,245,160,.1);color:var(--neon)}.tag.t{background:rgba(0,217,255,.1);color:var(--cyan)}.tag.r{background:rgba(255,181,71,.1);color:var(--amber)}
+.ex .mono{font-size:11px;color:var(--d)}
+.pnl{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pnl div{border:1px solid var(--line);border-radius:9px;padding:10px}
+.pnl small{display:block;color:var(--d);font-size:10.5px;font-family:"JetBrains Mono";text-transform:uppercase}
+.pnl b{font-family:"Space Grotesk";font-size:18px}
+.mock-label{position:fixed;right:14px;bottom:14px;z-index:60;font-family:"JetBrains Mono";font-size:11px;padding:7px 11px;border-radius:8px;background:var(--neon);color:#00140C}
+</style>
+</head>
+<body>
+<div class="scan"></div>
+<div class="app">
+  <nav class="rail">
+    <div class="logo"><b>PT</b></div>
+    <a class="on" href="#" title="Command"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="#" title="Markets"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></a>
+    <a href="#" title="Portfolio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 6"/></svg></a>
+    <a href="#" title="Rent"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></a>
+    <a href="#" title="Proofs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="#" title="Copilot" style="color:var(--cyan)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/></svg></a>
+  </nav>
+
+  <div class="main">
+    <div class="bar">
+      <b class="sg" style="font-size:15px">PROPERTY TOKEN <span class="mono" style="color:var(--neon);font-weight:400">// command</span></b>
+      <div class="ws"><span class="on">Workspace 1</span><span>Rent desk</span><span>+</span></div>
+      <div class="sp"></div>
+      <div class="stat"><span class="pill"><span class="ld"></span>QBFT 4/4</span><span>BLOCK <b class="mono" id="blk">24,196</b></span><span>FINALITY <b class="mono">2.0s</b></span><span>LEDGER <b class="up">INTACT</b></span><span>PKT <b class="mono" id="clk">12:04</b></span></div>
+      <a class="btn" href="#">اردو</a><a class="btn n" href="#">Deposit Rs</a>
+    </div>
+
+    <div class="grid">
+      <div class="w cmd">
+        <div class="prompt"><span class="k">✦ ask ›</span><span>compare GPF3 rent yield with a 12-month bank deposit and show my rent schedule<span class="caret"></span></span><span class="sp"></span><span class="pill mono">Ctrl K</span></div>
+        <div class="answer">
+          <div>
+            <p>GPF3's rent yield at today's price is <b class="up">9.15%</b> <span class="cite">rent 12m ÷ px 503</span>, paid monthly and rising 10% every two years under the lease <span class="cite">lease §5.1</span>. A 12-month deposit is fixed and, unlike GPF3, insured up to a limit. GPF3's price can move, and selling depends on buyers in the market <span class="cite">risk §2</span>.</p>
+            <div class="act"><span>open <b>lease.pdf §5</b></span><span>show <b>rent history</b></span><span>set alert <b>px &lt; 495</b></span><span>explain in <b>اردو</b></span></div>
+          </div>
+          <table class="cmp">
+            <tr><th></th><th>GPF3</th><th>12-mo deposit</th></tr>
+            <tr><td>Return</td><td class="n up">9.15% rent</td><td class="n">set by bank</td></tr>
+            <tr><td>Paid</td><td>monthly</td><td>at maturity</td></tr>
+            <tr><td>Price risk</td><td class="dn">yes</td><td>no</td></tr>
+            <tr><td>Insured</td><td class="dn">no</td><td>up to limit</td></tr>
+            <tr><td>Exit</td><td>market, ~2.4 s</td><td>penalty</td></tr>
+          </table>
+        </div>
+        <p class="mono" style="color:var(--d);font-size:10.5px;margin-top:10px">copilot · grounded in documents and chain data · not investment advice</p>
+      </div>
+
+      <div class="w order">
+        <div class="wh"><b>GPF3</b>order ticket<div class="r"><span class="on">LIMIT</span><span>MKT</span></div></div>
+        <div class="side2"><span class="on">BUY</span><span>SELL</span></div>
+        <div class="f"><small>Price</small><b>503.00</b></div>
+        <div class="f"><small>Tokens</small><b>200</b></div>
+        <div class="ln"><span>Cost</span><b>Rs 100,600.00</b></div>
+        <div class="ln"><span>Monthly rent</span><b class="up">+Rs 767</b></div>
+        <div class="ln"><span>Cash after</span><b>Rs 4,766,155</b></div>
+        <div style="margin:10px 0 12px">
+          <div class="check"><i>✓</i>within ±10% NAV band</div>
+          <div class="check"><i>✓</i>holding stays under 10% cap</div>
+          <div class="check"><i>✓</i>KYC verified on chain</div>
+        </div>
+        <a class="btn n" style="width:100%;justify-content:center;padding:12px" href="#">Place buy · DvP on chain</a>
+        <div class="tapew"><div class="wh" style="margin-bottom:6px">tape<div class="r"><span class="ld" style="margin-top:5px"></span></div></div><div class="tape" id="tape"></div></div>
+      </div>
+
+      <div class="w chart">
+        <div class="wh"><b>Gulberg Plaza F3</b>lahore · office<div class="r"><span>1m</span><span class="on">5m</span><span>1h</span><span>1d</span></div></div>
+        <div class="q"><b class="glow up">503.00</b><span class="mono up">+0.60%</span><span class="mono" style="color:var(--d)">NAV 500.00</span>
+          <div class="ind"><span class="on">NAV band</span><span class="on">VOL</span><span>YIELD</span><span>VWAP</span></div></div>
+        <svg viewBox="0 0 760 250" width="100%" height="250">
+          <defs><linearGradient id="nb" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#FFB547" stop-opacity=".09"/><stop offset="1" stop-color="#FFB547" stop-opacity=".02"/></linearGradient></defs>
+          <g stroke="#121A22"><path d="M0 40H760M0 95H760M0 150H760M0 205H760"/></g>
+          <rect x="0" y="60" width="760" height="110" fill="url(#nb)"/>
+          <path d="M0 115H760" stroke="#FFB547" stroke-dasharray="4 5"/>
+          <g id="cdl"></g><g id="vv" fill="#16212C"></g>
+        </svg>
+      </div>
+
+      <div class="right2">
+        <div class="w">
+          <div class="wh"><b>Rent desk</b>2026 schedule · GPF3</div>
+          <div class="cal">
+            <div class="paid"><small>JUN</small><b>✓ 25.0k</b></div><div class="paid"><small>JUL</small><b>✓ 25.0k</b></div><div class="paid"><small>AUG</small><b>✓ 25.0k</b></div>
+            <div class="paid"><small>SEP</small><b>✓ 25.0k</b></div><div class="next"><small>NOV 1</small><b>≈ 25.0k</b></div><div><small>DEC</small><b>≈ 25.0k</b></div>
+          </div>
+          <p class="mono" style="color:var(--d);font-size:10.5px;margin-top:8px">each paid month links to its Merkle root · verify in 1 click</p>
+        </div>
+        <div class="w ex">
+          <div class="wh"><b>Explorer</b>your on-chain events</div>
+          <div class="e"><span class="tag t">TRADE</span><span>Bought 40 GPF3 @ 503.00</span><span class="mono">#24,191</span></div>
+          <div class="e"><span class="tag r">RENT</span><span>Dist #3 · your share verified</span><span class="mono">#24,101</span></div>
+          <div class="e"><span class="tag m">MINT</span><span>1,000 GPF3 issued to you</span><span class="mono">#9,412</span></div>
+        </div>
+        <div class="w">
+          <div class="wh"><b>P&amp;L</b>portfolio</div>
+          <div class="pnl"><div><small>Value</small><b>25.6L</b></div><div><small>Unrealised</small><b class="up">+15.3k</b></div><div><small>Rent YTD</small><b class="up">2.5L</b></div><div><small>Yield</small><b>9.2%</b></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mock-label">mockup v8 · command center</div>
+<script>
+(function(){
+  const g=document.getElementById('cdl'),vv=document.getElementById('vv');let p=500,x=8,h='',v='';
+  for(let i=0;i<46;i++){const o=p,c=Math.max(495,Math.min(507,o+(Math.random()-.44)*1.5));const hi=Math.max(o,c)+Math.random()*.6,lo=Math.min(o,c)-Math.random()*.6;
+    const y=q=>205-((q-494)/14)*190,col=c>=o?'#00F5A0':'#FF4D6D';
+    h+=`<line x1="${x+5}" x2="${x+5}" y1="${y(hi)}" y2="${y(lo)}" stroke="${col}"/><rect x="${x}" y="${Math.min(y(o),y(c))}" width="10" height="${Math.max(1.5,Math.abs(y(o)-y(c)))}" fill="${col}" style="filter:drop-shadow(0 0 3px ${col})"/>`;
+    v+=`<rect x="${x}" y="${250-Math.random()*36}" width="10" height="40"/>`;p=c;x+=16;}
+  g.innerHTML=h;vv.innerHTML=v;
+  const tape=document.getElementById('tape');let px=503;
+  function add(){px=Math.round((px+(Math.random()-.5)*1.4)*4)/4;const el=document.createElement('div');el.className='t';const up=Math.random()>.5;
+    el.innerHTML=`<span>${new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi'})}</span><span class="${up?'up':'dn'}">${px.toFixed(2)}</span><span>${10+Math.floor(Math.random()*80)}</span><span>0x${Math.random().toString(16).slice(2,6)}</span>`;
+    tape.prepend(el);while(tape.children.length>6)tape.lastChild.remove();}
+  for(let i=0;i<6;i++)add();setInterval(add,2200);
+  let b=24196;setInterval(()=>{b++;document.getElementById('blk').textContent=b.toLocaleString();},2000);
+  setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi',hour:'2-digit',minute:'2-digit'});},1000);
+})();
+</script>
+</body>
+</html>

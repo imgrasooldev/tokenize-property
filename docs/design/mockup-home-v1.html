@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - home redesign mockup v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B1320; --navy:#0E1B2E; --navy2:#13243D; --navy3:#1B3150;
+  --gold:#E9B44C; --gold2:#F6D58E; --teal:#2DD4BF; --teal2:#14B8A6;
+  --up:#34D399; --down:#F87171; --paper:#F7F5F0; --card:#FFFFFF; --muted:#6B7686; --line:#E7E3DA;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+
+.ticker{background:#08101C;color:#C9D3E0;font-size:13px;overflow:hidden;white-space:nowrap;border-bottom:1px solid #1A2638}
+.ticker .row{display:inline-flex;gap:40px;padding:9px 0;animation:slide 40s linear infinite}
+.ticker b{color:#fff;font-weight:600}.ticker .u{color:var(--up)}.ticker .d{color:var(--down)}.ticker .tag{color:var(--gold)}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+.hero{background:radial-gradient(1200px 500px at 75% -10%,#23406A 0%,transparent 60%),radial-gradient(800px 400px at 0% 100%,#0F3B3A 0%,transparent 55%),linear-gradient(180deg,var(--navy) 0%,#0A1524 100%);color:#fff;position:relative;overflow:hidden}
+.hero:after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:22px 22px;mask-image:linear-gradient(180deg,#000 0%,transparent 80%);pointer-events:none}
+nav{display:flex;align-items:center;gap:36px;padding:22px 0;position:relative;z-index:2}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.3px}
+.logo i{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#C98A1E);display:grid;place-items:center;font-style:normal;color:#1A1205;font-size:14px;font-weight:800}
+nav .links{display:flex;gap:28px;font-size:14.5px;color:#C9D3E0}
+nav .links a.on{color:#fff}
+nav .sp{flex:1}
+.lang{display:flex;border:1px solid #2A3E5C;border-radius:999px;overflow:hidden;font-size:13px}
+.lang span{padding:6px 12px;color:#9FB0C6}.lang span.on{background:#22385A;color:#fff}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:12px;font-weight:600;font-size:15px;border:1px solid transparent;cursor:pointer}
+.btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#1A1205;box-shadow:0 10px 30px -10px rgba(233,180,76,.6)}
+.btn.ghost{border-color:#2F4566;color:#fff;background:rgba(255,255,255,.04)}
+.btn.sm{padding:9px 15px;font-size:14px}
+
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;padding:56px 0 64px;position:relative;z-index:2;align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--gold2);background:rgba(233,180,76,.1);border:1px solid rgba(233,180,76,.25);padding:6px 12px;border-radius:999px}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+h1{font-family:Fraunces,Georgia,serif;font-size:62px;line-height:1.04;letter-spacing:-1.5px;margin:22px 0 18px;font-weight:700}
+h1 em{font-style:normal;background:linear-gradient(90deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:18px;line-height:1.6;color:#BFCBDA;max-width:540px}
+.cta{display:flex;gap:12px;margin:30px 0 34px}
+.trust{display:flex;gap:22px;flex-wrap:wrap;font-size:13.5px;color:#AFC0D4}
+.trust span{display:flex;align-items:center;gap:7px}
+.trust svg{color:var(--teal)}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#22344F;border:1px solid #22344F;border-radius:16px;overflow:hidden;margin-top:38px}
+.kpis div{background:rgba(14,27,46,.9);padding:16px 18px}
+.kpis small{display:block;font-size:12px;color:#8FA2BA;margin-bottom:6px}
+.kpis b{font-size:22px;font-weight:700;letter-spacing:-.3px}
+
+.panel{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:22px;backdrop-filter:blur(10px);box-shadow:0 40px 80px -30px rgba(0,0,0,.6)}
+.ph{display:flex;align-items:center;gap:12px}
+.ph .sym{width:42px;height:42px;border-radius:12px;background:#1E3354;display:grid;place-items:center;font-weight:800;color:var(--gold2);font-size:13px}
+.ph h4{font-size:15px;font-weight:600}.ph p{font-size:12.5px;color:#8FA2BA}
+.price{margin-left:auto;text-align:right}.price b{font-size:24px;font-weight:700}.price small{display:block;color:var(--up);font-size:13px;font-weight:600}
+.tabs{display:flex;gap:6px;margin:16px 0 8px}.tabs span{font-size:12px;padding:5px 10px;border-radius:8px;color:#8FA2BA}.tabs span.on{background:#22385A;color:#fff}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.mini div{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px}
+.mini small{font-size:11.5px;color:#8FA2BA;display:block}.mini b{font-size:15px}
+.float{position:absolute;background:#fff;color:var(--ink);border-radius:14px;padding:12px 14px;box-shadow:0 20px 50px -15px rgba(0,0,0,.5);font-size:13px;display:flex;gap:10px;align-items:center}
+.float .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center}
+
+section{padding:84px 0}
+.sec-h{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:34px}
+.kicker{font-size:13px;font-weight:600;color:#B7862A;letter-spacing:.4px}
+h2{font-family:Fraunces,Georgia,serif;font-size:40px;letter-spacing:-.8px;line-height:1.1;margin-top:8px}
+.sub{color:var(--muted);font-size:16px;max-width:520px;line-height:1.6}
+
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;overflow:hidden;transition:transform .25s,box-shadow .25s}
+.card:hover{transform:translateY(-6px);box-shadow:0 30px 60px -25px rgba(14,27,46,.35)}
+.art{height:210px;position:relative}
+.badges{position:absolute;top:14px;left:14px;display:flex;gap:6px}
+.pill{font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.92);color:var(--ink)}
+.pill.live{background:#0E1B2E;color:#fff}.pill.live:before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--up);margin-right:6px;vertical-align:1px}
+.yield{position:absolute;right:14px;bottom:14px;background:#0E1B2E;color:#fff;border-radius:12px;padding:8px 12px;text-align:right}
+.yield small{display:block;font-size:10.5px;color:#9FB0C6}.yield b{font-size:18px;color:var(--gold2)}
+.cb{padding:20px 22px 22px}
+.cb h3{font-size:18.5px;font-weight:700;letter-spacing:-.2px}
+.loc{font-size:13.5px;color:var(--muted);margin-top:4px;display:flex;gap:6px;align-items:center}
+.stats3{display:grid;grid-template-columns:repeat(3,1fr);margin:18px 0 14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stats3 div{padding:12px 0}.stats3 div+div{border-left:1px solid var(--line);padding-left:14px}
+.stats3 small{display:block;font-size:11.5px;color:var(--muted)}.stats3 b{font-size:15.5px}
+.bar{height:8px;background:#EEEAE1;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal2),var(--teal));border-radius:99px}
+.barl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-top:8px}
+.cf{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+.cf .btn{background:var(--navy);color:#fff}
+.cf .soon{background:#F1EEE7;color:#7A7365}
+
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;counter-reset:s}
+.step{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;position:relative}
+.step .n{position:absolute;top:18px;right:20px;font-family:Fraunces,serif;font-size:42px;color:#EFE9DC;font-weight:700}
+.step .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#0E1B2E;color:var(--gold2);margin-bottom:16px}
+.step h4{font-size:16.5px;margin-bottom:6px}.step p{font-size:14px;color:var(--muted);line-height:1.55}
+
+.dark{background:var(--navy);color:#fff;border-radius:32px;margin:0 24px;padding:64px 0;position:relative;overflow:hidden}
+.calc{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.calc .box{background:#13243D;border:1px solid #22385A;border-radius:22px;padding:28px}
+.calc label{font-size:13px;color:#8FA2BA}
+.amount{font-size:40px;font-weight:800;letter-spacing:-1px;margin:6px 0 16px}
+.range{height:8px;background:#22385A;border-radius:99px;position:relative;margin-bottom:26px}
+.range i{position:absolute;left:0;top:0;bottom:0;width:38%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:99px}
+.range b{position:absolute;left:38%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(233,180,76,.25)}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.res div{background:#0E1B2E;border-radius:14px;padding:14px 16px}
+.res small{font-size:12px;color:#8FA2BA;display:block}.res b{font-size:21px}
+.res .g b{color:var(--gold2)}
+.note{font-size:12px;color:#7F92AA;margin-top:14px}
+
+.trustgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.tg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px}
+.tg .ic{width:42px;height:42px;border-radius:12px;background:#E7F7F4;color:#0F766E;display:grid;place-items:center;margin-bottom:14px}
+.tg h4{font-size:15.5px;margin-bottom:6px}.tg p{font-size:13.5px;color:var(--muted);line-height:1.55}
+.tg .st{display:inline-block;margin-top:12px;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:999px;background:#FFF5DF;color:#8A5A00}
+.tg .st.ok{background:#E3F6EE;color:#0B7A55}
+
+footer{background:#08101C;color:#9FB0C6;padding:56px 0 34px;margin-top:84px;font-size:14px}
+.fg{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px}
+footer h5{color:#fff;font-size:14px;margin-bottom:12px}footer li{list-style:none;margin:8px 0}
+.disc{border-top:1px solid #1A2638;margin-top:36px;padding-top:20px;font-size:12.5px;color:#6F8099;line-height:1.6}
+.mock-label{position:fixed;right:16px;bottom:16px;background:#0E1B2E;color:#F6D58E;font-size:12px;padding:8px 12px;border-radius:10px;z-index:9;border:1px solid #2A3E5C}
+</style>
+</head>
+<body>
+
+<div class="ticker"><div class="row">
+  <span><b>GPF3</b> Rs 503.00 <span class="u">+0.60%</span></span><span>Vol 24h <b>699</b> tokens</span><span><b>DHA6</b> <span class="tag">opening soon</span></span><span><b>BAO2</b> <span class="tag">opening soon</span></span><span>Rent paid this year <b>Rs 4.3M</b></span><span>Block <b>#24,168</b> · 4/4 validators</span>
+  <span><b>GPF3</b> Rs 503.00 <span class="u">+0.60%</span></span><span>Vol 24h <b>699</b> tokens</span><span><b>DHA6</b> <span class="tag">opening soon</span></span><span><b>BAO2</b> <span class="tag">opening soon</span></span><span>Rent paid this year <b>Rs 4.3M</b></span><span>Block <b>#24,168</b> · 4/4 validators</span>
+</div></div>
+
+<header class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="logo" href="#"><i>PT</i>Property Token</a>
+      <div class="links"><a class="on" href="#">Properties</a><a href="#">Market</a><a href="#">Portfolio</a><a href="#">How it works</a><a href="#">Trust</a></div>
+      <div class="sp"></div>
+      <div class="lang"><span class="on">EN</span><span>اردو</span></div>
+      <a class="btn ghost sm" href="#">Sign in</a>
+      <a class="btn gold sm" href="#">Start investing</a>
+    </nav>
+
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>Gulberg Plaza now open · 6.3% of register issued</span>
+        <h1>Own a share of <em>prime property</em>, from Rs 5,000</h1>
+        <p class="lead">Every building is held by an independent trustee. Your tokens mirror the trustee's register, and your share of the rent lands in your bank account every month.</p>
+        <div class="cta">
+          <a class="btn gold" href="#">Explore properties
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn ghost" href="#">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Watch the live market</a>
+        </div>
+        <div class="trust">
+          <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>Trustee-held</span>
+          <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>NADRA-verified investors only</span>
+          <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Rent paid in PKR via Raast</span>
+        </div>
+        <div class="kpis">
+          <div><small>Value on platform</small><b>Rs 31.7 Cr</b></div>
+          <div><small>Avg. rent yield</small><b>9.2%</b></div>
+          <div><small>Investors</small><b>1,240</b></div>
+          <div><small>Rent distributed</small><b>Rs 4.3M</b></div>
+        </div>
+      </div>
+
+      <div style="position:relative">
+        <div class="panel">
+          <div class="ph"><div class="sym">GPF3</div><div><h4>Gulberg Plaza, Floor 3</h4><p>Lahore · Grade-A office</p></div>
+            <div class="price"><b>Rs 503.00</b><small>+0.60% vs NAV</small></div></div>
+          <div class="tabs"><span>1H</span><span class="on">1D</span><span>1W</span><span>1M</span><span>ALL</span></div>
+          <svg viewBox="0 0 520 210" width="100%" height="210" aria-label="price chart">
+            <defs><linearGradient id="ar" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2DD4BF" stop-opacity=".35"/><stop offset="1" stop-color="#2DD4BF" stop-opacity="0"/></linearGradient></defs>
+            <g stroke="#ffffff" stroke-opacity=".06"><path d="M0 40H520M0 90H520M0 140H520M0 190H520"/></g>
+            <path d="M0 150 L40 140 L80 152 L120 120 L160 128 L200 100 L240 112 L280 86 L320 96 L360 70 L400 82 L440 58 L480 66 L520 44 L520 210 L0 210Z" fill="url(#ar)"/>
+            <path d="M0 150 L40 140 L80 152 L120 120 L160 128 L200 100 L240 112 L280 86 L320 96 L360 70 L400 82 L440 58 L480 66 L520 44" fill="none" stroke="#2DD4BF" stroke-width="2.6" stroke-linejoin="round"/>
+            <path d="M0 108 H520" stroke="#E9B44C" stroke-dasharray="5 6" stroke-width="1.4"/>
+            <rect x="452" y="96" width="62" height="22" rx="6" fill="#E9B44C"/><text x="483" y="111" font-size="11.5" text-anchor="middle" fill="#1A1205" font-family="Inter" font-weight="700">NAV 500</text>
+            <circle cx="520" cy="44" r="5" fill="#2DD4BF"/><circle cx="520" cy="44" r="11" fill="#2DD4BF" fill-opacity=".2"/>
+          </svg>
+          <div class="mini">
+            <div><small>Bid</small><b style="color:var(--up)">Rs 502.00</b></div>
+            <div><small>Ask</small><b style="color:var(--down)">Rs 504.50</b></div>
+            <div><small>Monthly rent / token</small><b>Rs 3.83</b></div>
+          </div>
+        </div>
+        <div class="float" style="left:-38px;bottom:-26px">
+          <div class="ic" style="background:#E3F6EE;color:#0B7A55"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg></div>
+          <div><b>Rent received</b><div style="color:#6B7686;font-size:12px">Rs 25,000 · verified on chain</div></div>
+        </div>
+        <div class="float" style="right:-22px;top:-58px">
+          <div class="ic" style="background:#FFF5DF;color:#8A5A00"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></div>
+          <div><b>Trustee: CDC</b><div style="color:#6B7686;font-size:12px">Register mirrored 1:1</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-h">
+      <div><div class="kicker">PROPERTIES</div><h2>Hand-picked, income-producing buildings</h2></div>
+      <p class="sub">Every listing has a signed lease, an independent valuation and a trustee. You see the numbers before you invest, and live on the blockchain after.</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <div class="art">
+          <svg viewBox="0 0 400 210" width="100%" height="210" preserveAspectRatio="xMidYMid slice">
+            <defs><linearGradient id="sky1" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F9C98A"/><stop offset=".55" stop-color="#F6A97A"/><stop offset="1" stop-color="#E07B6A"/></linearGradient></defs>
+            <rect width="400" height="210" fill="url(#sky1)"/>
+            <circle cx="300" cy="70" r="30" fill="#FFE8B8" opacity=".9"/>
+            <g fill="#C26C64" opacity=".55"><rect x="10" y="120" width="40" height="90"/><rect x="55" y="100" width="34" height="110"/><rect x="330" y="110" width="44" height="100"/><rect x="372" y="130" width="30" height="80"/></g>
+            <g><rect x="140" y="40" width="120" height="170" fill="#1C2E4A"/><rect x="260" y="70" width="44" height="140" fill="#14233A"/><rect x="120" y="70" width="20" height="140" fill="#24395B"/>
+              <g fill="#F6D58E"><rect x="152" y="56" width="14" height="10"/><rect x="176" y="56" width="14" height="10" opacity=".4"/><rect x="200" y="56" width="14" height="10"/><rect x="224" y="56" width="14" height="10"/>
+              <rect x="152" y="78" width="14" height="10" opacity=".4"/><rect x="176" y="78" width="14" height="10"/><rect x="200" y="78" width="14" height="10"/><rect x="224" y="78" width="14" height="10" opacity=".4"/>
+              <rect x="152" y="100" width="14" height="10"/><rect x="176" y="100" width="14" height="10"/><rect x="200" y="100" width="14" height="10" opacity=".4"/><rect x="224" y="100" width="14" height="10"/>
+              <rect x="152" y="122" width="14" height="10"/><rect x="176" y="122" width="14" height="10" opacity=".4"/><rect x="200" y="122" width="14" height="10"/><rect x="224" y="122" width="14" height="10"/>
+              <rect x="152" y="144" width="14" height="10" opacity=".4"/><rect x="176" y="144" width="14" height="10"/><rect x="200" y="144" width="14" height="10"/><rect x="224" y="144" width="14" height="10"/></g>
+              <rect x="186" y="176" width="28" height="34" fill="#0B1320"/></g>
+            <g fill="#2F5E3B"><circle cx="100" cy="196" r="14"/><circle cx="318" cy="198" r="12"/></g>
+            <rect y="204" width="400" height="6" fill="#3A2E2A" opacity=".5"/>
+          </svg>
+          <div class="badges"><span class="pill live">Live</span><span class="pill">Office · Lahore</span></div>
+          <div class="yield"><small>Rent yield</small><b>9.2%</b></div>
+        </div>
+        <div class="cb">
+          <h3>Gulberg Plaza, Floor 3</h3>
+          <div class="loc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Main Boulevard, Gulberg III · Tenant: bank regional office</div>
+          <div class="stats3"><div><small>Token price</small><b>Rs 500</b></div><div><small>Min. invest</small><b>Rs 5,000</b></div><div><small>Occupancy</small><b>100%</b></div></div>
+          <div class="bar"><i style="width:63%"></i></div>
+          <div class="barl"><span><b style="color:var(--ink)">63%</b> funded</span><span>370,000 tokens left</span></div>
+          <div class="cf"><span style="font-size:13px;color:var(--muted)">Next rent: <b style="color:var(--ink)">1 Nov</b></span><a class="btn sm" href="#">Invest now</a></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="art">
+          <svg viewBox="0 0 400 210" width="100%" height="210" preserveAspectRatio="xMidYMid slice">
+            <defs><linearGradient id="sky2" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#9ED8F0"/><stop offset="1" stop-color="#DDF2F7"/></linearGradient></defs>
+            <rect width="400" height="210" fill="url(#sky2)"/>
+            <g fill="#fff" opacity=".85"><ellipse cx="80" cy="50" rx="34" ry="11"/><ellipse cx="300" cy="38" rx="44" ry="12"/></g>
+            <rect x="40" y="96" width="320" height="114" fill="#F3E9DA"/><rect x="40" y="88" width="320" height="14" fill="#C9A26B"/>
+            <g fill="#2B6C8A"><rect x="60" y="116" width="80" height="60" rx="3"/><rect x="160" y="116" width="80" height="60" rx="3"/><rect x="260" y="116" width="80" height="60" rx="3"/></g>
+            <g fill="#BDE6F5" opacity=".6"><rect x="64" y="120" width="34" height="52"/><rect x="164" y="120" width="34" height="52"/><rect x="264" y="120" width="34" height="52"/></g>
+            <rect x="140" y="64" width="120" height="26" rx="6" fill="#0F766E"/><text x="200" y="82" text-anchor="middle" font-family="Inter" font-weight="700" font-size="13" fill="#fff">PHARMACY</text>
+            <g fill="#3E7D4F"><circle cx="30" cy="196" r="16"/><circle cx="372" cy="194" r="18"/></g>
+            <rect y="200" width="400" height="10" fill="#B9AE9C"/>
+          </svg>
+          <div class="badges"><span class="pill">Opening soon</span><span class="pill">Retail · Karachi</span></div>
+          <div class="yield"><small>Expected yield</small><b>8.4%</b></div>
+        </div>
+        <div class="cb">
+          <h3>DHA Phase 6 Retail Unit</h3>
+          <div class="loc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Bukhari Commercial · Tenant: pharmacy chain</div>
+          <div class="stats3"><div><small>Token price</small><b>Rs 500</b></div><div><small>Min. invest</small><b>Rs 5,000</b></div><div><small>Lease</small><b>10 yrs</b></div></div>
+          <div class="bar"><i style="width:0%"></i></div>
+          <div class="barl"><span>Waitlist <b style="color:var(--ink)">312</b> investors</span><span>Opens 15 Nov</span></div>
+          <div class="cf"><span style="font-size:13px;color:var(--muted)">Get notified first</span><a class="btn sm soon" href="#">Join waitlist</a></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="art">
+          <svg viewBox="0 0 400 210" width="100%" height="210" preserveAspectRatio="xMidYMid slice">
+            <defs><linearGradient id="sky3" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1B2A4E"/><stop offset="1" stop-color="#3B4F86"/></linearGradient></defs>
+            <rect width="400" height="210" fill="url(#sky3)"/>
+            <g fill="#fff"><circle cx="40" cy="30" r="1.4"/><circle cx="120" cy="20" r="1"/><circle cx="210" cy="36" r="1.2"/><circle cx="330" cy="24" r="1.5"/><circle cx="370" cy="60" r="1"/></g>
+            <circle cx="340" cy="52" r="16" fill="#F4E6B8"/>
+            <path d="M0 150 Q60 110 120 140 T240 130 T400 120 V210 H0Z" fill="#2B3C66"/>
+            <g><rect x="150" y="30" width="96" height="180" fill="#0E1A33"/><path d="M150 30 L198 8 L246 30Z" fill="#0E1A33"/>
+              <g fill="#7FE3D6"><rect x="160" y="46" width="76" height="4" opacity=".8"/><rect x="160" y="64" width="76" height="4" opacity=".5"/><rect x="160" y="82" width="76" height="4" opacity=".9"/><rect x="160" y="100" width="76" height="4" opacity=".6"/><rect x="160" y="118" width="76" height="4" opacity=".9"/><rect x="160" y="136" width="76" height="4" opacity=".4"/><rect x="160" y="154" width="76" height="4" opacity=".8"/></g></g>
+            <rect x="96" y="90" width="44" height="120" fill="#16264A"/><rect x="256" y="76" width="50" height="134" fill="#16264A"/>
+            <g fill="#F6D58E" opacity=".8"><rect x="104" y="100" width="8" height="6"/><rect x="122" y="116" width="8" height="6"/><rect x="266" y="90" width="8" height="6"/><rect x="286" y="110" width="8" height="6"/><rect x="266" y="130" width="8" height="6"/></g>
+          </svg>
+          <div class="badges"><span class="pill">Opening soon</span><span class="pill">Office · Islamabad</span></div>
+          <div class="yield"><small>Expected yield</small><b>8.9%</b></div>
+        </div>
+        <div class="cb">
+          <h3>Blue Area Office, Floor 2</h3>
+          <div class="loc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Jinnah Avenue · Tenant: telecom company</div>
+          <div class="stats3"><div><small>Token price</small><b>Rs 500</b></div><div><small>Min. invest</small><b>Rs 5,000</b></div><div><small>Occupancy</small><b>92%</b></div></div>
+          <div class="bar"><i style="width:0%"></i></div>
+          <div class="barl"><span>Waitlist <b style="color:var(--ink)">188</b> investors</span><span>Opens Dec</span></div>
+          <div class="cf"><span style="font-size:13px;color:var(--muted)">Get notified first</span><a class="btn sm soon" href="#">Join waitlist</a></div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-h"><div><div class="kicker">HOW IT WORKS</div><h2>From Rs 5,000 to monthly rent in four steps</h2></div></div>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><h4>Verify in 3 minutes</h4><p>CNIC and selfie check with NADRA. Your identity is registered on the blockchain.</p></div>
+      <div class="step"><span class="n">2</span><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></div><h4>Choose a building</h4><p>Leases, valuations and trustee documents are on every page, with live figures from the chain.</p></div>
+      <div class="step"><span class="n">3</span><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg></div><h4>Pay with Raast</h4><p>PKR from your own bank into the trustee's escrow. Tokens are issued only after the bank confirms.</p></div>
+      <div class="step"><span class="n">4</span><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M17 7.5c0-1.9-2.2-3.5-5-3.5s-5 1.6-5 3.5S9.2 11 12 11s5 1.6 5 3.5S14.8 18 12 18s-5-1.6-5-3.5"/></svg></div><h4>Earn monthly rent</h4><p>Your share arrives in your bank. Verify it yourself against the fingerprint on the blockchain.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="dark">
+  <div class="wrap calc">
+    <div>
+      <div class="kicker" style="color:var(--gold2)">RENT CALCULATOR</div>
+      <h2 style="color:#fff">See what your money could earn</h2>
+      <p class="lead" style="margin-top:14px">Move the slider. Figures use Gulberg Plaza's current rent yield of 9.2%; rent is not guaranteed and property values can go down.</p>
+      <div style="display:flex;gap:12px;margin-top:26px"><a class="btn gold" href="#">Start with Rs 50,000</a><a class="btn ghost" href="#">Read the risks</a></div>
+    </div>
+    <div class="box">
+      <label>You invest</label>
+      <div class="amount">Rs 250,000</div>
+      <div class="range"><i></i><b></b></div>
+      <div class="res">
+        <div class="g"><small>Monthly rent</small><b>Rs 1,917</b></div>
+        <div><small>Yearly rent</small><b>Rs 23,000</b></div>
+        <div><small>Tokens</small><b>500 GPF3</b></div>
+        <div><small>Share of building</small><b>0.05%</b></div>
+      </div>
+      <p class="note">Illustration only. Past performance is not a reliable indicator of future results.</p>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="sec-h"><div><div class="kicker">WHY IT'S SAFE</div><h2>Built so nobody has to trust us blindly</h2></div>
+      <p class="sub">Each control below is real in the prototype or clearly marked as planned. We will never show a badge we have not earned.</p></div>
+    <div class="trustgrid">
+      <div class="tg"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></div><h4>Independent trustee</h4><p>The building is held by a regulated trustee, not by us. Tokens mirror the trustee's register.</p><span class="st">Pending SECP sandbox</span></div>
+      <div class="tg"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h4>Money never on chain</h4><p>PKR moves only through banks and Raast into an escrow account the platform cannot withdraw from.</p><span class="st ok">Built in prototype</span></div>
+      <div class="tg"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><h4>Verify your own rent</h4><p>A fingerprint of every rent statement is on the blockchain. Check your share in one click.</p><span class="st ok">Built in prototype</span></div>
+      <div class="tg"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div><h4>Two external audits</h4><p>Smart contracts audited by two independent firms and formally verified before launch.</p><span class="st">Planned before launch</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fg">
+      <div><a class="logo" href="#" style="color:#fff"><i>PT</i>Property Token</a><p style="margin-top:14px;line-height:1.6;max-width:320px">Fractional ownership of income-producing property in Pakistan, held by an independent trustee.</p></div>
+      <div><h5>Invest</h5><ul><li>Properties</li><li>Market</li><li>Rent calculator</li></ul></div>
+      <div><h5>Trust</h5><ul><li>How we keep you safe</li><li>Verify a rent statement</li><li>Audit reports</li></ul></div>
+      <div><h5>Company</h5><ul><li>About</li><li>Risks</li><li>Contact</li></ul></div>
+    </div>
+    <p class="disc">Prototype on a local test network. Sample properties and test money only; not an offer. Investing in property involves risk: values and rent can go down, and secondary trading needs SECP approval.</p>
+  </div>
+</footer>
+
+<div class="mock-label">Mockup v1 · premium fintech · sample figures</div>
+</body>
+</html>

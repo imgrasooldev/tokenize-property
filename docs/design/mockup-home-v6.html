@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ur" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property Token - mockup v6 (Urdu-first, Pakistani modern)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--emerald:#0B4F3E;--emerald2:#0E6A52;--deep:#06291F;--gold:#D8A74A;--gold2:#F2D58F;--sand:#FAF6EE;--ivory:#FFFDF8;--ink:#14231D;--muted:#5E6F67;--line:#E7DFCF;--rose:#C4566A;--sky:#2E8AB8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Naskh Arabic",Outfit,sans-serif;background:var(--sand);color:var(--ink);-webkit-font-smoothing:antialiased}
+.nast{font-family:"Noto Nastaliq Urdu",serif}
+.en{font-family:Outfit,sans-serif;direction:ltr;unicode-bidi:isolate}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1260px;margin:0 auto;padding:0 32px}
+.pattern{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23D8A74A' stroke-opacity='.22' stroke-width='1'%3E%3Cpath d='M40 4l10 26 26 10-26 10-10 26-10-26L4 40l26-10z'/%3E%3Ccircle cx='40' cy='40' r='9'/%3E%3Cpath d='M0 0l16 16M80 0L64 16M0 80l16-16M80 80L64 64'/%3E%3C/g%3E%3C/svg%3E")}
+.top{background:var(--deep);color:#CFE3DA;font-size:13px}
+.top .wrap{display:flex;gap:24px;height:38px;align-items:center}
+.top b{color:var(--gold2)}
+nav{background:var(--ivory);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:28px;height:76px}
+.logo{display:flex;align-items:center;gap:12px}
+.logo .seal{width:44px;height:44px;border-radius:12px;background:var(--emerald);display:grid;place-items:center;box-shadow:inset 0 0 0 2px var(--gold)}
+.logo b{font-family:"Noto Nastaliq Urdu";font-size:20px;line-height:1.6}
+.logo small{display:block;font-family:Outfit;font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:-6px}
+.links{display:flex;gap:6px;font-size:16px;font-weight:500}
+.links a{padding:8px 14px;border-radius:10px}.links a.on{background:#EEF4EF;color:var(--emerald)}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 22px;border-radius:14px;font-weight:600;font-size:16px;border:1.5px solid var(--line);background:#fff}
+.btn.em{background:var(--emerald);color:#fff;border-color:var(--emerald);box-shadow:0 12px 30px -14px rgba(11,79,62,.8)}
+.btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#2A1D05;border:0}
+.lang{display:flex;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+.lang span{padding:8px 12px}.lang span.on{background:var(--emerald);color:#fff}
+
+.hero{background:var(--emerald);color:#fff;position:relative;overflow:hidden}
+.hero .pattern{position:absolute;inset:0;opacity:1}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding-top:60px;padding-bottom:70px}
+.badge{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.1);border:1px solid rgba(242,213,143,.4);color:var(--gold2);padding:7px 14px;border-radius:999px;font-size:14px}
+h1{font-family:"Noto Nastaliq Urdu";font-weight:700;font-size:56px;line-height:1.75;margin:20px 0 6px}
+h1 span{color:var(--gold2)}
+.en-sub{font-family:Outfit;direction:ltr;text-align:right;font-size:20px;color:#BFE0D3;font-weight:500;margin-top:26px}
+.lead{font-size:19px;line-height:1.9;color:#D7EAE2;margin-top:16px;max-width:560px}
+.cta{display:flex;gap:12px;margin-top:30px}
+.seals{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}
+.seal-b{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px 14px;font-size:14px}
+.seal-b i{width:30px;height:30px;border-radius:9px;background:var(--gold);display:grid;place-items:center;color:#2A1D05;font-style:normal;font-weight:700}
+.seal-b small{display:block;color:#A9CDBF;font-size:12px}
+
+.arch{position:relative;height:520px}
+.arch .frame{position:absolute;inset:0 30px 0 30px;border-radius:260px 260px 28px 28px;overflow:hidden;border:3px solid var(--gold);background:#0A3F31;box-shadow:0 40px 80px -30px rgba(0,0,0,.6)}
+.card{position:absolute;background:var(--ivory);color:var(--ink);border-radius:18px;padding:14px 16px;box-shadow:0 24px 50px -20px rgba(0,0,0,.45);min-width:210px}
+.card small{color:var(--muted);font-size:13px}
+.card b{display:block;font-size:20px}
+.card .row{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px}
+.up{color:#0E8A5F;font-family:Outfit;font-weight:700}
+
+section{padding:80px 0}
+.sec-h{display:flex;justify-content:space-between;align-items:end;margin-bottom:34px}
+.kick{color:var(--gold);font-weight:700;font-size:15px}
+h2{font-family:"Noto Nastaliq Urdu";font-size:40px;line-height:1.8;font-weight:700;color:var(--emerald)}
+.props{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.prop{background:var(--ivory);border:1px solid var(--line);border-radius:24px;overflow:hidden}
+.prop .img{height:200px;position:relative}
+.prop .chip{position:absolute;top:14px;right:14px;background:var(--emerald);color:#fff;font-size:13px;padding:5px 12px;border-radius:999px}
+.prop .chip.soon{background:#fff;color:var(--emerald);border:1px solid var(--line)}
+.prop .body{padding:18px 20px 20px}
+.prop h3{font-family:"Noto Nastaliq Urdu";font-size:23px;line-height:1.7}
+.prop .en-name{font-family:Outfit;direction:ltr;text-align:right;font-size:13px;color:var(--muted)}
+.prop .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.prop .nums div{background:var(--sand);border-radius:12px;padding:10px;text-align:center}
+.prop .nums small{display:block;font-size:12px;color:var(--muted)}.prop .nums b{font-family:Outfit;font-size:17px}
+.prop .bar{height:8px;border-radius:9px;background:#EFE8D9;overflow:hidden}.prop .bar i{display:block;height:100%;background:linear-gradient(270deg,var(--emerald2),var(--gold));margin-right:0}
+.prop .foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:14px;color:var(--muted)}
+
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.step{background:var(--ivory);border:1px solid var(--line);border-radius:22px;padding:24px;position:relative}
+.step .num{width:52px;height:52px;border-radius:16px;background:var(--emerald);color:var(--gold2);display:grid;place-items:center;font-family:Outfit;font-weight:800;font-size:22px;box-shadow:inset 0 0 0 2px var(--gold)}
+.step h4{font-size:19px;margin:16px 0 6px;font-weight:700}
+.step p{font-size:15px;color:var(--muted);line-height:1.8}
+
+.shariah{background:var(--deep);color:#E7F1EC;border-radius:32px;margin:0 32px;position:relative;overflow:hidden}
+.shariah .pattern{position:absolute;inset:0}
+.shariah .in{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:56px;align-items:center}
+.shariah h2{color:var(--gold2)}
+.shariah p{font-size:17px;line-height:1.9;color:#BFD6CC}
+.checks{display:grid;gap:12px}
+.check{display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px 16px;font-size:16px}
+.check i{width:30px;height:30px;border-radius:50%;background:var(--gold);color:#2A1D05;display:grid;place-items:center;font-style:normal;font-weight:800;font-family:Outfit}
+.check small{display:block;font-size:12.5px;color:#9FC1B3}
+.tag{display:inline-block;margin-right:8px;font-size:11.5px;padding:2px 8px;border-radius:999px;background:rgba(242,213,143,.15);color:var(--gold2)}
+footer{padding:40px 0;color:var(--muted);font-size:14px;line-height:1.8}
+.mock-label{position:fixed;left:16px;bottom:16px;z-index:9;background:var(--emerald);color:var(--gold2);padding:8px 12px;border-radius:12px;font-family:Outfit;font-size:12px;direction:ltr}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <span>جی پی ایف ۳ <b class="en">Rs 503.00</b> <span class="en" style="color:#7DE2B7">+0.60%</span></span>
+  <span>کرایہ اس سال: <b class="en">Rs 4.3M</b></span>
+  <span>بلاک <b class="en" id="blk">#24,182</b> · ۴/۴ تصدیق کنندگان</span>
+</div></div>
+
+<nav><div class="wrap">
+  <a class="logo" href="#"><span class="seal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2D58F" stroke-width="1.8"><path d="M12 2l3 6.5 7 1-5 5 1.2 7L12 18l-6.2 3.5L7 14.5l-5-5 7-1z"/></svg></span><span><b>پراپرٹی ٹوکن</b><small class="en">PROPERTY TOKEN</small></span></a>
+  <div class="links"><a class="on" href="#">جائیدادیں</a><a href="#">مارکیٹ</a><a href="#">میرا پورٹ فولیو</a><a href="#">کیسے کام کرتا ہے</a></div>
+  <div class="sp"></div>
+  <div class="lang"><span class="on">اردو</span><span class="en">EN</span></div>
+  <a class="btn" href="#">سائن ان</a>
+</div></nav>
+
+<header class="hero">
+  <div class="pattern"></div>
+  <div class="wrap">
+    <div>
+      <span class="badge">● گلبرگ پلازہ اب کھلا ہے · <span class="en">63%</span> فنڈڈ</span>
+      <h1>اپنی جائیداد کا مالک بنیں،<br><span>صرف پانچ ہزار روپے سے</span></h1>
+      <p class="en-sub">Own a share of prime property, from Rs 5,000</p>
+      <p class="lead">ہر عمارت ایک آزاد ٹرسٹی کے پاس محفوظ ہے۔ آپ کے ٹوکن ٹرسٹی کے رجسٹر کا عکس ہیں، اور ہر مہینے کرایہ سیدھا آپ کے بینک اکاؤنٹ میں آتا ہے، راست کے ذریعے۔</p>
+      <div class="cta"><a class="btn gold" href="#">سرمایہ کاری شروع کریں ←</a><a class="btn" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.35)" href="#">جائیدادیں دیکھیں</a></div>
+      <div class="seals">
+        <div class="seal-b"><i>✓</i><div>آزاد ٹرسٹی<small>عمارت ہمارے پاس نہیں</small></div></div>
+        <div class="seal-b"><i>✓</i><div>نادرا تصدیق<small>صرف تصدیق شدہ سرمایہ کار</small></div></div>
+        <div class="seal-b"><i>✓</i><div>بلاک چین ریکارڈ<small>کوئی خاموشی سے تبدیل نہیں کر سکتا</small></div></div>
+      </div>
+    </div>
+    <div class="arch">
+      <div class="frame">
+        <svg viewBox="0 0 440 520" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+          <defs><linearGradient id="dusk6" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#0D5644"/><stop offset=".6" stop-color="#1F7D63"/><stop offset="1" stop-color="#E7C77F"/></linearGradient></defs>
+          <rect width="440" height="520" fill="url(#dusk6)"/>
+          <circle cx="300" cy="150" r="40" fill="#F6E3B1" opacity=".9"/><circle cx="315" cy="140" r="36" fill="#1A6E57"/>
+          <g fill="#0A3F31" opacity=".7"><rect x="10" y="300" width="60" height="220"/><rect x="370" y="280" width="70" height="240"/></g>
+          <path d="M90 520 V260 Q90 210 140 210 H300 Q350 210 350 260 V520Z" fill="#0A3F31"/>
+          <path d="M150 210 Q220 120 290 210" fill="#0A3F31"/><rect x="214" y="110" width="12" height="40" fill="#0A3F31"/>
+          <g fill="#F2D58F"><path d="M130 300 h40 v50 h-40z M200 300 h40 v50 h-40z M270 300 h40 v50 h-40z M130 380 h40 v50 h-40z M270 380 h40 v50 h-40z" opacity=".85"/><path d="M200 380 h40 v140 h-40z" opacity=".95"/></g>
+          <g stroke="#D8A74A" stroke-opacity=".6" fill="none"><path d="M90 260 Q220 160 350 260"/></g>
+          <rect y="500" width="440" height="20" fill="#06291F"/>
+        </svg>
+      </div>
+      <div class="card" style="top:40px;left:-20px"><small>گلبرگ پلازہ · لاہور</small><b class="en">Rs 503.00</b><div class="row"><span class="up">+0.60%</span><span>کرایہ <b class="en" style="display:inline;font-size:14px">9.2%</b></span></div></div>
+      <div class="card" style="bottom:50px;right:-10px"><small>اس مہینے کا کرایہ موصول</small><b class="en">Rs 25,000</b><div class="row"><span style="color:#0E8A5F">✓ بلاک چین پر تصدیق شدہ</span></div></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-h"><div><div class="kick">جائیدادیں</div><h2>تین شہر، ایک معیار</h2></div><a class="btn" href="#">سب دیکھیں</a></div>
+    <div class="props">
+      <article class="prop"><div class="img pattern" style="background-color:#E8F1EC">
+        <svg viewBox="0 0 380 200" width="100%" height="200"><rect x="140" y="30" width="100" height="170" fill="#0B4F3E" rx="4"/><path d="M140 30 Q190 -10 240 30" fill="#0B4F3E"/><g fill="#F2D58F"><rect x="155" y="55" width="16" height="12"/><rect x="182" y="55" width="16" height="12" opacity=".5"/><rect x="209" y="55" width="16" height="12"/><rect x="155" y="85" width="16" height="12" opacity=".5"/><rect x="182" y="85" width="16" height="12"/><rect x="209" y="85" width="16" height="12"/><rect x="155" y="115" width="16" height="12"/><rect x="209" y="115" width="16" height="12" opacity=".5"/><rect x="182" y="150" width="16" height="50"/></g></svg>
+        <span class="chip">● لائیو</span></div>
+        <div class="body"><h3>گلبرگ پلازہ، تیسری منزل</h3><div class="en-name">Gulberg Plaza, Floor 3 · Lahore</div>
+          <div class="nums"><div><small>فی ٹوکن</small><b>Rs 503</b></div><div><small>کرایہ</small><b>9.2%</b></div><div><small>کم از کم</small><b>Rs 5k</b></div></div>
+          <div class="bar"><i style="width:63%"></i></div>
+          <div class="foot"><span><b class="en">63%</b> فنڈڈ</span><a class="btn em" style="padding:9px 16px;font-size:14px" href="#">سرمایہ لگائیں</a></div></div></article>
+      <article class="prop"><div class="img pattern" style="background-color:#F6EEE2">
+        <svg viewBox="0 0 380 200" width="100%" height="200"><rect x="80" y="90" width="220" height="110" fill="#FFFDF8" stroke="#D8A74A" stroke-width="2"/><rect x="80" y="78" width="220" height="16" fill="#C4566A"/><g fill="#0B4F3E"><rect x="100" y="115" width="50" height="60" rx="25"/><rect x="165" y="115" width="50" height="60" rx="25"/><rect x="230" y="115" width="50" height="60" rx="25"/></g></svg>
+        <span class="chip soon">۱۵ نومبر سے</span></div>
+        <div class="body"><h3>ڈی ایچ اے فیز ۶ ریٹیل</h3><div class="en-name">DHA Phase 6 Retail · Karachi</div>
+          <div class="nums"><div><small>فی ٹوکن</small><b>Rs 500</b></div><div><small>کرایہ</small><b>8.4%</b></div><div><small>کم از کم</small><b>Rs 5k</b></div></div>
+          <div class="bar"><i style="width:3%"></i></div>
+          <div class="foot"><span>انتظار کی فہرست <b class="en">312</b></span><a class="btn" style="padding:9px 16px;font-size:14px" href="#">مجھے بتائیں</a></div></div></article>
+      <article class="prop"><div class="img pattern" style="background-color:#E6EEF4">
+        <svg viewBox="0 0 380 200" width="100%" height="200"><rect x="150" y="20" width="80" height="180" fill="#123B57"/><g stroke="#F2D58F" stroke-opacity=".8"><path d="M158 45H222M158 70H222M158 95H222M158 120H222M158 145H222M158 170H222"/></g><rect x="230" y="80" width="40" height="120" fill="#2E8AB8"/><rect x="110" y="100" width="40" height="100" fill="#2E8AB8" opacity=".7"/></svg>
+        <span class="chip soon">دسمبر سے</span></div>
+        <div class="body"><h3>بلیو ایریا آفس، دوسری منزل</h3><div class="en-name">Blue Area Office, Floor 2 · Islamabad</div>
+          <div class="nums"><div><small>فی ٹوکن</small><b>Rs 500</b></div><div><small>کرایہ</small><b>8.9%</b></div><div><small>کم از کم</small><b>Rs 5k</b></div></div>
+          <div class="bar"><i style="width:2%"></i></div>
+          <div class="foot"><span>انتظار کی فہرست <b class="en">188</b></span><a class="btn" style="padding:9px 16px;font-size:14px" href="#">مجھے بتائیں</a></div></div></article>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:10px">
+  <div class="wrap">
+    <div class="sec-h"><div><div class="kick">آسان طریقہ</div><h2>چار قدم، ہر مہینے کرایہ</h2></div></div>
+    <div class="steps">
+      <div class="step"><div class="num">۱</div><h4>تین منٹ میں تصدیق</h4><p>شناختی کارڈ اور سیلفی، نادرا سے تصدیق۔ آپ کا پورا شناختی نمبر کبھی محفوظ نہیں ہوتا۔</p></div>
+      <div class="step"><div class="num">۲</div><h4>عمارت منتخب کریں</h4><p>لیز، قیمت کا تخمینہ اور ٹرسٹی کے کاغذات ہر صفحے پر موجود۔</p></div>
+      <div class="step"><div class="num">۳</div><h4>راست سے ادائیگی</h4><p>اپنے بینک سے ٹرسٹی کے ایسکرو میں۔ ادائیگی کے بعد ہی ٹوکن جاری ہوتے ہیں۔</p></div>
+      <div class="step"><div class="num">۴</div><h4>ہر مہینے کرایہ</h4><p>کرایہ آپ کے بینک میں۔ اپنا حصہ خود بلاک چین پر جانچیں۔</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="shariah">
+  <div class="pattern"></div>
+  <div class="in">
+    <div>
+      <div class="kick" style="color:var(--gold2)">اعتماد</div>
+      <h2>حلال ڈھانچہ، شفاف حساب</h2>
+      <p>یہ کرائے کی آمدنی میں ملکیت ہے، سود نہیں۔ ڈھانچہ شریعہ بورڈ سے منظوری کے لیے پیش کیا جائے گا، اور ہر وعدہ اسی وقت دکھایا جائے گا جب وہ پورا ہو جائے۔</p>
+    </div>
+    <div class="checks">
+      <div class="check"><i>✓</i><div>کرایہ، سود نہیں<small>آمدنی صرف کرائے سے</small></div><span class="tag">ڈیزائن میں</span></div>
+      <div class="check"><i>✓</i><div>آزاد ٹرسٹی<small>عمارت اور رقم ہمارے پاس نہیں</small></div><span class="tag">ایس ای سی پی سینڈ باکس زیر التوا</span></div>
+      <div class="check"><i>✓</i><div>شریعہ سرٹیفیکیٹ<small>آزاد شریعہ بورڈ</small></div><span class="tag">منصوبہ بند</span></div>
+      <div class="check"><i>✓</i><div>اپنا کرایہ خود جانچیں<small>بلاک چین پر فنگر پرنٹ</small></div><span class="tag">پروٹوٹائپ میں تیار</span></div>
+    </div>
+  </div>
+</div>
+
+<footer><div class="wrap">مقامی ٹیسٹ نیٹ ورک پر نمونہ۔ نمونہ جائیدادیں، نمونہ اعداد اور ٹیسٹ رقم؛ یہ پیشکش نہیں ہے۔ شریعہ منظوری ابھی حاصل نہیں کی گئی۔</div></footer>
+<div class="mock-label">mockup v6 · Urdu-first · Pakistani modern</div>
+<script>let b=24182;setInterval(()=>{b++;document.getElementById('blk').textContent='#'+b.toLocaleString('en');},2000);</script>
+</body>
+</html>
