@@ -2,7 +2,14 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, Step 6b built on a branch)
+## Latest update (2026-10-13, S-07, S-02, 6b and notifications merged)
+
+- **Merged into `main`:** S-07 public `/verify` (live on the demo server), S-02 offering backend (`0015_offering.sql`), Step 6b approvals portal (`0016_admin_approvals.sql`) and T-028 notifications backend (`0017_notify.sql`, ADR 0013 Proposed). Migrations 0001–0017 apply cleanly.
+- One cross-branch break fixed after the merges: the signer preview test fixture lacked S-02's `requireOfferingBatch` (d6789e9).
+- **Tests on `main` (lead run, d6789e9):** backend 504/504 (60 files), admin 207 unit/DB, web 94 (unit + integration); typecheck and lint clean in all three.
+- **In progress on branches:** T-021 investor offering screens (migration 0018) and Step 6c compliance portal (migration 0019). Merge 0018 first.
+
+## Earlier update (2026-10-13, Step 6b built on a branch)
 
 - **Step 6b (T-004) built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`). The approvals portal: inbox; signing requests shown as the exact call (decoded from the calldata, call hash) and decided by the **signing service** through a new admin-scoped HTTP client and one-time database tickets; payout batches (lines, held lines, gate, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker requests; a reason and a fresh security-key step-up on every decision; maker != checker enforced by the backend; officer names bound to officer sessions; S-01 duties linked to officer roles (S-01 refinement 10). **Merge S-02 (0015) first**: until then the backend runner refuses the gap (tests use a renumbered copy).
 - Tests on the branch (0016 renumbered to 0015 locally for the run, not committed): backend 422 passed + 3 skipped (Anvil anchor stand-in not running) of 425 incl. 15 new; admin 207 unit/db (129 + 78 new) and 272 HTTP matrix (183 + 89 new); admin e2e 5/5 in Edge (3 + 2 new) with virtual FIDO2 keys and a real signing service.
