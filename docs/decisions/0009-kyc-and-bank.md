@@ -1,6 +1,6 @@
 # ADR 0009: KYC and bank (Raast payments, payout accounts, payout batches)
 
-- Status: Proposed (owner approved the Step 5g plan 2026-10-12; awaiting lead review)
+- Status: Accepted (owner approved the Step 5g plan 2026-10-12 and delegated its three decisions 2026-10-13; merged and in use on the demo server). Real providers are pending (task T-031)
 - Date: 2026-10-13
 - Builds on: ADR 0003 (ledger), ADR 0007 (reconciliation and the payout gate), finding F-01 (never rely on claim revocation)
 - Addresses: threats M-1 (payout redirected), M-3 (duplicate payout), M-5 (payment disputes), D-2 (database dump leaks CNICs and bank details), KYC-1 (fake or stolen CNIC), KYC-2 (sanctions screening part), new M-11 (forged or replayed bank notifications) and M-12 (third-party funding)

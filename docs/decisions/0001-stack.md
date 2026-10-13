@@ -1,6 +1,6 @@
 # ADR 0001: Technology stack
 
-- Status: Accepted (database and queue choices amended by ADR 0003)
+- Status: Accepted (database and queue choices amended by ADR 0003; API, cache, runtime and write-path rows superseded by [ADR 0012](0012-server-stack-as-built.md))
 - Date: 2026-10-08
 
 ## Context

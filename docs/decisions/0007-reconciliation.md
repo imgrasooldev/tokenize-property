@@ -1,6 +1,6 @@
 # ADR 0007: Reconciliation (chain, ledger, bank) and the payout freeze
 
-- Status: Proposed (owner approved the Step 5f plan 2026-10-12; awaiting lead review)
+- Status: Accepted (owner approved the Step 5f plan 2026-10-12; reviewed and merged by the lead 2026-10-12; passing on the demo server 2026-10-13)
 - Date: 2026-10-12
 - Builds on: ADR 0003 (ledger), ADR 0004 (outbox), ADR 0005 (signing service, maker-checker), ADR 0006 (indexer; a `verify` mismatch must freeze payouts)
 - Addresses: threats M-2 (insider changes payout amounts), M-6 (tokens without payment, payment without tokens, double charge or mint), D-1 and D-3 (tampered ledger, drifting read model)

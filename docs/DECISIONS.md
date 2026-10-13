@@ -16,7 +16,7 @@ Index of architecture decision records and other recorded decisions, as of `main
 | [0008](decisions/0008-public-anchor.md) | Public-chain anchoring | Proposed (public L2 pending owner) | 2026-10-12 | Yes on a local Anvil stand-in |
 | [0009](decisions/0009-kyc-and-bank.md) | KYC and bank | Proposed ("awaiting lead review"); decisions of 2026-10-13 added | 2026-10-13 | Yes with mock providers; status line not updated |
 
-## 2. ADR 0001 drift (not superseded by any ADR)
+## 2. ADR 0001 drift (resolved 2026-10-13 by [ADR 0012](decisions/0012-server-stack-as-built.md); kept for history)
 
 | ADR 0001 says | `main` has | Status |
 |---|---|---|

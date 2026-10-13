@@ -1,6 +1,6 @@
 # ADR 0011: Internal portals, Step 6a foundation (officer authentication, roles, audit, exposure)
 
-- Status: Proposed (owner approved Step 6 on 2026-10-13; awaiting lead review)
+- Status: Accepted (owner approved Step 6 on 2026-10-13; reviewed, tested (129 unit/db + 183 authorization-matrix) and deployed by the lead 2026-10-13)
 - Date: 2026-10-13
 - Builds on: ADR 0001 (one Next.js app for the internal portals), ADR 0005 (maker-checker in the signer), ADR 0007 (payout gate), ADR 0009 (KYC status views, two-officer reviews), product map items 5 to 7
 - Addresses: threats INF-2 (admin panel exposed), P-1 (single insider), P-3 (admin action without trace), K-5 (departing employee keeps access), API-1 (account takeover) for staff, and the new ones in the threat model section 4.11 (AD-1..AD-8)

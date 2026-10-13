@@ -212,14 +212,14 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Outcome: web uses `@pt/kyc`, `@pt/ledger`, `@pt/bank` (or an internal API) instead of `web/src/lib/server/{ledger,onboarding}.ts` and the inline mock NADRA in `web/src/app/actions/auth.ts` (two different mock rule sets today: web rejects CNICs ending 0; `@pt/kyc` mocks use last digit 0/8/9).
 - P high, C M, Dep T-002.
 
-### T-010 ADR for the real server stack (A1)
+### T-010 ADR for the real server stack (A1) — DONE (ADR 0012, 2026-10-13)
 - Outcome: new ADR superseding ADR 0001's NestJS/Fastify, Redis read cache, Java 21, 202+WebSocket lines with what `main` does (node:http services, Next.js server actions, SSE, PostgreSQL queues) or a plan to adopt NestJS; ADR 0001 status updated.
 - P high, C S. Accept: DECISIONS.md §2 has no "undocumented" rows.
 
 ### T-013 One short status source (A6)
 - Outcome: CURRENT_STATUS.md is the short status; MEMORY.md and README keep links instead of long status lines; README layout fixed (`admin/`, `mobile/` listed but absent; step table stale: "121 tests", Step 5 list ends at 5f); backend/README "5h Planned" fixed; product-map build order refreshed. P medium, C S. Coordinate with whoever edits MEMORY.md.
 
-### T-015 Update ADR 0007/0009 status lines
+### T-015 Update ADR 0007/0009 status lines — DONE (2026-10-13: 0007, 0009, 0010, 0011 Accepted; 0008 stays Proposed until the L2 is chosen)
 - Both say "Proposed ... awaiting lead review" though merged. P low, C S. Owner/lead decides Accepted.
 
 ## 7. A1-A6 cross-reference

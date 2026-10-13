@@ -1,6 +1,6 @@
 # ADR 0010: Website on the outbox, the signing service and the read model
 
-- Status: Proposed (Step 5h; owner approved the 5h plan, "go on as per standard", 2026-10-13)
+- Status: Accepted (Step 5h; owner approved the plan 2026-10-13; reviewed, merged and deployed by the lead 2026-10-13; reconciliation passes on the demo server)
 - Date: 2026-10-13
 - Builds on: ADR 0001 (chain out of the read path), ADR 0004 (outbox), ADR 0005 (signing service), ADR 0006 (indexer and read model), ADR 0007 (reconciliation), ADR 0009 (KYC and bank)
 - Replaces: the web prototype's demo signer (W3–W5, `web/src/lib/server/demo-signer.ts`) and the `WEB_DEMO_SIGNER` opt-in
