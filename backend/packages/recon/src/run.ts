@@ -62,6 +62,7 @@ export async function reconcile(pool: pg.Pool, o: ReconcileOptions): Promise<Run
       statements: d.bank.statements.length,
       bankLines: d.bank.statements.reduce((n, s) => n + s.lines.length, 0),
       openOutboxCommands: d.integrity.outbox.length,
+      offeringSubscriptions: d.offerings?.subscriptions.length ?? 0,
     },
     totalSupply: d.chain.onChain.totalSupply.toString(),
     indexerVerify: d.integrity.indexer.verify.ran ? `ran at block ${String(d.integrity.indexer.verify.pinnedBlock)}` : "not run",

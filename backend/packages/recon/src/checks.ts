@@ -7,6 +7,7 @@ import {
   parseSubscriptionKey,
   payoutBatchHash,
   pktDate,
+  refIdForSubscription,
   type SubscriptionPhase,
 } from "./conventions.ts";
 import {
@@ -76,6 +77,16 @@ export function checkIssuance(d: ReconData): Finding[] {
   }
   const late = (t: Date): boolean => d.asOf.getTime() - t.getTime() > d.slaMs;
   const minted = (m: ChainIssuance): string => `minted ${s(m.amount)} to ${m.account} at block ${s(m.blockNumber)}`;
+  // S-02 mints only at completion: for an offering subscription the paid -> minted SLA starts when
+  // the offering's mint commands were enqueued, not at payment (ADR 0007 amendment). Before that a
+  // paid subscription is an allocation, not a finding.
+  const offeringSubs = new Map((d.offerings?.subscriptions ?? []).map((x) => [x.refId, x]));
+  const mintDue = (refId: string, paidAt: Date): Date | null => {
+    const o = offeringSubs.get(refId);
+    if (!o) return paidAt;
+    if (o.state === "refund_pending" || o.state === "blocked" || o.state === "disputed") return null; // not to be minted (refund or S-06)
+    return o.mintStartedAt;
+  };
 
   for (const refId of [...new Set([...subs.keys(), ...mints.keys(), ...d.expectedMints.keys()])].sort()) {
     const sub = subs.get(refId);
@@ -102,7 +113,11 @@ export function checkIssuance(d: ReconData): Finding[] {
     if (settled && !m && late(settled.createdAt)) out.push(f("issuance.settled_without_mint", subject, "a mint on chain", `none at block ${s(d.pinnedBlock)}`));
     if (!settled && !refunded) {
       if (m && late(m.blockTime)) out.push(f("issuance.minted_not_settled", subject, "settled within the SLA", minted(m), { tx: m.txHash }));
-      if (!m && late(paid.createdAt)) out.push(f("issuance.paid_not_minted", subject, "minted or refunded within the SLA", `paid ${paid.createdAt.toISOString()}, no mint at block ${s(d.pinnedBlock)}`));
+      const due = mintDue(refId, paid.createdAt);
+      if (!m && due && late(due)) {
+        out.push(f("issuance.paid_not_minted", subject, "minted or refunded within the SLA",
+          `${due === paid.createdAt ? "paid" : "mint window opened"} ${due.toISOString()}, no mint at block ${s(d.pinnedBlock)}`));
+      }
     }
     if (m) {
       if (!e) out.push(f("issuance.unverified_amount", subject, "the subscription's token amount and wallet", "not known to the ledger, outbox or subscriptions"));
@@ -315,7 +330,129 @@ export function checkIntegrity(d: ReconData): Finding[] {
   return out;
 }
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity] as const;
+// ------------------------------------------------------------------ offerings (S-02 §8)
+
+/** Ledger phases a subscription in this state must have (paid, settled, refunded). */
+function expectedPhases(state: string): [boolean, boolean, boolean] | null {
+  switch (state) {
+    case "initiated":
+    case "kyc_pending":
+    case "waitlisted":
+    case "payment_pending":
+    case "rejected":
+    case "expired":
+    case "cancelled":
+      return [false, false, false];
+    case "payment_confirmed":
+    case "allocation_pending":
+    case "issuance_review":
+    case "refund_pending":
+    case "blocked":
+    case "disputed":
+      return [true, false, false];
+    case "tokens_issued":
+    case "active":
+    case "redeemed":
+      return [true, true, false];
+    case "refunded":
+      return [true, false, true];
+    default:
+      return null;
+  }
+}
+
+const phaseList = ([paid, settled, refunded]: [boolean, boolean, boolean]): string =>
+  [paid ? "paid" : "", settled ? "settled" : "", refunded ? "refunded" : ""].filter(Boolean).join("+") || "none";
+
+const HELD = new Set(["payment_pending", "payment_confirmed", "allocation_pending", "issuance_review", "tokens_issued", "active", "refund_pending", "blocked", "disputed"]);
+const PAID_UNREFUNDED = new Set(["payment_confirmed", "allocation_pending", "issuance_review", "tokens_issued", "active", "refund_pending", "blocked", "disputed"]);
+const MINTABLE = new Set(["allocation_pending", "issuance_review", "tokens_issued", "active", "redeemed"]);
+
+/**
+ * S-02 offerings against the ledger and the chain: the refId is the subscription's; each state has
+ * exactly the journals it implies (subscriptions vs escrow); per offering the money paid equals
+ * refunded + settled + still held; units held never exceed the hard cap; a failed offering refunds
+ * within the SLA; mints happen only in the mint window and, at completion, equal the settled
+ * allocations; the trustee cap covers what is still to mint.
+ */
+export function checkOfferings(d: ReconData): Finding[] {
+  const out: Finding[] = [];
+  const od = d.offerings;
+  if (!od) return out;
+  const phases = new Map<string, Record<SubscriptionPhase, LedgerJournal[]>>();
+  for (const j of d.ledger.journals) {
+    const k = parseSubscriptionKey(j.key);
+    if (!k) continue;
+    const e = phases.get(k.refId) ?? { paid: [], settled: [], refunded: [] };
+    e[k.phase].push(j);
+    phases.set(k.refId, e);
+  }
+  const mints = new Map(d.chain.issuances.filter((i) => i.kind === "mint").map((i) => [i.refId, i]));
+  const byOffering = new Map<string, typeof od.subscriptions>();
+  for (const x of od.subscriptions) {
+    if (x.token !== d.deployment.token) continue; // other tokens are reconciled in their own runs
+    byOffering.set(x.offeringId, [...(byOffering.get(x.offeringId) ?? []), x]);
+  }
+
+  for (const [offeringId, subs] of [...byOffering].sort(([a], [b]) => a.localeCompare(b))) {
+    const first = subs[0];
+    if (!first) continue;
+    const subject = `offering ${offeringId}`;
+    let held = 0n;
+    let journalsNet = 0n;
+    let heldMoney = 0n;
+    let toMint = 0n;
+    let settledUnits = 0n;
+    let mintedUnits = 0n;
+    for (const x of [...subs].sort((a, b) => a.subscriptionId.localeCompare(b.subscriptionId))) {
+      const ss = `subscription ${x.subscriptionId}`;
+      if (refIdForSubscription(x.subscriptionId) !== x.refId) out.push(f("offering.ref_id_mismatch", ss, refIdForSubscription(x.subscriptionId), x.refId));
+      const p = phases.get(x.refId) ?? { paid: [], settled: [], refunded: [] };
+      const exp = expectedPhases(x.state);
+      const has: [boolean, boolean, boolean] = [p.paid.length > 0, p.settled.length > 0, p.refunded.length > 0];
+      if (!exp || exp.some((v, i) => v !== has.at(i))) {
+        out.push(f("offering.state_mismatch", ss, `${x.state}: ledger ${exp ? phaseList(exp) : "known state"}`, `ledger ${phaseList(has)}`));
+      }
+      for (const j of p.paid) journalsNet += journalTotal(j);
+      for (const j of [...p.settled, ...p.refunded]) journalsNet -= journalTotal(j);
+      if (HELD.has(x.state)) held += x.units;
+      if (PAID_UNREFUNDED.has(x.state) && x.state !== "tokens_issued" && x.state !== "active") heldMoney += x.amountPaisa;
+      if (x.state === "allocation_pending" || x.state === "issuance_review") toMint += x.units;
+      if (x.state === "tokens_issued" || x.state === "active" || x.state === "redeemed") settledUnits += x.units;
+      const m = mints.get(x.refId);
+      if (m) {
+        mintedUnits += m.amount;
+        if (!x.mintStartedAt || !MINTABLE.has(x.state)) {
+          out.push(f("offering.mint_outside_window", ss, "a mint only for an allocation of an offering in its mint window", `${x.state}, ${mintedText(m)}`, { tx: m.txHash }));
+        }
+      }
+      if ((x.offeringState === "failed" || x.offeringState === "refunding") && (x.state === "refund_pending" || x.state === "payment_confirmed" || x.state === "allocation_pending")) {
+        const overdue = x.failedAt !== null && d.asOf.getTime() - x.failedAt.getTime() > od.refundSlaMs;
+        out.push(f(overdue ? "offering.refund_overdue" : "offering.paid_after_failure", ss, `refunded within ${String(Math.round(od.refundSlaMs / 3_600_000))} h of the failure (OF-53)`,
+          `${x.state} since the offering failed${x.failedAt ? ` at ${x.failedAt.toISOString()}` : ""}`));
+      }
+    }
+    if (held > first.hardCap) out.push(f("offering.over_hard_cap", subject, `at most ${s(first.hardCap)} units held`, `${s(held)} units held`));
+    if (journalsNet !== heldMoney) {
+      out.push(f("offering.escrow_mismatch", subject, `${s(heldMoney)} paisa held for paid, unsettled, unrefunded subscriptions`, `${s(journalsNet)} paisa = paid - settled - refunded in the ledger`));
+    }
+    if (first.offeringState === "completed" && mintedUnits !== settledUnits) {
+      out.push(f("offering.allocation_mismatch", subject, `${s(settledUnits)} units settled`, `${s(mintedUnits)} units minted for its refIds`));
+    }
+    if (first.offeringState === "completing" && first.mintStartedAt && od.trusteeCap - d.chain.readModel.totalSupply < toMint) {
+      out.push(f("offering.cap_headroom", subject, `trustee cap headroom >= ${s(toMint)} units still to mint`, `${s(od.trusteeCap - d.chain.readModel.totalSupply)} units of headroom`));
+    }
+  }
+  const ours = new Set([...byOffering.values()].flat().map((x) => x.subscriptionId));
+  for (const a of [...od.paymentAnomalies].filter((x) => ours.has(x.subscriptionId)).sort((x, y) => x.raastRef.localeCompare(y.raastRef))) {
+    out.push(f("offering.payment_anomaly", `credit ${a.raastRef}`, "a matched credit only for a reservation waiting for it", `subscription ${a.subscriptionId} was ${a.state}`));
+  }
+  return out;
+}
+
+const mintedText = (m: ChainIssuance): string => `minted ${s(m.amount)} to ${m.account} at block ${s(m.blockNumber)}`;
+
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

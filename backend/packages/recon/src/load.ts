@@ -8,6 +8,8 @@ import type {
   DistributionStatus,
   ExpectedMint,
   LedgerJournal,
+  OfferingData,
+  OfferingSubscription,
   OutboxCommand,
   PayoutBatch,
   ReconData,
@@ -120,6 +122,25 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       }
     }
 
+    // S-02 offerings of this token (migration 0015), read-only, when the schema exists.
+    let offerings: OfferingData | undefined;
+    const hasOfferings = (await q<{ ok: boolean }>("SELECT to_regclass('offering.recon_subscriptions') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasOfferings) {
+      const token = lower(d.contracts.token);
+      const subscriptions: OfferingSubscription[] = (await q<{ subscription_id: string; ref_id: string; offering_id: string; offering_state: string; hard_cap_units: string;
+        mint_started_at: Date | null; failed_at: Date | null; state: string; units: string; wallet: string | null; amount_paisa: string; token: string | null }>(
+        `SELECT subscription_id, ref_id, offering_id, offering_state, hard_cap_units::text, mint_started_at, failed_at, state, units::text, wallet, amount_paisa::text, token
+         FROM offering.recon_subscriptions ORDER BY offering_id, subscription_id`))
+        .map((r) => ({ subscriptionId: r.subscription_id, token: r.token, refId: r.ref_id, offeringId: r.offering_id, offeringState: r.offering_state, hardCap: BigInt(r.hard_cap_units),
+          mintStartedAt: r.mint_started_at, failedAt: r.failed_at, state: r.state, units: BigInt(r.units), wallet: r.wallet, amountPaisa: BigInt(r.amount_paisa) }));
+      const sla = (await q<{ v: string }>("SELECT value::text AS v FROM offering.settings WHERE key = 'refund_sla_hours'"))[0]?.v ?? "48";
+      const cap = (await q<{ cap: string }>("SELECT trustee_cap::text AS cap FROM chain.tokens WHERE token = $1", [token]))[0]?.cap ?? "0";
+      const paymentAnomalies = (await q<{ subscription_id: string; raast_ref: string; state: string }>(
+        `SELECT a.subscription_id, a.raast_ref, a.state FROM offering.payment_anomalies a JOIN offering.recon_subscriptions s ON s.subscription_id = a.subscription_id
+         WHERE s.token = $1 ORDER BY a.id`, [token])).map((r) => ({ subscriptionId: r.subscription_id, raastRef: r.raast_ref, state: r.state }));
+      offerings = { subscriptions, refundSlaMs: Number(sla) * 3_600_000, trusteeCap: BigInt(cap), paymentAnomalies };
+    }
+
     const statements = new Map<string, BankStatement>();
     for (const r of await q<{ id: string; account: string; statement_date: string; opening_paisa: string; closing_paisa: string }>(
       "SELECT id, account, statement_date::text, opening_paisa::text, closing_paisa::text FROM recon.bank_statements ORDER BY account, statement_date")) {
@@ -156,6 +177,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       chain: { issuances, distributions, readModel: { totalSupply: BigInt(token?.total_supply ?? "0"), holdings } },
       ledger: { journals },
       expectedMints,
+      ...(offerings ? { offerings } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };

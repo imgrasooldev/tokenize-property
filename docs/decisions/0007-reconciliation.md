@@ -117,3 +117,25 @@ Found while measuring: building the 20,000 bench journals took 287 s (about 14 m
 - Producers of ledger entries must use the conventions above; otherwise reconciliation reports their entries as unmatched.
 - `signer.verify_audit()` hashes timestamps in the session's TimeZone (found while building R-6): run under a different TimeZone it reports every row as changed. Recon reads it in the cluster default (Asia/Karachi). A fix needs a new migration and a re-hash plan; see open questions.
 - Open questions: accepted-exception list for known historical differences (e.g. demo mints); who may register bank accounts in production (single operator today, audited); real bank batch-hash definition (5g); scheduling and alert wiring (`NOTIFY recon_alert`) in production.
+
+## Amendment 2026-10-13: offerings (spec S-02, migration 0015, T-020)
+
+**Problem (spec finding).** S-02 mints only at completion, for paid subscriptions (specs README §3, decision 1). Under the original rule `issuance.paid_not_minted` measured the SLA from the `sub:<refId>:paid` journal, so every normal open or funded offering would raise a blocking finding 30 minutes after the first payment and freeze all payouts for weeks.
+
+**Change.** For a refId that belongs to an S-02 offering subscription (`offering.recon_subscriptions`), the paid → minted SLA starts when the offering's mint commands are enqueued (`offering.offerings.mint_started_at`, set by `offering.start_minting` once the completion record is approved), not at payment and not at L13. Before that a paid subscription is an allocation, not a finding. A subscription in `refund_pending`, `blocked` or `disputed` is not expected to be minted at all. RefIds that are not offering subscriptions (web prototype `web:sub:*`, earlier backend subscriptions) keep the payment-based SLA. Proven by `recon/test/offering-checks.test.ts` (pure) and `offering/test/recon.test.ts` (real loader: a live and a funded offering with two-hour-old payments raise no blocking finding; a mint window open for 45 minutes without a mint does).
+
+**New checks** (`checkOfferings`, read from `offering.recon_subscriptions`, `offering.settings`, `offering.payment_anomalies` and `chain.tokens` for the deployment's token, only where migration 0015 exists):
+
+| Check | Severity | Rule |
+|---|---|---|
+| `offering.over_hard_cap` | blocking | units held (reserved, paid, allocated, issued, refund pending, blocked, disputed) above the hard cap |
+| `offering.ref_id_mismatch` | blocking | the stored refId is not `keccak256("property-token:subscription:<id>")` (the database cannot compute keccak) |
+| `offering.state_mismatch` | blocking | a subscription's state and its ledger journals disagree (subscriptions vs escrow per subscription: e.g. Payment Confirmed needs `paid` and no `settled`/`refunded`) |
+| `offering.escrow_mismatch` | blocking | per offering, paid − settled − refunded in the ledger ≠ the amounts of paid, unsettled, unrefunded subscriptions (money conserved) |
+| `offering.paid_after_failure` / `offering.refund_overdue` | warning (both) | a paid subscription of a failed or refunding offering not yet refunded; `refund_overdue` after `refund_sla_hours` (48 h, OF-53) |
+| `offering.mint_outside_window` | blocking | a `Minted` refId of an offering subscription before the mint window or in a state that may not be minted |
+| `offering.allocation_mismatch` | blocking | a completed offering whose minted units differ from its settled units (minted = paid at completion) |
+| `offering.cap_headroom` | blocking | while minting, trustee cap − totalSupply < units still to mint |
+| `offering.payment_anomaly` | blocking | a matched credit reached a subscription that was no longer waiting for it (should be impossible; see the ADR 0009 amendment) |
+
+Deviation from S-02 §8 ("blocking after the SLA"): `offering.refund_overdue` is a **warning**. Refunds need the payout gate (ADR 0009 B-9), a blocking finding freezes the gate, and the gate only reopens after a passing run, so a blocking overdue refund could never be cured (found in `offering/test/recon.test.ts`). The overdue refund is alerted every run instead. The S-02 checks `supply.register_mismatch` (needs the trustee's register attestation feed, S-07) and burn checks are not built yet.

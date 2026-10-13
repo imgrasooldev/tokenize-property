@@ -35,6 +35,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/http-auth` | HMAC request signing for the internal APIs (method, path, time, one-time nonce, body hash; 30 s skew, replay refused) with per-client path scopes; used by the signing service and the KYC API |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only), and the local/demo bookings for reconciliation (`seed:local`, `rent:book`, `recon:demo-bank`) |
 | `@pt/property` | Sponsor KYB, property submission and due diligence (spec S-01): keyed hashes and sealed sponsor data, the K/P state machines, duplicate detection, maker-checker and the hash-chained audit in the database; operator CLI until the portal screens exist |
+| `@pt/offering` | Offering lifecycle (spec S-02): terms and approvals, reservations with payment codes, FCFS with a waitlist, payment matching, closing outcomes, extension with withdrawal, refunds to the sender, issuance batch, mint at completion only, settlement from the read model; every rule in the database; operator CLI until the portal screens exist |
 
 ## Outbox (Step 5c)
 
@@ -258,6 +259,40 @@ LEGAL TO CONFIRM values are configurable in `property.settings` (beneficial-owne
 Not yet built (later steps): anchoring document hashes on DocumentRegistry after deployment (OB-41, needs a signer kind `document.add`), the `documents.*` and `property.token_without_approval` checks inside `@pt/recon` runs (pure functions exist in `@pt/property/recon.ts`), notifications (§9), SLA clocks, the sponsor portal, and the encrypted document vault.
 
 Tests: `rules.test.ts` (11, no database), `property-db.test.ts` (35), `property-model.test.ts` (1 property test: 30 random operation sequences by right and wrong officers against a reference model), `cli.test.ts` (1). While migrations 0012 (Step 5h) and 0013 (Step 6a) are on other branches, the property tests build their scratch databases from a renumbered copy of the migrations (`test/helpers.ts`, 0014 becomes 0012); the copy equals the real directory once those branches are merged.
+
+## Offering lifecycle (spec S-02, task T-020)
+
+[S-02](../docs/specs/S-02-offering-lifecycle.md) (implementation notes §16). Every state, guard, duty, maker-checker rule, unit count, payment link, mint command and refund is in `0015_offering.sql` (schema `offering`, plus an additive bank amendment); `@pt/offering` validates input (zod), derives each subscription's refId (`keccak256("property-token:subscription:<id>")`), maps refusals to `OfferingError` (`INVALID_INPUT`, `FORBIDDEN`, `GUARD`, `DUPLICATE`, `NOT_FOUND`) and sends approved refunds (record first, then `BankGateway.returnCredit`). Backend only: investor pages and portal screens come later; operators use the CLI. Adopted defaults: mint at completion only for paid subscriptions with a single-use refId; FCFS with 24 h reservations and a strict waitlist; pilot all-or-nothing (min raise = target = hard cap); payment grace 2 h; completion deadline 60 days; one extension of up to 30 days with a withdrawal right.
+
+```bash
+npm run offering:run -- actions                 # every workflow operation
+npm run offering:run -- createOffering @offering.json
+npm run offering:run -- decide '{"requestId":"12","officer":"off-trustee","approve":true,"reason":"terms checked"}'
+npm run offering:show -- <offeringId>           # state, units held/reserved/paid/waitlisted, subscriptions, issuance dry run
+npm run offering:queue                          # open maker-checker requests
+npm run offering:tick                           # the offering clock for every active offering (schedule every minute)
+npm run offering:audit                          # offering audit chain (exit 3 on a problem)
+```
+
+Flow: create (draft) → `submit` (L1, opens the L3 request) → four approvals (offering checker, legal head, compliance, trustee) → `markReady` (L4, checked against the read model: token paused, cap, documents anchored) → `tick` opens (L5) → investors `acceptDocument` and `reserve` (payment code `PT-XXXX-XXXX` for exactly units × price, expiring with the reservation) → the bank's matched credit moves the subscription to Payment Confirmed in the same transaction → `tick` expires unpaid reservations and promotes the waitlist, closes (L9) and proposes L11/L12 to the trustee → funded: `prepareBatch` (IB) → L13 (conditions precedent, clean dry run) → `CMP` (registered deed, completion payments) → `startMinting` (one `issuance.mint` outbox command per allocation, key `mint:<refId>`) → `settle` on each `Minted` event (`sub:<refId>:settled`) → L14 (trustee's register attestation) → completed. Failed: refunds approved by two bank operators, sent with `executeApprovedRefunds` → cancelled.
+
+| Rule | What it guarantees |
+|---|---|
+| OFR-1 | Only the S-02 transitions L1..L18 and V1..V22 exist (`offering.transitions`); a trigger refuses any other event or one not from the current state; the state follows the event log; terms are immutable once submitted |
+| OFR-2 | Maker-checker requests (`offering.request_rules`): requester never approves, each needed duty by a different officer, one rejection is final, 72 h expiry, stale when the offering's state moved; OF-SOD-1 and OF-SOD-2 in the database |
+| OFR-3 | Units held never exceed the hard cap (lock on the offering row); payment codes exist only for reservations, expire with them and are cancelled with them; freed units go to the oldest waitlisted investor |
+| OFR-4 | The exact matched credit (bank, B-2) confirms the reservation in the same transaction (trigger on `bank.credits`); late, wrong-amount, cancelled-code and third-party credits go to suspense |
+| OFR-5 | `issuance.mint` only by `start_minting`, in Completing, after the completion record and an approved batch, only for booked unrefunded payments; `offering.mint_allowed` for the signer (`requireOfferingBatch`) |
+| OFR-6 | Refunds return the whole credit to its sender under its own reference, after two bank operators and the reconciliation gate, never while a mint exists or could still be mined; journal and state change in one transaction |
+| OFR-7 | Settlement only against a `Minted` event with the same wallet and amount; a mismatch or a failed mint goes to Issuance Review; a retry (V17) is maker-checker with the same refId |
+| OFR-8 | Append-only records, hash-chained audit (UTC); `offering.verify_audit()` replays every state and finds rows written around the API |
+| OFR-9 | Roles `pt_offering_service`, `pt_offering_officer`, `pt_offering_admin`, `pt_offering_reader`; `pt_signer` may call `offering.mint_allowed` only |
+
+LEGAL TO CONFIRM values are rows in `offering.settings` (completion 60 days, extension 30 days, withdrawal window 7 days, minimum offer period 7 days, all-or-nothing, refund SLA 48 h, allowed country 586); a change is a new migration.
+
+Not yet built: completion payments as a bank batch (OF-45), refunds the beneficiary bank returned (OF-52), one escrow account per trust, trustee-cap reduction and `token.pause`, the chain view-call dry run, notifications, investor and portal screens (S-02 §16).
+
+Tests: `lifecycle.test.ts` (12), `db.test.ts` (4), `concurrency.test.ts` (2 racing-investor tests), `model.test.ts` (1 fast-check property test: 32 random sequences of reservations, payments, cancellations and expiries against a reference model; mutation-checked), `recon.test.ts` (3, real reconciliation runs), `cli.test.ts` (1), `unit.test.ts` (4); plus `recon/test/offering-checks.test.ts` (13) and one signer policy test.
 
 ## Live Demo Console
 

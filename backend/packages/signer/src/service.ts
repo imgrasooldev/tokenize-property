@@ -356,7 +356,12 @@ export class SignerService {
         [rule.keyRef, excludeRequest],
       ),
     ]);
-    return evaluateMint(rule, payload, { chainId, ...facts, signedToday: BigInt(used.rows[0]?.n ?? "0") });
+    let offeringProblem: string | null | undefined;
+    if (rule.requireOfferingBatch) {
+      const { rows } = await c.query<{ r: string | null }>("SELECT offering.mint_allowed($1, $2, $3) AS r", [p.data.refId.toLowerCase(), p.data.to.toLowerCase(), p.data.amount]);
+      offeringProblem = rows[0] ? rows[0].r : "no answer";
+    }
+    return evaluateMint(rule, payload, { chainId, ...facts, signedToday: BigInt(used.rows[0]?.n ?? "0"), ...(offeringProblem === undefined ? {} : { offeringProblem }) });
   }
 
   private async decide(c: pg.ClientBase, input: SignInput, requestedBy: string): Promise<SignResult> {

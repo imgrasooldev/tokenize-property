@@ -21,7 +21,8 @@
 | `anchor` | 0007 | public anchors |
 | `kyc` | 0009 | investor identity subjects, checks, decisions |
 | `bank` | 0009, 0010 | bank events, credits, payees, payout batches |
-| `property` | 0014 (branch `t-021-property-onboarding`, not on `main`) | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
+| `property` | 0014 | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
+| `offering` | 0015 | offerings, subscriptions, document acceptances, maker-checker requests, issuance batches, completion records, refunds (spec S-02) |
 | `webdemo` | runtime DDL (web) | prototype investors, subscriptions, top-ups, orders, trades |
 
 `0001` revokes `CREATE` on `public` and all rights on the five first schemas from `PUBLIC`.
@@ -135,6 +136,27 @@ Numbered 0014 because 0012 (Step 5h) and 0013 (Step 6a) are on other branches; u
 
 Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (submissions and the duplicate check).
 
+### 0015 offering (OFR-1..OFR-9; spec S-02, task T-020)
+
+| Table | Key columns and constraints |
+|---|---|
+| `offering.settings`, `transitions`, `request_rules` | configuration (LEGAL TO CONFIRM values; the only allowed transitions L1..L18 and V1..V22; which duties approve each request kind); no role writes them |
+| `offering.duties` | duty per officer (offering, compliance, legal_head, trustee, bank_operator); requested and decided by two different administrators; a trustee holds no other duty |
+| `offering.offerings` | uuid; property (one live offering per property, unique per token); terms (price paisa, min raise, target, hard cap, min/max units, open/close, grace, reservation minutes, completion days, categories, use of proceeds, document SHA-256s) immutable after submission; structure, register size and MaxBalance limit from S-01; `token`, `extended_close_at`, `withdrawal_until`, `funded_at`, `completion_deadline`, `completing_at`, `mint_started_at`, `completed_at`, `failed_at` set once |
+| `offering.offering_events`, `subscription_events` | the state logs; trigger `apply_event` refuses anything outside `transitions` or not from the current state |
+| `offering.subscriptions` | uuid; refId (unique, keccak of the id, checked by recon); units, amount = units × price; category; idempotency key unique per investor and offering; one open reservation per investor and offering; `wallet`, `intent_code` (FK `bank.payment_intents`), `expires_at`, `raast_ref` (FK `bank.credits`), `paid_journal`, `settled_journal`, `mint_tx`, `refund_journal` set once; internal `reason` and investor-facing `public_reason` |
+| `offering.acceptances` | append-only acceptance of the exact document version (kind, language, SHA-256, keyed session and device hashes) |
+| `offering.requests`, `request_votes` | maker-checker requests (L3, L7, L8, L10, L11, L12, L13, L14, L15, L16, IB, CMP, SD, V17, V20); one open per kind and subject; decided once; votes once per officer with the duty they filled |
+| `offering.issuance_batches`, `issuance_items` | batch digest `sha256('pt-issuance-batch-v1' || [refId, wallet, units, subscription] sorted by refId)`, approved through request IB |
+| `offering.conditions_precedent`, `completions`, `register_attestations` | L13 evidence hashes; CMP deed and completion batch; L14 register total and hash |
+| `offering.mint_commands` | every `issuance.mint` outbox command per subscription and attempt (`mint:<refId>`, retries `mint:<refId>:retry:<n>`) |
+| `offering.refunds` | one per subscription: cause, approval request, Raast reference, amount; journal set once when sent |
+| `offering.payment_anomalies` | a matched credit for a subscription no longer waiting (reported by reconciliation) |
+| `offering.audit` | hash-chained (`pt-offering-audit-v1`, UTC); `detail.ref` names the row each entry describes |
+| `bank.intent_cancellations`, `bank.credit_refunds` | bank amendment (ADR 0009 B-8, B-9): cancelled payment codes; returns of matched subscription credits (`sub:<refId>:refunded`, original reference) |
+
+`bank.book_credit` is replaced (cancelled codes go to suspense) and a trigger on `bank.credits` confirms the reservation of a matched subscription credit in the same transaction. Lock order: payment code 586586098 → ledger 586586002 → bank audit 586586095 → offering audit 586586150; per-investor lock 586586151; rows locked `FOR NO KEY UPDATE`.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -147,6 +169,7 @@ Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (subm
 | Anchor | history; anchor inputs immutable | public anchor + `anchor:verify` |
 | KYC / bank | all records | `kyc.verify_audit()`, `bank.verify_audit()` |
 | Property (0014) | all records; requests, duties, meetings, persons and valuers decided or ended once | `property.verify_audit()` (also replays states and re-checks document and review hashes) |
+| Offering (0015) | all records; requests, duties, refunds decided or sent once; subscription facts set once | `offering.verify_audit()` (replays states, re-checks batch digests, finds rows without audit, incl. bank cancellations and refunds) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
 
@@ -164,12 +187,13 @@ All NOLOGIN, created idempotently:
 | 0007 | `pt_anchor_writer`, `pt_anchor_reader` |
 | 0009 | `pt_kyc_service`, `pt_kyc_officer`, `pt_kyc_reader`, `pt_bank_service`, `pt_bank_operator`, `pt_bank_reader` |
 | 0014 | `pt_property_writer`, `pt_property_reviewer`, `pt_property_admin`, `pt_property_reader` |
+| 0015 | `pt_offering_service`, `pt_offering_officer`, `pt_offering_admin`, `pt_offering_reader` (and `offering.mint_allowed` for `pt_signer`) |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
 ## 6. Ledger account conventions
 
-From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`. The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
+From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
 
 ## 7. `webdemo` (runtime, prototype only)
 
