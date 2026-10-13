@@ -181,7 +181,9 @@ describe("LISTEN/NOTIFY", () => {
         await new Promise((r) => setTimeout(r, 20));
       }
       expect(status).toBe("confirmed");
-      expect(Date.now() - started).toBeLessThan(1_500);
+      // The poll is 60 s, so finishing well under it proves NOTIFY woke the worker. 10 s leaves room
+      // for a loaded machine; the 1.5 s bound applies with PT_PERF_GATES=1 (T-001).
+      expect(Date.now() - started).toBeLessThan(process.env.PT_PERF_GATES === "1" ? 1_500 : 10_000);
     } finally {
       await w.stop();
     }

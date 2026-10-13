@@ -48,7 +48,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ## 2. Bugs
 
-### T-001 Move tail-latency gates out of unit tests into benchmarks — PARTLY DONE (signer: median gate + `npm run perf:signer`, 2026-10-13; the other timing checks remain)
+### T-001 Move tail-latency gates out of unit tests into benchmarks — DONE (2026-10-13: unit suite gates medians or generous bounds; full budgets in `npm run perf` / `npm run perf:signer` with PT_PERF_GATES=1 on a quiet machine)
 - Outcome: `npm test` never fails because the machine is busy; latency budgets are still enforced where the environment is controlled.
 - Evidence: lead's run 2026-10-13 backend 311 passed / 1 failed (signer p99 63 ms locally with a busy machine; CI #34, #48 failed on p99). Gates: `backend/packages/signer/test/service.test.ts:167-187` (p50/p99), `signer/test/e2e-chain.test.ts:139` (p50 < 200), `indexer/test/local-chain.test.ts:85` (p95 < 100), `indexer/test/indexer-db.test.ts:280` and `outbox/test/worker.test.ts:184` (elapsed < 1-1.5 s; review whether these are functional timeouts or speed gates).
 - P high, C S, Dep none. Files: the tests above; new `backend/packages/signer/scripts/bench.ts` + `npm run signer:bench` (pattern: `indexer:bench`, `recon:bench`, `bank:bench`).
