@@ -76,6 +76,13 @@ export const CHECKS = {
   "offering.allocation_mismatch": "blocking",
   "offering.cap_headroom": "blocking",
   "offering.payment_anomaly": "blocking",
+  // Operations and FBR withholding (spec S-03 §8, migration 0021; rules in tax.reconcile())
+  "rent.wht_mismatch": "blocking",
+  "rent.statement_totals": "blocking",
+  "tax.line_arithmetic": "blocking",
+  "tax.payable_mismatch": "blocking",
+  // Warning only: freezing payouts would not make the remittance happen sooner (due date LEGAL/TAX TO CONFIRM).
+  "tax.wht_unremitted": "warning",
 } as const satisfies Record<string, Severity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -213,6 +220,14 @@ export interface OfferingData {
   paymentAnomalies: { subscriptionId: string; raastRef: string; state: string }[];
 }
 
+/** S-03 operations and tax of this token (migration 0021); absent where it is not applied. */
+export interface TaxData {
+  /** Rows of tax.reconcile(token): the consistency rules, evaluated in the database. */
+  findings: { check: string; subject: string; expected: string; actual: string }[];
+  /** Calculations with an attached statement, re-verified here independently (keccak, Merkle root, totals). */
+  documents: { id: string; status: string; onchainId: bigint | null; statement: string; statementHash: string; schedule: string; scheduleHash: string; root: string }[];
+}
+
 export interface ReconData {
   /** Database time of the snapshot; all ages are measured from it. */
   asOf: Date;
@@ -232,6 +247,8 @@ export interface ReconData {
   expectedMints: Map<string, ExpectedMint>;
   /** S-02 offerings of this token; absent where migration 0015 is not applied (then no offering checks run). */
   offerings?: OfferingData;
+  /** S-03 operations and FBR withholding of this token; absent where migration 0021 is not applied. */
+  tax?: TaxData;
   bank: {
     accounts: BankAccount[];
     statements: BankStatement[];
