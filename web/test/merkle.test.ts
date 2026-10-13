@@ -69,7 +69,8 @@ describe("rent Merkle proofs (chain/rent.py fixtures)", () => {
 });
 
 describe("entitlement input", () => {
-  const sample = { distributionId: 3n, wallet: "0x3ab55575f2dd6c52976b50f64b0a39e97feb6eb5" as Address, amountPaisa: 1660313n, proof: [`0x${"ab".repeat(32)}`] };
+  const proof: Hex[] = [`0x${"ab".repeat(32)}`];
+  const sample = { distributionId: 3n, wallet: "0x3ab55575f2dd6c52976b50f64b0a39e97feb6eb5" as Address, amountPaisa: 1660313n, proof };
 
   it("round-trips the text the portfolio offers", () => {
     expect(parseEntitlement(entitlementText(sample))).toEqual(sample);

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { keccak256, toBytes } from "viem";
 import { describe, expect, it } from "vitest";
-import { COMMITMENT_DOMAIN, computeCommitment, ZERO_HASH } from "../src/lib/anchor-commitment";
+import { COMMITMENT_DOMAIN, computeCommitment, ZERO_HASH, type CommitmentInput } from "../src/lib/anchor-commitment";
 
 /**
  * S-07 PV-21: the browser recomputes the v1 anchor commitment (contract-spec 7.1). The code is a
@@ -11,7 +11,7 @@ import { COMMITMENT_DOMAIN, computeCommitment, ZERO_HASH } from "../src/lib/anch
  * the fixed test vector is the one contracts/test/AnchorDeployment.t.sol and
  * backend/packages/anchor/test/unit.test.ts check.
  */
-const VECTOR = {
+const VECTOR: CommitmentInput = {
   besuChainId: 586_586n,
   besuBlock: 1800n,
   besuBlockHash: keccak256(toBytes("besu-block-1800")),
