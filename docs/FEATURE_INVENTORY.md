@@ -78,7 +78,7 @@ The owner's 16-stage lifecycle brief is not in the repository. The stages below 
 | Burn / redemption kind in signer | Missing | `KINDS` has no burn | exit workflow |
 | Live Demo Console | Done (local tool) | `B/demo-console/src/*`; no automated tests (Untested) | Besu, PostgreSQL |
 | Production KeyProvider (HSM/MPC) | Missing | ADR 0005; only encrypted keystore | vendor choice |
-| Notifications (SMS, email, push) | Missing | product-map §3 | |
+| Notifications: catalogue, sealed contacts, consent, EN/UR templates, delivery worker (record before send, provider lookup, retries, dead letters, rate limits) (T-028, ADR 0013) | Done in the backend on a branch with **mock providers** (not on `main`); producers not wired yet (TASKS T-028), no real SMS/e-mail provider (T-031), no push (T-040) | `0017_notify.sql`, `B/notify/src/*`; `render.test.ts` (12), `notify-db.test.ts` (12), `worker.test.ts` (12, incl. 1 property test), `cli.test.ts` (2) | `@pt/kyc` sealing; producer modules |
 | API gateway / auth service for investors (passkeys) | Missing | product-map §3; web shows "Coming soon" | |
 
 ### 2.3 Investor website (`web/`)

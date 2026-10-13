@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md), [0006](../docs/decisions/0006-indexer.md), [0007](../docs/decisions/0007-reconciliation.md), [0009](../docs/decisions/0009-kyc-and-bank.md) and [0010](../docs/decisions/0010-website-integration.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation, notifications. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md), [0006](../docs/decisions/0006-indexer.md), [0007](../docs/decisions/0007-reconciliation.md), [0009](../docs/decisions/0009-kyc-and-bank.md) , [0010](../docs/decisions/0010-website-integration.md) and [0013](../docs/decisions/0013-notifications.md).
 
 ## Status
 
@@ -34,6 +34,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/bank` | Bank side: signed webhook endpoint, Raast credits matched to payment codes (or suspense), payout accounts with title match and 72-hour cooling-off, maker-checker payout batches gated by reconciliation, deterministic bank file; `MockBank` plays the outside bank (own records, statements in `pt-mock-bank-v1`) |
 | `@pt/http-auth` | HMAC request signing for the internal APIs (method, path, time, one-time nonce, body hash; 30 s skew, replay refused) with per-client path scopes; used by the signing service and the KYC API |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only), and the local/demo bookings for reconciliation (`seed:local`, `rent:book`, `recon:demo-bank`) |
+| `@pt/notify` | Notifications (ADR 0013): event catalogue with typed placeholders, sealed and keyed-hashed contacts, consent rules (security notices cannot be switched off), versioned EN/UR templates, rendering (escaping, Urdu RTL, SMS segments), delivery worker with record-before-send and provider lookup, mock SMS/e-mail providers, CLI `notify:*` |
 | `@pt/property` | Sponsor KYB, property submission and due diligence (spec S-01): keyed hashes and sealed sponsor data, the K/P state machines, duplicate detection, maker-checker and the hash-chained audit in the database; operator CLI until the portal screens exist |
 | `@pt/offering` | Offering lifecycle (spec S-02): terms and approvals, reservations with payment codes, FCFS with a waitlist, payment matching, closing outcomes, extension with withdrawal, refunds to the sender, issuance batch, mint at completion only, settlement from the read model; every rule in the database; operator CLI until the portal screens exist |
 
@@ -294,6 +295,32 @@ Not yet built: completion payments as a bank batch (OF-45), refunds the benefici
 
 Tests: `lifecycle.test.ts` (12), `db.test.ts` (4), `concurrency.test.ts` (2 racing-investor tests), `model.test.ts` (1 fast-check property test: 32 random sequences of reservations, payments, cancellations and expiries against a reference model; mutation-checked), `recon.test.ts` (3, real reconciliation runs), `cli.test.ts` (1), `unit.test.ts` (4); plus `recon/test/offering-checks.test.ts` (13) and one signer policy test.
 
+## Notifications (task T-028, ADR 0013)
+
+[ADR 0013](../docs/decisions/0013-notifications.md). Schema `notify` (`0017_notify.sql`, rules N-1..N-9) and `@pt/notify`. **Mock providers only** (they record what would be sent); real SMS and e-mail providers are T-031, push comes with the app (T-040).
+
+```bash
+npm run notify:setup            # LOCAL DEV ONLY: NOTIFY_DATA_KEY and NOTIFY_LOOKUP_KEY in backend/.env.local, once, never printed
+npm run notify:run              # delivery worker (LISTEN notify + polling), mock providers; -- --once for one pass
+npm run notify:status           # queue, dead letters, undeliverable security notices, audit chain (exit 3 if any)
+```
+
+Producers (bank, KYC, signer, offering, web) call `notify.enqueue(key, kind, 'investor'|'officer', subjectId, params, actor)` (or `enqueue` from `@pt/notify`) **inside their own transaction**; the role `pt_notify_producer` may do nothing else. Wiring each producer is a follow-up per module (TASKS.md T-028); nothing calls it yet except the contact-change notice inside `notify.register_contact`.
+
+| Rule | What it guarantees |
+|---|---|
+| N-1 | No readable phone number or e-mail address: keyed HMAC for lookups plus AES-256-GCM bound to recipient, channel and hash; only `pt_notify_worker` receives the sealed value; provider errors are redacted |
+| N-2 | Typed placeholders per event kind, checked in TypeScript and again in `notify.enqueue` (no extra keys, no 7+ digit runs, no `@`, statuses from a fixed list); templates may use only their kind's placeholders; no links |
+| N-3 | Transactional notices follow per-channel preferences; security notices ignore opt-outs; a security notice without any contact is `undeliverable` and raises `notify_alert` |
+| N-4 | Enqueue in the business transaction, idempotent per key; contacts and template version bound at enqueue; a replaced contact is told about the change |
+| N-5 | Attempt recorded before the provider call, with enough lease left; an expired `sending` delivery is resolved by asking the provider (idempotency key = delivery uid), never re-sent blindly |
+| N-6 | Backoff 30 s × 2^(n−1) up to 1 h; 8 attempts (security) / 5 (transactional); dead letters alert and need an operator decision with a reason |
+| N-7 | Hourly limit per recipient and channel (`notify.rate_limits`); over the limit deferred, never dropped, no attempt used |
+| N-8 | Append-only, hash-chained audit in UTC; `notify.verify_audit()` |
+| N-9 | Roles `pt_notify_producer`, `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
+
+Tests: `render.test.ts` (12, no database: catalogue validation, formatting, escaping, Urdu, SMS segments, sealing, redaction, mock provider), `notify-db.test.ts` (12: catalogue = database, every template renders and fits, idempotency, rollback, PII refusals in SQL, consent, undeliverable alert, contact change, full-database scan for plaintext contacts, privileges, append-only and audit tampering), `worker.test.ts` (12: delivery in both languages, NOTIFY wake-up, backoff and dead letters, operator retry/abandon, render and contact failures, accepted-then-crash, timeout, unknown outcome, dead claim, racing workers, rate limits, and a property test against a reference model), `cli.test.ts` (2). Mutations checked: retrying an unknown outcome at once, and resolving without asking the provider, both make the property test fail. While migrations 0015 (S-02) and 0016 (Step 6b) are on other branches, these tests build their scratch databases from a renumbered copy of the migrations (`test/helpers.ts`, 0017 becomes 0015); the copy equals the real directory once those branches are merged.
+
 ## Live Demo Console
 
 ```bash
@@ -352,6 +379,9 @@ npm run kyc:serve          # KYC API for the website, 127.0.0.1:4910
 npm run kyc:offboard       # freezes for investors who lost their verification
 npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"   # maker-checker (break-glass; officers decide in admin/)
 npm run signer:admin-client   # the admin portal's client (preview + decide only), secret to .env.local and admin/.env.local, never printed
+
+npm run notify:setup && npm run notify:run   # notification keys once; delivery worker (mock SMS/e-mail providers)
+npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"   # maker-checker
 
 # local/demo bookings so reconciliation passes on the local chain (dev chain only)
 npm run seed:local         # chain/flow.py's scenario mint as Alice's seed subscription

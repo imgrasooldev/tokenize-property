@@ -60,6 +60,8 @@ Not re-run by the documentation audit itself (no `node_modules` in the audit wor
 | T-021 (S-01 backend) | merged (043ab74). Was branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
 
 | T-004 (Step 6b) | branch with `admin/` approvals pages and API routes, migration `0016_admin_approvals.sql`, signer preview + officer decisions (`/v1/requests/preview`, `/v1/decide`, `npm run signer:admin-client`). Merge after S-02 (0015) |
+
+| T-028 notifications (backend) | branch: migration `0017_notify.sql` (schema `notify`) and `@pt/notify` (sealed contacts, consent, EN/UR templates, delivery worker with record-before-send and provider lookup, mock providers, CLI `notify:*`), ADR 0013 Proposed. Numbered 0017 after S-02 (0015) and 6b (0016): merge those first. Producers not wired yet (list in TASKS T-028) |
 | T-021 (S-01 backend) | branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
 
 ## 4. Blockers and owner decisions
