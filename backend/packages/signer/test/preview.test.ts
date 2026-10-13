@@ -33,7 +33,7 @@ function allowed(d: Decision): { to: string; data: string; gas: bigint } {
   return d;
 }
 
-const mintRule: MintRule = { chainId: 586586, keyRef: "issuance", issuance: A(1), token: A(2), identityRegistry: A(3), maxPerCommand: "100000", maxPerDay: "300000", approvalAbove: "10000", approvals: 2, gasLimit: "800000" };
+const mintRule: MintRule = { chainId: 586586, keyRef: "issuance", issuance: A(1), token: A(2), identityRegistry: A(3), maxPerCommand: "100000", maxPerDay: "300000", approvalAbove: "10000", approvals: 2, gasLimit: "800000", requireOfferingBatch: false };
 const transferRule: TransferRule = { chainId: 586586, token: A(2), identityRegistry: A(3), maxPerCommand: "100000", maxPerDay: "1000000", approvalAbove: "10000", approvals: 2, gasLimit: "1000000" };
 const freezeRule: FreezeRule = { chainId: 586586, keyRef: "ops", freezeGuard: A(4), token: A(2), maxPerDay: 20, approvals: 1, gasLimit: "300000" };
 const payoutRule: RecordPayoutRule = { chainId: 586586, keyRef: "ops", registry: A(5), token: A(2), approvals: 1, gasLimit: "200000" };
