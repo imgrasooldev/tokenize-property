@@ -25,7 +25,7 @@ scp chain/tools/besu-26.9.0.zip ubuntu@51.79.144.40:property-token/chain/tools/
 cd property-token && (cd chain/tools && unzip -q besu-26.9.0.zip)
 sudo bash deploy/demo-server/provision.sh   # OS packages, firewall, swap, services, CI key
 bash deploy/demo-server/setup.sh            # build, chain, database, contracts, demo data
-sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-web pt-console
+sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-web pt-console pt-admin
 (cd backend && npm run seed:local && npm run rent:book)   # once the indexer has caught up
 ```
 
@@ -127,10 +127,33 @@ Notes:
 - Large investments or trades (over 10,000 tokens) now wait for two operators:
   `npm run signer:decide -- <requestId> <operator> approve "<reason>"` (twice, by different names).
 
+## Internal portals (PT Control, Step 6)
+
+`pt-admin.service` runs the officers' portal (`admin/`, ADR 0011) on **127.0.0.1:3300 only**. It
+is **not** in nginx and port 3300 is not opened in ufw (owner decision, option A: not publicly
+exposed). Officers reach it through an SSH tunnel and open `http://localhost:3300` (WebAuthn
+needs a secure context; browsers treat `localhost` as one, so the `__Host-` Secure session cookie
+works without TLS; an IP address cannot be a WebAuthn RP ID, so `http://127.0.0.1:3300` is refused
+with 421).
+
+```bash
+# once, on the server: the first (and optionally a second) bootstrap administrator
+cd ~/property-token/admin && npm run officer -- bootstrap <handle> "<Full Name>"   # prints a one-time link (30 min)
+# on the officer's own machine, with a FIDO2 security key
+ssh -L 3300:127.0.0.1:3300 ubuntu@51.79.144.40   # then open the printed http://localhost:3300/enrol#token=... link
+# later officers: invited and approved by two administrators in the portal, then on the server
+npm run officer -- enrol-link <handle>
+```
+
+`update.sh` installs and builds `admin/`, (re)creates its database login `pt_admin_web` (member of
+`pt_admin_portal` only, new random password in the git-ignored `admin/.env.local`) and restarts
+the unit; the smoke test checks `/api/health` on loopback.
+
 ## Operating
 
 ```bash
-sudo systemctl status pt-stack pt-web pt-console pt-indexer pt-signer pt-outbox pt-kyc pt-offboarding
+sudo systemctl status pt-stack pt-web pt-console pt-indexer pt-signer pt-outbox pt-kyc pt-offboarding pt-admin
 python3 chain/net.py status
 ssh -L 4800:127.0.0.1:4800 ubuntu@51.79.144.40   # then open http://127.0.0.1:4800 (console)
+ssh -L 3300:127.0.0.1:3300 ubuntu@51.79.144.40   # then open http://localhost:3300 (internal portals)
 ```

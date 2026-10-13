@@ -88,6 +88,19 @@ git checkout --quiet -- web/next-env.d.ts 2>/dev/null || true
 sudo systemctl start pt-web
 sudo systemctl restart pt-console
 
+echo "== internal portals (admin/): 127.0.0.1:3300 only, reached through an SSH tunnel, never nginx"
+sudo systemctl stop pt-admin 2>/dev/null || true
+(cd admin && npm ci --ignore-scripts --no-audit --no-fund --silent && node scripts/setup-server.mjs \
+  && NODE_ENV=production ADMIN_ORIGIN=http://localhost:3300 NODE_OPTIONS=--max-old-space-size=1536 npx next build >/tmp/pt-admin-build.log 2>&1) \
+  || { tail -40 /tmp/pt-admin-build.log; exit 7; }
+git checkout --quiet -- admin/next-env.d.ts 2>/dev/null || true
+if ! sudo cmp -s deploy/demo-server/pt-admin.service /etc/systemd/system/pt-admin.service; then
+  sudo cp deploy/demo-server/pt-admin.service /etc/systemd/system/pt-admin.service
+  sudo systemctl daemon-reload
+fi
+sudo systemctl enable pt-admin >/dev/null 2>&1 || true
+sudo systemctl start pt-admin
+
 echo "== design mockups -> /mockups/ and nginx config"
 sudo bash deploy/demo-server/publish-mockups.sh
 if ! sudo cmp -s deploy/demo-server/nginx.conf /etc/nginx/sites-available/property-token; then
@@ -112,7 +125,17 @@ for unit in pt-indexer pt-outbox pt-offboarding; do
 done
 for _ in $(seq 1 30); do
   code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/login || true)
-  [ "$code" = 200 ] && { echo "website up ($SHA)"; exit 0; }
+  if [ "$code" = 200 ]; then
+    echo "website up ($SHA)"
+    # The portal must answer on loopback only (Host = its localhost origin) and never on port 80.
+    for _ in $(seq 1 30); do
+      a=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost:3300' http://127.0.0.1:3300/api/health || true)
+      [ "$a" = 200 ] && { echo "admin portal up on 127.0.0.1:3300"; exit 0; }
+      sleep 2
+    done
+    echo "admin portal did not come up (last HTTP $a)" >&2
+    exit 8
+  fi
   sleep 2
 done
 echo "website did not come back (last HTTP $code)" >&2

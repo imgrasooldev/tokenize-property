@@ -29,6 +29,11 @@ echo "== PostgreSQL cluster on 127.0.0.1:5433 and migrations"
 python3 backend/scripts/pg.py setup
 (cd backend && npm run migrate)
 
+echo "== internal portals (admin/): least-privilege database login and production build (127.0.0.1:3300)"
+(cd admin && npm ci --ignore-scripts --no-audit --no-fund && node scripts/setup-server.mjs \
+  && NODE_ENV=production ADMIN_ORIGIN=http://localhost:3300 NODE_OPTIONS=--max-old-space-size=1536 npx next build)
+git checkout -- admin/next-env.d.ts 2>/dev/null || true
+
 echo "== contracts: deploy through DeployLib and run the end-to-end flow (creates Alice and Bob)"
 python3 chain/flow.py
 

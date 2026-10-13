@@ -1,0 +1,76 @@
+/**
+ * The portal's copy of the role matrix in the admin portal migration (admin.role_permissions and
+ * admin.role_conflicts). The database is the authority and checks every request itself; this copy
+ * only drives menus and early, friendly checks. test/db/matrix.test.ts asserts both are identical.
+ */
+export const ROLES = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const PERMISSIONS = [
+  "ops.read",
+  "audit.read.ops",
+  "audit.read.admin",
+  "audit.export",
+  "officers.read",
+  "officers.manage",
+  "approvals.read",
+  "compliance.read",
+  "trustee.read",
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
+  ops_maker: ["ops.read", "audit.read.ops", "approvals.read"],
+  ops_checker: ["ops.read", "audit.read.ops", "approvals.read"],
+  compliance_officer: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "compliance.read"],
+  trustee_officer: ["trustee.read"],
+  auditor: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "officers.read", "compliance.read", "trustee.read"],
+  admin: ["audit.read.admin", "officers.read", "officers.manage"],
+};
+
+/** Incompatible pairs (segregation of duties), sorted alphabetically within each pair. */
+export const ROLE_CONFLICTS: readonly (readonly [Role, Role])[] = [
+  ["admin", "auditor"],
+  ["admin", "compliance_officer"],
+  ["admin", "ops_checker"],
+  ["admin", "ops_maker"],
+  ["admin", "trustee_officer"],
+  ["auditor", "compliance_officer"],
+  ["auditor", "ops_checker"],
+  ["auditor", "ops_maker"],
+  ["auditor", "trustee_officer"],
+  ["compliance_officer", "ops_maker"],
+  ["compliance_officer", "trustee_officer"],
+  ["ops_checker", "ops_maker"],
+  ["ops_checker", "trustee_officer"],
+  ["ops_maker", "trustee_officer"],
+];
+
+const LABELS: Readonly<Record<Role, string>> = {
+  ops_maker: "Operations maker",
+  ops_checker: "Operations checker",
+  compliance_officer: "Compliance officer",
+  trustee_officer: "Trustee officer",
+  auditor: "Auditor",
+  admin: "Administrator",
+};
+
+const LABEL_MAP = new Map<Role, string>(Object.entries(LABELS) as [Role, string][]);
+const PERMISSION_MAP = new Map<Role, readonly Permission[]>(Object.entries(ROLE_PERMISSIONS) as [Role, readonly Permission[]][]);
+
+export function roleLabel(r: Role): string {
+  return LABEL_MAP.get(r) ?? r;
+}
+
+export function isRole(x: unknown): x is Role {
+  return typeof x === "string" && (ROLES as readonly string[]).includes(x);
+}
+
+export function permissionsOf(roles: readonly Role[]): Set<Permission> {
+  return new Set(roles.flatMap((r) => PERMISSION_MAP.get(r) ?? []));
+}
+
+export function conflicts(a: Role, b: Role): boolean {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  return ROLE_CONFLICTS.some(([p, q]) => p === x && q === y);
+}
