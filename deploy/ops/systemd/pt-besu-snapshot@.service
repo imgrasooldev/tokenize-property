@@ -1,0 +1,20 @@
+[Unit]
+Description=Property Token encrypted data snapshot of Besu validator node%i (one node at a time)
+Documentation=file:///home/ubuntu/property-token/docs/runbooks/backup-restore.md
+After=pt-stack.service
+OnFailure=pt-ops-alert@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=-/etc/pt-ops/ops.env
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+ExecStart=/usr/local/lib/pt-ops/pt-besu-snapshot.sh %i
+UMask=0077
+TimeoutStartSec=30min
+# The restarted validator is a child of this unit (chain/net.py starts it detached, as in
+# pt-stack.service). KillMode=process keeps it running when this oneshot unit finishes.
+KillMode=process
+NoNewPrivileges=yes
+PrivateTmp=yes

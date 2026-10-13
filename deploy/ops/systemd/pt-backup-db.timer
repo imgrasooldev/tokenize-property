@@ -1,0 +1,10 @@
+[Unit]
+Description=Property Token database backup, daily 02:15 Pakistan time
+
+[Timer]
+OnCalendar=*-*-* 21:15:00 UTC
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

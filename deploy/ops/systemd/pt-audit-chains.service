@@ -1,0 +1,20 @@
+[Unit]
+Description=Property Token audit hash chains (signer, KYC, bank)
+Documentation=file:///home/ubuntu/property-token/docs/OPERATIONS.md
+After=pt-stack.service
+OnFailure=pt-ops-alert@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=-/etc/pt-ops/ops.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Each line must succeed; the first failure stops the unit and fails it (loud).
+ExecStart=/usr/local/lib/pt-ops/pt-job.sh signer:audit
+ExecStart=/usr/local/lib/pt-ops/pt-job.sh kyc:audit
+ExecStart=/usr/local/lib/pt-ops/pt-job.sh bank:audit
+TimeoutStartSec=30min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
