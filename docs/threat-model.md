@@ -70,7 +70,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | K-2 | Elevation | API compromise used to sign transactions | API holds no keys; signing service is a separate process in a separate network zone, reachable only via mTLS | Built (Step 5d): separate `@pt/signer` process, HMAC-authenticated internal API on 127.0.0.1, replay and skew protection; mTLS and network zoning in production |
 | K-3 | Tampering | Signing service signs a malicious transaction | Policy engine: allowed contracts and functions only, amount and rate limits, maker-checker for anything non-routine | Built and tested (Step 5d): deny-by-default policies (target, function, chain, per-command and daily limits, verified recipient, cap, simulation), maker-checker approvals by distinct operators, policy changes also maker-checker (ADR 0005) |
 | K-4 | Repudiation | Nobody knows who approved a signature | Every signing request logged with requester, approvers and payload hash in the append-only audit log | Built and tested (Step 5d): hash-chained `signer.audit`, tamper detection. Verification made independent of the session TimeZone (finding [F-04](findings/F-04-06-step-5f-review.md), migration 0008) |
-| K-5 | Elevation | Departing employee keeps access | Same-day key revocation and Safe owner rotation; monthly access review | Planned |
+| K-5 | Elevation | Departing employee keeps access | Same-day key revocation and Safe owner rotation; monthly access review | Portal part built (Step 6a): disabling an officer (maker-checker) ends the session and blocks sign-in at once; auditors see the officer list for access reviews. Safe owner rotation planned |
 | K-7 | Tampering | Nonce reuse or gaps stall or double-send transactions | Database nonce reservations under a lock; released and stale nonces reused lowest first; dropped transactions proven before re-signing | Built and tested (Step 5d) |
 | K-6 | Info. disclosure | Keys leak via code, logs or backups | Keys only in HSM/MPC in production; gitleaks in CI; secrets in Vault; log redaction | Partly built: local keys AES-256-GCM encrypted at rest (scrypt), never in JSON or logs, DB holds addresses only; HSM/MPC planned |
 
@@ -134,7 +134,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | CH-2 | DoS | Validators go offline | QBFT tolerates 1 of 4 failing; monitoring and runbook for validator recovery | Built, tested locally (`chain/flow.py` stops and restarts a validator) |
 | CH-3 | Elevation | Unauthorised node joins network | Permissioned node allowlist; static peering, discovery off; TLS between nodes | Allow-list and static peering built locally; TLS planned |
 | INF-1 | Elevation | Lateral movement after one service is breached | Private subnets; mTLS between services; signing service and DB not internet-reachable | Planned |
-| INF-2 | Elevation | Admin panel exposed | VPN + SSO + FIDO2 hardware keys; IP allowlist; separate domain | Planned |
+| INF-2 | Elevation | Admin panel exposed | VPN + SSO + FIDO2 hardware keys; IP allowlist; separate domain | Partly built (Step 6a, [ADR 0011](decisions/0011-admin-portal.md)): FIDO2 hardware keys only, Host allow-list, binds 127.0.0.1:3300, never behind the public nginx (demo: SSH tunnel). VPN, SSO and TLS domain in production pending |
 
 ### 4.8 Supply chain and CI/CD
 
@@ -149,9 +149,22 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 
 | ID | STRIDE | Threat | Control | Status |
 |---|---|---|---|---|
-| P-1 | Elevation | Single insider acts alone | Separation of duties; maker-checker everywhere; no one holds more than one Safe key of the same Safe | Planned |
+| P-1 | Elevation | Single insider acts alone | Separation of duties; maker-checker everywhere; no one holds more than one Safe key of the same Safe | Officer roles and segregation of duties enforced by the database, officer changes maker-checker with step-up (Step 6a, ADR 0011, AD-3/AD-4); Safe keys planned |
 | P-2 | Spoofing | Social engineering of staff ("urgent CEO request") | Out-of-band verification for any key or payout action; training; written procedures | Planned |
-| P-3 | Repudiation | Admin action without trace | Immutable audit log of every admin action | Planned |
+| P-3 | Repudiation | Admin action without trace | Immutable audit log of every admin action | Built, tested (Step 6a): hash-chained `admin.audit` of every sign-in, step-up, page view, denial, officer change and export; `admin.verify_audit()` (AD-6) |
+
+### 4.11 Internal portals (Step 6, [ADR 0011](decisions/0011-admin-portal.md))
+
+| ID | STRIDE | Threat | Control | Status |
+|---|---|---|---|---|
+| AD-1 | Spoofing | Officer account taken over (phishing, password reuse, stolen session) | FIDO2 hardware keys only (no passwords), user verification required, origin-bound (phishing-resistant), synced passkeys refused; random 256-bit session token, only its hash stored; 15 min idle, 8 h absolute, one live session, enforced in the database; counter regression refused and alerted | Built, tested |
+| AD-2 | Spoofing | Rogue enrolment (someone else registers a key for an officer) | One-time link only for an officer approved by two administrators (or a bootstrap administrator): hashed, single use, 30 min, newest link revokes older ones, token only in the URL fragment; issued on the server by a role that can do nothing else | Built, tested |
+| AD-3 | Elevation | One person combines incompatible roles (maker and checker, trustee and platform, auditor and anything) | `admin.role_conflicts` checked by a trigger on every grant, also for a superuser's direct INSERT, serialised per officer | Built, tested (incl. concurrent approvals) |
+| AD-4 | Elevation | A single administrator grants themself or a friend power | Every officer change maker-checker by two administrators with reasons; nobody changes their own account; step-up within 5 minutes checked in the database; at least two active administrators; administrators can never approve money or token actions | Built, tested |
+| AD-5 | Elevation | Broken access control in a page or API route (IDOR, forgotten check) | Route registry tested against the files; authorisation matrix over HTTP for every route × role, anonymous and investor cookie; every database function checks the session and permission again; the portal's database login has no table grants | Built, tested |
+| AD-6 | Repudiation / Tampering | Officer actions denied later, or the record edited by a DBA | Hash-chained append-only `admin.audit` (UTC digests); `verify_audit()` finds edits, deletions, forged credentials, swapped public keys, forged sessions, unaudited grants and changes, an edited role matrix | Built, tested; anchoring the admin head with the ledger head (ADR 0008) planned |
+| AD-7 | Tampering | Cross-site request forgery or DNS rebinding against a signed-in officer | No server actions; same origin (or `Origin: null` with `Sec-Fetch-Site: same-origin`) plus a session-bound CSRF token plus SameSite=Strict; Host allow-list (421) | Built, tested on every mutating route |
+| AD-8 | Information disclosure | Evidence export or overview leaks data, or an export is altered afterwards | Overview returns counts and health only (no payloads, no personal data); exports only for compliance and auditors, recorded with the file's SHA-256 before release, manifest names the audit entry; CSV formula neutralisation | Built, tested |
 
 ### 4.10 Property and title (non-technical, tracked here for completeness)
 

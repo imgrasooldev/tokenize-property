@@ -77,7 +77,7 @@ nginx -t && systemctl reload nginx
 echo "== systemd units"
 cp "$APP"/deploy/demo-server/pt-*.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable pt-stack pt-web pt-console >/dev/null
+systemctl enable pt-stack pt-web pt-console pt-admin >/dev/null
 
 echo "== CI deploy key: forced command, can only run update.sh for a commit on main"
 install -o $APP_USER -g $APP_USER -m 0755 "$APP/deploy/demo-server/ci-entry.sh" /home/$APP_USER/pt-ci-entry.sh

@@ -77,6 +77,53 @@ jobs:
       - name: Production build
         run: npm run build
 
+  admin:
+    # Internal portals (Step 6, ADR 0011). Database and HTTP authorisation tests build their own
+    # scratch databases (pt_scratch_admin_*) from backend/packages/db/migrations.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pt_admin
+          # Throw-away CI container only; not a real credential.
+          POSTGRES_PASSWORD: ci_only_not_a_secret_0000
+          POSTGRES_DB: property_token_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pt_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_ADMIN_USER: pt_admin
+      PG_ADMIN_PASSWORD: ci_only_not_a_secret_0000
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (zero warnings)
+        run: npm run lint
+      - name: Tests (unit, database rules, database authorisation matrix)
+        run: npm run test
+      - name: Production build
+        run: npm run build
+      - name: HTTP authorisation matrix against the production build
+        run: npm run test:http
+
   backend:
     runs-on: ubuntu-latest
     services:

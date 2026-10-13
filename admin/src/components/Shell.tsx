@@ -1,0 +1,134 @@
+import type { ReactNode } from "react";
+import { pkt } from "@/lib/format";
+import { roleLabel, type Permission } from "@/lib/permissions";
+import type { Officer } from "@/lib/server/session";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  need: Permission | null;
+  tag?: string;
+}
+
+const SECTIONS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Operations",
+    items: [
+      { href: "/", label: "Overview", icon: "◉", need: "ops.read" },
+      { href: "/approvals", label: "Approvals", icon: "✓", need: "approvals.read", tag: "6b" },
+      { href: "/audit", label: "Audit trail", icon: "⛓", need: null },
+    ],
+  },
+  { title: "Compliance", items: [{ href: "/compliance", label: "KYC & AML", icon: "◎", need: "compliance.read", tag: "6c" }] },
+  { title: "Trustee", items: [{ href: "/trustee", label: "Register", icon: "▦", need: "trustee.read", tag: "6d" }] },
+  { title: "Administration", items: [{ href: "/officers", label: "Officers & roles", icon: "⚿", need: "officers.read" }] },
+];
+
+function canSeeAudit(o: Officer): boolean {
+  return o.permissions.has("audit.read.ops") || o.permissions.has("audit.read.admin");
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+/** App frame: role-filtered navigation, page title, session facts and sign-out. */
+export function Shell({
+  officer,
+  current,
+  title,
+  actions,
+  children,
+}: {
+  officer: Officer;
+  current: string;
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const visible = (i: NavItem) => (i.href === "/audit" ? canSeeAudit(officer) : i.need === null || officer.permissions.has(i.need));
+  return (
+    <div className="app">
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      <aside className="side" aria-label="Portal">
+        <a className="logo" href="/account">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" strokeWidth="2" />
+            <path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6" />
+          </svg>
+          PT Control
+        </a>
+        <nav aria-label="Main">
+          {SECTIONS.map((s) => {
+            const items = s.items.filter(visible);
+            if (items.length === 0) return null;
+            return (
+              <div key={s.title}>
+                <div className="sect">{s.title}</div>
+                {items.map((i) => (
+                  <a
+                    key={i.href}
+                    className="nav"
+                    href={i.href}
+                    aria-current={current === i.href || (i.href !== "/" && current.startsWith(`${i.href}/`)) ? "page" : undefined}
+                  >
+                    <span className="ico" aria-hidden="true">
+                      {i.icon}
+                    </span>
+                    {i.label}
+                    {i.tag ? (
+                      <span className="tag" title={`Planned for Step ${i.tag}`}>
+                        {i.tag}
+                      </span>
+                    ) : null}
+                  </a>
+                ))}
+              </div>
+            );
+          })}
+        </nav>
+        <div className="who">
+          <a className="who-top" href="/account" style={{ color: "inherit" }}>
+            <span className="av" aria-hidden="true">
+              {initials(officer.name)}
+            </span>
+            <span>
+              <b>{officer.name}</b>
+              <span className="cy small" style={{ display: "block" }}>
+                {officer.roles.map((r) => roleLabel(r)).join(" · ") || "no role"}
+              </span>
+            </span>
+          </a>
+          <form method="post" action="/api/auth/logout">
+            <input type="hidden" name="csrf" value={officer.csrf} />
+            <button className="btn block" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </aside>
+      <div className="main">
+        <header className="top">
+          <h1>{title}</h1>
+          <span className="env">INTERNAL · VPN/SSH ONLY</span>
+          <span className="sp" />
+          {actions}
+          <span className="mono di small" title="Sessions end after 15 minutes without activity">
+            session until {pkt(officer.expiresAt)}
+          </span>
+        </header>
+        <main id="main" className="content" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

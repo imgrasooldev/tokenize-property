@@ -16,7 +16,7 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 | `contracts/` | Solidity contracts and Foundry tests |
 | `chain/` | Local 4-validator Besu QBFT network: `net.py` (setup/start/stop/status), `flow.py` (end-to-end checks) |
 | `backend/` | TypeScript workspace: config, logger, DB + migrations, typed ABIs; ledger, outbox, signing service, indexer (read model) |
-| `admin/` | Admin panel (Next.js) |
+| `admin/` | Internal portals "PT Control" (Next.js, 127.0.0.1:3300): officers sign in with FIDO2 hardware keys only; operations overview, audit trails with evidence export, officer management (maker-checker); see [admin/README.md](admin/README.md) and ADR 0011 |
 | `mobile/` | Investor app (Flutter) |
 
 ## Development flow
@@ -30,7 +30,7 @@ Each step ends with a review. The next step starts only after approval.
 | 3 | Smart contracts + unit, fuzz and invariant tests + Slither | Done (internal): 121 tests, 100% coverage, Slither clean, EthTrust [Q] self-assessment, deploy script verified on Anvil. External audits pending |
 | 4 | Local chain: Anvil, then 4-node Besu QBFT | Done: 4-validator Besu 26.9 network (`chain/`), 50-check end-to-end flow on real blocks, validator outage tested |
 | 5 | Backend: ledger, outbox, signing service, indexer, reconciliation | In progress: 5a foundation, 5b ledger, 5c outbox, 5d signing service, 5e indexer and 5f reconciliation done (see `backend/README.md`) |
-| 6 | Admin panel (maker-checker) | Not started |
+| 6 | Internal portals (maker-checker) | In progress: 6a foundation (WebAuthn sign-in and step-up, roles with segregation of duties in the database, hash-chained admin audit, read-only operations overview and audit viewer, officer management) built; 6b approvals, 6c compliance, 6d trustee next |
 | 7 | Flutter investor app | Not started |
 
 ## Security standards

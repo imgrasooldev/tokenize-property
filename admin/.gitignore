@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.next-e2e/
+.next-http/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.env.local
+screenshots/

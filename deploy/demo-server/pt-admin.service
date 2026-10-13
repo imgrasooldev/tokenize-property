@@ -1,0 +1,21 @@
+[Unit]
+Description=Property Token internal portals (Next.js production build on 127.0.0.1:3300 only; reach it through an SSH tunnel, never nginx)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/admin
+Environment=NODE_ENV=production
+# WebAuthn needs a secure context: officers open http://localhost:3300 through `ssh -L 3300:127.0.0.1:3300`.
+Environment=ADMIN_ORIGIN=http://localhost:3300
+Environment=NODE_OPTIONS=--max-old-space-size=256
+# Database login (member of pt_admin_portal only) is in admin/.env.local, written by scripts/setup-server.mjs.
+ExecStart=/usr/bin/npx next start --hostname 127.0.0.1 --port 3300
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
