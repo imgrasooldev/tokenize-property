@@ -7,7 +7,8 @@ import { csrfFor } from "@/lib/server/session";
 import { ROUTES } from "@/lib/routes";
 import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
-import { cast, createWorld, invite, type Cast, type World } from "../support/world";
+import { caseOf, freezePolicies, investor } from "../support/compliance";
+import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
 
 /**
  * Authorisation matrix over real HTTP against the production build (`npm run build` first): every
@@ -26,6 +27,7 @@ const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"
 
 const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor"];
 const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -47,7 +49,17 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/approvals/property", allowed: PROPERTY },
   // Authorised readers get "not found" for an unknown request (the database answers NULL).
   { path: "/approvals/property/999999", allowed: PROPERTY, okStatus: 404 },
-  { path: "/compliance", allowed: ["compliance_officer", "auditor"] },
+  { path: "/compliance", allowed: COMPLIANCE },
+  // Step 6c: compliance officers and auditors only (operations never); unknown items are "not found".
+  { path: "/audit/compliance", allowed: COMPLIANCE },
+  { path: "/compliance/kyc", allowed: COMPLIANCE },
+  { path: "/compliance/kyc/{kycCase}", allowed: COMPLIANCE },
+  { path: "/compliance/kyc/999999", allowed: COMPLIANCE, okStatus: 404 },
+  { path: "/compliance/screening", allowed: COMPLIANCE },
+  { path: "/compliance/freezes", allowed: COMPLIANCE },
+  { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
+  { path: "/compliance/str", allowed: COMPLIANCE },
+  { path: "/compliance/str/{str}", allowed: COMPLIANCE },
   { path: "/trustee", allowed: ["trustee_officer", "auditor"] },
 ];
 
@@ -68,11 +80,24 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/approvals/unfreeze", allowed: ["ops_maker"], okStatus: 303, form: { reason: "short" } },
   { path: "/api/approvals/unfreeze/{unfreeze}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/property/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  // Step 6c: compliance officers only; an incomplete form (or a missing step-up) is answered with a 303 back (nothing decided).
+  { path: "/api/audit/compliance/export", allowed: COMPLIANCE, okStatus: 200, form: { format: "csv" } },
+  { path: "/api/compliance/kyc", allowed: ["compliance_officer"], okStatus: 303, form: { summary: "short" } },
+  { path: "/api/compliance/kyc/{kycCase}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/compliance/rescreen", allowed: ["compliance_officer"], okStatus: 303, form: { reason: "short" } },
+  { path: "/api/compliance/freezes", allowed: ["compliance_officer"], okStatus: 303, form: { kind: "freeze" } },
+  { path: "/api/compliance/freezes/{freeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/compliance/str", allowed: ["compliance_officer"], okStatus: 303, form: { summary: "short" } },
+  { path: "/api/compliance/str/{str}/notes", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
+  // Without the export button (and a fresh step-up, checked by the database) no file is made: 303 back.
+  { path: "/api/compliance/str/{str}/export", allowed: ["compliance_officer"], okStatus: 303, form: {} },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
 function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
+  if (path.startsWith("/api/compliance/")) return "compliance_officer";
   if (path.includes("export")) return "auditor";
   if (path.includes("/approvals/property/")) return "compliance_officer";
   if (path.endsWith("/decide") && path.includes("/approvals/")) return "ops_checker";
@@ -146,6 +171,7 @@ function resolve(path: string): string {
 
 let signer: TestSigner;
 const SIGNER_PORT = 4998;
+let compliance2: Actor;
 
 beforeAll(async () => {
   w = await createWorld("pt_admin_testhttp");
@@ -158,6 +184,18 @@ beforeAll(async () => {
   ids.set("freeze", await freezePayouts(w.su));
   const unfreeze = await w.su.query<{ id: string }>("SELECT recon.request_unfreeze('operator:night-shift', 'cash difference explained by a late bank file') AS id");
   ids.set("unfreeze", unfreeze.rows[0]?.id ?? "");
+  // Step 6c items: a KYC case opened by a possible match, a freeze request and an STR case (command-line names).
+  const inReview = await investor(w.su, { screening: "review" });
+  ids.set("kycCase", await caseOf(w.su, inReview.subjectId));
+  await freezePolicies(w.su);
+  const held = await investor(w.su);
+  ids.set("heldWallet", held.wallet);
+  ids.set("heldSubject", held.subjectId);
+  const fr = await w.su.query<{ id: string }>("SELECT compliance.request_freeze('freeze', $1, 'court_order', 'court order received by the operator', 'operator:night', NULL, NULL) AS id", [held.wallet]);
+  ids.set("freeze", fr.rows[0]?.id ?? "");
+  const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
+  ids.set("str", st.rows[0]?.id ?? "");
+  compliance2 = await invite(w, c.admin, c.admin2, "http.compliance.two", "compliance_officer");
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -200,14 +238,16 @@ describe("route coverage", () => {
     const covered = new Set([
       ...PAGES.map((p) =>
         p.path
-          .replace(/^\/audit\/(signer|recon|ledger|admin)$/, "/audit/[source]")
-          .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]"),
+          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance)$/, "/audit/[source]")
+          .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
+          .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]"),
       ),
       ...APIS.map((a) =>
         a.path
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
-          .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide"),
+          .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
+          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2"),
       ),
       ...ANONYMOUS_POSTS,
       "/login",
@@ -439,6 +479,96 @@ describe("approvals over HTTP (Step 6b)", () => {
     expect(rows.map((r) => `${r.action}:${r.detail.kind ?? ""}`)).toEqual(
       expect.arrayContaining(["approval.ticket:signer", "approval.decided:signer", "approval.refused:payout", "approval.requested:unfreeze", "approval.decided:unfreeze"]),
     );
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("compliance over HTTP (Step 6c)", () => {
+  let counter = Date.now() + 1_000_000;
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  async function fresh(a: Actor, stale = false): Promise<void> {
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+  /** Runs fn as the second compliance officer (the matrix's own compliance officer is restored afterwards). */
+  async function asSecond<T>(fn: () => Promise<T>): Promise<T> {
+    tokens.set("compliance_officer", compliance2.token);
+    try {
+      return await fn();
+    } finally {
+      tokens.set("compliance_officer", c.compliance_officer.token);
+    }
+  }
+
+  it("pages show masked identifiers only (no CNIC, IBAN or name)", async () => {
+    for (const p of ["/compliance", "/compliance/kyc", `/compliance/kyc/${resolve("{kycCase}")}`, "/compliance/screening", `/compliance/freezes/${resolve("{freeze}")}`, `/compliance/str/${resolve("{str}")}`]) {
+      const html = await (await req(p, { who: "compliance_officer" })).text();
+      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}|PK\d{2}[A-Z]{4}/);
+    }
+    expect(await (await req(`/compliance/kyc/${resolve("{kycCase}")}`, { who: "compliance_officer" })).text()).toMatch(/\*{5}-\*{4}\d{3}-\d/);
+  });
+
+  it("a high-risk KYC case needs two compliance officers; a stale step-up is refused", async () => {
+    const path = `/compliance/kyc/${resolve("{kycCase}")}`;
+    const act = async (decision: string) => {
+      const digest = digestOf(await (await req(path, { who: "compliance_officer" })).text());
+      return location(await req(`/api/compliance/kyc/${resolve("{kycCase}")}/act`, { method: "POST", who: "compliance_officer", form: { decision, reason: "screening evidence reviewed in full", digest } }));
+    };
+    await fresh(c.compliance_officer, true);
+    expect(await act("approve")).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.compliance_officer);
+    expect(await act("approve")).toMatch(/ok=Recorded: the case is now pending_second/);
+    // The proposer gets no decision form, only the reason (the database refuses it too: see test/db/compliance.test.ts).
+    const mine = await (await req(path, { who: "compliance_officer" })).text();
+    expect(digestOf(mine)).toBe("");
+    expect(mine).toContain("You proposed it");
+    await fresh(compliance2);
+    expect(await asSecond(() => act("confirm"))).toMatch(/ok=Recorded: the case is now approved/);
+  });
+
+  it("a freeze proposed by one officer is approved by another and queued for the signing service", async () => {
+    const path = `/compliance/freezes/${resolve("{freeze}")}`;
+    await fresh(c.compliance_officer);
+    const digest = digestOf(await (await req(path, { who: "compliance_officer" })).text());
+    const res = await req(`${path.replace("/compliance/", "/api/compliance/")}/decide`, {
+      method: "POST",
+      who: "compliance_officer",
+      form: { decision: "approve", reason: "court order verified with the registry", digest },
+    });
+    expect(location(res)).toMatch(/ok=Approved: the command is in the outbox/);
+    const cmd = await w.su.query<{ kind: string }>("SELECT kind FROM outbox.commands WHERE idempotency_key = $1", [`compliance.freeze:request:${resolve("{freeze}")}`]);
+    expect(cmd.rows[0]?.kind).toBe("compliance.freeze");
+    const st = await w.su.query<{ s: string }>("SELECT kyc.subject_status($1) AS s", [ids.get("heldSubject")]);
+    expect(st.rows[0]?.s).toBe("suspended");
+    // Proposing through the portal: the maker cannot decide their own unfreeze.
+    const asked = await req("/api/compliance/freezes", {
+      method: "POST",
+      who: "compliance_officer",
+      form: { kind: "unfreeze", wallet: ids.get("heldWallet") ?? "", reasonCode: "court_release", reason: "the court lifted the order today" },
+    });
+    const uid = /\/compliance\/freezes\/(\d+)\?ok=/.exec(location(asked))?.[1] ?? "";
+    expect(uid, location(asked)).not.toBe("");
+    const udigest = digestOf(await (await req(`/compliance/freezes/${uid}`, { who: "compliance_officer" })).text());
+    expect(udigest).toBe(""); // the proposer sees no decision form, only the reason why
+  });
+
+  it("an STR export is recorded before it is handed out, and its file matches the record", async () => {
+    await fresh(c.compliance_officer);
+    const res = await req(`/api/compliance/str/${resolve("{str}")}/export`, { method: "POST", who: "compliance_officer", form: { decision: "export" } });
+    expect(res.status, serverLog.slice(-2000)).toBe(200);
+    const files = unzipStore(new Uint8Array(await res.arrayBuffer()));
+    const manifest = JSON.parse(new TextDecoder().decode(files.get("manifest.json"))) as { files: { name: string; sha256: string }[] };
+    const data = files.get(manifest.files[0]?.name ?? "") ?? new Uint8Array();
+    expect(sha256Hex(data)).toBe(manifest.files[0]?.sha256);
+    expect(new TextDecoder().decode(data)).not.toMatch(/\d{13}|name_enc/);
+    const rec = await w.su.query<{ sha256: Buffer }>("SELECT sha256 FROM compliance.str_exports WHERE case_id = $1", [resolve("{str}")]);
+    expect(rec.rows.map((r) => r.sha256.toString("hex"))).toContain(manifest.files[0]?.sha256);
+    expect((await w.su.query("SELECT * FROM compliance.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });

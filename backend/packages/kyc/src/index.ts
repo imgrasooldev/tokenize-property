@@ -1,6 +1,7 @@
 export { keyFromEnv, normalizeCnic, normalizeName, Peppers, seal, unseal, type HashPurpose, type Pepper } from "./crypto.ts";
 export {
   evidenceHash,
+  MOCK_PEP_LIST,
   MOCK_SANCTIONS_LIST,
   MockLiveness,
   MockNadra,
@@ -37,4 +38,5 @@ export {
   type SubjectView,
 } from "./service.ts";
 export { OffboardingWorker } from "./offboarding.ts";
+export { RescreenWorker } from "./rescreen.ts";
 export { createKycServer, WEB_KYC_SCOPE, type KycApi } from "./http.ts";

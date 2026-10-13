@@ -212,3 +212,6 @@ textarea { resize: vertical; min-block-size: 54px; inline-size: 100%; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Step 6c: the check that opened a KYC case. */
+.t tr.hl td { background: rgba(255, 181, 71, 0.06); }

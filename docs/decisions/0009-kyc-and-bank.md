@@ -125,3 +125,10 @@ Additive; nothing in 0009/0010 is edited (migrations are immutable). Built for T
 - `bank.verify_audit()` is unchanged; `offering.verify_audit()` reports cancellations and refunds without their bank audit entry.
 
 Not built yet (S-02 §8): batch kinds `completion` (OF-45) and `refund` (OF-52, a refund the beneficiary bank returned), the `refund-returned` / `refund-paid` journals, one escrow account per trust (decision 14; one `bank:trustee-escrow` today).
+
+## Amendment 2026-10-13: compliance portal (Step 6c, T-005, migration 0019)
+
+- Y-3/Y-4: a screening may now end in `review` with reason `pep_match` (politically exposed person). It is settled like a possible match by two different officers; the new clearance proposal `accept_edd` (only for a `pep_match` check) verifies the subject with the reason "PEP accepted after enhanced due diligence by two officers"; `true_match` remains final. The mock screening has a fictional PEP list.
+- New derived status `suspended`: a verified (or expired) subject under an approved compliance freeze (`compliance.holds`). `kyc.underlying_status()` keeps the 0009 derivation; every gate comparing with `verified` treats a suspended investor as not verified (payouts held, no mints or transfers). The offboarding list does not include `suspended` (the compliance freeze already queued its own command).
+- Officer names in `kyc.clearances` and `kyc.decisions` are bound to officer sessions (as ADR 0011 section 10): officers decide in the portal; non-officer operator names keep working on the command line.
+- Re-screening requested by officers is queued in `compliance.rescreens` and executed by the KYC service (`npm run kyc:rescreen`).

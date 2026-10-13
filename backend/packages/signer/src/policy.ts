@@ -69,6 +69,7 @@ export type Decision =
 export const KINDS = [
   "issuance.mint",
   "compliance.freeze",
+  "compliance.unfreeze",
   "rent.record_payout",
   "token.transfer",
   "identity.create",
@@ -125,6 +126,52 @@ export function evaluateFreeze(rule: FreezeRule, payload: unknown, facts: Freeze
     keyRef: rule.keyRef,
     to: rule.freezeGuard.toLowerCase() as Hex,
     data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "freezeAddress", args: [account as Hex, caseId as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+// ------------------------------------------------------------------ compliance.unfreeze (Step 6c)
+
+/**
+ * Lifts a compliance freeze (FreezeGuard.unfreezeAddress). Only after two different compliance
+ * officers decided it in the portal (migration 0019 C-3): the database answers
+ * compliance.unfreeze_allowed(account, caseId) only for an approved unfreeze request with that
+ * wallet and caseId whose hold is lifted. Never for an investor who is not KYC-verified (offboarding
+ * would freeze them again), only for a frozen wallet, and a daily count limits a compromised caller.
+ * Same rule shape as compliance.freeze.
+ */
+export const unfreezeRule = freezeRule;
+export type UnfreezeRule = FreezeRule;
+export const unfreezePayload = freezePayload;
+
+export interface UnfreezeFacts {
+  chainId: number;
+  frozen: boolean;
+  /** kyc.is_verified(account). */
+  ownerVerified: boolean;
+  /** compliance.unfreeze_allowed(account, caseId): a two-officer decision exists. */
+  decided: boolean;
+  signedToday: number;
+}
+
+export function evaluateUnfreeze(rule: UnfreezeRule, payload: unknown, facts: UnfreezeFacts): Decision {
+  const p = unfreezePayload.safeParse(payload);
+  if (!p.success) return { decision: "deny", reason: `malformed payload: ${p.error.issues.map((i) => i.path.join(".")).join(", ")}` };
+  const { freezeGuard, account, caseId } = p.data;
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (freezeGuard.toLowerCase() !== rule.freezeGuard.toLowerCase()) return { decision: "deny", reason: "target is not the approved FreezeGuard" };
+  if (BigInt(caseId) === 0n) return { decision: "deny", reason: "zero caseId" };
+  if (!facts.decided) return { decision: "deny", reason: "no approved two-officer unfreeze decision for this wallet and caseId" };
+  if (!facts.ownerVerified) return { decision: "deny", reason: "the wallet's owner is not KYC-verified: it stays frozen" };
+  if (!facts.frozen) return { decision: "deny", reason: "wallet is not frozen" };
+  if (facts.signedToday + 1 > rule.maxPerDay) return { decision: "deny", reason: `daily limit of ${String(rule.maxPerDay)} unfreezes would be exceeded` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.freezeGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "unfreezeAddress", args: [account as Hex, caseId as Hex] }),
     gas: BigInt(rule.gasLimit),
   };
 }
@@ -435,6 +482,7 @@ export function parseRule(kind: string, rule: unknown): AnyRule;
 export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "issuance.mint") return mintRule.parse(rule);
   if (kind === "compliance.freeze") return freezeRule.parse(rule);
+  if (kind === "compliance.unfreeze") return unfreezeRule.parse(rule);
   if (kind === "rent.record_payout") return recordPayoutRule.parse(rule);
   if (kind === "token.transfer") return transferRule.parse(rule);
   if (kind === "identity.create") return identityCreateRule.parse(rule);

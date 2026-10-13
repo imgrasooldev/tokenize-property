@@ -9,7 +9,8 @@ import { evidenceHash, type CheckKind, type KycProviders, type ProviderResult } 
  * gets keyed hashes, the last four CNIC digits, the sealed name and evidence hashes (Y-1).
  */
 
-export type KycStatus = "unknown" | "pending" | "verified" | "review" | "rejected" | "revoked" | "expired";
+/** "suspended": verified (or expired) but held by an approved compliance freeze (migration 0019 C-3). */
+export type KycStatus = "unknown" | "pending" | "verified" | "review" | "rejected" | "revoked" | "expired" | "suspended";
 
 export type KycErrorCode = "DUPLICATE_CNIC" | "INVALID_INPUT" | "UNKNOWN_SUBJECT";
 
@@ -200,8 +201,8 @@ export async function statusOf(db: Db, subjectId: string): Promise<SubjectView |
   return r ? { subjectId: r.subject_id, cnicLast4: r.cnic_last4, wallet: r.wallet, status: r.status, reason: r.reason ?? "", validUntil: r.valid_until } : null;
 }
 
-/** Y-4 maker: an officer proposes how to settle a possible sanctions match. */
-export async function requestClearance(db: Db, checkId: bigint, officer: string, proposal: "false_positive" | "true_match", reason: string): Promise<bigint> {
+/** Y-4 maker: an officer proposes how to settle a possible sanctions match (accept_edd: a PEP match accepted after enhanced due diligence, 0019). */
+export async function requestClearance(db: Db, checkId: bigint, officer: string, proposal: "false_positive" | "true_match" | "accept_edd", reason: string): Promise<bigint> {
   const { rows } = await db.query<{ id: string }>("SELECT kyc.request_clearance($1, $2, $3, $4) AS id", [checkId.toString(), officer, proposal, reason]);
   return BigInt(rows[0]?.id ?? "0");
 }

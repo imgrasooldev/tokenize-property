@@ -15,6 +15,7 @@ import {
   evaluateMint,
   evaluateRecordPayout,
   evaluateTransfer,
+  evaluateUnfreeze,
   freezePayload,
   identityClaimPayload,
   identityCreatePayload,
@@ -36,6 +37,7 @@ import {
   type OnboardingFacts,
   type RecordPayoutRule,
   type TransferRule,
+  type UnfreezeRule,
 } from "./policy.ts";
 
 /**
@@ -246,6 +248,8 @@ export class SignerService {
         return this.evaluateMint(c, rule as MintRule, payload, excludeRequest);
       case "compliance.freeze":
         return this.evaluateFreeze(c, rule as FreezeRule, payload, excludeRequest);
+      case "compliance.unfreeze":
+        return this.evaluateUnfreeze(c, rule as UnfreezeRule, payload, excludeRequest);
       case "rent.record_payout":
         return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
       case "token.transfer":
@@ -353,6 +357,21 @@ export class SignerService {
       ),
     ]);
     return evaluateFreeze(rule, payload, { chainId, alreadyFrozen, ownerVerified: verified.rows[0]?.ok === true, signedToday: Number(used.rows[0]?.n ?? "0") });
+  }
+
+  /** Step 6c: lifts a compliance freeze only after the two-officer decision in the database (0019 C-3). */
+  private async evaluateUnfreeze(c: pg.ClientBase, rule: UnfreezeRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = freezePayload.safeParse(payload);
+    if (!p.success) return evaluateUnfreeze(rule, payload, { chainId: 0, frozen: false, ownerVerified: false, decided: false, signedToday: 0 });
+    const account = p.data.account.toLowerCase() as Hex;
+    const db = async () => {
+      const verified = await c.query<{ ok: boolean }>("SELECT kyc.is_verified($1) AS ok", [account]);
+      const decided = await c.query<{ ok: boolean }>("SELECT compliance.unfreeze_allowed($1, $2) AS ok", [account, p.data.caseId.toLowerCase()]);
+      const used = await this.signedToday(c, "compliance.unfreeze", excludeRequest, false);
+      return { ownerVerified: verified.rows[0]?.ok === true, decided: decided.rows[0]?.ok === true, signedToday: Number(used) };
+    };
+    const [chainId, frozen, facts] = await Promise.all([this.chain.chainId(), this.chain.isFrozen(rule, account), db()]);
+    return evaluateUnfreeze(rule, payload, { chainId, frozen, ...facts });
   }
 
   private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {

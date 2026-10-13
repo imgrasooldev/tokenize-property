@@ -21,7 +21,16 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/audit", label: "Audit trail", icon: "⛓", need: null },
     ],
   },
-  { title: "Compliance", items: [{ href: "/compliance", label: "KYC & AML", icon: "◎", need: "compliance.read", tag: "6c" }] },
+  {
+    title: "Compliance",
+    items: [
+      { href: "/compliance", label: "Dashboard", icon: "◎", need: "compliance.read" },
+      { href: "/compliance/kyc", label: "KYC reviews", icon: "☑", need: "compliance.read" },
+      { href: "/compliance/screening", label: "Sanctions & PEP", icon: "⚑", need: "compliance.read" },
+      { href: "/compliance/freezes", label: "Freezes", icon: "⏸", need: "compliance.read" },
+      { href: "/compliance/str", label: "STR cases", icon: "✉", need: "compliance.read" },
+    ],
+  },
   { title: "Trustee", items: [{ href: "/trustee", label: "Register", icon: "▦", need: "trustee.read", tag: "6d" }] },
   { title: "Administration", items: [{ href: "/officers", label: "Officers & roles", icon: "⚿", need: "officers.read" }] },
 ];

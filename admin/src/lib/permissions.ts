@@ -1,6 +1,6 @@
 /**
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
- * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016). The database is the authority
+ * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016 and the Step 6c ones of 0019). The database is the authority
  * and checks every request itself; this copy only drives menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
@@ -20,6 +20,8 @@ export const PERMISSIONS = [
   "property.read",
   "property.decide",
   "compliance.read",
+  "compliance.decide",
+  "compliance.export",
   "trustee.read",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -27,7 +29,17 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   ops_maker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.request", "property.read"],
   ops_checker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.decide", "property.read", "property.decide"],
-  compliance_officer: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "property.read", "property.decide", "compliance.read"],
+  compliance_officer: [
+    "ops.read",
+    "audit.read.ops",
+    "audit.read.admin",
+    "audit.export",
+    "property.read",
+    "property.decide",
+    "compliance.read",
+    "compliance.decide",
+    "compliance.export",
+  ],
   trustee_officer: ["trustee.read"],
   auditor: [
     "ops.read",

@@ -116,6 +116,7 @@ async function setup(): Promise<void> {
       ["token.transfer", { chainId: LOCAL_DEV_CHAIN_ID, token: lc(d.token), identityRegistry: lc(d.ir),
         maxPerCommand: "100000", maxPerDay: "1000000", approvalAbove: "10000", approvals: 2 }],
       ["compliance.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
+      ["compliance.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["rent.record_payout", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],
       ["identity.create", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "identity", idFactory: lc(factories.idFactory), maxPerDay: 500 }],
       ["identity.add_claim", { chainId: LOCAL_DEV_CHAIN_ID, claimKeyRef: "claims", idFactory: lc(factories.idFactory), claimIssuer: lc(factories.claimIssuer),

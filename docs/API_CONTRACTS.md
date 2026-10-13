@@ -77,7 +77,9 @@ Session cookie: `pt_session` = `<investorId>.<expiry>.<hmac>`, HttpOnly, SameSit
 
 Client scopes (`@pt/http-auth`): `outbox-worker` = sign, broadcast, release; `web` = custody wallets; `admin-portal` = requests/preview and decide only (secret `SIGNER_CLIENT_SECRET_ADMIN`, `npm run signer:admin-client`). An authenticated client outside its scope gets `403 {error: forbidden}`. The call hash is SHA-256 over `["pt-signer-call-v1", requestId, kind, chainId, policyId, policyVersion, from, to, data, gasLimit, payloadHash]` (JSON); `/v1/decide` recomputes it and refuses a decision taken on another call. The ticket is issued by `admin.issue_signer_ticket` (admin database) and redeemed by `signer.decide_officer` (migration 0016).
 
-Payload schemas (`backend/packages/signer/src/policy.ts`): mint `{issuance, to, amount (decimal string), refId (bytes32)}`; freeze `{freezeGuard, account, caseId}`; record payout `{registry, distributionId, payoutBatchHash}`.
+Payload schemas (`backend/packages/signer/src/policy.ts`): mint `{issuance, to, amount (decimal string), refId (bytes32)}`; freeze and unfreeze `{freezeGuard, account, caseId}`; record payout `{registry, distributionId, payoutBatchHash}`.
+
+Kind `compliance.unfreeze` (Step 6c, migration 0019): `FreezeGuard.unfreezeAddress(account, caseId)`, signed only if `compliance.unfreeze_allowed(account, caseId)` (an approved two-officer unfreeze whose hold is lifted), the owner is KYC-verified and the wallet is frozen; same rule shape as `compliance.freeze` (`chainId, keyRef, freezeGuard, token, maxPerDay, approvals, gasLimit`). Commands are enqueued only by `compliance.decide_freeze` (keys `compliance.freeze:request:<id>` / `compliance.unfreeze:request:<id>`).
 
 Errors (body `{error}`): `404 not_found`, `415 json_only`, `413 too_large`, `401 unauthorized`, `400 bad_json`, `400 bad_request` (schema), `500 internal` (never echoes details). Client: `SignerClient` in the same file (20 s timeout).
 
@@ -139,3 +141,25 @@ Step 6b (migration 0016): command-line operator names that are the handle of an 
 | `POST /api/approvals/property/[id]/decide` | `property.decide` | form `decision`, `reason`, `digest` → `admin.decide_property_request` → `property.decide_request` |
 
 Every decision needs a step-up younger than five minutes (`PTS01` → "Confirm with your security key first"); the forms run it with the officer's key before submitting. Database refusals come back as `{ok: false, error}` from the `admin.*` function and are shown on the page.
+
+Step 6c compliance routes (migration 0019; pages for compliance officers and auditors, POSTs for compliance officers only; "step-up" = checked by the database):
+
+| Route | Access | Contract |
+|---|---|---|
+| `GET /compliance` | `compliance.read` | dashboard: counts by state, SLA breaches, oldest open items, recent decisions (`admin.compliance_dashboard`) |
+| `GET /compliance/kyc[?status=]`, `GET /compliance/kyc/[id]` | `compliance.read` | queue (live or one state); case with masked investor, provider checks (codes, scores, list versions), proposal, Y-4 clearance, history, per-action blockers, digest |
+| `GET /compliance/screening[?outcome=]` | `compliance.read` | latest sanctions/PEP screening per investor, its case, re-screening queue |
+| `GET /compliance/freezes`, `GET /compliance/freezes/[id]` | `compliance.read` | requests, active holds, policy presence; one request with outbox command status, blockers, digest |
+| `GET /compliance/str`, `GET /compliance/str/[id]` | `compliance.read` | STR cases; one case with notes, history, exports, blockers, digest |
+| `GET /audit/compliance`, `POST /api/audit/compliance/export` | `compliance.read` (+ `audit.export`) | the compliance audit chain like the other sources |
+| `POST /api/compliance/kyc` | `compliance.decide` | form `subject` (uuid), `risk`, `summary` → `admin.open_kyc_case`; 303 to the case |
+| `POST /api/compliance/kyc/[id]/act` | `compliance.decide` + step-up | form `decision` (request_info, info_received, escalate, approve, reject, confirm, decline), `reason`, `digest` → `admin.kyc_case_act` |
+| `POST /api/compliance/rescreen` | `compliance.decide` | form `subject`, `reason` → `admin.request_rescreen` (the KYC service runs it) |
+| `POST /api/compliance/freezes` | `compliance.decide` + step-up | form `kind`, `wallet`, `reasonCode`, `reason`, optional `kycCase`, `strCase` → `admin.request_freeze`; 303 to the request |
+| `POST /api/compliance/freezes/[id]/decide` | `compliance.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_freeze` (hold + outbox command on approval) |
+| `POST /api/compliance/str` | `compliance.decide` | form `category`, optional `subject`, `summary` → `admin.open_str`; 303 to the case |
+| `POST /api/compliance/str/[id]/notes` | `compliance.decide` | form `body` → `admin.add_str_note` (append-only) |
+| `POST /api/compliance/str/[id]/act` | `compliance.decide` + step-up | form `decision` (start_review, propose_close, confirm_close, decline_close, mark_filed), `reason`, `fmuReference`, `digest` → `admin.str_act` |
+| `POST /api/compliance/str/[id]/export` | `compliance.export` + step-up | form `decision=export` → ZIP (case JSON, manifest.json, SHA256SUMS), recorded by `admin.record_str_export` before release; otherwise 303 back with the reason |
+
+CLI (KYC service): `npm run kyc:rescreen` executes queued re-screenings (mock providers; refused in production).
