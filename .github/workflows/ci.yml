@@ -122,8 +122,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: admin/package-lock.json
+          cache-dependency-path: |
+            admin/package-lock.json
+            backend/package-lock.json
       - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Backend install (the 6b tests start a real signing service from backend/)
+        working-directory: backend
         run: npm ci --ignore-scripts
       - name: Dependency audit
         run: npm audit --audit-level=high
