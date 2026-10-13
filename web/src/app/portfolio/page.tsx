@@ -4,6 +4,7 @@ import { PortalShell, Sample } from "@/components/Shell";
 import { VerifyRent } from "@/components/VerifyRent";
 import { formatNumber, formatPkr, formatPrice, loc, type Dict } from "@/lib/i18n";
 import { MAX_HOLDING_TOKENS } from "@/lib/invest-rules";
+import { entitlementText } from "@/lib/merkle";
 import { PROPERTIES } from "@/lib/properties";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { db, investorById } from "@/lib/server/db";
@@ -436,6 +437,23 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                   </svg>
                 )}
                 {d.mine && <VerifyRent t={t} distributionId={d.id.toString()} />}
+                {d.mine && (
+                  <details className="entitlement">
+                    <summary>{t.entitlementExport}</summary>
+                    <p className="fine">{t.entitlementExportNote}</p>
+                    <textarea
+                      readOnly
+                      className="mono entitlement-text"
+                      rows={6}
+                      aria-label={t.entitlementExport}
+                      data-distribution={d.id.toString()}
+                      value={entitlementText({ distributionId: d.id, wallet: investor.wallet_address, amountPaisa: d.mine.amountPaisa, proof: d.mine.proof })}
+                    />
+                    <Link href="/verify#entitlement" className="btn secondary small">
+                      {t.navVerify}
+                    </Link>
+                  </details>
+                )}
               </div>
             ))}
           </div>

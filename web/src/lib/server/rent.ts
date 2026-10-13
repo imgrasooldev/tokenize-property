@@ -124,15 +124,35 @@ export async function verifyEntitlement(wallet: Address, id: bigint): Promise<Ve
   if (!file || !line) return null;
   const onChain = await publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "getDistribution", args: [id] });
   const amount = BigInt(line.amountPaisa);
-  const proof = line.proof as Hex[];
-  const [proofValid, tampered] = await Promise.all([
-    publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "verify", args: [id, wallet, amount, proof] }),
-    publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "verify", args: [id, wallet, amount + 1n, proof] }),
-  ]);
+  const r = await verifyProofOnChain(id, wallet, amount, line.proof as Hex[]);
+  if (!r) return null;
   return {
     statementMatches: keccak256(stringToBytes(file.statement)) === onChain.statementHash,
-    proofValid,
-    tamperedRejected: !tampered,
+    proofValid: r.valid,
+    tamperedRejected: r.controlRejected,
     amountPaisa: amount,
   };
+}
+
+/**
+ * DistributionRegistry.verify(id, wallet, amount, proof) on chain, plus the control: the same proof
+ * with 1 paisa more must fail. `blockNumber` pins the read (S-07 PV-31: the public page pins it to the
+ * read model's block). A direct chain read on purpose (ADR 0010 §1: rent self-verification); null when
+ * there is no deployment. Throws when the chain cannot be read.
+ */
+export async function verifyProofOnChain(
+  id: bigint,
+  wallet: Address,
+  amountPaisa: bigint,
+  proof: readonly Hex[],
+  blockNumber?: bigint,
+): Promise<{ valid: boolean; controlRejected: boolean } | null> {
+  const registry = latestDeployment()?.get("distributions");
+  if (!registry) return null;
+  const at = blockNumber === undefined ? {} : { blockNumber };
+  const [valid, control] = await Promise.all([
+    publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "verify", args: [id, wallet, amountPaisa, proof], ...at }),
+    publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "verify", args: [id, wallet, amountPaisa + 1n, proof], ...at }),
+  ]);
+  return { valid, controlRejected: !control };
 }

@@ -15,6 +15,7 @@
 | `/portfolio` | session, else redirect `/login` | `?sub=<subscriptionId>` highlights a subscription; rent at `#rent` |
 | `/market` | public view; trading needs a session | demo market |
 | `/account` | session, else redirect `/login` | |
+| `/verify` | public (no sign-in) | S-07 public verification page (T-027): supply, trustee cap, pause reason and holder count as of the indexer cursor; DocumentRegistry records with a browser-only SHA-256 file check; anchors (or why they are not available); rent distributions with a browser + on-chain entitlement check; latest reconciliation result (or why not available). Server data from `web/src/lib/server/verify.ts` (`verificationView`, one shared value per 2 s; anchors and reconciliation 30 s). Read-only. |
 
 Global: per-request CSP nonce and security headers from `web/src/proxy.ts` (matcher excludes `_next/static`, `_next/image`, `favicon.ico`); `error.tsx` shows an opaque reference; `not-found.tsx`.
 
@@ -47,6 +48,7 @@ All are POSTs through Next.js server actions (built-in origin check). Errors are
 | `topUpAction` | `market.ts` | session; rate `topup` | `amount` whole rupees (<= `MAX_TOPUP_PAISA`), `requestId`, `bankConfirm`=`on` | `{ok: true}` or `{error: input, rate, generic}` |
 | `cancelOrderAction` | `market.ts` | session; rate `cancel` | `orderId` uuid | void (revalidates `/market`) |
 | `verifyRent` | `rent.ts` | session; rate `verify` | `distributionId` 1-9 digits | `{done, statementMatches, proofValid, tamperedRejected}` or `{done, error: none, chain, rate}` |
+| `checkProofOnChain` | `verify.ts` | none (public page `/verify`); rate `publicVerify` (20, 20/min) per client address | one string: entitlement JSON `{distributionId, wallet, amountPaisa, proof}` (strict, `web/src/lib/merkle.ts` `entitlementInput`; amount integer paisa; at most 64 proof hashes; at most 20,000 characters) | `{ok: true, valid, controlRejected, block}` (`DistributionRegistry.verify` at the read model's cursor block, and the same proof with 1 paisa more) or `{ok: false, error: rate, input, paused, chain}`. Nothing entered is stored or logged (S-07 PV-33); a chain error logs the error class only |
 
 Idempotency: `requestId` is unique per subscription, top-up and order (`webdemo` unique constraints), so a repeated submit returns the first result.
 
