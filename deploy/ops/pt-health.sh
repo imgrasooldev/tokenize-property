@@ -109,7 +109,7 @@ check_chain() {
 # ------------------------------------------------------------------ database
 DB=${PT_HEALTH_DB:-${PT_PG_DATABASES%% *}}
 check_db() {
-  local out line key a b c d e
+  local out key a b c d e
   pt_pg_setup
   if ! "$(pt_pg pg_isready)" -q 2>/dev/null; then
     add CRIT "postgres: not reachable at $PT_PG_HOST:$PT_PG_PORT"

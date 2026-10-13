@@ -161,7 +161,8 @@ WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema') 
 ORDER BY 1;"
 
 dump_db() { # db
-  local db=$1 snap out="$WORK/$db.dump.$EXT" t0 migr r
+  local db=$1
+  local snap out="$WORK/$db.dump.$EXT" t0 migr r
   local -a lines rows
   t0=$(date +%s)
   coproc SNAP { "$(pt_pg psql)" -X -q -At -v ON_ERROR_STOP=1 -d "$db" 2>&1; }
@@ -187,7 +188,8 @@ dump_db() { # db
   "$(pt_pg pg_dump)" -d "$db" --format=custom --compress=6 --snapshot="$snap" --no-password | pt_encrypt >"$out" ||
     pt_die 2 "$db: pg_dump or encryption failed"
   echo "COMMIT;" >&"${SNAP[1]}"
-  exec {SNAP[1]}>&-
+  snap_w=${SNAP[1]}
+  exec {snap_w}>&- # close the coproc input so psql ends the snapshot session
   wait "$SNAP_PID" 2>/dev/null || true
   [[ -s $out ]] || pt_die 2 "$db: empty dump"
   {

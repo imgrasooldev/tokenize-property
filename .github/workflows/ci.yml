@@ -19,6 +19,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  shell:
+    # Deploy and operations scripts run as root on servers: they must be shellcheck-clean
+    # (a shellcheck finding once caught a backup file-name bug).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck deploy and ops scripts
+        run: |
+          shellcheck --version
+          shellcheck -S warning -x deploy/ops/*.sh
+          shellcheck -S warning deploy/demo-server/*.sh
+
   contracts:
     runs-on: ubuntu-latest
     defaults:

@@ -93,6 +93,7 @@ if ((GLOBALS)); then
 fi
 
 pt_psql postgres -c "CREATE DATABASE \"$TARGET\" TEMPLATE template0 ENCODING 'UTF8'"
+# shellcheck disable=SC2034 # read by the exit hook below (pt_on_exit evaluates the string)
 CREATED=1
 if ((!KEEP)); then
   pt_on_exit "[[ \${CREATED:-0} == 1 ]] && \"\$(pt_pg psql)\" -X -q -d postgres -c 'DROP DATABASE \"$TARGET\"' >/dev/null 2>&1 && echo 'scratch database $TARGET dropped'"

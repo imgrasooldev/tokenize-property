@@ -9,6 +9,7 @@
 #     the environment. The environment wins.
 #   - Exit codes: 0 ok, 1 check failed / warning, 2 critical or usage error (per script header).
 
+# shellcheck disable=SC2034 # read by scripts that source this file (reported in health output)
 PT_OPS_VERSION=1
 
 pt_ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
