@@ -101,6 +101,9 @@ fi
 sudo systemctl enable pt-admin >/dev/null 2>&1 || true
 sudo systemctl start pt-admin
 
+echo "== operations pack (scripts and units; enabled timers stay as they are, none is turned on here)"
+sudo bash deploy/ops/install.sh >/dev/null || echo "WARNING: deploy/ops/install.sh failed; ops scripts may be stale" >&2
+
 echo "== design mockups -> /mockups/ and nginx config"
 sudo bash deploy/demo-server/publish-mockups.sh
 if ! sudo cmp -s deploy/demo-server/nginx.conf /etc/nginx/sites-available/property-token; then
