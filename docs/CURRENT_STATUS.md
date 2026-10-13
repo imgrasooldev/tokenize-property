@@ -2,12 +2,17 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-044 investor offering screens (2026-10-13, merged; migration 0018)
+
+- Website: `/offerings`, `/offerings/[id]` (reserve with document acceptance; KYC-verified investors only), `/subscriptions` (timeline, payment instructions with countdown, refund status, cancel). Migration `0018_web_offering.sql` grants `pt_web` six `offering.web_*` functions only. Not built: withdrawal (OF-22) button, investor category choice (retail only), document download (no document store), notifications.
+- Not verified in a browser (no seeded live offering in a shared database; see the branch report). Tests: see docs/TASKS.md T-044.
+
 ## Latest update (2026-10-13, S-07, S-02, 6b and notifications merged)
 
 - **Merged into `main`:** S-07 public `/verify` (live on the demo server), S-02 offering backend (`0015_offering.sql`), Step 6b approvals portal (`0016_admin_approvals.sql`) and T-028 notifications backend (`0017_notify.sql`, ADR 0013 Proposed). Migrations 0001–0017 apply cleanly.
 - One cross-branch break fixed after the merges: the signer preview test fixture lacked S-02's `requireOfferingBatch` (d6789e9).
 - **Tests on `main` (lead run, d6789e9):** backend 504/504 (60 files), admin 207 unit/DB, web 94 (unit + integration); typecheck and lint clean in all three.
-- **In progress on branches:** T-021 investor offering screens (migration 0018) and Step 6c compliance portal (migration 0019). Merge 0018 first.
+- **In progress on a branch:** Step 6c compliance portal (migration 0019).
 
 ## Earlier update (2026-10-13, Step 6b built on a branch)
 

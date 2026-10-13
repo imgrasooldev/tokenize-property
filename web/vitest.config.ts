@@ -1,6 +1,9 @@
+import { join } from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // The same "@/..." imports as the app (tsconfig paths), for tests of server actions.
+  resolve: { alias: { "@": join(import.meta.dirname, "src") } },
   test: {
     include: ["test/**/*.test.ts"],
     // Integration tests write to the test database (never the demo one) and the local chain, through

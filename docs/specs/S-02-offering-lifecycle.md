@@ -1,6 +1,6 @@
 # S-02: Offering lifecycle (configuration, deployment, subscriptions, allocation, closing)
 
-- Status: Draft for owner review; backend built (T-020, migration 0015, see §16); investor UI and portal screens not yet built
+- Status: Draft for owner review; backend built (T-020, migration 0015, see §16); investor website screens on a branch (T-044, migration 0018: offerings list and detail, reserve, my subscriptions, cancel); portal screens not yet built
 - Date: 2026-10-13
 - Lifecycle stages: 5 (legal structuring and investor rights, the offering side), 6 (token issuance configuration), 7 (deploy and mint), 8 (offering launch), 9 (investor KYC and eligibility), 10 (subscription and payment), 11 (allocation and reconciliation)
 - Exceptions covered: failed KYC or sanctioned wallet at subscription, payment received but allocation fails, offering fails

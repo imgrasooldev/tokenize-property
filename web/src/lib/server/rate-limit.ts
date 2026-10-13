@@ -8,7 +8,7 @@ import { headers } from "next/headers";
  * Signed-in actions are keyed by investor id (cannot be spoofed). Anonymous actions are keyed by
  * the client address the server sees; in this prototype the server binds to 127.0.0.1 only.
  */
-export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify";
+export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify" | "reserve";
 
 const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   login: { capacity: 10, perMinute: 10 },
@@ -20,6 +20,8 @@ const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   verify: { capacity: 20, perMinute: 20 },
   // Public verification page (S-07 PV-31): on-chain proof checks by anyone, keyed by client address.
   publicVerify: { capacity: 20, perMinute: 20 },
+  // Offering reservations and cancellations (S-02), keyed by investor id.
+  reserve: { capacity: 10, perMinute: 10 },
 };
 
 const MAX_KEYS = 10_000;

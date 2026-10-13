@@ -15,6 +15,9 @@
 | `/portfolio` | session, else redirect `/login` | `?sub=<subscriptionId>` highlights a subscription; rent at `#rent` |
 | `/market` | public view; trading needs a session | demo market |
 | `/account` | session, else redirect `/login` | |
+| `/offerings` | public | S-02 offerings from `offering.web_offerings()` (migration 0018): state, price per token, raise target and raised so far (paid units x price), min/max per investor, open/close in PKT, all-or-nothing chip |
+| `/offerings/[id]` | public; reserving needs a session, a verified KYC status and a KYC subject | non-uuid or not visible -> 404. Terms, rules (all-or-nothing, FCFS reservation and waitlist, mint at completion, refunds to source), document SHA-256 (EN, UR, risk) with a link to `/verify`, use of proceeds, reserve form |
+| `/subscriptions` | session, else redirect `/login` | "My subscriptions": timeline reserved -> paid -> allocated -> minted at completion (or refunded / cancelled / expired / under review), payment instructions while a reservation awaits payment (payment code, exact amount, trustee escrow account, expiry in PKT with a countdown), refund status, cancel before payment. `?sub=<id>` highlights one |
 | `/verify` | public (no sign-in) | S-07 public verification page (T-027): supply, trustee cap, pause reason and holder count as of the indexer cursor; DocumentRegistry records with a browser-only SHA-256 file check; anchors (or why they are not available); rent distributions with a browser + on-chain entitlement check; latest reconciliation result (or why not available). Server data from `web/src/lib/server/verify.ts` (`verificationView`, one shared value per 2 s; anchors and reconciliation 30 s). Read-only. |
 
 Global: per-request CSP nonce and security headers from `web/src/proxy.ts` (matcher excludes `_next/static`, `_next/image`, `favicon.ico`); `error.tsx` shows an opaque reference; `not-found.tsx`.
@@ -49,6 +52,9 @@ All are POSTs through Next.js server actions (built-in origin check). Errors are
 | `cancelOrderAction` | `market.ts` | session; rate `cancel` | `orderId` uuid | void (revalidates `/market`) |
 | `verifyRent` | `rent.ts` | session; rate `verify` | `distributionId` 1-9 digits | `{done, statementMatches, proofValid, tamperedRejected}` or `{done, error: none, chain, rate}` |
 | `checkProofOnChain` | `verify.ts` | none (public page `/verify`); rate `publicVerify` (20, 20/min) per client address | one string: entitlement JSON `{distributionId, wallet, amountPaisa, proof}` (strict, `web/src/lib/merkle.ts` `entitlementInput`; amount integer paisa; at most 64 proof hashes; at most 20,000 characters) | `{ok: true, valid, controlRejected, block}` (`DistributionRegistry.verify` at the read model's cursor block, and the same proof with 1 paisa more) or `{ok: false, error: rate, input, paused, chain}`. Nothing entered is stored or logged (S-07 PV-33); a chain error logs the error class only |
+
+| `reserveAction` | `offering.ts` | session, else redirect `/login`; rate `reserve` (10, 10/min) per investor; `kyc_status = verified` and a KYC subject, and the database gate (0018 WO-2) | `offeringId` uuid, `units` (1-13 digits), `requestId` uuid v4, `language` en/ur, `docSha`, `riskSha` (64 hex, the versions shown), `acceptDoc`=`on`, `acceptRisk`=`on` | redirect `/subscriptions?sub=<id>`, or `{error}`: `input`, `rate`, `kyc`, `notOpen`, `units`, `docs`, `already`, `paused`, `unknown`, `generic`. Acceptances and reservation in one transaction; actor `web:<investorId>`; idempotency key `web-<requestId>`; session and device stored only as keyed SHA-256 |
+| `cancelReservationAction` | `offering.ts` | session; rate `reserve` | `subscriptionId` uuid | `{ok: true}` or `{error}`: `input`, `rate`, `state` (already paid or ended), `unknown` (not the investor's), `generic` |
 
 Idempotency: `requestId` is unique per subscription, top-up and order (`webdemo` unique constraints), so a repeated submit returns the first result.
 

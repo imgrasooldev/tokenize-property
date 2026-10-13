@@ -195,6 +195,21 @@ Numbered 0017 because 0015 (S-02 offering) and 0016 (Step 6b) are on other branc
 
 API: `notify.enqueue` (producers, in their transaction), `register_recipient`, `register_contact`, `set_preference`, `set_locale` (service), `claim`, `delivery_material`, `begin_attempt`, `record_sent`, `record_failure`, `extend_lease`, `open_attempt_started` (worker), `operator_decide`, `add_template`, `stats`, `verify_audit` (operator). NOTIFY channels: `notify` (new work, at commit), `notify_alert` (dead letter, undeliverable security notice). Advisory locks: 586586170 (audit), 586586171 (rate limit per recipient and channel), 586586172 (contact registration).
 
+### 0018 web offering (WO-1..WO-6; spec S-02 investor UI, task T-044)
+
+No tables. Thin `SECURITY DEFINER` functions so the website's role `pt_web` can serve the investor offering screens, and nothing else of `offering`, `kyc`, `bank`, `recon` or `property`:
+
+| Function | Purpose |
+|---|---|
+| `offering.web_offerings(p_offering uuid DEFAULT NULL)` | offerings from `ready` on: public terms, aggregate units (paid, held, available, waitlisted), anchored document hashes (hex), use of proceeds, and coarse property facts (province, district, use, covered area). No parcel, deed, address, GPS, sponsor or investor data (WO-5) |
+| `offering.web_subscriptions(p_subject uuid)` | one investor's subscriptions; payment code and trustee escrow account (`recon.bank_accounts` for `bank:trustee-escrow`) only while `payment_pending` (WO-6); refund status `requested`/`approved`/`sent`/`in_review`; `blocked`/`disputed` read `under_review` with no reason (WO-4, tipping-off) |
+| `offering.web_subscription_events(p_subject uuid)` | state history (code, state, time); no actor or reason |
+| `offering.web_accept_document(...)` | wraps `offering.accept_document` (OF-10) |
+| `offering.web_reserve(offering, sub, refId, subject, units, idempotency, actor)` | KYC gate: refuses (42501) unless `kyc.subject_status(subject) = 'verified'` (WO-2); then `offering.reserve(..., 'retail', ...)` |
+| `offering.web_cancel(sub, subject, actor)` | wraps `offering.cancel` (V11) |
+
+Every write requires an actor `web:<website investor uuid>` (WO-3). `pt_web` gets `USAGE` on schema `offering` and `EXECUTE` on these six functions only; the helpers `offering.web_check_actor` and `offering.web_state` are not granted.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -231,6 +246,7 @@ All NOLOGIN, created idempotently:
 | 0015 | `pt_offering_service`, `pt_offering_officer`, `pt_offering_admin`, `pt_offering_reader` (and `offering.mint_allowed` for `pt_signer`) |
 
 | 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
+| 0018 | no new role: `pt_web` (0012) may execute the six `offering.web_*` functions |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
