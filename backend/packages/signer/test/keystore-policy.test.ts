@@ -97,6 +97,17 @@ describe("mint policy (deny by default)", () => {
     if (d.decision === "deny") expect(d.reason).toMatch(reason);
   });
 
+  it("with requireOfferingBatch, mints only what offering.mint_allowed accepts (S-02, ADR 0005 amendment)", () => {
+    const strict: MintRule = mintRule.parse({ ...rule, requireOfferingBatch: true });
+    expect(rule.requireOfferingBatch).toBe(false);
+    expect(evaluateMint(strict, payload("10"), facts)).toMatchObject({ decision: "deny", reason: "offering fact unavailable" });
+    expect(evaluateMint(strict, payload("10"), { ...facts, offeringProblem: "the offering is not in its mint window" })).toMatchObject({
+      decision: "deny",
+      reason: "offering: the offering is not in its mint window",
+    });
+    expect(evaluateMint(strict, payload("10"), { ...facts, offeringProblem: null })).toMatchObject({ decision: "allow" });
+  });
+
   it("rejects malformed policies", () => {
     expect(() => mintRule.parse({ ...rule, approvals: 0 })).toThrow();
     expect(() => mintRule.parse({ ...rule, maxPerDay: "-1" })).toThrow();

@@ -9,7 +9,8 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 - **Tests on main after both merges:** backend 362/362 (with 0013: 361/362, the one failure was the load-sensitive signer p99 gate, now fixed under T-001); web 69/69; admin 129 unit/db + 183 authorization-matrix; contracts 137/137 (unchanged).
 - **T-001 (partly):** the signer speed test now gates only the median in the unit suite; the full p50/p99 budget is `npm run perf:signer` (PT_PERF_GATES=1). Other timing checks listed in TASKS remain.
 - **S-01 backend merged** (043ab74, T-021): `@pt/property` + migration 0014 (sponsor KYB, property state machine, duplicates, due diligence, maker-checker, audit). Backend 410/410 on main. Not yet in the portal (needs 6b screens) and DocumentRegistry anchoring needs a `document.add` signer kind.
-- **Next:** S-07 public verification page (read-only), then S-02 offering, then 6b approvals portal.
+- **S-02 backend built on branch `t-020-offering`** (T-020, not merged): migration `0015_offering.sql` (schema `offering` + additive bank amendment), `@pt/offering` (service, CLI `offering:*`), reconciliation amended (`issuance.paid_not_minted` SLA starts at the mint window; `offering.*` checks), signer `requireOfferingBatch`. ADR 0005/0007/0009 amendments; deviations in S-02 §16. Not built: completion payment batch (OF-45), returned refunds (OF-52), escrow per trust, investor and portal screens.
+- **Next:** S-07 public verification page (read-only), then merge S-02 (0015), then 6b approvals portal.
 
 - **Last audited commit:** `main` @ `41241b3` "test(signer): gate the speed test on the median on CI" (2026-10-13), 60 commits.
 - **Audit date:** 2026-10-13.
@@ -47,7 +48,8 @@ Not re-run by the documentation audit itself (no `node_modules` in the audit wor
 |---|---|
 | Step 5h (remaining) | website onto outbox + signer + indexer read model; retire `web/src/lib/server/demo-signer.ts`; rent and mint journals so recon passes; demo-server services |
 | Step 6a | new `admin/` app: internal portal foundation with WebAuthn, roles and separation of duties, audit viewer |
-| T-021 (S-01 backend) | branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
+| T-020 (S-02 backend) | branch `t-020-offering`: migration `0015_offering.sql` (schema `offering`; bank amendment: cancelled payment codes, refunds of matched credits, trigger on `bank.credits`) and `@pt/offering`; recon and signer amendments. Needs 0014 (merged) |
+| T-021 (S-01 backend) | merged (043ab74). Was branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
 
 ## 4. Blockers and owner decisions
 

@@ -64,6 +64,18 @@ export const CHECKS = {
   "integrity.indexer_lag": "warning",
   "integrity.outbox_stuck": "blocking",
   "integrity.outbox_waiting": "warning",
+  // Offerings (spec S-02 §8, ADR 0007 amendment 2026-10-13)
+  "offering.over_hard_cap": "blocking",
+  "offering.ref_id_mismatch": "blocking",
+  "offering.state_mismatch": "blocking",
+  "offering.escrow_mismatch": "blocking",
+  "offering.paid_after_failure": "warning",
+  // Warning, not blocking: a freeze would stop the very refunds that cure it (refunds need the gate).
+  "offering.refund_overdue": "warning",
+  "offering.mint_outside_window": "blocking",
+  "offering.allocation_mismatch": "blocking",
+  "offering.cap_headroom": "blocking",
+  "offering.payment_anomaly": "blocking",
 } as const satisfies Record<string, Severity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -169,6 +181,38 @@ export interface OutboxCommand {
   lastError: string | null;
 }
 
+/** One subscription of an S-02 offering (migration 0015, view offering.recon_subscriptions). */
+export interface OfferingSubscription {
+  subscriptionId: string;
+  /** The offering's token (null before L4). Ledger journals are shared by all tokens. */
+  token: string | null;
+  refId: string;
+  offeringId: string;
+  offeringState: string;
+  hardCap: bigint;
+  /** When the offering's mint commands were enqueued (completion); null before. */
+  mintStartedAt: Date | null;
+  failedAt: Date | null;
+  state: string;
+  units: bigint;
+  wallet: string | null;
+  amountPaisa: bigint;
+}
+
+export interface OfferingData {
+  /**
+   * Subscriptions of EVERY offering: the ledger's `sub:*` journals belong to all tokens, so the
+   * paid -> minted SLA needs every offering's mint window. The offering checks use this token's only.
+   */
+  subscriptions: OfferingSubscription[];
+  /** OF-53: refunds of a failed offering are due within this time after the failure. */
+  refundSlaMs: number;
+  /** IssuanceGuard trustee cap in the read model at the pinned block. */
+  trusteeCap: bigint;
+  /** Matched credits that reached a subscription no longer waiting for them (offering.payment_anomalies). */
+  paymentAnomalies: { subscriptionId: string; raastRef: string; state: string }[];
+}
+
 export interface ReconData {
   /** Database time of the snapshot; all ages are measured from it. */
   asOf: Date;
@@ -186,6 +230,8 @@ export interface ReconData {
   };
   ledger: { journals: LedgerJournal[] };
   expectedMints: Map<string, ExpectedMint>;
+  /** S-02 offerings of this token; absent where migration 0015 is not applied (then no offering checks run). */
+  offerings?: OfferingData;
   bank: {
     accounts: BankAccount[];
     statements: BankStatement[];

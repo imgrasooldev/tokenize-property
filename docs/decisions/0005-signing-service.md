@@ -61,3 +61,9 @@ Before the fixed gas limit: p50 738 ms. Besu reads vary from run to run; the ide
   - operator authentication (passkeys + SSO) in the Step 6 portals, replacing the CLI
   - the service running as `pt_signer` with only the grants in `0004_signer.sql`
 - Operators approve with `npm run signer:decide` until the operations portal exists.
+
+## Amendment 2026-10-13: offering mints (spec S-02 OF-46, T-020)
+
+- The `issuance.mint` policy has a new field `requireOfferingBatch` (default `false`). When `true`, the signer asks the database `offering.mint_allowed(refId, to, amount)` (granted to `pt_signer`, nothing else in schema `offering`) and denies unless the refId is an allocation in the **approved issuance batch** of an offering **in its mint window** (Completing, `start_minting` done), with the same wallet and units, a booked `sub:<refId>:paid` and no refund; a subscription in Issuance Review is allowed only with an approved V17 retry. Denials read `offering: <reason>`; an unavailable fact denies.
+- Default `false` keeps the web prototype's mints (no offering) working; **production policies must set it to `true`** (a policy change is approved by a second operator, S-2) once investors subscribe through offerings. Tested in `signer/test/keystore-policy.test.ts` and `offering/test/lifecycle.test.ts`.
+- Not changed: how the signer key relates to a 2-of-3 Issuance Safe in production (S-02 Q-8), the `token.pause` and `document.add` kinds.

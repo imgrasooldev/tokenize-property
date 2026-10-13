@@ -94,6 +94,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Accept / Tests: trustee-only access; reject path reflected on chain and in the read model.
 
 ### T-020 Offering module
+- Status (2026-10-13): **backend done on branch `t-020-offering`**, not merged: migration `0015_offering.sql`, `@pt/offering` (service, CLI), recon `offering.*` checks and the `paid_not_minted` amendment, signer `requireOfferingBatch`; S-02 §16 lists refinements and what is not built (completion payment batch OF-45, OF-52 returned refunds, escrow per trust, cap reduction, chain dry run, notifications, investor pages and portal screens). Merge after S-01 (0014); migration number 0015.
 - Outcome: offerings with open/close dates, target and minimum raise, per-investor min/max, reservations with expiry, oversubscription allocation, close, cancel with refunds, documents.
 - P critical, C L, Dep T-002, T-004. Files: new migration `0012_offering.sql` (or next free number), backend package, web pages.
 - Accept: state machine enforced in SQL; refunds only through `@pt/bank`; mints only after close and allocation; recon covers offering totals.

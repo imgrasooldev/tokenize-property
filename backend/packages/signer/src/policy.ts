@@ -30,6 +30,13 @@ export const mintRule = z.object({
    * private chain, so a generous fixed limit is both safe and fast.
    */
   gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("800000"),
+  /**
+   * S-02 (ADR 0005 amendment 2026-10-13): when true, a mint is allowed only for a refId that
+   * offering.mint_allowed() accepts: an allocation in the approved issuance batch of an offering in
+   * its mint window, with the same wallet and amount and a booked, unrefunded payment. Off by
+   * default so the web prototype's mints (no offering) keep working until it moves to offerings.
+   */
+  requireOfferingBatch: z.boolean().default(false),
 });
 export type MintRule = z.infer<typeof mintRule>;
 
@@ -50,6 +57,8 @@ export interface MintFacts {
   paused: boolean;
   /** Amount already signed today for this key and kind (excluding this request). */
   signedToday: bigint;
+  /** offering.mint_allowed(): why an offering refuses this mint (null = allowed); read only when the rule requires it. */
+  offeringProblem?: string | null;
 }
 
 export type Decision =
@@ -447,6 +456,10 @@ export function evaluateMint(rule: MintRule, payload: unknown, facts: MintFacts)
   if (!facts.recipientVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
   if (facts.paused) return { decision: "deny", reason: "token is paused" };
   if (facts.supply + amount > facts.cap) return { decision: "deny", reason: "trustee cap would be exceeded" };
+  if (rule.requireOfferingBatch) {
+    if (facts.offeringProblem === undefined) return { decision: "deny", reason: "offering fact unavailable" };
+    if (facts.offeringProblem !== null) return { decision: "deny", reason: `offering: ${facts.offeringProblem}` };
+  }
   const data = encodeFunctionData({ abi: issuanceGuardAbi, functionName: "mint", args: [to as Hex, amount, refId as Hex] });
   return {
     decision: "allow",
