@@ -9,7 +9,7 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 
 | Area | State | Evidence |
 |---|---|---|
-| Contracts (Step 3) | Done internally; external audits pending | 132 forge tests pass (lead run 2026-10-13); Slither in CI |
+| Contracts (Step 3) | Done internally; external audits pending | 137 forge tests pass (lead run 2026-10-13, incl. paused/frozen agent actions); Slither in CI |
 | Local chain (Step 4) | Done | `chain/net.py`, `chain/flow.py` 50 checks |
 | Backend 5a-5g | Done (mock providers, local anchor stand-in) | 13 packages, migrations 0001-0011 |
 | Backend 5h | Parts 1-4 on `main` (held payouts, freeze and payout-record signer kinds, automatic offboarding, payout record through the outbox); rest **in progress on a branch** | commits 88d43cf, 246f2e9, 07d03b2 |
@@ -24,7 +24,7 @@ Feature-level detail: [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md).
 
 | Suite | Result |
 |---|---|
-| contracts `forge test` | 132 / 132 pass |
+| contracts `forge test` | 137 / 137 pass |
 | web `npm run typecheck` | OK |
 | web `npm test` (vitest) | 67 / 67 pass (chain integration tests skip without a local chain) |
 | backend `npm test` (vitest, 36 files) | 311 pass, **1 fail**: signer speed test p99 63 ms > 50 ms on a busy machine (p50 7 ms). Same gate failed CI #34 and #48 before the median-only CI change |

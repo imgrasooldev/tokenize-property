@@ -4,6 +4,9 @@ Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are comm
 
 ## 2026-10-13
 
+- Contracts: 5 tests proving agent actions while paused or frozen (mint refused; redemption burn, trustee forced transfer and burn of frozen tokens work; investor transfers blocked), as assumed by specs S-04/S-05/S-06; 137 forge tests.
+- Functional specs S-01..S-07 merged (docs/specs).
+- Documentation set from the code audit merged (docs/*.md).
 **Step 5f review fixes and Step 5g**
 - Fix Step 5f review findings F-04..F-06: migration 0008 (signer audit digest v2 in UTC, forward-only ledger running balances, `IS DISTINCT FROM` validation) [c986aa0]
 - Step 5g: KYC and bank with mock providers and a mock bank (ADR 0009, migration 0009) [19e5cc6]

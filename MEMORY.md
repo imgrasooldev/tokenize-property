@@ -128,7 +128,7 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 git clone --recursive https://github.com/imgrasooldev/tokenize-property.git
 cd tokenize-property/contracts
 forge build
-forge test                      # 132 tests, about 2 minutes
+forge test                      # 137 tests, about 2 minutes
 forge coverage --report summary --no-match-coverage "(test|lib|vendor|script)"
 python -m slither . --filter-paths "lib/|test/|src/vendor/|script/" --exclude-dependencies
 ```
