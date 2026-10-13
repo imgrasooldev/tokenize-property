@@ -6,6 +6,8 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 
 - **Live demo for the team:** start Postgres and the chain, then `cd backend && npm run demo` and open http://127.0.0.1:4800 (see [backend/README.md](backend/README.md#live-demo-console)).
 - [MEMORY.md](MEMORY.md): decisions, current status, findings, gotchas and next actions. Read this first.
+- **Project docs:** [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) (short status), [docs/TASKS.md](docs/TASKS.md) (roadmap), [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) (index of architecture, flows, database, API, standards, decisions, changelog).
+- **Setup and run:** chain [chain/README.md](chain/README.md#one-time-setup), backend [backend/README.md](backend/README.md#commands) (`npm ci --ignore-scripts`, `npm run migrate`, `npm run check`), website [web/README.md](web/README.md#run), contracts [MEMORY.md §6](MEMORY.md#6-how-to-work-on-the-code).
 - [docs/Development-Lifecycle.pdf](docs/Development-Lifecycle.pdf): the complete lifecycle (phases, gates, standards, status). Regenerate with `python docs/tools/build_lifecycle_pdf.py`.
 
 ## Repository layout
@@ -16,8 +18,8 @@ A permissioned platform for fractional ownership of real estate in Pakistan. Eac
 | `contracts/` | Solidity contracts and Foundry tests |
 | `chain/` | Local 4-validator Besu QBFT network: `net.py` (setup/start/stop/status), `flow.py` (end-to-end checks) |
 | `backend/` | TypeScript workspace: config, logger, DB + migrations, typed ABIs; ledger, outbox, signing service, indexer (read model) |
-| `admin/` | Admin panel (Next.js) |
-| `mobile/` | Investor app (Flutter) |
+| `admin/` | Internal portals (Next.js); not on `main` yet (Step 6a on a branch) |
+| `mobile/` | Investor app (Flutter); not started |
 
 ## Development flow
 
