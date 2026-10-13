@@ -93,6 +93,8 @@ A **pilot rehearsal** on the local network (one property: S-01 → S-02 → one 
 
 ## 8. Decisions recommended to the owner
 
+**Status (2026-10-13): adopted as working defaults by the lead under the owner's standing delegation ("go on with whatever you feel best"). The owner may override any row; items marked LEGAL TO CONFIRM stay open until legal confirms, and code must keep them configurable.**
+
 | # | Decision | Recommendation | Spec |
 |---|---|---|---|
 | 1 | When to mint | At completion, only for paid subscriptions (single-use refId) | S-02 §2 |
