@@ -39,6 +39,13 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/approvals/property", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
   { path: "/approvals/property/[id]", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
   { path: "/compliance", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/kyc", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/kyc/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/screening", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/freezes", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/trustee", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -56,6 +63,16 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/approvals/unfreeze", kind: "api", methods: ["POST"], access: "approvals.request", mutating: true },
   { path: "/api/approvals/unfreeze/[id]/decide", kind: "api", methods: ["POST"], access: "approvals.decide", mutating: true },
   { path: "/api/approvals/property/[id]/decide", kind: "api", methods: ["POST"], access: "property.decide", mutating: true },
+  // Step 6c: compliance (migration 0019). Decisions need a step-up as well (checked by the database).
+  { path: "/api/compliance/kyc", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/kyc/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/rescreen", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/freezes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/freezes/[id]/decide", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/str", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/str/[id]/notes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/str/[id]/export", kind: "api", methods: ["POST"], access: "compliance.export", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
@@ -64,6 +81,7 @@ export const AUDIT_SOURCES = {
   recon: "audit.read.ops",
   ledger: "audit.read.ops",
   admin: "audit.read.admin",
+  compliance: "compliance.read",
 } as const satisfies Record<string, Permission>;
 export type AuditSource = keyof typeof AUDIT_SOURCES;
 

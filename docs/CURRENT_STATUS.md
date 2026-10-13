@@ -2,7 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, Step 6b built on a branch)
+## Latest update (2026-10-13, Step 6c built on a branch)
+
+- **Step 6c (T-005) built on branch `step-6c-compliance-portal`, not merged** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).
+- Owner to confirm: investor wording for `suspended`/PEP (tipping-off), SLA values, PEP provider, goAML format.
+
+## Earlier update (2026-10-13, Step 6b built on a branch)
 
 - **Step 6b (T-004) built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`). The approvals portal: inbox; signing requests shown as the exact call (decoded from the calldata, call hash) and decided by the **signing service** through a new admin-scoped HTTP client and one-time database tickets; payout batches (lines, held lines, gate, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker requests; a reason and a fresh security-key step-up on every decision; maker != checker enforced by the backend; officer names bound to officer sessions; S-01 duties linked to officer roles (S-01 refinement 10). **Merge S-02 (0015) first**: until then the backend runner refuses the gap (tests use a renumbered copy).
 - Tests on the branch (0016 renumbered to 0015 locally for the run, not committed): backend 422 passed + 3 skipped (Anvil anchor stand-in not running) of 425 incl. 15 new; admin 207 unit/db (129 + 78 new) and 272 HTTP matrix (183 + 89 new); admin e2e 5/5 in Edge (3 + 2 new) with virtual FIDO2 keys and a real signing service.

@@ -11,7 +11,7 @@ Decisions and rules: [ADR 0011](../docs/decisions/0011-admin-portal.md). Threats
 |---|---|---|
 | 6a | Foundation: WebAuthn hardware keys, sessions and step-up, roles with segregation of duties in the database, hash-chained admin audit, operations overview, audit trails with evidence export, officer management (maker-checker) | Built |
 | 6b | Approvals (ADR 0011 section 10, migration 0016): inbox; signing requests shown as the exact call and decided by the signing service; payout batches; unfreeze requests; S-01 property and KYB requests; reason + step-up on every decision | Built (branch). Not yet: batch create/submit, statement import, suspense returns, outbox reviews |
-| 6c | Compliance: KYC reviews, sanctions, freezes and offboarding, FMU reports | Planned (placeholder page) |
+| 6c | Compliance (ADR 0011 section 11, migration 0019): dashboard (counts, SLA breaches, recent decisions); KYC review queue and cases (two officers for high risk, PEP via EDD); sanctions/PEP results and re-screening (run by `npm run kyc:rescreen` in backend); freeze/unfreeze maker-checker → outbox → signer; STR case log with recorded FMU export; compliance audit chain | Built (branch). Not yet: partial freezes, assisted payout-account changes, offboarding steps 2-3, e2e spec |
 | 6d | Trustee: register, co-signing, distribution review | Planned (placeholder page) |
 
 ## Run locally
@@ -59,8 +59,8 @@ index the local chain into it (`PG_DATABASE=pt_admin_dev INDEXER_DEPLOYMENT_FILE
 
 ```bash
 npm run typecheck && npm run lint          # strict TypeScript, 0 warnings
-npm test                                   # unit (13) + database rules (30) + authorisation matrix (156) + approvals rules (8)
-npm run build && npm run test:http         # HTTP authorisation matrix against the production build (272), with a real signing service
+npm test                                   # unit + database rules + authorisation matrix + approvals and compliance rules (353)
+npm run build && npm run test:http         # HTTP authorisation matrix against the production build (438), with a real signing service
 npm run test:e2e                           # Edge + virtual FIDO2 keys: auth (3) + approvals (2: two checkers approve a mint; unfreeze)
 ADMIN_E2E_DB=pt_admin_dev SCREENSHOTS=1 npm run test:e2e -- screens   # 1440 px screenshots with real data into screenshots/
 ```

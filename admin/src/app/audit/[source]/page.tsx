@@ -14,12 +14,14 @@ const LABEL = new Map<AuditSource, string>([
   ["recon", "Reconciliation"],
   ["ledger", "Ledger"],
   ["admin", "Admin portal"],
+  ["compliance", "Compliance"],
 ]);
 const ABOUT = new Map<AuditSource, string>(Object.entries({
   signer: "Every signing request, policy evaluation, approval and signature (signer.audit, UTC digest v2).",
   recon: "Every reconciliation run, finding set, bank statement import and payout-gate change (recon.audit).",
   ledger: "Every journal of the double-entry ledger, hash-chained over its postings (ledger.journal).",
   admin: "Every sign-in, step-up, page view of sensitive data, denial, officer change and export in this portal (admin.audit).",
+  compliance: "Every KYC review case, freeze and unfreeze decision, STR case, note and FMU export, and every re-screening (compliance.audit).",
 }) as [AuditSource, string][]);
 
 function query(f: AuditFilters, before: string | null): string {

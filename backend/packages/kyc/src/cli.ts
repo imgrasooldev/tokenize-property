@@ -8,6 +8,7 @@ import { keyFromEnv, Peppers } from "./crypto.ts";
 import { createKycServer, WEB_KYC_SCOPE } from "./http.ts";
 import { OffboardingWorker } from "./offboarding.ts";
 import { mockProviders } from "./providers.ts";
+import { RescreenWorker } from "./rescreen.ts";
 import { KycService, statusOf, verifyAudit } from "./service.ts";
 
 /**
@@ -18,8 +19,10 @@ import { KycService, statusOf, verifyAudit } from "./service.ts";
  *   npm run kyc:serve                the KYC API for the website's sign-up (127.0.0.1:4910, mock providers)
  *   npm run kyc:offboard             queue a freeze for every wallet whose owner lost the verification
  *                                    (on kyc_alert and every minute; KYC_FREEZE_GUARD or the local deployment)
- * Sanctions reviews (maker-checker) are decided in the compliance portal (Step 6) through
- * requestClearance / decideClearance.
+ *   npm run kyc:rescreen             execute the re-screenings compliance officers queue in the portal
+ *                                    (on compliance_rescreen and every 30 s; mock providers, not in production)
+ * Sanctions and PEP reviews (maker-checker) are decided in the compliance portal (Step 6c, migration
+ * 0019), which runs requestClearance / decideClearance under the officers' handles.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 const ENV_FILE = `${BACKEND}.env.local`;
@@ -106,11 +109,33 @@ function serve(): Promise<void> {
   return Promise.resolve();
 }
 
+/** Executes queued re-screenings (Step 6c): the KYC service alone can unseal a name. */
+async function rescreen(): Promise<void> {
+  const e = env();
+  if (process.env.NODE_ENV === "production") throw new Error("kyc:rescreen uses mock providers and does not run in production");
+  const db = pool();
+  const service = new KycService(db, mockProviders(), Peppers.fromEnv(e), keyFromEnv(e, "KYC_DATA_KEY"), "kyc-service");
+  const worker = new RescreenWorker(db, service, {
+    worker: "kyc-rescreen",
+    onError: (err) => {
+      console.error(`re-screening failed: ${err instanceof Error ? err.name : "error"}`);
+    },
+  });
+  await worker.start();
+  console.log("re-screening worker running (mock sanctions and PEP lists); results appear in the compliance portal");
+  const stop = (): void => {
+    void worker.stop().then(() => db.end());
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+}
+
 async function main(): Promise<void> {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "setup") return setup();
   if (cmd === "offboard") return offboard();
   if (cmd === "serve") return serve();
+  if (cmd === "rescreen") return rescreen();
   const db = pool();
   try {
     if (cmd === "status" && arg) {
@@ -122,7 +147,7 @@ async function main(): Promise<void> {
       console.log(problems.length === 0 ? "KYC audit chain intact" : `${String(problems.length)} problem(s)`);
       if (problems.length) process.exitCode = 3;
     } else {
-      console.log("usage: kyc setup | serve | status <subjectId> | audit | offboard");
+      console.log("usage: kyc setup | serve | status <subjectId> | audit | offboard | rescreen");
       process.exitCode = 2;
     }
   } finally {

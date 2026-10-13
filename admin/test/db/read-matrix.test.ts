@@ -32,6 +32,27 @@ const EXPECT: Record<string, Who[]> = {
   decide_unfreeze: ["ops_checker"],
   request_unfreeze: ["ops_maker"],
   decide_property_request: ["ops_checker", "compliance_officer"],
+  // Step 6c (migration 0019): compliance officers act, auditors read, nobody else (operations included).
+  "audit_rows:compliance": ["compliance_officer", "auditor"],
+  "record_export:compliance": ["compliance_officer", "auditor"],
+  compliance_dashboard: ["compliance_officer", "auditor"],
+  kyc_queue: ["compliance_officer", "auditor"],
+  kyc_case: ["compliance_officer", "auditor"],
+  screenings: ["compliance_officer", "auditor"],
+  freeze_requests: ["compliance_officer", "auditor"],
+  freeze_request: ["compliance_officer", "auditor"],
+  str_cases: ["compliance_officer", "auditor"],
+  str_case: ["compliance_officer", "auditor"],
+  str_export_data: ["compliance_officer"],
+  open_kyc_case: ["compliance_officer"],
+  kyc_case_act: ["compliance_officer"],
+  request_rescreen: ["compliance_officer"],
+  request_freeze: ["compliance_officer"],
+  decide_freeze: ["compliance_officer"],
+  open_str: ["compliance_officer"],
+  add_str_note: ["compliance_officer"],
+  str_act: ["compliance_officer"],
+  record_str_export: ["compliance_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -59,9 +80,40 @@ const CALLS: Record<string, string> = {
   decide_unfreeze: "SELECT admin.decide_unfreeze($1, 999999, 'approve', 'matrix permission probe', 1)",
   request_unfreeze: "SELECT admin.request_unfreeze($1, 'matrix permission probe')",
   decide_property_request: `SELECT admin.decide_property_request($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  "audit_rows:compliance": "SELECT * FROM admin.audit_rows($1, 'compliance', NULL, NULL, NULL, NULL, NULL, 5)",
+  "record_export:compliance": `SELECT * FROM admin.record_export($1, 'compliance', '{}', 0, 'csv', '${"c".repeat(64)}')`,
+  compliance_dashboard: "SELECT admin.compliance_dashboard($1)",
+  kyc_queue: "SELECT admin.kyc_queue($1, NULL)",
+  kyc_case: "SELECT admin.kyc_case($1, 999999)",
+  screenings: "SELECT admin.screenings($1, NULL)",
+  freeze_requests: "SELECT admin.freeze_requests($1)",
+  freeze_request: "SELECT admin.freeze_request($1, 999999)",
+  str_cases: "SELECT admin.str_cases($1)",
+  str_case: "SELECT admin.str_case($1, 999999)",
+  str_export_data: "SELECT admin.str_export_data($1, 999999)",
+  // Unknown subjects, wallets and cases: refusals are audited and returned, so only the permission decides.
+  open_kyc_case: "SELECT admin.open_kyc_case($1, gen_random_uuid(), 'standard', 'matrix permission probe')",
+  kyc_case_act: `SELECT admin.kyc_case_act($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  request_rescreen: "SELECT admin.request_rescreen($1, gen_random_uuid(), 'matrix permission probe')",
+  request_freeze: `SELECT admin.request_freeze($1, 'freeze', '0x${"9".repeat(40)}', 'court_order', 'matrix permission probe', NULL, NULL)`,
+  decide_freeze: `SELECT admin.decide_freeze($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  open_str: "SELECT admin.open_str($1, gen_random_uuid(), 'other', 'matrix permission probe for the STR log')",
+  add_str_note: "SELECT admin.add_str_note($1, 999999, 'matrix permission probe')",
+  str_act: `SELECT admin.str_act($1, 999999, 'start_review', 'matrix permission probe', NULL, '\\x${"a".repeat(64)}')`,
+  record_str_export: `SELECT admin.record_str_export($1, 999999, '${"d".repeat(64)}')`,
 };
 
-const DECISIONS = new Set(["issue_signer_ticket", "decide_payout_batch", "decide_unfreeze", "decide_property_request"]);
+const DECISIONS = new Set([
+  "issue_signer_ticket",
+  "decide_payout_batch",
+  "decide_unfreeze",
+  "decide_property_request",
+  "kyc_case_act",
+  "request_freeze",
+  "decide_freeze",
+  "str_act",
+  "record_str_export",
+]);
 let stepCounter = Date.now();
 let w: World;
 let c: Cast;
@@ -105,7 +157,8 @@ describe("database authorisation matrix", () => {
   it("verify_chains returns only the chains the officer may read", async () => {
     const chains = async (who: Who) =>
       (await w.portal.query<{ source: string }>("SELECT source FROM admin.verify_chains($1, NULL)", [sessionOf(who)])).rows.map((r) => r.source).sort();
-    expect(await chains("auditor")).toEqual(["admin", "ledger", "recon", "signer"]);
+    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
+    expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
     expect(await chains("ops_maker")).toEqual(["ledger", "recon", "signer"]);
     expect(await chains("admin")).toEqual(["admin"]);
     expect(await chains("trustee_officer")).toEqual([]);

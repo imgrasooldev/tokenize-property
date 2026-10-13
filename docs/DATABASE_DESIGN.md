@@ -195,6 +195,32 @@ Numbered 0017 because 0015 (S-02 offering) and 0016 (Step 6b) are on other branc
 
 API: `notify.enqueue` (producers, in their transaction), `register_recipient`, `register_contact`, `set_preference`, `set_locale` (service), `claim`, `delivery_material`, `begin_attempt`, `record_sent`, `record_failure`, `extend_lease`, `open_attempt_started` (worker), `operator_decide`, `add_template`, `stats`, `verify_audit` (operator). NOTIFY channels: `notify` (new work, at commit), `notify_alert` (dead letter, undeliverable security notice). Advisory locks: 586586170 (audit), 586586171 (rate limit per recipient and channel), 586586172 (contact registration).
 
+### 0019 compliance (C-1..C-8; Step 6c, task T-005, ADR 0011 section 11)
+
+Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); until 0018 is merged the backend runner refuses the gap and tests use `contiguousMigrations()`. Schema `compliance`; advisory locks 586586190 (audit) and 586586191 (freeze requests).
+
+| Object | Purpose |
+|---|---|
+| `compliance.reason_codes` | (code, applies_to `freeze`/`unfreeze`/`str`, label); seeded, append-only; freeze requests and STR cases reference it with a composite key |
+| `compliance.kyc_cases` | subject, kind `screening_match`/`sanctions_hit`/`manual`, check (unique), risk (only raised), flags (only added), summary, status `open`/`info_requested`/`pending_second`/`approved`/`rejected`/`superseded`, proposal + proposer, Y-4 clearance, decider; CHECKs: proposer ≠ decider, high risk and screening outcomes need a proposal, a list hit is never approved; trigger-enforced transitions; never deleted |
+| `compliance.kyc_case_events` | every transition (action, from, to, actor, reason); append-only |
+| trigger `checks_compliance_cases` on `kyc.checks` | a sanctions `review` (incl. `pep_match`) or `fail` opens a case; a newer screening supersedes the open one |
+| `compliance.freeze_requests` | kind, subject, wallet, reason code, reason, links to KYC/STR cases, unfreeze → the freeze it lifts, `case_ref` (bytes32 caseId), 24 h expiry, decider ≠ proposer, outbox `command_key` when approved; decided once |
+| `compliance.holds` | one active hold per wallet from an approved freeze; lifted once by an approved unfreeze |
+| `kyc.underlying_status()` (new), `kyc.subject_status()` (replaced) | the 0009 derivation; with an active hold a verified or expired investor reads `suspended` |
+| `kyc.request_clearance()`, `kyc.evaluate()` (replaced), `kyc.clearances` proposal CHECK | new proposal `accept_edd` (only for a `pep_match` check): a PEP accepted by two officers verifies with its own reason |
+| `compliance.str_cases`, `str_events`, `str_notes`, `str_exports` | STR state machine `open`/`under_review`/`close_proposed`/`closed`/`filed`; closer ≠ proposer; filing needs an export and the FMU reference; notes, events and exports append-only |
+| `compliance.rescreens` | queue for the KYC service (`queued → running → done/failed`, one live per subject, stale claims return after 10 min) |
+| `compliance.audit` | hash-chained (`pt-compliance-audit-v1`, UTC); `compliance.verify_audit()` also finds rows without their audit entry or event |
+| `compliance.free_text_ok()` | CHECK on every free text: no CNIC, IBAN or Pakistani mobile number |
+| triggers `*_officer_binding` | officer handles in compliance rows, `kyc.clearances` and `kyc.decisions` only with the admin function on the stack |
+| `admin.role_permissions` (+2) | `compliance.decide`, `compliance.export` for compliance officers; digest fixed again |
+| `admin.compliance_dashboard`, `kyc_queue`, `kyc_case`, `screenings`, `freeze_requests`, `freeze_request`, `str_cases`, `str_case`, `str_export_data` | reads (masked CNIC `*****-****NNN-N`, no names, hashes or evidence) with per-action blockers and digests |
+| `admin.open_kyc_case`, `kyc_case_act`, `request_rescreen`, `request_freeze`, `decide_freeze`, `open_str`, `add_str_note`, `str_act`, `record_str_export` | writes; step-up on every decision; refusals audited as `approval.refused` |
+| `admin.audit_rows`, `verify_chains`, `record_export` (replaced) | new audit source `compliance` |
+
+Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -211,6 +237,7 @@ API: `notify.enqueue` (producers, in their transaction), `register_recipient`, `
 | Offering (0015) | all records; requests, duties, refunds decided or sent once; subscription facts set once | `offering.verify_audit()` (replays states, re-checks batch digests, finds rows without audit, incl. bank cancellations and refunds) |
 
 | Admin approvals (0016) | signer tickets used once, never deleted; decisions, refusals and views in `admin.audit` | `admin.verify_audit()` (role matrix digest updated in 0016) |
+| Compliance (0019) | reason codes, case events, STR events/notes/exports, audit; cases, requests, holds, rescreens change only along their state machines | `compliance.verify_audit()` (rows without audit entry, status vs last event, holds vs decisions) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
 

@@ -131,6 +131,18 @@ export const MOCK_SANCTIONS_LIST = {
   ],
 } as const;
 
+/**
+ * Fictional politically exposed persons for the mock screening (Step 6c): a PEP is not prohibited,
+ * but the relationship needs enhanced due diligence and two compliance officers (migration 0019).
+ */
+export const MOCK_PEP_LIST = {
+  version: "mock-pep-2026-10-01",
+  entries: [
+    { id: "PEP-001", name: "PERVAIZ PEPTEST" },
+    { id: "PEP-002", name: "NARGIS SAMPLEMINISTER" },
+  ],
+} as const;
+
 /** Token overlap score 0..100 (Dice coefficient on name tokens). */
 export function nameScore(a: string, b: string): number {
   const ta = normalizeName(a).split(" ");
@@ -142,7 +154,8 @@ export function nameScore(a: string, b: string): number {
 
 /**
  * MOCK sanctions screening against MOCK_SANCTIONS_LIST: score 100 -> list_hit (fail, final),
- * score >= 60 -> possible_match (review by two officers), else clear (pass).
+ * score >= 60 -> possible_match (review by two officers); otherwise MOCK_PEP_LIST: score >= 80 ->
+ * pep_match (review: enhanced due diligence by two officers), else clear (pass).
  */
 export class MockSanctions implements SanctionsScreening {
   calls = 0;
@@ -157,6 +170,26 @@ export class MockSanctions implements SanctionsScreening {
     }
     const outcome = best.score >= 100 ? "fail" : best.score >= 60 ? "review" : "pass";
     const providerRef = `SCR-${randomUUID()}`;
+    if (outcome === "pass") {
+      // Not sanctioned: a PEP match (score >= 80) still needs two officers (enhanced due diligence).
+      let pep: { id: string; score: number } = { id: "", score: 0 };
+      for (const e of MOCK_PEP_LIST.entries) {
+        const score = nameScore(request.fullName, e.name);
+        if (score > pep.score) pep = { id: e.id, score };
+      }
+      if (pep.score >= 80) {
+        return Promise.resolve({
+          kind: "sanctions",
+          outcome: "review",
+          provider: "mock-sanctions",
+          providerRef,
+          reason: "pep_match",
+          score: pep.score,
+          listVersion: MOCK_PEP_LIST.version,
+          evidence: { transactionId: providerRef, listVersion: MOCK_PEP_LIST.version, bestEntry: pep.id, score: pep.score },
+        });
+      }
+    }
     return Promise.resolve({
       kind: "sanctions",
       outcome,

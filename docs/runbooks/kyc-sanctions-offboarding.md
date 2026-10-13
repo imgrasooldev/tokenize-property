@@ -27,6 +27,27 @@ spec 4.2): **freeze → move or redeem the tokens → only then delete the ident
    ```
 4. Payouts to that subject are held automatically (not verified → held, H-1); do not pay manually.
 
+## In the compliance portal (Step 6c, preferred)
+
+Open `http://localhost:3300/compliance` (SSH tunnel). A possible match or PEP match already has a
+case under **KYC reviews**; a list hit has a `sanctions_hit` case (final, close it as rejected).
+
+- **Possible match / PEP:** officer A proposes approve or reject with a reason and the security
+  key; officer B (different person) confirms or declines. For a PEP, approve means "accepted after
+  enhanced due diligence" (keep the EDD file outside the portal).
+- **Freeze now:** **Freezes** → propose (wallet, reason code, reason); a second officer approves.
+  The investor reads `suspended` at once and the freeze command goes through the outbox to the
+  signing service; check the command status on the request page. Unfreeze is the same two-officer
+  path and needs the investor's own KYC status to be verified.
+- **Suspicion:** **STR cases** → open, add notes, export for the FMU (the ZIP is recorded before it
+  is handed out), file by hand in goAML, then record the FMU reference. Closing without a report
+  needs a second officer.
+- **Re-screen:** **Sanctions & PEP** → re-screen; the KYC service runs it (`npm run kyc:rescreen`
+  must be running).
+
+The SQL calls below remain the break-glass path for non-officer operator names only; officer
+handles are refused outside the portal.
+
 ## Diagnosis and decisions
 
 | Situation | Decision path |

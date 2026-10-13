@@ -130,6 +130,65 @@ function.
   send, bank file built from sealed IBANs); bank statement import, suspense returns, outbox review
   decisions and signer policy changes stay on the command line for now.
 
+### 11. Step 6c: compliance portal (addendum, 2026-10-13, task T-005, migration 0019)
+
+Numbered 0019: 0018 is reserved for work built in parallel (no dependency on it). Until 0018 is
+merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
+
+- **Rules live in the new schema `compliance`** (C-1..C-8 in the migration header), reached by the
+  portal only through `admin.*` functions that check the session, the permission and, for every
+  decision, a step-up younger than five minutes, then bind the officer's handle (as in 6b).
+- **KYC review cases.** A sanctions screening in `review` (possible match, or the new reason code
+  `pep_match`) or `fail` (list hit) opens a case in the same transaction (trigger on `kyc.checks`);
+  a newer screening supersedes the older open case. Officers open manual cases (standard or high
+  risk). State machine in a trigger: open ↔ info_requested, open → pending_second → approved /
+  rejected / open, open → approved / rejected (one officer, standard risk only), → superseded.
+  High risk (PEP, sanctions, escalated) needs a proposer and a **different** confirmer, enforced by
+  CHECK constraints on the row. For a screening match the decision **is** ADR 0009 Y-4
+  (`kyc.request_clearance` / `kyc.decide_clearance`), so the KYC status stays derived in
+  `kyc.evaluate`. A PEP is accepted only as the new clearance proposal `accept_edd` (enhanced due
+  diligence, two officers); a list hit is final (Y-3) and is only closed as rejected. Rejecting a
+  manual case revokes the verification (`kyc.revoke`; offboarding then freezes the wallet).
+  Request-more-info is a state, not a message: contacting the investor is outside the portal (and
+  must avoid tipping-off).
+- **Freeze and unfreeze (spec change, ADR 0005/0009 amendment).** One compliance officer proposes
+  with a reason code (`compliance.reason_codes`, freeze vs unfreeze codes enforced by a composite
+  foreign key), a different one decides within 24 hours. An approved freeze places a
+  `compliance.holds` row: `kyc.subject_status()` then reads **`suspended`** for a verified (or
+  expired) investor (`kyc.underlying_status()` keeps the old derivation). Every gate that needs
+  "verified" (signer, bank payouts, offering, property) therefore refuses a held investor, and the
+  **existing** `compliance.freeze` policy (never a verified owner) signs the `compliance.freeze`
+  command the approval enqueued in the same transaction (`compliance.freeze:request:<id>`, caseId =
+  SHA-256 of the domain and request id). Unfreeze is the same two-officer path; it needs an active
+  hold and an investor whose own status is `verified`, lifts the hold and enqueues the **new signer
+  kind `compliance.unfreeze`** (`FreezeGuard.unfreezeAddress`), which the signing service signs only
+  when `compliance.unfreeze_allowed(account, caseId)` confirms the decision, the owner is verified
+  and the wallet is frozen (daily limit, same rule shape as freeze; policy approvals 0 because the
+  two officers decided in the database). `suspended` is not in the offboarding list, so the
+  offboarding worker never doubles a compliance freeze.
+- **STR cases.** open → under_review → filed | close_proposed → closed (or back to under_review).
+  Closing without a report needs a second officer; filing needs an export recorded first and the
+  FMU reference. Notes append-only. Export = ZIP (case JSON with masked identifiers, notes,
+  history; manifest; SHA256SUMS), recorded with its SHA-256 in `compliance.str_exports` and the
+  admin audit **before** it is handed out; nothing is sent to the FMU automatically. Visible to
+  compliance officers and auditors only; never changes the investor's status (tipping-off).
+- **Re-screening** is queued in `compliance.rescreens` and executed by the KYC service
+  (`npm run kyc:rescreen`, `RescreenWorker`), the only holder of the sealed-name key; failures are
+  recorded by error name only.
+- **Least data.** Reads show a short subject reference, the CNIC as `*****-****NNN-N` (last four
+  only), the wallet, statuses and provider reason codes/scores/list versions; never names, hashes
+  or evidence. Free text (reasons, summaries, notes) is refused by `compliance.free_text_ok` if it
+  contains a CNIC, an IBAN or a Pakistani mobile number. URLs carry numeric ids only; investor
+  references travel in POST bodies.
+- **Officer names bound** (C-7): officer handles in `compliance.*` rows, `kyc.clearances` and
+  `kyc.decisions` need the admin function on the stack (closes consequence 2 for KYC).
+- **Permissions (role matrix digest fixed again).** `compliance.decide` and `compliance.export`:
+  compliance officers only; `compliance.read`: compliance officers and auditors. Operations roles
+  hold none. The compliance audit chain is a new audit source (`/audit/compliance`).
+- **Dashboard.** Counts by state, SLA breaches from `compliance.sla()` (KYC open 48 h, second
+  officer 24 h, info requested 7 d; freeze 4 h; STR open 3 d, under review 7 d, close proposed 2 d;
+  re-screening 1 h), oldest open items, recent decisions.
+
 ## Consequences
 
 - Every later approval (6b to 6d) gets identity, segregation of duties, step-up and audit for free by calling `admin.require` and `admin.require_step_up` from its own database function.
@@ -165,6 +224,23 @@ function.
 - End to end in Edge with virtual FIDO2 keys (2): two checkers approve a mint with their keys and the
   signing service decides; a maker asks for an unfreeze and a checker approves it after a passed run.
 
+## Tests (Step 6c)
+
+- Backend: KYC compliance rules through the portal's functions (13: PEP mock list, automatic
+  cases, two-officer clearance and PEP acceptance, two-officer true match, list hit final, manual
+  cases incl. info requests, escalation and revocation, supersede, CNIC/IBAN/phone refused, ops
+  refused, stale step-up, officer names bound, portal role cannot reach `compliance.*`,
+  re-screening worker incl. provider outage, audit tamper detection); signer freeze/unfreeze end to
+  end (4: no policy, two-officer freeze → suspended → signed `freezeAddress`, forged unfreeze denied,
+  two-officer unfreeze → signed `unfreezeAddress`, unfreeze refused for a revoked investor, chains
+  verify); call preview for `compliance.unfreeze`.
+- Admin database: matrix +20 functions × 7 callers (incl. audit source `compliance`); compliance
+  rules (6: no table/function access, PTS01 on five decisions, KYC maker-checker and digest, freeze
+  maker-checker and outbox command, STR close/file/export rules, audit).
+- HTTP matrix: 8 new pages and 10 new POST routes × 8 callers, CSRF/same-origin on each, plus 4
+  flows (masked identifiers only; two-officer KYC approval with stale step-up refused; freeze
+  approved and queued; STR export recorded before release and matching its record).
+
 ## Open items
 
 1. AAGUID allow-list of approved hardware keys (FIDO MDS) and the SSO in front of the portal, before the pilot.
@@ -174,3 +250,6 @@ function.
 5. Urdu UI (later; the investor website already has it).
 6. Cross-check in `admin.verify_audit()` that every backend decision under an officer's handle has its `approval.decided` entry (today each chain verifies separately).
 7. A signer policy that changes after an approval but before signing: the service signs with the new policy (as before 6b); consider re-checking the approved call hash at signing time.
+8. (6c) Investor-facing wording of `suspended`, `review` and the PEP reason (tipping-off): the website shows KYC reasons today; compliance to confirm the generic text (also T-028 item 4).
+9. (6c) Partial freezes (`freezePartial`), freezes of investors without a bound wallet, and assisted payout-account changes are not in the portal yet.
+10. (6c) Real PEP list provider and FMU goAML format (T-031); SLA values are working defaults for the owner to confirm.

@@ -155,6 +155,25 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
         ],
       };
     }
+    case "compliance.unfreeze": {
+      const r = rule as FreezeRule;
+      const p = freezePayload.safeParse(payload);
+      if (!p.success) bad("unfreeze");
+      return {
+        to: r.freezeGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "unfreezeAddress", args: [p.data.account as Hex, p.data.caseId as Hex] }),
+        abi: freezeGuardAbi,
+        contract: "FreezeGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved FreezeGuard ${r.freezeGuard.toLowerCase()}`,
+          "only after two different compliance officers approved the unfreeze in the portal (compliance.unfreeze_allowed)",
+          "only for a frozen wallet whose owner is KYC-verified",
+          `at most ${String(r.maxPerDay)} unfreezes per day`,
+        ],
+      };
+    }
     case "rent.record_payout": {
       const r = rule as RecordPayoutRule;
       const p = recordPayoutPayload.safeParse(payload);

@@ -7,6 +7,7 @@ import {
   evaluateMint,
   evaluateRecordPayout,
   evaluateTransfer,
+  evaluateUnfreeze,
   type AnyRule,
   type Decision,
   type FreezeRule,
@@ -53,6 +54,8 @@ describe("call preview", () => {
     const freeze = { freezeGuard: A(4), account: A(12), caseId: H(9) };
     const f = allowed(evaluateFreeze(freezeRule, freeze, { chainId: 586586, alreadyFrozen: false, ownerVerified: false, signedToday: 0 }));
     expect(show("compliance.freeze", freezeRule, freeze)).toMatchObject({ to: f.to, data: f.data, functionName: "freezeAddress" });
+    const u = allowed(evaluateUnfreeze(freezeRule, freeze, { chainId: 586586, frozen: true, ownerVerified: true, decided: true, signedToday: 0 }));
+    expect(show("compliance.unfreeze", freezeRule, freeze)).toMatchObject({ to: u.to, data: u.data, functionName: "unfreezeAddress" });
 
     const payout = { registry: A(5), distributionId: "4", payoutBatchHash: H(77) };
     const p = allowed(evaluateRecordPayout(payoutRule, payout, { chainId: 586586, status: "finalized", token: A(2), bankFileSha256: H(77) }));
