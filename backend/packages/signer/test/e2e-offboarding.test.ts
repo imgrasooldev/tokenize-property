@@ -10,7 +10,7 @@ import { tokenAbi } from "@pt/contracts";
 import { KycService, mockProviders, OffboardingWorker, Peppers, revoke } from "@pt/kyc";
 import { getCommand, OutboxWorker } from "@pt/outbox";
 import pg from "pg";
-import { createPublicClient, http, type Hex } from "viem";
+import { createPublicClient, getAddress, http, type Hex } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
@@ -78,11 +78,11 @@ describe.skipIf(!live)("offboarding freeze on the local chain", () => {
 
   it("a revoked investor's wallet is frozen on chain, once", async () => {
     if (!d) throw new Error("no deployment");
-    const wallet = `0x${randomBytes(20).toString("hex")}`;
+    const wallet: Hex = `0x${randomBytes(20).toString("hex")}`;
     const kyc = new KycService(pool, mockProviders(), Peppers.of([{ version: 1, key: randomBytes(32) }]), randomBytes(32));
     const r = await kyc.onboard({ cnic: "6110100000011", fullName: "Chain Offboard", livenessSessionId: "sess-e2e-off-01", wallet });
     expect(r.status).toBe("verified");
-    const frozen = () => rpc.readContract({ address: d.token, abi: tokenAbi, functionName: "isFrozen", args: [wallet] });
+    const frozen = () => rpc.readContract({ address: getAddress(d.token), abi: tokenAbi, functionName: "isFrozen", args: [wallet] });
     expect(await frozen()).toBe(false);
 
     await revoke(admin, r.subjectId, "officer:amna", "Sanctions match confirmed by two officers");

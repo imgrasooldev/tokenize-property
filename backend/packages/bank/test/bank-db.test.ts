@@ -2,10 +2,11 @@ import { balanceOf } from "@pt/ledger";
 import { revoke } from "@pt/kyc";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BankError, decidePayoutBatch, verifyAudit } from "../src/service.ts";
+import { BankError, BankService, decidePayoutBatch, verifyAudit } from "../src/service.ts";
 import {
   ageCoolingOff,
   cashFindings,
+  ESCROW,
   ESCROW_LEDGER,
   escrowBalance,
   finalizedDistribution,
@@ -383,6 +384,35 @@ describe("payout batches (B-5, B-6)", () => {
     await expect(w.bank.submitPayoutBatch(over, w.mock)).rejects.toThrow(/insufficient balance/);
     const { rows: st } = await w.db.query<{ status: string }>("SELECT status FROM bank.payout_batches WHERE id = $1", [over.toString()]);
     expect(st[0]?.status).toBe("approved");
+    expect(await escrowBalance(w)).toBe(w.mock.balancePaisa);
+  });
+
+  it("submitting a distribution batch enqueues its on-chain payout record in the same transaction, once (Step 5h)", async () => {
+    const registry = `0x${"d1".repeat(20)}`;
+    const bank = new BankService(w.pool, w.peppers, w.dataKey, w.mock, { escrowAccount: ESCROW, distributionRegistry: registry });
+    const t = token();
+    const a = await investor(w, "Recorded Payout");
+    await rentOwed(w, t, 3n, [{ subjectId: a.subjectId, amountPaisa: 6_000n }]);
+    await finalizedDistribution(w, t, 3n, 6_000n);
+    await passRecon(w);
+    const batch = await bank.createPayoutBatch({ token: t, distributionId: 3n, items: [{ subjectId: a.subjectId, amountPaisa: 6_000n }], createdBy: "operator:maker" });
+    await decidePayoutBatch(w.db, batch, "operator:checker", "approve", "Matches the distribution");
+
+    // A failing submission (gate closed) leaves no command behind.
+    await freezeRecon(w);
+    await expect(bank.submitPayoutBatch(batch, w.mock)).rejects.toThrow(/blocked by reconciliation/);
+    const none = await w.db.query("SELECT 1 FROM outbox.commands WHERE kind = 'rent.record_payout' AND payload->>'distributionId' = '3' AND payload->>'registry' = $1", [registry]);
+    expect(none.rows).toHaveLength(0);
+    await w.db.query("SELECT recon.request_unfreeze('operator:ali', 'Test freeze investigated and resolved')");
+    await passRecon(w);
+    const { rows: req } = await w.db.query<{ id: string }>("SELECT id FROM recon.unfreeze_requests WHERE status = 'open'");
+    await w.db.query("SELECT recon.decide_unfreeze($1, 'operator:sara', 'approve', 'Checked the investigation notes')", [req[0]?.id]);
+
+    const sent = await bank.submitPayoutBatch(batch, w.mock);
+    await bank.submitPayoutBatch(batch, w.mock); // crash and retry
+    const { rows } = await w.db.query<{ key: string; payload: Record<string, string>; status: string }>(
+      "SELECT idempotency_key AS key, payload, status FROM outbox.commands WHERE kind = 'rent.record_payout' AND payload->>'registry' = $1", [registry]);
+    expect(rows).toEqual([{ key: `rent.record_payout:${t}:3`, payload: { registry, distributionId: "3", payoutBatchHash: sent.fileSha256 }, status: "pending" }]);
     expect(await escrowBalance(w)).toBe(w.mock.balancePaisa);
   });
 

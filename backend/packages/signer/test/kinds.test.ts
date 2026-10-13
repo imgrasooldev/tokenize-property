@@ -60,7 +60,7 @@ afterAll(async () => {
 
 /** A verified investor with a bound wallet. */
 async function walletOwner(): Promise<{ subjectId: string; wallet: Hex }> {
-  const wallet = `0x${randomBytes(20).toString("hex")}`;
+  const wallet: Hex = `0x${randomBytes(20).toString("hex")}`;
   const r = await w.kyc.onboard({ cnic: `4210${String(10_000_000 + ++n).slice(-8)}1`, fullName: "Freeze Candidate", livenessSessionId: `sess-freeze-${String(n).padStart(4, "0")}`, wallet });
   expect(r.status).toBe("verified");
   return { subjectId: r.subjectId, wallet };

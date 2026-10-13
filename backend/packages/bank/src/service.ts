@@ -77,6 +77,12 @@ export interface BankServiceOptions {
   /** The trustee escrow account's id at the bank, as in its statements (e.g. TRUSTEE-ESCROW-01). */
   escrowAccount: string;
   actor?: string;
+  /**
+   * The DistributionRegistry to record paid distributions in (Step 5h). When set, submitting a
+   * distribution batch also enqueues an outbox command rent.record_payout(id, SHA-256 of the bank
+   * file) in the SAME transaction, so a payout that left escrow is always recorded on chain.
+   */
+  distributionRegistry?: string;
 }
 
 export class BankService implements WebhookHandler {
@@ -228,9 +234,34 @@ export class BankService implements WebhookHandler {
   async submitPayoutBatch(batchId: bigint, gateway: BankGateway): Promise<{ journalId: bigint; fileSha256: string; file: string }> {
     const file = await this.payoutFile(batchId);
     const sha = fileSha256(file);
-    const { rows } = await this.db.query<{ id: string }>("SELECT bank.submit_payout_batch($1, $2, $3) AS id", [batchId.toString(), this.actor, sha]);
+    const fileHash = `0x${sha.toString("hex")}`;
+    const c = await this.db.connect();
+    let journalId: bigint;
+    try {
+      await c.query("BEGIN");
+      const { rows } = await c.query<{ id: string }>("SELECT bank.submit_payout_batch($1, $2, $3) AS id", [batchId.toString(), this.actor, sha]);
+      journalId = BigInt(rows[0]?.id ?? "0");
+      const { rows: b } = await c.query<{ kind: string; token: string; distribution_id: string }>(
+        "SELECT kind, token, distribution_id::text FROM bank.payout_batches WHERE id = $1", [batchId.toString()]);
+      const batch = b[0];
+      if (this.opts.distributionRegistry && batch?.kind === "distribution") {
+        // Idempotent (outbox O-2): a re-submission after a crash finds the same command.
+        await c.query("SELECT outbox.enqueue($1, 'rent.record_payout', $2::jsonb, $3, $4)", [
+          `rent.record_payout:${batch.token}:${batch.distribution_id}`,
+          JSON.stringify({ registry: this.opts.distributionRegistry.toLowerCase(), distributionId: batch.distribution_id, payoutBatchHash: fileHash }),
+          `bank:batch:${batchId.toString()}`,
+          this.actor,
+        ]);
+      }
+      await c.query("COMMIT");
+    } catch (e) {
+      await c.query("ROLLBACK").catch(() => undefined);
+      throw e;
+    } finally {
+      c.release();
+    }
     await gateway.submitPayoutFile(file);
-    return { journalId: BigInt(rows[0]?.id ?? "0"), fileSha256: `0x${sha.toString("hex")}`, file };
+    return { journalId, fileSha256: fileHash, file };
   }
 
   /** The deterministic bank file of an approved or submitted batch. Refuses a swapped or edited account. */
