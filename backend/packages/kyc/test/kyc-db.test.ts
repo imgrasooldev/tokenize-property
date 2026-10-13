@@ -207,6 +207,7 @@ describe("records (Y-5) and roles (Y-6)", () => {
     await expect(db.query("UPDATE kyc.clearances SET reason = 'changed afterwards, quietly'")).rejects.toThrow(/decided once/);
   });
 
+  // Builds and drops its own database: on Windows the drop's checkpoint fsyncs every new file (~25 s here).
   it("the audit chain is intact, and a rogue administrator's edits are found", async () => {
     expect(await verifyAudit(db)).toEqual([]);
     const scratch = await scratchDatabase();
@@ -235,7 +236,7 @@ describe("records (Y-5) and roles (Y-6)", () => {
       await p.end();
       await scratch.drop();
     }
-  });
+  }, 120_000);
 
   it("roles: readers see status only; the service cannot revoke or clear; nobody writes tables directly", async () => {
     const asRole = async (role: string, sql: string, params: unknown[] = []): Promise<unknown> => {

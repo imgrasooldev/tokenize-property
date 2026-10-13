@@ -1,10 +1,25 @@
 import { createHash } from "node:crypto";
 import type pg from "pg";
 import { createPublicClient, http, keccak256, type Hex } from "viem";
-import { identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
+import { distributionRegistryAbi, identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
 import { z } from "zod";
 import type { KeyProvider } from "./keystore.ts";
-import { evaluateMint, isPayoutKind, KINDS, mintPayload, parseRule, type Decision, type MintRule } from "./policy.ts";
+import {
+  evaluateFreeze,
+  evaluateMint,
+  evaluateRecordPayout,
+  freezePayload,
+  isPayoutKind,
+  KINDS,
+  mintPayload,
+  parseRule,
+  recordPayoutPayload,
+  type AnyRule,
+  type Decision,
+  type FreezeRule,
+  type MintRule,
+  type RecordPayoutRule,
+} from "./policy.ts";
 
 /**
  * Signing service (Step 5d). The only component that can sign platform transactions:
@@ -22,6 +37,10 @@ export interface ChainReader {
   /** Simulates the call from `from`; throws with the revert reason if it would fail. */
   simulate(from: Hex, to: Hex, data: Hex): Promise<void>;
   mintFacts(rule: MintRule, to: Hex): Promise<{ recipientVerified: boolean; supply: bigint; cap: bigint; paused: boolean }>;
+  /** Whether the token already freezes this wallet. */
+  isFrozen(rule: FreezeRule, account: Hex): Promise<boolean>;
+  /** A distribution's on-chain status (none | published | rejected | finalized | paid) and token. */
+  distribution(rule: RecordPayoutRule, id: bigint): Promise<{ status: string; token: string }>;
   /** "dropped" only when there is no receipt and the sender's mined nonce is past this one. */
   txState(hash: Hex, from: Hex, nonce: bigint): Promise<"mined" | "dropped" | "pending">;
 }
@@ -53,8 +72,15 @@ export function viemChainReader(rpcUrl: string): ChainReader {
       ]);
       return { recipientVerified, supply, cap, paused };
     },
+    isFrozen: (rule, account) => c.readContract({ address: rule.token as Hex, abi: tokenAbi, functionName: "isFrozen", args: [account] }),
+    distribution: async (rule, id) => {
+      const d = await c.readContract({ address: rule.registry as Hex, abi: distributionRegistryAbi, functionName: "getDistribution", args: [id] });
+      return { status: DISTRIBUTION_STATUS[d.status] ?? "unknown", token: d.token.toLowerCase() };
+    },
   };
 }
+
+const DISTRIBUTION_STATUS = ["none", "published", "rejected", "finalized", "paid"];
 
 export const signInput = z.object({
   commandRef: z.string().min(8).max(200),
@@ -132,7 +158,7 @@ export class SignerService {
     await c.query("SELECT signer.audit_append($1, $2, $3, $4::jsonb)", [actor, action, requestId, JSON.stringify(detail)]);
   }
 
-  private async activePolicy(c: pg.ClientBase, kind: string): Promise<{ id: string; rule: MintRule } | null> {
+  private async activePolicy(c: pg.ClientBase, kind: string): Promise<{ id: string; rule: AnyRule } | null> {
     const { rows } = await c.query<{ id: string; rule: unknown }>(
       "SELECT id, rule FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL",
       [kind],
@@ -141,7 +167,46 @@ export class SignerService {
     return r ? { id: r.id, rule: parseRule(kind, r.rule) } : null;
   }
 
-  private async evaluate(c: pg.ClientBase, rule: MintRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+  /** Facts are read fresh for every decision, per kind; the evaluation itself is a pure function. */
+  private async evaluate(c: pg.ClientBase, kind: string, rule: AnyRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    if (kind === "compliance.freeze") return this.evaluateFreeze(c, rule as FreezeRule, payload, excludeRequest);
+    if (kind === "rent.record_payout") return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
+    if (kind !== "issuance.mint") return { decision: "deny", reason: `no evaluator for ${kind}` };
+    return this.evaluateMint(c, rule as MintRule, payload, excludeRequest);
+  }
+
+  private async evaluateFreeze(c: pg.ClientBase, rule: FreezeRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = freezePayload.safeParse(payload);
+    if (!p.success) return evaluateFreeze(rule, payload, { chainId: 0, alreadyFrozen: true, ownerVerified: true, signedToday: 0 });
+    const account = p.data.account.toLowerCase() as Hex;
+    const [chainId, alreadyFrozen, verified, used] = await Promise.all([
+      this.chain.chainId(),
+      this.chain.isFrozen(rule, account),
+      c.query<{ ok: boolean }>("SELECT kyc.is_verified($1) AS ok", [account]),
+      c.query<{ n: string }>(
+        `SELECT count(*) AS n FROM signer.requests
+         WHERE key_ref = $1 AND kind = 'compliance.freeze' AND status IN ('approved', 'signed', 'broadcast')
+           AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi')
+           AND ($2::uuid IS NULL OR id <> $2::uuid)`,
+        [rule.keyRef, excludeRequest],
+      ),
+    ]);
+    return evaluateFreeze(rule, payload, { chainId, alreadyFrozen, ownerVerified: verified.rows[0]?.ok === true, signedToday: Number(used.rows[0]?.n ?? "0") });
+  }
+
+  private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {
+    const p = recordPayoutPayload.safeParse(payload);
+    if (!p.success) return evaluateRecordPayout(rule, payload, { chainId: 0, status: "none", token: "", bankFileSha256: null });
+    const id = BigInt(p.data.distributionId);
+    const [chainId, d, file] = await Promise.all([
+      this.chain.chainId(),
+      this.chain.distribution(rule, id),
+      c.query<{ sha: string | null }>("SELECT bank.distribution_file_hash($1, $2) AS sha", [rule.token.toLowerCase(), id.toString()]),
+    ]);
+    return evaluateRecordPayout(rule, payload, { chainId, status: d.status, token: d.token, bankFileSha256: file.rows[0]?.sha ?? null });
+  }
+
+  private async evaluateMint(c: pg.ClientBase, rule: MintRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
     const p = mintPayload.safeParse(payload);
     if (!p.success) return evaluateMint(rule, payload, { chainId: 0, recipientVerified: false, supply: 0n, cap: 0n, paused: true, signedToday: 0n });
     const [chainId, facts, used] = await Promise.all([
@@ -204,7 +269,7 @@ export class SignerService {
     }
     const policy = await this.activePolicy(c, input.kind);
     const decision: Decision = policy
-      ? await this.evaluate(c, policy.rule, input.payload, null)
+      ? await this.evaluate(c, input.kind, policy.rule, input.payload, null)
       : { decision: "deny", reason: `no active policy for ${input.kind}` };
     const keyRef = decision.decision === "allow" ? decision.keyRef : (policy?.rule.keyRef ?? null);
     if (keyRef === null || !this.keys.refs().includes(keyRef)) {
@@ -222,7 +287,7 @@ export class SignerService {
         JSON.stringify(input.payload),
         hash,
         policy?.id ?? null,
-        decision.decision === "allow" ? decision.amount.toString() : null,
+        decision.decision === "allow" ? (decision.amount?.toString() ?? null) : null,
         requestedBy,
         status,
         decision.decision === "allow" ? decision.approvalsNeeded : 0,
@@ -235,7 +300,7 @@ export class SignerService {
       commandRef: input.commandRef,
       kind: input.kind,
       policy: policy?.id ?? null,
-      ...(decision.decision === "deny" ? { reason: decision.reason } : { amount: decision.amount.toString(), approvalsNeeded: decision.approvalsNeeded }),
+      ...(decision.decision === "deny" ? { reason: decision.reason } : { amount: decision.amount?.toString() ?? null, approvalsNeeded: decision.approvalsNeeded }),
     });
     if (decision.decision === "deny") return { status: "denied", requestId: req.id, reason: decision.reason };
     if (status === "pending_approval") return { status: "pending_approval", requestId: req.id, approvalsNeeded: decision.approvalsNeeded };
@@ -256,7 +321,7 @@ export class SignerService {
     }
     const policy = await this.activePolicy(c, req.kind);
     if (!policy) return { status: "denied", requestId: req.id, reason: `no active policy for ${req.kind}` };
-    const decision = fresh ?? (await this.evaluate(c, policy.rule, req.payload, req.id));
+    const decision = fresh ?? (await this.evaluate(c, req.kind, policy.rule, req.payload, req.id));
     if (decision.decision === "deny") {
       await this.audit(c, requestedBy, "request.denied_at_sign", req.id, { reason: decision.reason });
       return { status: "denied", requestId: req.id, reason: decision.reason };

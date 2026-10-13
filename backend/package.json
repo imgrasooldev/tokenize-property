@@ -41,6 +41,7 @@
     "kyc:setup": "tsx packages/kyc/src/cli.ts setup",
     "kyc:status": "tsx packages/kyc/src/cli.ts status",
     "kyc:audit": "tsx packages/kyc/src/cli.ts audit",
+    "kyc:offboard": "tsx packages/kyc/src/cli.ts offboard",
     "bank": "tsx packages/bank/src/cli.ts serve",
     "bank:setup": "tsx packages/bank/src/cli.ts setup",
     "bank:audit": "tsx packages/bank/src/cli.ts audit",

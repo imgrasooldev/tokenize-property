@@ -36,3 +36,4 @@ export {
   type OnboardResult,
   type SubjectView,
 } from "./service.ts";
+export { OffboardingWorker } from "./offboarding.ts";

@@ -79,6 +79,7 @@ describe("payout gate (R-2, R-4)", () => {
     expect((await payoutGate(db)).allowed).toBe(true);
   });
 
+  // Builds and drops its own database: on Windows the drop's checkpoint fsyncs every new file (~25 s here).
   it("denies when the latest passed run is older than 26 hours", async () => {
     // Own database: ageing a run by hand is itself a tampering the audit chain reports.
     const s = await scratchDatabase();
@@ -95,7 +96,7 @@ describe("payout gate (R-2, R-4)", () => {
     } finally {
       await s.drop();
     }
-  });
+  }, 120_000);
 });
 
 describe("freeze and maker-checker unfreeze (R-2, R-3)", () => {

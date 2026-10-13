@@ -29,6 +29,8 @@ const chain: ChainReader = {
   simulate: () => (chainState.simulateFails ? Promise.reject(new Error("execution reverted: RefAlreadyUsed")) : Promise.resolve()),
   mintFacts: () => Promise.resolve({ recipientVerified: chainState.verified, supply: chainState.supply, cap: chainState.cap, paused: chainState.paused }),
   txState: (hash) => Promise.resolve(chainState.dropped.has(hash) ? "dropped" : "pending"),
+  isFrozen: () => Promise.resolve(false),
+  distribution: () => Promise.resolve({ status: "none", token: A(2) }),
 };
 
 const ref = () => `cmd:${String(++n)}:${String(Date.now())}`;

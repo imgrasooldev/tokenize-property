@@ -241,6 +241,7 @@ describe("L-4 hash chain", () => {
     expect(head?.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  // Builds and drops its own database: on Windows the drop's checkpoint fsyncs every new file (~25 s here).
   it("detects a change made by someone who disabled the protection (e.g. a rogue DBA)", async () => {
     const scratch = await scratchDatabase();
     try {
@@ -270,7 +271,7 @@ describe("L-4 hash chain", () => {
     } finally {
       await scratch.drop();
     }
-  });
+  }, 120_000);
 });
 
 describe("concurrency and properties", () => {

@@ -129,6 +129,7 @@ describe("RF-2 running balances", () => {
     await expect(db.query("TRUNCATE ledger.account_balances")).rejects.toThrow(/not allowed/);
   });
 
+  // Builds and drops its own database: on Windows the drop's checkpoint fsyncs every new file (~25 s here).
   it("verify_balances() exposes a tampered running balance (rogue DBA)", async () => {
     const scratch = await scratchDatabase();
     try {
@@ -154,15 +155,21 @@ describe("RF-2 running balances", () => {
     } finally {
       await scratch.drop();
     }
-  });
+  }, 120_000);
 
   it("write cost no longer grows with account history", async () => {
     await openAccount(db, { code: "perf:hot", kind: "asset", asset: "PKR", allowOverdraft: true });
     await openAccount(db, { code: "perf:other", kind: "asset", asset: "PKR", allowOverdraft: true });
+    // Median per journal, so a checkpoint or another process stalling the disk for a moment does
+    // not decide the result; growth with history moves the median, a stall does not.
     const timeBatch = async (count: number): Promise<number> => {
-      const t0 = performance.now();
-      for (let i = 0; i < count; i++) await transfer("perf:other", "perf:hot", 1n, "perf");
-      return (performance.now() - t0) / count;
+      const times: number[] = [];
+      for (let i = 0; i < count; i++) {
+        const t0 = performance.now();
+        await transfer("perf:other", "perf:hot", 1n, "perf");
+        times.push(performance.now() - t0);
+      }
+      return times.sort((x, y) => x - y)[Math.floor(count / 2)] ?? 0;
     };
     const early = await timeBatch(200);
     for (let i = 0; i < 1_600; i++) await transfer("perf:other", "perf:hot", 1n, "perf-fill");

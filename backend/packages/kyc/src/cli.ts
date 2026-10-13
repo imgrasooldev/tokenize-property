@@ -3,6 +3,7 @@ import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { readEnvFile } from "@pt/config";
 import pg from "pg";
+import { OffboardingWorker } from "./offboarding.ts";
 import { statusOf, verifyAudit } from "./service.ts";
 
 /**
@@ -10,6 +11,8 @@ import { statusOf, verifyAudit } from "./service.ts";
  *   npm run kyc:setup                LOCAL DEV ONLY: generates the pepper and the data key in backend/.env.local
  *   npm run kyc:status -- <subject>  status of one subject (no personal data)
  *   npm run kyc:audit                verify the KYC audit hash chain
+ *   npm run kyc:offboard             queue a freeze for every wallet whose owner lost the verification
+ *                                    (on kyc_alert and every minute; KYC_FREEZE_GUARD or the local deployment)
  * Sanctions reviews (maker-checker) are decided in the compliance portal (Step 6) through
  * requestClearance / decideClearance.
  */
@@ -44,9 +47,28 @@ async function setup(): Promise<void> {
   console.log(add.length ? `added ${String(add.length)} KYC secret(s) to backend/.env.local` : "KYC secrets already present");
 }
 
+async function offboard(): Promise<void> {
+  let freezeGuard = env().KYC_FREEZE_GUARD;
+  if (!freezeGuard) {
+    const { latestDeployment } = await import("../../demo-console/src/local.ts");
+    freezeGuard = latestDeployment()?.freezeGuard;
+  }
+  if (!freezeGuard) throw new Error("set KYC_FREEZE_GUARD or deploy the local chain first");
+  const db = pool();
+  const worker = new OffboardingWorker(db, { freezeGuard, onError: (e) => { console.error(`offboarding pass failed: ${(e as Error).message}`); } });
+  await worker.start();
+  console.log(`offboarding worker running (FreezeGuard ${freezeGuard}); freezes go through the outbox and the signing service`);
+  const stop = (): void => {
+    void worker.stop().then(() => db.end());
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+}
+
 async function main(): Promise<void> {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "setup") return setup();
+  if (cmd === "offboard") return offboard();
   const db = pool();
   try {
     if (cmd === "status" && arg) {
@@ -58,7 +80,7 @@ async function main(): Promise<void> {
       console.log(problems.length === 0 ? "KYC audit chain intact" : `${String(problems.length)} problem(s)`);
       if (problems.length) process.exitCode = 3;
     } else {
-      console.log("usage: kyc setup | status <subjectId> | audit");
+      console.log("usage: kyc setup | status <subjectId> | audit | offboard");
       process.exitCode = 2;
     }
   } finally {
