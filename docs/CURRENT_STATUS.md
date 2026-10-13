@@ -8,7 +8,8 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 - **Step 6a merged** (55d2c39, ADR 0011): `admin/` internal portal foundation (FIDO2-only officers, roles + SoD in the DB, audit viewer with evidence export, maker-checker officer management), migration 0013, 127.0.0.1:3300 only (SSH tunnel).
 - **Tests on main after both merges:** backend 362/362 (with 0013: 361/362, the one failure was the load-sensitive signer p99 gate, now fixed under T-001); web 69/69; admin 129 unit/db + 183 authorization-matrix; contracts 137/137 (unchanged).
 - **T-001 (partly):** the signer speed test now gates only the median in the unit suite; the full p50/p99 budget is `npm run perf:signer` (PT_PERF_GATES=1). Other timing checks listed in TASKS remain.
-- **Next:** merge S-01 (branch `t-021-property-onboarding`, migration 0014) after re-running checks on top of 0012/0013; then S-07, S-02, 6b.
+- **S-01 backend merged** (043ab74, T-021): `@pt/property` + migration 0014 (sponsor KYB, property state machine, duplicates, due diligence, maker-checker, audit). Backend 410/410 on main. Not yet in the portal (needs 6b screens) and DocumentRegistry anchoring needs a `document.add` signer kind.
+- **Next:** S-07 public verification page (read-only), then S-02 offering, then 6b approvals portal.
 
 - **Last audited commit:** `main` @ `41241b3` "test(signer): gate the speed test on the median on CI" (2026-10-13), 60 commits.
 - **Audit date:** 2026-10-13.
