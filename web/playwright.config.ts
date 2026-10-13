@@ -20,11 +20,21 @@ export default defineConfig({
     locale: "en-GB",
   },
   projects: [{ name: "edge", use: { ...devices["Desktop Edge"], channel: "msedge" } }],
-  webServer: {
-    command: "npx next dev --hostname 127.0.0.1 --port 3101",
-    url: "http://127.0.0.1:3101/login",
-    timeout: 180_000,
-    reuseExistingServer: false,
-    env: { WEB_DB_NAME: "property_token_test", NEXT_DIST_DIR: ".next-e2e" },
-  },
+  webServer: [
+    {
+      // Indexer, signing service (4901), outbox worker and KYC service (4911) for the TEST database
+      // (Step 5h: the website signs nothing and reads the chain index).
+      command: "npx tsx test/stack-cli.ts",
+      url: "http://127.0.0.1:4919/ready",
+      timeout: 400_000,
+      reuseExistingServer: false,
+    },
+    {
+      command: "npx next dev --hostname 127.0.0.1 --port 3101",
+      url: "http://127.0.0.1:3101/login",
+      timeout: 180_000,
+      reuseExistingServer: false,
+      env: { WEB_DB_NAME: "property_token_test", NEXT_DIST_DIR: ".next-e2e", SIGNER_URL: "http://127.0.0.1:4901", KYC_URL: "http://127.0.0.1:4911" },
+    },
+  ],
 });

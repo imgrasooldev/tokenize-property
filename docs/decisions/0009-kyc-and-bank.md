@@ -32,7 +32,7 @@ Onboarding = NADRA Verisys, then liveness, then sanctions screening, stopping at
 | Y-5 | Subjects, hashes, wallets, checks, decisions are append-only (clearances are decided once); hash-chained audit (UTC timestamps, finding F-04); `kyc.verify_audit()` also finds decisions changed afterwards and rows written around the API |
 | Y-6 | Roles: `pt_kyc_service` registers and records checks; `pt_kyc_officer` decides reviews and revokes; `pt_kyc_reader`, `pt_signer` and the bank roles see the status only (`kyc.status`, `kyc.subject_status`, `kyc.is_verified`), never hashes or sealed data |
 
-Losing a verification (re-screening hit, revocation, expiry) raises `NOTIFY kyc_alert`. The chain side must follow with a freeze and then offboarding through the timelock (finding F-01): **wiring this alert to the FreezeGuard is Step 5h**. `kyc.is_verified(wallet)` is the gate the registrar path will call before registering an identity on chain (5h).
+Losing a verification (re-screening hit, revocation, expiry) raises `NOTIFY kyc_alert`. The chain side must follow with a freeze and then offboarding through the timelock (finding F-01): **wiring this alert to the FreezeGuard is Step 5h**. `kyc.is_verified(wallet)` is the gate the registrar path will call before registering an identity on chain (5h). **Built in Step 5h** ([ADR 0010](0010-website-integration.md)): `identity.create`, `identity.add_claim` and `identity.register` are signed only for a custodial wallet whose owner `kyc.is_verified`, and the website's sign-up goes through the KYC service's HMAC API (`npm run kyc:serve`).
 
 ### Bank
 

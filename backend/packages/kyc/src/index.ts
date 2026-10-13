@@ -37,3 +37,4 @@ export {
   type SubjectView,
 } from "./service.ts";
 export { OffboardingWorker } from "./offboarding.ts";
+export { createKycServer, WEB_KYC_SCOPE, type KycApi } from "./http.ts";

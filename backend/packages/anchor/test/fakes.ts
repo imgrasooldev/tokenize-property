@@ -22,6 +22,10 @@ export function memoryKeys(ref = "anchor"): KeyProvider {
       if (r !== ref) throw new Error(`unknown key ${r}`);
       return account.signTransaction(tx);
     },
+    signMessage: (r, hash) => {
+      if (r !== ref) throw new Error(`unknown key ${r}`);
+      return account.signMessage({ message: { raw: hash } });
+    },
   };
 }
 

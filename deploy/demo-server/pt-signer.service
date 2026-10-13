@@ -1,0 +1,21 @@
+[Unit]
+Description=Property Token demo: signing service (127.0.0.1:4900; keys, policies, maker-checker, audit)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Local dev keys on the local dev chain (586586) only: no NODE_ENV=production here (the service
+# itself has no production key provider yet; ADR 0005). Secrets come from backend/.env.local.
+Environment=NODE_OPTIONS=--max-old-space-size=160
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/signer/src/cli.ts serve
+Restart=always
+RestartSec=5
+MemoryMax=320M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

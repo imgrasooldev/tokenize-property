@@ -1,0 +1,19 @@
+[Unit]
+Description=Property Token demo: KYC offboarding worker (queues a freeze when an investor loses verification)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+Environment=NODE_OPTIONS=--max-old-space-size=128
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/kyc/src/cli.ts offboard
+Restart=always
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

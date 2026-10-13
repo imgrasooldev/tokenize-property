@@ -6,18 +6,15 @@ import { NavChart, RentChart } from "@/components/HistoryCharts";
 import { InvestForm } from "@/components/InvestForm";
 import { BlockHeight } from "@/components/live/Live";
 import { PublicPage, Sample, Spark } from "@/components/Shell";
-import { tokenAbi } from "@/lib/abis";
 import { formatNumber, formatPkr, formatPrice, loc } from "@/lib/i18n";
 import { MAX_HOLDING_TOKENS, MIN_TOKENS } from "@/lib/invest-rules";
 import { findProperty, sampleHistory } from "@/lib/properties";
 import { shortHash } from "@/lib/pulse-view";
 import { sampleScore } from "@/lib/sample-ai";
-import { liveToken } from "@/lib/server/chain";
 import { investorById } from "@/lib/server/db";
-import { publicClient } from "@/lib/server/demo-signer";
 import { getDict } from "@/lib/server/lang";
 import { marketSnapshot } from "@/lib/server/market";
-import { isVerifiedOnChain } from "@/lib/server/onboarding";
+import { holdingOf, liveToken, registeredOnChain } from "@/lib/server/readmodel";
 import { currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -33,13 +30,8 @@ export default async function PropertyPage({ params }: { params: Promise<{ symbo
   const minTokens = Number(MIN_TOKENS);
   const investorId = await currentInvestorId();
   const investor = investorId ? await investorById(investorId) : null;
-  const verified = investor ? (await isVerifiedOnChain(investor.wallet_address)) === true : false;
-  const holding =
-    investor && live
-      ? await publicClient
-          .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
-          .catch(() => null)
-      : null;
+  const verified = investor ? (await registeredOnChain(investor.wallet_address)) === true : false;
+  const holding = investor && live ? await holdingOf(investor.wallet_address) : null;
   const room = holding === null ? 0n : MAX_HOLDING_TOKENS - holding;
   const market = live ? await marketSnapshot(p.symbol).catch(() => null) : null;
   const last = market?.last === null || market?.last === undefined ? null : Number(market.last) / 100;

@@ -1,0 +1,11 @@
+[Unit]
+Description=Property Token demo: a few demo-market trades every four hours (optional, off by default)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=4h
+RandomizedDelaySec=10min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -72,5 +72,6 @@ Contract-level guards add a second line of defence where they exist. For example
 ## Consequences
 
 - Services never call the chain directly; they enqueue. Step 5d's signing service is an `Executor`, and the policy engine and maker-checker sit in front of signing.
-- The website prototype still uses its own inline version of the same rules. It moves onto the outbox after 5d.
+- The website prototype used its own inline version of the same rules until Step 5h; it is now on the outbox (below).
 - The local executor (`@pt/outbox/local-executor`) signs with dev keys on chain 586586 only and refuses production.
+- **Step 5h:** the website enqueues its mints, DvP deliveries and onboarding steps here, in the same transaction as its ledger entries, and settles only from final command states (`confirmed` with a matching event in the read model; `failed` with a chain proof before any refund; never while in `review`). One worker process (`npm run outbox`) executes every kind through the signing service ([ADR 0010](0010-website-integration.md)).

@@ -14,6 +14,9 @@ test.beforeAll(async () => {
 });
 
 test("a trade between two investors settles on chain and appears live for others", async ({ page, browser }) => {
+  // Since Step 5h delivery runs asynchronously (outbox, signing service, chain index), and a cold
+  // dev server compiles each page on first visit: more time than the default 2 minutes.
+  test.setTimeout(300_000);
   // An observer watches the public market page; it must update without a reload.
   const observer = await browser.newPage();
   await observer.goto("/market");
@@ -30,7 +33,7 @@ test("a trade between two investors settles on chain and appears live for others
   await page.getByLabel(/confirm the Raast payment/).check();
   await page.getByRole("button", { name: "Add cash" }).click();
   // The action finished (button back to its label) without an error.
-  await expect(page.getByRole("button", { name: "Add cash" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Add cash" })).toBeVisible({ timeout: 90_000 });
   await expect(page.locator(".alert:not(.demo)")).toHaveCount(0);
 
   // Outside the ±10% band: refused, nothing reserved.
@@ -42,7 +45,8 @@ test("a trade between two investors settles on chain and appears live for others
   const myTrades = page.locator("h2", { hasText: "My trades" }).locator("xpath=following-sibling::div[1]");
   await expect(myTrades.locator("tbody tr").first()).toContainText("Bought");
   await expect(myTrades.locator("tbody tr").first()).toContainText("451.25");
-  await expect(myTrades.locator("tbody tr").first()).toContainText("Settled");
+  // Delivered through the outbox and the signing service; the page refreshes until it settles.
+  await expect(myTrades.locator("tbody tr").first()).toContainText("Settled", { timeout: 90_000 });
 
   // The observer saw the trade arrive over the live feed.
   await expect(observer.locator(".market-head .stat .value").first()).toHaveText(/451\.25/, { timeout: 15_000 });

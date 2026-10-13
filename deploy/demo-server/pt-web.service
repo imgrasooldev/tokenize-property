@@ -1,7 +1,10 @@
 [Unit]
 Description=Property Token demo website (Next.js production build on 127.0.0.1:3100)
-After=pt-stack.service
+After=pt-stack.service pt-indexer.service pt-signer.service pt-kyc.service
 Requires=pt-stack.service
+# The website signs nothing (ADR 0010): it reads the chain index and hands writes to the outbox.
+# It still starts if one of these is down, and then says so (fail closed per feature).
+Wants=pt-indexer.service pt-signer.service pt-outbox.service pt-kyc.service
 
 [Service]
 User=ubuntu
@@ -9,8 +12,6 @@ WorkingDirectory=/home/ubuntu/property-token/web
 Environment=NODE_ENV=production
 Environment=WEB_PLAIN_HTTP=1
 Environment=TRUST_PROXY=1
-# Demo server only: lets the production build use the local dev-key demo signer (chain 586586).
-Environment=WEB_DEMO_SIGNER=1
 Environment=NODE_OPTIONS=--max-old-space-size=384
 ExecStart=/usr/bin/npx next start --hostname 127.0.0.1 --port 3100
 Restart=always

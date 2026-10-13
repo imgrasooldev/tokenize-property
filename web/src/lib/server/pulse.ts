@@ -1,9 +1,9 @@
 import type { Block } from "viem";
 import { PROPERTIES } from "../properties";
 import type { Pulse, PulseBlock } from "../pulse-view";
-import { liveToken } from "./chain";
+import { publicClient } from "./chain";
 import { db } from "./db";
-import { publicClient } from "./demo-signer";
+import { liveToken } from "./readmodel";
 import { chainProblemsCached } from "./ledger";
 import { marketSnapshot } from "./market";
 

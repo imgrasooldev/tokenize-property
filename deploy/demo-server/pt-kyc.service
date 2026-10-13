@@ -1,0 +1,19 @@
+[Unit]
+Description=Property Token demo: KYC service API for the website sign-up (127.0.0.1:4910, mock providers)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+Environment=NODE_OPTIONS=--max-old-space-size=160
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/kyc/src/cli.ts serve
+Restart=always
+RestartSec=5
+MemoryMax=320M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

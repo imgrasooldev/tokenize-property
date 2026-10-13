@@ -4,7 +4,7 @@ import { MIN_TOKENS } from "@/lib/invest-rules";
 import type { Property } from "@/lib/properties";
 import { shortHash } from "@/lib/pulse-view";
 import { sampleScore } from "@/lib/sample-ai";
-import type { LiveToken } from "@/lib/server/chain";
+import type { LiveToken } from "@/lib/server/readmodel";
 import { BuildingArt } from "./BuildingArt";
 
 export function PropertyCard({ p, live, lang, t }: { p: Property; live: LiveToken | null; lang: Lang; t: Dict }) {

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { MAX_TOPUP_PAISA, orderSchema, topUpSchema } from "@/lib/market-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
+import { nudgeFollower } from "@/lib/server/follower";
 import { cancelOrder, placeOrder, topUp, type PlaceError } from "@/lib/server/market";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
@@ -40,6 +41,7 @@ export async function placeOrderAction(_prev: MarketState, formData: FormData): 
     logError("placeOrder", e);
     return { error: "generic" };
   }
+  void nudgeFollower();
   revalidatePath("/market");
   return { ok: true };
 }

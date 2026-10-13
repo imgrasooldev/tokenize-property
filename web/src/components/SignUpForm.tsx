@@ -15,9 +15,13 @@ export function SignUpForm({ t }: { t: Dict }) {
           ? t.errRate
           : state.error === "chain"
           ? t.errChain
-          : state.error
-            ? t.errGeneric
-            : null;
+          : state.error === "kyc"
+            ? t.errKyc
+            : state.error === "kycDown"
+              ? t.errKycDown
+              : state.error
+                ? t.errGeneric
+                : null;
   const fieldError = (name: keyof NonNullable<SignUpState["fields"]>) => {
     const msg = new Map(Object.entries(state.fields ?? {})).get(name);
     return msg ? (

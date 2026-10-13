@@ -5,14 +5,16 @@
  * Usage (local chain and PostgreSQL running, from web/):
  *   npm run demo:market -- [rounds=30] [secondsBetween=8]
  *
- * LOCAL DEVELOPMENT ONLY: signs with the local persona dev keys; the demo signer refuses any other
- * chain and production builds.
+ * LOCAL DEVELOPMENT ONLY. Since Step 5h every trade is delivered through the outbox and the signing
+ * service (Alice's and Bob's wallets are custodial wallets there; `npm run signer:setup`), so the
+ * backend services must run: npm run indexer, npm run signer, npm run outbox (backend/).
  */
 import { randomInt, randomUUID } from "node:crypto";
 import { MIN_TOKENS } from "../src/lib/invest-rules";
 import { priceBand } from "../src/lib/market-rules";
 import { findProperty } from "../src/lib/properties";
 import { db, investorById, type InvestorRow } from "../src/lib/server/db";
+import { startFollower, stopFollower } from "../src/lib/server/follower";
 import { cancelOrder, cashOf, ordersOf, placeOrder, positionOf, topUp } from "../src/lib/server/market";
 import { upsertPersona } from "../src/lib/server/personas";
 
@@ -40,6 +42,9 @@ async function main(): Promise<void> {
   const band = priceBand(p.navPkr);
   const nav = BigInt(p.navPkr) * 100n;
   const people = [await persona("ALICE"), await persona("BOB")];
+  // Settles trades in this process too (the website's follower may not be running); one runner at a
+  // time across processes, so running it next to the website is safe.
+  startFollower();
   for (const who of people) {
     // Start clean: earlier resting orders would otherwise block this run as self-trades.
     for (const o of await ordersOf(who.id)) if (o.status === "open") await cancelOrder(who, o.id);
@@ -87,6 +92,13 @@ async function main(): Promise<void> {
     }
     out("Left three resting bids (Bob) and three resting asks (Alice) around the last price.");
   }
+  // Give the last deliveries time to settle before leaving.
+  for (let i = 0; i < 30; i++) {
+    const { rows } = await (await db()).query<{ n: string }>("SELECT count(*) AS n FROM webdemo.trades WHERE status = 'settling'");
+    if (rows[0]?.n === "0") break;
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+  await stopFollower();
   await (await db()).end();
 }
 
