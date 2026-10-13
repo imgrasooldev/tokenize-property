@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { csrfFor } from "@/lib/server/session";
 import { ROUTES } from "@/lib/routes";
 import { sha256Hex, unzipStore } from "@/lib/export";
+import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
 import { cast, createWorld, invite, type Cast, type World } from "../support/world";
 
 /**
@@ -23,7 +24,13 @@ const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "truste
 const EVERYONE: Who[] = [...ROLES, "anonymous", "investor"];
 const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 
-/** Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login. */
+const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor"];
+const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+
+/**
+ * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
+ * {signer}, {payout} and {unfreeze} are items created in beforeAll.
+ */
 const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/", allowed: OPS },
   { path: "/account", allowed: ROLES },
@@ -33,7 +40,13 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/audit/ledger", allowed: OPS },
   { path: "/audit/admin", allowed: ["compliance_officer", "auditor", "admin"] },
   { path: "/officers", allowed: ["auditor", "admin"] },
-  { path: "/approvals", allowed: ["ops_maker", "ops_checker"] },
+  { path: "/approvals", allowed: APPROVALS },
+  { path: "/approvals/signer/{signer}", allowed: APPROVALS },
+  { path: "/approvals/payouts/{payout}", allowed: APPROVALS },
+  { path: "/approvals/unfreeze/{unfreeze}", allowed: APPROVALS },
+  { path: "/approvals/property", allowed: PROPERTY },
+  // Authorised readers get "not found" for an unknown request (the database answers NULL).
+  { path: "/approvals/property/999999", allowed: PROPERTY, okStatus: 404 },
   { path: "/compliance", allowed: ["compliance_officer", "auditor"] },
   { path: "/trustee", allowed: ["trustee_officer", "auditor"] },
 ];
@@ -49,7 +62,22 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/audit/admin/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "json" } },
   { path: "/api/officers/changes", allowed: ["admin"], okStatus: 303, form: { kind: "invite", reason: "too short" } },
   { path: "/api/officers/changes/1/decide", allowed: ["admin"], okStatus: 303, form: { decision: "approve", reason: "matrix test" } },
+  // Step 6b: an incomplete decision is answered with a 303 back to the item (nothing decided).
+  { path: "/api/approvals/signer/{signer}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/approvals/payouts/{payout}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/approvals/unfreeze", allowed: ["ops_maker"], okStatus: 303, form: { reason: "short" } },
+  { path: "/api/approvals/unfreeze/{unfreeze}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/approvals/property/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
 ];
+
+/** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
+function userOf(path: string): Role {
+  if (path.includes("officers")) return "admin";
+  if (path.includes("export")) return "auditor";
+  if (path.includes("/approvals/property/")) return "compliance_officer";
+  if (path.endsWith("/decide") && path.includes("/approvals/")) return "ops_checker";
+  return "ops_maker";
+}
 
 /** Anonymous ceremonies: reachable without a session, but only from our own origin. */
 const ANONYMOUS_POSTS = ["/api/auth/login/options", "/api/auth/login/verify", "/api/auth/enrol/options", "/api/auth/enrol/verify"];
@@ -107,13 +135,29 @@ async function req(
       body = new URLSearchParams({ ...(csrf ? { csrf } : {}), ...(opts.form ?? {}) });
     }
   }
-  return fetch(`${ORIGIN}${path}`, { method, headers, body, redirect: "manual" });
+  return fetch(`${ORIGIN}${resolve(path)}`, { method, headers, body, redirect: "manual" });
 }
+
+/** Items created in beforeAll, by placeholder name. */
+const ids = new Map<string, string>();
+function resolve(path: string): string {
+  return path.replace(/\{(\w+)\}/g, (_m, k: string) => ids.get(k) ?? "missing");
+}
+
+let signer: TestSigner;
+const SIGNER_PORT = 4998;
 
 beforeAll(async () => {
   w = await createWorld("pt_admin_testhttp");
   c = await cast(w);
   for (const [r, actor] of Object.entries(c)) tokens.set(r as Who, actor.token);
+  // Step 6b items: a signing request through a real signing service, a payout batch, an unfreeze request.
+  signer = await startTestSigner(w.name, SIGNER_PORT);
+  ids.set("signer", await pendingMint(signer));
+  ids.set("payout", await payoutBatch(w.su));
+  ids.set("freeze", await freezePayouts(w.su));
+  const unfreeze = await w.su.query<{ id: string }>("SELECT recon.request_unfreeze('operator:night-shift', 'cash difference explained by a late bank file') AS id");
+  ids.set("unfreeze", unfreeze.rows[0]?.id ?? "");
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -127,6 +171,8 @@ beforeAll(async () => {
       ADMIN_PG_PASSWORD: w.portalPassword,
       // Unreachable on purpose: pages must still render (chain shown as down).
       CHAIN_RPC_URL: "http://127.0.0.1:9",
+      SIGNER_URL: signer.url,
+      SIGNER_CLIENT_SECRET_ADMIN: signer.adminSecret,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -145,14 +191,24 @@ beforeAll(async () => {
 
 afterAll(async () => {
   server.kill();
+  signer.stop();
   await w.drop();
 });
 
 describe("route coverage", () => {
   it("every registered route is exercised by this matrix", () => {
     const covered = new Set([
-      ...PAGES.map((p) => p.path.replace(/^\/audit\/(signer|recon|ledger|admin)$/, "/audit/[source]")),
-      ...APIS.map((a) => a.path.replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export").replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")),
+      ...PAGES.map((p) =>
+        p.path
+          .replace(/^\/audit\/(signer|recon|ledger|admin)$/, "/audit/[source]")
+          .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]"),
+      ),
+      ...APIS.map((a) =>
+        a.path
+          .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
+          .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
+          .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide"),
+      ),
       ...ANONYMOUS_POSTS,
       "/login",
       "/enrol",
@@ -230,7 +286,7 @@ describe("CSRF and same-origin on every mutating route", () => {
   const mutating = [...APIS.map((a) => ({ path: a.path, json: a.json })), { path: "/api/auth/logout", json: undefined }];
   for (const { path, json } of mutating) {
     it(`${path}: refused without origin, from another origin, cross-site fetch, without or with a wrong CSRF token`, async () => {
-      const who: Role = path.includes("officers") ? "admin" : path.includes("export") ? "auditor" : "ops_maker";
+      const who = userOf(path);
       expect((await req(path, { method: "POST", who, json, origin: null })).status).toBe(403);
       expect((await req(path, { method: "POST", who, json, origin: "null" })).status).toBe(403);
       expect((await req(path, { method: "POST", who, json, origin: "null", headers: { "sec-fetch-site": "same-site" } })).status).toBe(403);
@@ -282,6 +338,108 @@ describe("evidence export", () => {
     expect(rows[0]?.hash.toString("hex")).toBe(manifest.exportAuditEntry.hash);
     const sums = new TextDecoder().decode(files.get("SHA256SUMS"));
     expect(sums).toContain(createHash("sha256").update(files.get("manifest.json") ?? new Uint8Array()).digest("hex"));
+  });
+});
+
+describe("approvals over HTTP (Step 6b)", () => {
+  let counter = Date.now();
+  // eslint-disable-next-line security/detect-non-literal-regexp -- test ids are fixed literals of this file
+  const testId = (html: string, id: string): string => new RegExp(`data-testid="${id}"[^>]*>([^<]+)<`).exec(html)?.[1] ?? "";
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  async function stepUp(who: Role, stale = false): Promise<void> {
+    // eslint-disable-next-line security/detect-object-injection
+    const a = c[who];
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+
+  it("a checker approves a signing request as shown; the signing service decides; stale step-up and a second approval are refused", async () => {
+    const id = await pendingMint(signer);
+    const page = await req(`/approvals/signer/${id}`, { who: "ops_checker" });
+    expect(page.status, serverLog.slice(-2000)).toBe(200);
+    const html = await page.text();
+    expect(html).toContain("mint(address, uint256, bytes32)");
+    const payloadHash = testId(html, "payload-hash");
+    const callHash = testId(html, "call-hash");
+    expect(payloadHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(callHash).toMatch(/^[0-9a-f]{64}$/);
+    const decide = (who: Role) =>
+      req(`/api/approvals/signer/${id}/decide`, { method: "POST", who, form: { decision: "approve", reason: "checked against the subscription", payloadHash, callHash } });
+
+    await stepUp("ops_checker", true);
+    const stale = await decide("ops_checker");
+    expect(stale.status).toBe(303);
+    expect(location(stale)).toMatch(/error=Confirm with your security key first/);
+    expect((await w.su.query("SELECT 1 FROM signer.approvals WHERE request_id = $1", [id])).rowCount).toBe(0);
+
+    await stepUp("ops_checker");
+    const ok = await decide("ops_checker");
+    expect(location(ok), serverLog.slice(-2000)).toMatch(/ok=Decision recorded by the signing service: request is now pending_approval/);
+    const approvals = await w.su.query<{ operator: string }>("SELECT operator FROM signer.approvals WHERE request_id = $1", [id]);
+    expect(approvals.rows.map((r) => r.operator)).toEqual([c.ops_checker.handle]);
+    // The same checker again: refused before anything reaches the signing service.
+    expect(location(await decide("ops_checker"))).toMatch(/error=You already decided/);
+    // What the page now explains.
+    const after = await (await req(`/approvals/signer/${id}`, { who: "ops_checker" })).text();
+    expect(after).toContain("decision-unavailable");
+    // A changed call (as if the policy had changed since the page was shown) is refused by the signing service.
+    const other = await pendingMint(signer);
+    const otherHtml = await (await req(`/approvals/signer/${other}`, { who: "ops_checker" })).text();
+    const wrong = await req(`/api/approvals/signer/${other}/decide`, {
+      method: "POST",
+      who: "ops_checker",
+      form: { decision: "approve", reason: "checked against the subscription", payloadHash: testId(otherHtml, "payload-hash"), callHash: "ab".repeat(32) },
+    });
+    expect(location(wrong)).toMatch(/error=Refused by the signing service: the transaction changed since you reviewed it/);
+  });
+
+  it("a payout batch cannot be approved while reconciliation has payouts frozen", async () => {
+    const html = await (await req(`/approvals/payouts/${resolve("{payout}")}`, { who: "ops_checker" })).text();
+    expect(html).toContain("approve-unavailable");
+    expect(html).not.toMatch(/PK\d{2}[A-Z]{4}/); // no IBAN, only the last four digits
+    await stepUp("ops_checker");
+    const res = await req(`/api/approvals/payouts/${resolve("{payout}")}/decide`, {
+      method: "POST",
+      who: "ops_checker",
+      form: { decision: "approve", reason: "totals match the finalized distribution", itemsDigest: testId(html, "items-digest") },
+    });
+    expect(location(res)).toMatch(/error=payouts are blocked by reconciliation/);
+    expect((await w.su.query<{ status: string }>("SELECT status FROM bank.payout_batches WHERE id = $1", [resolve("{payout}")])).rows[0]?.status).toBe("created");
+  });
+
+  it("a maker asks for an unfreeze, a checker approves it once a run passed; the gate opens", async () => {
+    // The open request from beforeAll blocks a second one for the same freeze: freeze again first.
+    const event = await freezePayouts(w.su);
+    const asked = await req("/api/approvals/unfreeze", { method: "POST", who: "ops_maker", form: { reason: "difference explained by a late bank file" } });
+    expect(asked.status).toBe(303);
+    const id = /\/approvals\/unfreeze\/(\d+)\?ok=/.exec(location(asked))?.[1] ?? "";
+    expect(id).not.toBe("");
+    const decide = () =>
+      req(`/api/approvals/unfreeze/${id}/decide`, { method: "POST", who: "ops_checker", form: { decision: "approve", reason: "late bank file imported, difference gone", freezeEvent: event } });
+    await stepUp("ops_checker");
+    expect(location(await decide())).toMatch(/error=unfreezing needs a reconciliation run that passed/);
+    await passRecon(w.su);
+    expect(location(await decide())).toMatch(/ok=Decision recorded: approved/);
+    const gate = await w.su.query<{ allowed: boolean }>("SELECT allowed FROM recon.payout_gate()");
+    expect(gate.rows[0]?.allowed).toBe(true);
+    const decided = await w.su.query<{ requested_by: string; decided_by: string }>("SELECT requested_by, decided_by FROM recon.unfreeze_requests WHERE id = $1", [id]);
+    expect(decided.rows[0]).toEqual({ requested_by: c.ops_maker.handle, decided_by: c.ops_checker.handle });
+  });
+
+  it("every view of a pending item and every decision is in the admin audit chain, which stays intact", async () => {
+    const { rows } = await w.su.query<{ action: string; detail: { resource?: string; kind?: string } }>(
+      "SELECT action, detail FROM admin.audit WHERE action IN ('page.view', 'approval.ticket', 'approval.decided', 'approval.refused', 'approval.requested') ORDER BY id",
+    );
+    const views = rows.filter((r) => r.action === "page.view").map((r) => r.detail.resource ?? "");
+    expect(views).toEqual(expect.arrayContaining([`/approvals/signer/${resolve("{signer}")}`, `/approvals/payouts/${resolve("{payout}")}`, "/approvals"]));
+    expect(rows.map((r) => `${r.action}:${r.detail.kind ?? ""}`)).toEqual(
+      expect.arrayContaining(["approval.ticket:signer", "approval.decided:signer", "approval.refused:payout", "approval.requested:unfreeze", "approval.decided:unfreeze"]),
+    );
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });
 

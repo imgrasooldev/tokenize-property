@@ -2,7 +2,13 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, after the 5h and 6a merges)
+## Latest update (2026-10-13, Step 6b built on a branch)
+
+- **Step 6b (T-004) built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`). The approvals portal: inbox; signing requests shown as the exact call (decoded from the calldata, call hash) and decided by the **signing service** through a new admin-scoped HTTP client and one-time database tickets; payout batches (lines, held lines, gate, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker requests; a reason and a fresh security-key step-up on every decision; maker != checker enforced by the backend; officer names bound to officer sessions; S-01 duties linked to officer roles (S-01 refinement 10). **Merge S-02 (0015) first**: until then the backend runner refuses the gap (tests use a renumbered copy).
+- Tests on the branch (0016 renumbered to 0015 locally for the run, not committed): backend 422 passed + 3 skipped (Anvil anchor stand-in not running) of 425 incl. 15 new; admin 207 unit/db (129 + 78 new) and 272 HTTP matrix (183 + 89 new); admin e2e 5/5 in Edge (3 + 2 new) with virtual FIDO2 keys and a real signing service.
+- Demo server: unchanged exposure (SSH tunnel only); `update.sh` now also runs `npm run signer:admin-client` (idempotent, secret never printed).
+
+## Earlier update (2026-10-13, after the 5h and 6a merges)
 
 - **Step 5h merged** (c962432, ADR 0010): the website signs nothing and holds no key; reads come from the indexer read model; invest, DvP trades and sign-up go through outbox + signer (maker-checker above 10,000 tokens); web uses its own least-privilege DB role `pt_web_app`; `webdemo` DDL moved into migration 0012. Demo server: services pt-indexer, pt-signer, pt-kyc, pt-outbox, pt-offboarding active; **reconciliation PASSED on the demo server (0 blocking, 0 warnings, with indexer verify)**; signer audit intact.
 - **Step 6a merged** (55d2c39, ADR 0011): `admin/` internal portal foundation (FIDO2-only officers, roles + SoD in the DB, audit viewer with evidence export, maker-checker officer management), migration 0013, 127.0.0.1:3300 only (SSH tunnel).
@@ -47,6 +53,7 @@ Not re-run by the documentation audit itself (no `node_modules` in the audit wor
 |---|---|
 | Step 5h (remaining) | website onto outbox + signer + indexer read model; retire `web/src/lib/server/demo-signer.ts`; rent and mint journals so recon passes; demo-server services |
 | Step 6a | new `admin/` app: internal portal foundation with WebAuthn, roles and separation of duties, audit viewer |
+| T-004 (Step 6b) | branch with `admin/` approvals pages and API routes, migration `0016_admin_approvals.sql`, signer preview + officer decisions (`/v1/requests/preview`, `/v1/decide`, `npm run signer:admin-client`). Merge after S-02 (0015) |
 | T-021 (S-01 backend) | branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
 
 ## 4. Blockers and owner decisions

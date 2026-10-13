@@ -102,8 +102,10 @@ The owner's 16-stage lifecycle brief is not in the repository. The stages below 
 
 | Feature | Status | Evidence |
 |---|---|---|
-| 6a internal portal foundation (WebAuthn, roles/SoD, audit viewer) | In progress on a branch (not on `main`) | lead brief |
-| 6b-6d approvals, compliance, trustee portals | Missing | product-map #5-7 |
+| 6a internal portal foundation (WebAuthn, roles/SoD, audit viewer) | Done (merged 55d2c39) | `admin/`, ADR 0011, migration 0013 |
+| 6b operations approvals: inbox; signer requests with the exact call (decoded calldata + call hash) decided by the signing service via one-time tickets; payout batches (gate, held lines, items digest); unfreeze request/decision; S-01 requests; step-up and reason on every decision; officer names bound to sessions; S-01 duties linked to officer roles | Built on a branch (T-004), not merged; needs 0015 (S-02) merged first | `admin/src/app/approvals/*`, `admin/src/app/api/approvals/*`, migration 0016, `backend/packages/signer/src/preview.ts`; tests: backend 15, admin db 78, HTTP matrix +89, e2e 2 |
+| 6b not yet in the portal: payout batch creation and submission, bank statement import, suspense returns, outbox review decisions, signer policy changes, backup keys | Missing (CLI or service only) | ADR 0011 section 10 |
+| 6c-6d compliance, trustee portals | Missing | product-map #5-7 |
 | Multisig signing console (self-hosted Safe) | Missing | product-map #8 |
 | Sponsor portal | Missing | product-map #9 |
 | Flutter investor app | Missing | no `mobile/` folder |

@@ -149,6 +149,13 @@ npm run officer -- enrol-link <handle>
 `pt_admin_portal` only, new random password in the git-ignored `admin/.env.local`) and restarts
 the unit; the smoke test checks `/api/health` on loopback.
 
+Step 6b (approvals): `update.sh` also runs `npm run signer:admin-client` (idempotent): the portal's
+own client of the signing service (it may only preview and decide pending requests, never ask for a
+signature) gets a secret that is appended to `backend/.env.local` once and copied with `SIGNER_URL`
+into `admin/.env.local`; never printed. pt-signer and pt-admin are restarted by the same run.
+Exposure is unchanged (SSH tunnel only). Migration `0016_admin_approvals.sql` needs `0015` (S-02)
+merged first, or `npm run migrate` refuses the numbering gap.
+
 ## Operating
 
 ```bash

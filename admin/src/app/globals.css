@@ -171,6 +171,17 @@ textarea { resize: vertical; min-block-size: 54px; inline-size: 100%; }
 /* chain links (audit) */
 .hash { font-family: var(--monof); font-size: 10.5px; color: var(--dim); line-height: 1.5; white-space: nowrap; }
 
+/* approvals (Step 6b; v2 ops-approvals) */
+.req { border: 1px solid var(--stroke); border-radius: 12px; padding: 10px 12px; display: grid; gap: 3px; color: var(--text); }
+.req:hover { border-color: rgba(34, 227, 240, 0.6); background: rgba(34, 227, 240, 0.05); text-decoration: none; }
+.diff { font-family: var(--monof); font-size: 11.5px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--stroke); border-radius: 10px; padding: 10px 12px;
+  line-height: 1.8; overflow-wrap: anywhere; color: var(--text2); }
+.sig { display: flex; gap: 8px; flex-wrap: wrap; }
+.sig > div { flex: 1 1 160px; border: 1px dashed var(--stroke2); border-radius: 10px; padding: 9px 11px; font-size: 12px; min-inline-size: 0; }
+.sig > div.y { border-style: solid; border-color: rgba(59, 232, 155, 0.4); background: rgba(59, 232, 155, 0.05); }
+.sig > div.n { border-style: solid; border-color: rgba(255, 107, 129, 0.4); background: rgba(255, 107, 129, 0.05); }
+.checks i.wait { font-size: 9px; }
+
 /* placeholders */
 .placeholder { border: 1px dashed var(--stroke2); border-radius: 14px; padding: 22px; display: grid; gap: 10px; max-inline-size: 760px; }
 .placeholder ul { margin: 0; padding-inline-start: 18px; color: var(--text2); display: grid; gap: 4px; }

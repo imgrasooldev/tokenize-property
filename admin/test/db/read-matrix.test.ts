@@ -21,6 +21,17 @@ const EXPECT: Record<string, Who[]> = {
   my_account: ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"],
   session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"],
   request_change: ["admin"],
+  // Step 6b (migration 0016)
+  approvals_inbox: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  signer_request: ["ops_maker", "ops_checker", "auditor"],
+  payout_batch: ["ops_maker", "ops_checker", "auditor"],
+  unfreeze_request: ["ops_maker", "ops_checker", "auditor"],
+  property_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  issue_signer_ticket: ["ops_checker"],
+  decide_payout_batch: ["ops_checker"],
+  decide_unfreeze: ["ops_checker"],
+  request_unfreeze: ["ops_maker"],
+  decide_property_request: ["ops_checker", "compliance_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -37,8 +48,21 @@ const CALLS: Record<string, string> = {
   session_credentials: "SELECT * FROM admin.session_credentials($1)",
   // An invitation with a valid shape: only the permission decides.
   request_change: "SELECT admin.request_change($1, 'invite', NULL, 'auditor', 'matrix.' || substr(md5(random()::text), 1, 8), 'Matrix Person', 'matrix permission probe')",
+  // Unknown items: reads return NULL and decisions an audited refusal, so only the permission decides.
+  approvals_inbox: "SELECT admin.approvals_inbox($1)",
+  signer_request: "SELECT admin.signer_request($1, gen_random_uuid())",
+  payout_batch: "SELECT admin.payout_batch($1, 999999)",
+  unfreeze_request: "SELECT admin.unfreeze_request($1, 999999)",
+  property_request: "SELECT admin.property_request($1, 999999)",
+  issue_signer_ticket: `SELECT admin.issue_signer_ticket($1, gen_random_uuid(), 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}', '\\x${"b".repeat(64)}', sha256(random()::text::bytea))`,
+  decide_payout_batch: `SELECT admin.decide_payout_batch($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  decide_unfreeze: "SELECT admin.decide_unfreeze($1, 999999, 'approve', 'matrix permission probe', 1)",
+  request_unfreeze: "SELECT admin.request_unfreeze($1, 'matrix permission probe')",
+  decide_property_request: `SELECT admin.decide_property_request($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
 };
 
+const DECISIONS = new Set(["issue_signer_ticket", "decide_payout_batch", "decide_unfreeze", "decide_property_request"]);
+let stepCounter = Date.now();
 let w: World;
 let c: Cast;
 beforeAll(async () => {
@@ -60,6 +84,12 @@ describe("database authorisation matrix", () => {
       const ok = allowed.includes(who);
       it(`${fn} × ${who}: ${ok ? "allowed" : "denied"}`, async () => {
         const sql = new Map(Object.entries(CALLS)).get(fn) ?? "";
+        // Decisions also need a step-up younger than five minutes: refresh it, so only the permission decides.
+        if (DECISIONS.has(fn) && who !== "nobody") {
+          // eslint-disable-next-line security/detect-object-injection
+          const a = c[who];
+          await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++stepCounter]);
+        }
         const outcome = await w.portal.query(sql, [sessionOf(who)]).then(
           () => "allowed",
           (e: unknown) => {

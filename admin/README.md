@@ -10,7 +10,7 @@ Decisions and rules: [ADR 0011](../docs/decisions/0011-admin-portal.md). Threats
 | Sub-step | Scope | Status |
 |---|---|---|
 | 6a | Foundation: WebAuthn hardware keys, sessions and step-up, roles with segregation of duties in the database, hash-chained admin audit, operations overview, audit trails with evidence export, officer management (maker-checker) | Built |
-| 6b | Approvals: signer requests, payout batches, unfreezes, outbox reviews (by officer sessions with step-up) | Planned (placeholder page) |
+| 6b | Approvals (ADR 0011 section 10, migration 0016): inbox; signing requests shown as the exact call and decided by the signing service; payout batches; unfreeze requests; S-01 property and KYB requests; reason + step-up on every decision | Built (branch). Not yet: batch create/submit, statement import, suspense returns, outbox reviews |
 | 6c | Compliance: KYC reviews, sanctions, freezes and offboarding, FMU reports | Planned (placeholder page) |
 | 6d | Trustee: register, co-signing, distribution review | Planned (placeholder page) |
 
@@ -32,6 +32,13 @@ second approves it (the browser asks for the key again: step-up), then on the se
 `npm run officer -- enrol-link <handle>` prints that officer's link. `npm run officer -- list` and
 `npm run officer -- verify` (admin audit chain) help operators.
 
+Approvals (6b) need the signing service for signing requests (pages without it still show the
+request, but no decision is possible). Once, in `backend/`: `npm run signer:admin-client` (the
+portal's own client, scope preview + decide only; its secret goes to `backend/.env.local` and, with
+`SIGNER_URL`, to `admin/.env.local`; never printed). Then run the signer on the portal's database:
+`PG_DATABASE=pt_admin_dev npm run signer` (it decides in the database it is connected to). Payout,
+unfreeze and S-01 decisions need only the database.
+
 `pt_admin_dev` never touches the demo database `property_token`. For real data in the overview,
 index the local chain into it (`PG_DATABASE=pt_admin_dev INDEXER_DEPLOYMENT_FILE=... npm run indexer` in
 `backend/`) and run a reconciliation (`... npm run recon -- --no-verify`).
@@ -46,21 +53,30 @@ index the local chain into it (`PG_DATABASE=pt_admin_dev INDEXER_DEPLOYMENT_FILE
 - **Database:** the portal's login is a member of `pt_admin_portal` only (no table grants, EXECUTE on `admin.*`); every function re-checks the session and permission; read-only towards the operational schemas.
 - **Audit:** every sign-in, step-up, page view, denial, officer change and export in the hash-chained `admin.audit`; exports carry a SHA-256 manifest naming their audit entry.
 - **Exposure:** binds 127.0.0.1:3300; production behind VPN + SSO + TLS; the demo server only through `ssh -L 3300:127.0.0.1:3300` (never nginx).
+- **Approvals (6b):** the portal decides nothing itself. Payout, unfreeze and S-01 decisions run `admin.decide_*`, which check session, permission and step-up and then call the backend's own function (`bank.decide_payout_batch`, `recon.decide_unfreeze`, `property.decide_request`) under the officer's handle. Signing requests: the database issues a one-time ticket (2 minutes, hash only, bound to what was shown), the signing service recomputes the call, redeems the ticket and runs `signer.decide`. Every decision is bound to what the officer saw (payload + call hash, items digest, freeze event, request digest). Maker ≠ checker, the payout gate, expiry and duties are enforced by the backend; each page lists why a decision is unavailable. Officer handles cannot be used as operator names outside the portal.
 
 ## Tests
 
 ```bash
 npm run typecheck && npm run lint          # strict TypeScript, 0 warnings
-npm test                                   # unit (13) + database rules (30) + database authorisation matrix (86)
-npm run build && npm run test:http         # HTTP authorisation matrix against the production build (183)
-npm run test:e2e                           # Edge + virtual FIDO2 key: enrolment, sign-in, step-up, maker-checker, sign-out (3)
+npm test                                   # unit (13) + database rules (30) + authorisation matrix (156) + approvals rules (8)
+npm run build && npm run test:http         # HTTP authorisation matrix against the production build (272), with a real signing service
+npm run test:e2e                           # Edge + virtual FIDO2 keys: auth (3) + approvals (2: two checkers approve a mint; unfreeze)
 ADMIN_E2E_DB=pt_admin_dev SCREENSHOTS=1 npm run test:e2e -- screens   # 1440 px screenshots with real data into screenshots/
 ```
 
 Database tests create and drop their own `pt_scratch_admin_*` databases. The HTTP matrix starts
 `next start` on port 3399 (set `ADMIN_HTTP_DIST=.next-http` after `NEXT_DIST_DIR=.next-http npm run build`
 to keep a dev server's `.next` untouched). The end-to-end run starts `next dev` on 3301 with its own
-build folder `.next-e2e` and database `pt_admin_e2e` (re-created each run).
+build folder `.next-e2e` and database `pt_admin_e2e` (re-created each run). The HTTP matrix and the
+end-to-end run also start a real signing service (`backend/packages/signer/scripts/serve-test.ts`:
+temporary key, fixed chain facts, refuses any database but the portal's test databases) on 4998 /
+4997 with random client secrets (`.env.e2e`, git-ignored). The approvals e2e writes screenshots to
+`screenshots/6b-*.png` (git-ignored). Backend `npm install` is needed for these (tsx).
+
+Migration note: `0016_admin_approvals.sql` follows S-02's `0015`, built in parallel. The portal's
+own runner applies files in order without a gap check, so the admin tests work on a branch without
+0015; the backend runner refuses the gap until 0015 is merged.
 
 ## Gotchas
 

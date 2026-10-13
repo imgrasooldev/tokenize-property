@@ -28,6 +28,7 @@
     "signer:audit": "tsx packages/signer/src/cli.ts audit",
     "perf:signer": "node packages/signer/scripts/perf.mjs",
     "signer:import-web-wallets": "tsx packages/signer/src/cli.ts import-web-wallets",
+    "signer:admin-client": "tsx packages/signer/src/cli.ts admin-client",
     "outbox": "tsx packages/signer/src/outbox-worker.ts",
     "indexer": "tsx packages/indexer/src/cli.ts run",
     "indexer:verify": "tsx packages/indexer/src/cli.ts verify",

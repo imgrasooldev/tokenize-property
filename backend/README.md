@@ -315,7 +315,8 @@ npm run signer             # signing service, 127.0.0.1:4900
 npm run outbox             # outbox worker (every kind through the signer)
 npm run kyc:serve          # KYC API for the website, 127.0.0.1:4910
 npm run kyc:offboard       # freezes for investors who lost their verification
-npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"   # maker-checker
+npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"   # maker-checker (break-glass; officers decide in admin/)
+npm run signer:admin-client   # the admin portal's client (preview + decide only), secret to .env.local and admin/.env.local, never printed
 
 # local/demo bookings so reconciliation passes on the local chain (dev chain only)
 npm run seed:local         # chain/flow.py's scenario mint as Alice's seed subscription

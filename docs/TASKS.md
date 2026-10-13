@@ -75,6 +75,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 ## 4. Missing features
 
 ### T-004 Step 6b: operations and approvals portal
+- Status (2026-10-13): **built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`; merge S-02's 0015 first). Done: approvals inbox; signer requests decided by the signing service through a new admin-scoped HTTP client and one-time database tickets, with the exact call decoded from the calldata and bound by a call hash; payout batch decisions (gate, held lines, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker request decisions; reason + fresh step-up on every decision; officer names bound to sessions for signer approvals, unfreezes and payout batches; S-01 duties linked to officer roles; views and decisions audited. Not in the portal yet (still CLI/service): payout batch create and submit, follow-up batch creation, bank statement import, suspense returns, outbox review decisions. Tests: backend +15, admin db +78, HTTP matrix +89 (272), e2e +2 (approve flow with virtual keys).
 - Outcome: UI for maker-checker actions that are CLI-only today: signer approvals (`signer:decide`), payout batch create/decide/submit, follow-up batches, recon unfreeze request/approve, bank statement import, suspense returns.
 - P critical, C L, Dep T-003. Files: `admin/`, calls into `@pt/bank`, `@pt/recon`, `@pt/signer`.
 - Accept: every action needs two distinct operators where the DB requires it; DB refusals shown clearly; all actions in audit logs.

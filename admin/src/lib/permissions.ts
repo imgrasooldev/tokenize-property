@@ -1,7 +1,8 @@
 /**
- * The portal's copy of the role matrix in the admin portal migration (admin.role_permissions and
- * admin.role_conflicts). The database is the authority and checks every request itself; this copy
- * only drives menus and early, friendly checks. test/db/matrix.test.ts asserts both are identical.
+ * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
+ * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016). The database is the authority
+ * and checks every request itself; this copy only drives menus and early, friendly checks.
+ * test/db/rules.test.ts asserts both are identical.
  */
 export const ROLES = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"] as const;
 export type Role = (typeof ROLES)[number];
@@ -14,17 +15,31 @@ export const PERMISSIONS = [
   "officers.read",
   "officers.manage",
   "approvals.read",
+  "approvals.request",
+  "approvals.decide",
+  "property.read",
+  "property.decide",
   "compliance.read",
   "trustee.read",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
-  ops_maker: ["ops.read", "audit.read.ops", "approvals.read"],
-  ops_checker: ["ops.read", "audit.read.ops", "approvals.read"],
-  compliance_officer: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "compliance.read"],
+  ops_maker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.request", "property.read"],
+  ops_checker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.decide", "property.read", "property.decide"],
+  compliance_officer: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "property.read", "property.decide", "compliance.read"],
   trustee_officer: ["trustee.read"],
-  auditor: ["ops.read", "audit.read.ops", "audit.read.admin", "audit.export", "officers.read", "compliance.read", "trustee.read"],
+  auditor: [
+    "ops.read",
+    "audit.read.ops",
+    "audit.read.admin",
+    "audit.export",
+    "officers.read",
+    "approvals.read",
+    "property.read",
+    "compliance.read",
+    "trustee.read",
+  ],
   admin: ["audit.read.admin", "officers.read", "officers.manage"],
 };
 

@@ -4,6 +4,7 @@ import { createPublicClient, http, keccak256, type Hex } from "viem";
 import { distributionRegistryAbi, idFactoryAbi, identityAbi, identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
 import { z } from "zod";
 import { custodialRef, type CustodyProvider, type KeyProvider } from "./keystore.ts";
+import { describeCall, PreviewError, type CallPreview } from "./preview.ts";
 import {
   claimHash,
   claimId,
@@ -158,6 +159,30 @@ interface RequestRow {
 }
 
 const LOCK_KIND = 586_586_070;
+
+/** A pending request as a checker sees it (Step 6b): the exact call and the policy checks right now. */
+export interface PreviewResult {
+  requestId: string;
+  status: string;
+  call: CallPreview | null;
+  /** Why no call can be shown (no active policy, malformed payload). */
+  problem: string | null;
+  /** The policy evaluated now with fresh facts (done again at signing time). */
+  live: { state: "pass" | "fail" | "unavailable" | "skipped"; reason: string | null; approvalsNeeded: number | null };
+}
+
+export const officerDecision = z.strictObject({
+  requestId: z.uuid(),
+  decision: z.enum(["approve", "reject"]),
+  reason: z.string().trim().min(10).max(500),
+  ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  callHash: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type OfficerDecision = z.infer<typeof officerDecision>;
+export type OfficerDecisionResult = { status: string; reason?: undefined } | { status: "refused"; reason: string };
+
+/** Refusals the database raises on purpose (maker-checker, ticket, step-up, state): safe to show. */
+const OFFICER_REFUSALS = new Set(["23514", "23505", "42501", "P0002", "PTS01", "22023"]);
 
 /**
  * The reconciliation payout gate (ADR 0007) for a kind: null when the kind is not a payout or
@@ -507,6 +532,108 @@ export class SignerService {
     await c.query("UPDATE signer.requests SET status = 'signed', nonce = $2, tx_hash = $3 WHERE id = $1", [req.id, nonce.toString(), txHash]);
     await this.audit(c, requestedBy, "request.signed", req.id, { hash: txHash, nonce: nonce.toString(), from });
     return { status: "signed", requestId: req.id, raw, hash: txHash, nonce, from };
+  }
+
+  private keyAddress(ref: string): Hex | null {
+    return this.keys.refs().includes(ref) ? this.keys.address(ref) : null;
+  }
+
+  private async callFor(c: pg.ClientBase, req: RequestRow): Promise<{ call: CallPreview | null; problem: string | null; rule: AnyRule | null }> {
+    const { rows } = await c.query<{ id: string; version: number; rule: unknown }>(
+      "SELECT id, version, rule FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL",
+      [req.kind],
+    );
+    const p = rows[0];
+    if (!p) return { call: null, problem: `no active policy for ${req.kind}`, rule: null };
+    try {
+      const rule = parseRule(req.kind, p.rule);
+      const call = describeCall({
+        requestId: req.id,
+        kind: req.kind,
+        payload: req.payload,
+        payloadHash: req.payload_hash.toString("hex"),
+        policy: { id: p.id, version: p.version, rule },
+        keyAddress: (ref) => this.keyAddress(ref),
+      });
+      return { call, problem: null, rule };
+    } catch (e) {
+      if (e instanceof PreviewError) return { call: null, problem: e.message, rule: null };
+      if (e instanceof z.ZodError) return { call: null, problem: "the active policy is malformed", rule: null };
+      throw e;
+    }
+  }
+
+  /**
+   * Step 6b: what a pending request would sign (the exact call, decoded from its bytes) and the
+   * policy evaluated now with fresh facts. Read-only: nothing is signed, reserved or audited. The
+   * claim kind is not evaluated (evaluating it makes the claim key sign).
+   */
+  async preview(requestId: string): Promise<PreviewResult | null> {
+    if (!z.uuid().safeParse(requestId).success) return null;
+    const client = await this.pool.connect();
+    try {
+      const { rows } = await client.query<RequestRow>("SELECT * FROM signer.requests WHERE id = $1", [requestId]);
+      const req = rows[0];
+      if (!req) return null;
+      const { call, problem, rule } = await this.callFor(client, req);
+      let live: PreviewResult["live"] = { state: "skipped", reason: null, approvalsNeeded: null };
+      if (rule && req.kind !== "identity.add_claim") {
+        try {
+          const gate = await payoutGateDenial(client, req.kind);
+          const d: Decision = gate ? { decision: "deny", reason: gate } : await this.evaluate(client, req.kind, rule, req.payload, req.id);
+          live = d.decision === "allow" ? { state: "pass", reason: null, approvalsNeeded: d.approvalsNeeded } : { state: "fail", reason: d.reason, approvalsNeeded: null };
+        } catch (e) {
+          const why = (e instanceof Error ? e.message : String(e)).split("\n")[0] ?? "";
+          live = { state: "unavailable", reason: `facts could not be read: ${why}`.slice(0, 200), approvalsNeeded: null };
+        }
+      }
+      return { requestId: req.id, status: req.status, call, problem, live };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Step 6b: a portal officer's decision (ADR 0011 section 10). The portal holds a one-time ticket
+   * that the database issued after checking the officer's session, permission and step-up. Here the
+   * call is recomputed and must still be exactly the call the officer reviewed (callHash); then
+   * signer.decide_officer redeems the ticket (checking the session again) and runs signer.decide
+   * under the officer's handle in the same transaction. Maker-checker stays in signer.decide.
+   */
+  async decideAsOfficer(raw: unknown): Promise<OfficerDecisionResult> {
+    const input = officerDecision.parse(raw);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows } = await client.query<RequestRow>("SELECT * FROM signer.requests WHERE id = $1 FOR UPDATE", [input.requestId]);
+      const req = rows[0];
+      if (!req) {
+        await client.query("ROLLBACK");
+        return { status: "refused", reason: "unknown signing request" };
+      }
+      const { call, problem } = await this.callFor(client, req);
+      if (!call || call.callHash !== input.callHash) {
+        await client.query("ROLLBACK");
+        return { status: "refused", reason: problem ?? "the transaction changed since you reviewed it (policy or request): reload and check again" };
+      }
+      const ticketHash = createHash("sha256").update(input.ticket, "utf8").digest();
+      const out = await client.query<{ s: string }>("SELECT signer.decide_officer($1, $2, $3, $4, $5) AS s", [
+        ticketHash,
+        req.id,
+        input.decision,
+        input.reason,
+        Buffer.from(input.callHash, "hex"),
+      ]);
+      await client.query("COMMIT");
+      return { status: out.rows[0]?.s ?? "unknown" };
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      const code = e instanceof Error && "code" in e ? String((e as { code?: unknown }).code) : "";
+      if (OFFICER_REFUSALS.has(code) && e instanceof Error) return { status: "refused", reason: e.message.slice(0, 300) };
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   /**

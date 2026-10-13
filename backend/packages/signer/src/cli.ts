@@ -1,5 +1,5 @@
 import { createDecipheriv, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { LOCAL_DEV_CHAIN_ID, readEnvFile } from "@pt/config";
@@ -7,7 +7,7 @@ import { secretFromEnv } from "@pt/http-auth";
 import pg from "pg";
 import { createPublicClient, http, type Hex } from "viem";
 import { FileKeystore, writeKeyFile } from "./keystore.ts";
-import { createSignerServer, OUTBOX_SCOPE, WEB_SCOPE, type Client } from "./http.ts";
+import { ADMIN_SCOPE, createSignerServer, OUTBOX_SCOPE, WEB_SCOPE, type Client } from "./http.ts";
 import { SignerService, viemChainReader } from "./service.ts";
 
 /**
@@ -17,6 +17,8 @@ import { SignerService, viemChainReader } from "./service.ts";
  *   npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"
  *   npm run signer:audit                 verify the audit hash chain
  *   npm run signer:import-web-wallets    LOCAL/DEMO ONLY: move earlier web sign-ups' wallets into custody
+ *   npm run signer:admin-client          the admin portal's client secret (preview + decide only), idempotent;
+ *                                        written to backend/.env.local and admin/.env.local, never printed
  * Settings: PG_* (PG_DATABASE, default property_token), CHAIN_RPC_URL, SIGNER_PORT (4900),
  * SIGNER_KEYSTORE_DIR (default backend/data/keystore); secrets from backend/.env.local.
  */
@@ -166,6 +168,8 @@ async function serve(): Promise<void> {
   const clients: Client[] = [{ id: "outbox-worker", secret: secretFromEnv(e, "SIGNER_CLIENT_SECRET_OUTBOX"), scope: OUTBOX_SCOPE }];
   // The website may only create custodial wallets (ADR 0010); it can never ask for a signature.
   if (e.SIGNER_CLIENT_SECRET_WEB) clients.push({ id: "web", secret: secretFromEnv(e, "SIGNER_CLIENT_SECRET_WEB"), scope: WEB_SCOPE });
+  // The admin portal may only preview and decide pending requests (Step 6b); it can never ask for a signature.
+  if (e.SIGNER_CLIENT_SECRET_ADMIN) clients.push({ id: "admin-portal", secret: secretFromEnv(e, "SIGNER_CLIENT_SECRET_ADMIN"), scope: ADMIN_SCOPE });
   const port = Number(e.SIGNER_PORT ?? 4900);
   createSignerServer(service, clients).listen(port, "127.0.0.1", () => {
     out(`signer listening on 127.0.0.1:${String(port)} · ${String(keys.refs().length)} keys · clients: ${clients.map((c) => c.id).join(", ")}`);
@@ -240,6 +244,30 @@ async function importWebWallets(): Promise<void> {
   }
 }
 
+/**
+ * The admin portal's client of the signing service (Step 6b, ADR 0011 section 10): a 32-byte secret,
+ * appended to backend/.env.local only when missing, and copied with the signer's URL into
+ * admin/.env.local (lines replaced, file mode 0600). Idempotent; the secret is never printed.
+ * Restart the signer and the portal afterwards.
+ */
+async function adminClient(): Promise<void> {
+  if (!env().SIGNER_CLIENT_SECRET_ADMIN) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside backend/
+    await appendFile(ENV_FILE, `\n# signing service: admin portal client (generated)\nSIGNER_CLIENT_SECRET_ADMIN=${randomBytes(32).toString("base64url")}\n`, { mode: 0o600 });
+  }
+  const e = env();
+  const secret = e.SIGNER_CLIENT_SECRET_ADMIN ?? "";
+  secretFromEnv(e, "SIGNER_CLIENT_SECRET_ADMIN"); // validates the format
+  const url = `http://127.0.0.1:${e.SIGNER_PORT ?? "4900"}`;
+  const adminEnv = `${ROOT}admin/.env.local`;
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside the repository
+  const before = existsSync(adminEnv) ? readFileSync(adminEnv, "utf8") : "# admin portal settings (never commit)";
+  const keep = before.split(/\r?\n/).filter((l) => l && !/^(SIGNER_URL|SIGNER_CLIENT_SECRET_ADMIN)=/.test(l));
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside the repository
+  writeFileSync(adminEnv, [...keep, `SIGNER_URL=${url}`, `SIGNER_CLIENT_SECRET_ADMIN=${secret}`, ""].join("\n"), { mode: 0o600 });
+  out(`admin portal client ready: backend/.env.local and admin/.env.local hold SIGNER_CLIENT_SECRET_ADMIN (not shown); signer at ${url}. Restart the signer and the portal.`);
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 const commands = new Map<string, () => Promise<void>>([
   ["setup", setup],
@@ -247,10 +275,11 @@ const commands = new Map<string, () => Promise<void>>([
   ["decide", () => decide(rest)],
   ["audit", audit],
   ["import-web-wallets", importWebWallets],
+  ["admin-client", adminClient],
 ]);
 const run = commands.get(cmd ?? "");
 if (!run) {
-  out("commands: setup | serve | decide | audit | import-web-wallets");
+  out("commands: setup | serve | decide | audit | import-web-wallets | admin-client");
   process.exitCode = 2;
 } else {
   run().catch((e: unknown) => {

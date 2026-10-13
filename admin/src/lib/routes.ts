@@ -33,6 +33,11 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/audit/[source]", kind: "page", methods: ["GET"], access: "audit-source", mutating: false },
   { path: "/officers", kind: "page", methods: ["GET"], access: "officers.read", mutating: false },
   { path: "/approvals", kind: "page", methods: ["GET"], access: "approvals.read", mutating: false },
+  { path: "/approvals/signer/[id]", kind: "page", methods: ["GET"], access: "approvals.read", mutating: false },
+  { path: "/approvals/payouts/[id]", kind: "page", methods: ["GET"], access: "approvals.read", mutating: false },
+  { path: "/approvals/unfreeze/[id]", kind: "page", methods: ["GET"], access: "approvals.read", mutating: false },
+  { path: "/approvals/property", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
+  { path: "/approvals/property/[id]", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
   { path: "/compliance", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/trustee", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
@@ -46,6 +51,11 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/audit/[source]/export", kind: "api", methods: ["POST"], access: "audit-source", mutating: true },
   { path: "/api/officers/changes", kind: "api", methods: ["POST"], access: "officers.manage", mutating: true },
   { path: "/api/officers/changes/[id]/decide", kind: "api", methods: ["POST"], access: "officers.manage", mutating: true },
+  { path: "/api/approvals/signer/[id]/decide", kind: "api", methods: ["POST"], access: "approvals.decide", mutating: true },
+  { path: "/api/approvals/payouts/[id]/decide", kind: "api", methods: ["POST"], access: "approvals.decide", mutating: true },
+  { path: "/api/approvals/unfreeze", kind: "api", methods: ["POST"], access: "approvals.request", mutating: true },
+  { path: "/api/approvals/unfreeze/[id]/decide", kind: "api", methods: ["POST"], access: "approvals.decide", mutating: true },
+  { path: "/api/approvals/property/[id]/decide", kind: "api", methods: ["POST"], access: "property.decide", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
