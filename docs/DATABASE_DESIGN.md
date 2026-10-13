@@ -21,6 +21,7 @@
 | `anchor` | 0007 | public anchors |
 | `kyc` | 0009 | investor identity subjects, checks, decisions |
 | `bank` | 0009, 0010 | bank events, credits, payees, payout batches |
+| `property` | 0014 (branch `t-021-property-onboarding`, not on `main`) | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
 | `webdemo` | runtime DDL (web) | prototype investors, subscriptions, top-ups, orders, trades |
 
 `0001` revokes `CREATE` on `public` and all rights on the five first schemas from `PUBLIC`.
@@ -108,6 +109,32 @@ The migration also opens ledger accounts `bank:trustee-escrow` (asset) and `bank
 
 `bank.distribution_file_hash(token, distribution)` for the signer (I-1); `kyc.enqueue_offboarding(freeze_guard, actor)` with idempotency key `compliance.freeze:<subject>:<decision>:<status>` and advisory lock 586586099 (I-3).
 
+### 0014 property (PR-1..PR-9; spec S-01, task T-021)
+
+Numbered 0014 because 0012 (Step 5h) and 0013 (Step 6a) are on other branches; until they are merged the runner's no-gap rule refuses 0014 on a database built from this branch alone (the property tests use a renumbered copy, `backend/packages/property/test/helpers.ts`).
+
+| Table | Key columns and constraints |
+|---|---|
+| `property.settings`, `doc_types`, `mandatory_documents`, `transitions` | configuration (LEGAL TO CONFIRM values; DocType mapping; KYB and property document lists; the only allowed transitions K1..K11, P1..P14 with their audit event names); no role writes them |
+| `property.staff_duties` | duty per officer (onboarding, compliance, compliance_senior, legal, legal_head, valuation, technical, ic_member, ic_independent, trustee); requested and decided by two different administrators; a trustee holds no other duty (trigger) |
+| `property.sponsors` | uuid; `kind` company/individual; `owner_subject` (KYC subject, individual); `legal_name_enc`, `address_enc` (sealed); `cuin_last4`, `ntn_last4`; `state` (moves only with an event) |
+| `property.sponsor_identifiers` | keyed hash of CUIN/NTN/STRN per pepper version, unique (one sponsor per registration number) |
+| `property.sponsor_persons` | KYC subject, role owner/director/representative/beneficial_owner, ownership in basis points, control basis, powers (submit/upload/respond/withdraw); ended once |
+| `property.registration_checks`, `sponsor_screenings`, `risk_ratings`, `fmu_assessments` | SECP verification, company screening (clear/possible_match/hit), risk rating (high needs EDD evidence), FMU assessment (compliance only) |
+| `property.sponsor_events`, `property_events` | the state logs; trigger `apply_event` refuses anything outside `transitions` or not from the current state; `checker`, `request_id`, `curable` (OB-16) |
+| `property.properties` | OB-10 identifiers, area, GPS (inside Pakistan), use, occupancy, leases summary; generated `property_key` (OB-11) and `deed_key`; identifiers change only in Draft; `previous_id` links a curable resubmission (unique) |
+| `property.documents`, `document_verifications` | SHA-256, size, media type, opaque store reference, uploader, representative; same bytes once per file; `supersedes` (unique, same type and file); verification at source (OB-21) |
+| `property.duplicate_checks`, `duplicate_candidates`, `duplicate_decisions` | one check per submission (clear/possible/blocked, fraud flag), candidates (exact/possible/linked with reasons), one decision per officer and candidate (onboarding and compliance capacities) |
+| `property.requests` | maker-checker requests (K4, K5, K10, K11, SC, P6, P13, P14); one open per file; decided once; 72 h |
+| `property.assignments`, `reviews`, `review_documents`, `reopenings` | reviewers per group (legal, valuation, technical); reviews per discipline with the hashes relied on; a reopening makes earlier reviews of its discipline stale (shared sequence `property.seq`) |
+| `property.title_links`, `encumbrances`, `encumbrance_resolutions` | chain of title; encumbrances discharged or condition precedent (OB-22) |
+| `property.valuers`, `valuations` | approved panel (maker-checker), a natural-person valuer is a KYC subject; valuations in paisa with the report and independence declaration hashes |
+| `property.ic_meetings`, `ic_votes` | committee meeting closed once with the minutes hash; votes with independence and conflicts |
+| `property.structures`, `trustee_decisions` | REIT/SPV, Shariah, unit rights, planned units and the derived 10 % holding limit, trust deed; the trustee's accept/decline |
+| `property.audit` | hash-chained (`pt-property-audit-v1`, UTC); `detail.ref` names the row each entry describes |
+
+Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (submissions and the duplicate check).
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -119,6 +146,7 @@ The migration also opens ledger accounts `bank:trustee-escrow` (asset) and `bank
 | Recon | runs, findings, statements, gate events | `recon.verify_audit()` |
 | Anchor | history; anchor inputs immutable | public anchor + `anchor:verify` |
 | KYC / bank | all records | `kyc.verify_audit()`, `bank.verify_audit()` |
+| Property (0014) | all records; requests, duties, meetings, persons and valuers decided or ended once | `property.verify_audit()` (also replays states and re-checks document and review hashes) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
 
@@ -135,6 +163,7 @@ All NOLOGIN, created idempotently:
 | 0006 | `pt_recon_writer`, `pt_recon_operator`, `pt_recon_reader` |
 | 0007 | `pt_anchor_writer`, `pt_anchor_reader` |
 | 0009 | `pt_kyc_service`, `pt_kyc_officer`, `pt_kyc_reader`, `pt_bank_service`, `pt_bank_operator`, `pt_bank_reader` |
+| 0014 | `pt_property_writer`, `pt_property_reviewer`, `pt_property_admin`, `pt_property_reader` |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 

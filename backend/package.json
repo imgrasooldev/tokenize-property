@@ -45,7 +45,13 @@
     "bank": "tsx packages/bank/src/cli.ts serve",
     "bank:setup": "tsx packages/bank/src/cli.ts setup",
     "bank:audit": "tsx packages/bank/src/cli.ts audit",
-    "bank:bench": "tsx packages/bank/scripts/bench.ts"
+    "bank:bench": "tsx packages/bank/scripts/bench.ts",
+    "property:setup": "tsx packages/property/src/cli.ts setup",
+    "property:run": "tsx packages/property/src/cli.ts run",
+    "property:show": "tsx packages/property/src/cli.ts show",
+    "property:queue": "tsx packages/property/src/cli.ts queue",
+    "property:audit": "tsx packages/property/src/cli.ts audit",
+    "property:expire": "tsx packages/property/src/cli.ts expire"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

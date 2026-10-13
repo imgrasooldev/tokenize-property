@@ -101,6 +101,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Risk: mint before funds are final; double refund.
 
 ### T-021 Property owner onboarding (KYB), property submission, due diligence
+- Status (2026-10-13): **backend done on branch `t-021-property-onboarding`**, not merged: migration `0014_property.sql` and `@pt/property` (service, CLI, pure consistency checks, 48 tests). Remaining: portal screens (Step 6), DocumentRegistry anchoring after deployment (OB-41, signer kind `document.add`), wiring `documents.*` / `property.token_without_approval` into `@pt/recon`, notifications, SLA clocks, the encrypted document vault; LEGAL TO CONFIRM values in `property.settings`.
 - Outcome: sponsor/owner KYB, property record, document upload (hashes to DocumentRegistry), due-diligence states (title, valuation, legal, Shariah) with approvals.
 - P high, C L, Dep T-003, T-038.
 - Accept: no property can reach token deployment without all approvals recorded.

@@ -32,6 +32,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/recon` | Reconciliation: one snapshot pinned to the read model's block, pure deterministic checks (issuance, supply, holdings, cash, rent, integrity), findings recorded atomically; blocking findings freeze payouts until two operators unfreeze; mock bank statement import |
 | `@pt/kyc` | KYC onboarding: NADRA, liveness and sanctions behind interfaces (realistic mocks), peppered CNIC/name hashes and sealed name (no readable personal data in the database), status derived in the database, maker-checker sanctions reviews |
 | `@pt/bank` | Bank side: signed webhook endpoint, Raast credits matched to payment codes (or suspense), payout accounts with title match and 72-hour cooling-off, maker-checker payout batches gated by reconciliation, deterministic bank file; `MockBank` plays the outside bank (own records, statements in `pt-mock-bank-v1`) |
+| `@pt/property` | Sponsor KYB, property submission and due diligence (spec S-01): keyed hashes and sealed sponsor data, the K/P state machines, duplicate detection, maker-checker and the hash-chained audit in the database; operator CLI until the portal screens exist |
 | `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
 
 ## Outbox (Step 5c)
@@ -207,6 +208,39 @@ npm run bank:bench       # throw-away database: onboarding, webhooks, a payout b
 Measured on this laptop (`npm run bank:bench -- 1000`): KYC onboarding with the mock providers p50 10.7 ms, p99 49 ms; a Raast credit through the signed HTTP endpoint into the ledger p50 5.9 ms, p99 32 ms; a payout batch of 1,000 investors created in 0.66 s, approved in 0.07 s, submitted (bank file + ledger) in 0.51 s; the cash check on 1,001 statement lines 19 ms with zero findings.
 
 Tests: 22 KYC and 37 bank (see ADR 0009), including a scan of every KYC row for personal data, ten concurrent deliveries of one event, a sealed IBAN swapped between investors, and a property test where lost webhooks always show up in reconciliation and, after the bank's retry, the ledger equals the bank line by line. Three deliberate rule breaks (third-party payer accepted, suspense booked without its reference, no cooling-off) each make tests fail.
+
+## Property onboarding and due diligence (spec S-01, task T-021)
+
+[S-01](../docs/specs/S-01-owner-onboarding-and-due-diligence.md). Every state, guard, duty and maker-checker rule is in `0014_property.sql` (schema `property`); `@pt/property` validates input (zod), hashes registration numbers and seals names and addresses, and maps refusals to `PropertyError` (`INVALID_INPUT`, `FORBIDDEN`, `GUARD`, `DUPLICATE`, `NOT_FOUND`). Backend only: the screens come with the Step 6 portals; until then operators use the CLI. For the pilot, operations enter the sponsor's file on the sponsor's behalf, naming the representative who acted (S-01 Q-1, OB-8).
+
+```bash
+npm run property:setup                          # LOCAL DEV ONLY: PROPERTY_PEPPER_V1, PROPERTY_PEPPER_CURRENT, PROPERTY_DATA_KEY in backend/.env.local
+npm run property:run -- actions                 # every workflow operation
+npm run property:run -- submitProperty '{"propertyId":"…","actor":"onb-1","actingFor":12}'
+npm run property:run -- decideRequest @decision.json
+npm run property:show -- property <id>          # state, review status, valuations, duplicate candidates (no personal data)
+npm run property:queue                          # open maker-checker requests, possible duplicates, blocked submissions
+npm run property:audit                          # property audit chain (exit 3 on a problem)
+npm run property:expire                         # K7 for every lapsed KYB (schedule daily)
+```
+
+| Rule | What it guarantees |
+|---|---|
+| PR-1 | No readable CNIC, NTN, CUIN, person's name or address: people are KYC subject ids; registration numbers are keyed hashes (own pepper, rotation-aware) + last four; legal name and address sealed (AES-256-GCM, bound to the sponsor and field); documents are SHA-256 + size + media type + an opaque store reference (no files in the database) |
+| PR-2 | Only the S-01 transitions K1..K11 and P1..P14 exist (`property.transitions`); a trigger refuses any other event, or one not starting from the current state, whoever writes it; the state column follows the event log only |
+| PR-3 | KYB status derived in the database: approved reads as expired after 365 days or as soon as a director, representative or beneficial owner is no longer KYC-verified |
+| PR-4 | Maker-checker for K4, K5, K10, K11, a company screening clearance, P6, P13, P14 (requester never approves, one rejection is final, 72 h expiry, stale when the state moved); duplicates need an onboarding and a compliance officer; P7 needs an IC quorum; P8 needs the legal head's structure and a trustee officer |
+| PR-5 | Duties granted maker-checker; a trustee holds no other duty; whoever entered or submitted a file never decides it; three different reviewers who did not assign themselves; parties to a file cannot sit on its committee |
+| PR-6 | Duplicate detection inside the submission, under one lock, against every property ever submitted (any state, every sponsor): exact (property key, registered deed, identical title document) blocks and records a case; possible (GPS within 30 m, same parcel other unit, same parcel number, same land-record/authority/tax reference or address, same document) needs two decisions; an exact match on a Tokenization Ready property is a fraud indicator |
+| PR-7 | A review relies on the hashes of current documents; superseding a document, a new encumbrance or a material change reopens the affected reviews and moves an approved file back to Under Review |
+| PR-8 | Append-only records, hash-chained audit with UTC timestamps; `property.verify_audit()` also re-checks transitions, document hashes, review hashes, valuations, votes, replays every state and finds rows written around the API |
+| PR-9 | Roles `pt_property_writer`, `pt_property_reviewer`, `pt_property_admin`, `pt_property_reader` |
+
+LEGAL TO CONFIRM values are configurable in `property.settings` (beneficial-owner threshold 25 %, title period 30 years, valuation tolerance 10 %, gap 60 days, validity 6 months), `property.mandatory_documents` (KYB and per-property lists) and `property.doc_types` (DocType mapping, S-01 Q-5); a change is a new migration.
+
+Not yet built (later steps): anchoring document hashes on DocumentRegistry after deployment (OB-41, needs a signer kind `document.add`), the `documents.*` and `property.token_without_approval` checks inside `@pt/recon` runs (pure functions exist in `@pt/property/recon.ts`), notifications (§9), SLA clocks, the sponsor portal, and the encrypted document vault.
+
+Tests: `rules.test.ts` (11, no database), `property-db.test.ts` (35), `property-model.test.ts` (1 property test: 30 random operation sequences by right and wrong officers against a reference model), `cli.test.ts` (1). While migrations 0012 (Step 5h) and 0013 (Step 6a) are on other branches, the property tests build their scratch databases from a renumbered copy of the migrations (`test/helpers.ts`, 0014 becomes 0012); the copy equals the real directory once those branches are merged.
 
 ## Live Demo Console
 

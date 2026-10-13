@@ -4,6 +4,7 @@ Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are comm
 
 ## 2026-10-13
 
+- T-021 (branch, not merged): S-01 backend. Migration `0014_property.sql` (schema `property`, rules PR-1..PR-9) and package `@pt/property`: sponsor KYB with keyed hashes and sealed name/address, the K1..K11 and P1..P14 state machines enforced by the database, maker-checker requests, duplicate detection (normalised property key incl. Urdu digits, deed, title-document hash, GPS 30 m), document metadata with supersede chains, reviews relying on current hashes, valuations with the 10 % rule, IC quorum, structure and trustee acceptance, hash-chained audit; operator CLI `property:*`; pure `documents.*` and `property.token_without_approval` checks for later recon wiring. 48 tests.
 - Contracts: 5 tests proving agent actions while paused or frozen (mint refused; redemption burn, trustee forced transfer and burn of frozen tokens work; investor transfers blocked), as assumed by specs S-04/S-05/S-06; 137 forge tests.
 - Functional specs S-01..S-07 merged (docs/specs).
 - Documentation set from the code audit merged (docs/*.md).

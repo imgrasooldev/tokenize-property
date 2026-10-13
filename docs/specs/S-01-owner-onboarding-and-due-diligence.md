@@ -290,3 +290,18 @@ The summary of the title review, the encumbrances found and how each was cleared
 - Q-3 Who pays for due diligence (sponsor fee, deducted at completion, or platform cost)?
 - Q-4 Third valuation trigger: 10 % proposed.
 - Q-5 DocType: `Other` plus an off-chain catalogue now (recommended), or a new DocumentRegistry version with more types before the pilot.
+
+## 15. Implementation notes (T-021, migration 0014)
+
+Refinements made while building the backend; each is stricter than, or fills a gap in, the text above. For owner review; none changes a maker-checker rule.
+
+1. **OB-11 normalisation:** a run of separators (`-`, `/`, dashes, with spaces) *between two digits* is kept as `/`, so khasra `123/4` and `1234` stay different parcels; everything else is removed as written. Leading zeros of a number are dropped (`Plot 012` = `Plot 12`); Arabic yeh, kaf and heh are folded into their Urdu forms. The key joins its parts with separators that normalisation never produces. LEGAL TO CONFIRM with the land-record conventions per province.
+2. **OB-15 deed match:** "same deed number at the same office" is an exact match when the deed year is also the same (offices restart numbering); the same office and number in another year is a possible match.
+3. **OB-14 scope:** "every other property in any state" is read as every property that was ever submitted (P1), in any state including rejected and withdrawn. A draft that was never submitted does not block anyone (otherwise two concurrent first submissions would block each other, and anyone could squat a property key with a draft).
+4. **OB-17:** until S-02 adds Offering Live, an exact match on a Tokenization Ready property is already treated as a fraud indicator.
+5. **K4 / K7:** directors must be KYC-verified as well as representatives and beneficial owners (OB-3 makes them KYC subjects; OB-5 screens them).
+6. **People** are added to a KYB file only while it is a draft (after K6 the file is a draft again); ending a person is allowed at any time (protective).
+7. **P7 not approved:** a committee that does not approve closes the meeting without a transition; the file stays Under Review (P5, P6, or a new meeting follow).
+8. **P11** is not available from Tokenization Ready (as in the diagram; the table's "before the offering goes live" belongs to S-02).
+9. **OB-39:** in Legal Approved or Tokenization Ready, superseding *any* property document moves the file back to Under Review (P9/P10), not only documents a review relied on.
+10. **Duties** (onboarding, compliance, senior compliance, legal, legal head, valuation, technical, IC member, independent IC member, trustee) are granted in `property.staff_duties` by two different administrators. When the Step 6a officer registry is merged, a duty should require an active officer with the matching portal role (trustee duty only for `trustee_officer`).
