@@ -48,7 +48,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ## 2. Bugs
 
-### T-001 Move tail-latency gates out of unit tests into benchmarks
+### T-001 Move tail-latency gates out of unit tests into benchmarks — PARTLY DONE (signer: median gate + `npm run perf:signer`, 2026-10-13; the other timing checks remain)
 - Outcome: `npm test` never fails because the machine is busy; latency budgets are still enforced where the environment is controlled.
 - Evidence: lead's run 2026-10-13 backend 311 passed / 1 failed (signer p99 63 ms locally with a busy machine; CI #34, #48 failed on p99). Gates: `backend/packages/signer/test/service.test.ts:167-187` (p50/p99), `signer/test/e2e-chain.test.ts:139` (p50 < 200), `indexer/test/local-chain.test.ts:85` (p95 < 100), `indexer/test/indexer-db.test.ts:280` and `outbox/test/worker.test.ts:184` (elapsed < 1-1.5 s; review whether these are functional timeouts or speed gates).
 - P high, C S, Dep none. Files: the tests above; new `backend/packages/signer/scripts/bench.ts` + `npm run signer:bench` (pattern: `indexer:bench`, `recon:bench`, `bank:bench`).
@@ -58,14 +58,14 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ## 3. In progress on branches (not on `main`)
 
-### T-002 Step 5h: website on outbox + signer + indexer read model
+### T-002 Step 5h: website on outbox + signer + indexer read model — DONE (merged c962432, 2026-10-13)
 - Outcome: web mints/transfers through outbox + signer with maker-checker; reads holdings from schema `chain`; `web/src/lib/server/demo-signer.ts` retired (used by 10 files today); rent and `flow.py`-style mints booked in the ledger so reconciliation PASSES on the demo chain; demo-server services updated.
 - P critical, C L, Dep 5a-5g (done). Files: `web/src/lib/server/*`, `backend/packages/{outbox,signer,indexer,recon}`, `deploy/demo-server/*`.
 - Accept: `grep demo-signer web/src` empty; recon run on the local chain passes; e2e green; MEMORY/CURRENT_STATUS updated.
 - Tests: web integration through the signer path; recon local-chain test expects pass; e2e.
 - Risk: demo server downtime; double mint during migration of in-flight `webdemo` rows.
 
-### T-003 Step 6a: internal portal foundation (`admin/`)
+### T-003 Step 6a: internal portal foundation (`admin/`) — DONE (merged 55d2c39, 2026-10-13)
 - Outcome: Next.js internal app with WebAuthn (FIDO2) sign-in, roles and separation of duties, audit viewer.
 - P critical, C L, Dep none for scaffolding; 6b-6d depend on it. Files: new `admin/`, CI job.
 - Accept: per branch plan; CI job added; README layout matches reality.

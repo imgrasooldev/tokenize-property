@@ -2,6 +2,14 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## Latest update (2026-10-13, after the 5h and 6a merges)
+
+- **Step 5h merged** (c962432, ADR 0010): the website signs nothing and holds no key; reads come from the indexer read model; invest, DvP trades and sign-up go through outbox + signer (maker-checker above 10,000 tokens); web uses its own least-privilege DB role `pt_web_app`; `webdemo` DDL moved into migration 0012. Demo server: services pt-indexer, pt-signer, pt-kyc, pt-outbox, pt-offboarding active; **reconciliation PASSED on the demo server (0 blocking, 0 warnings, with indexer verify)**; signer audit intact.
+- **Step 6a merged** (55d2c39, ADR 0011): `admin/` internal portal foundation (FIDO2-only officers, roles + SoD in the DB, audit viewer with evidence export, maker-checker officer management), migration 0013, 127.0.0.1:3300 only (SSH tunnel).
+- **Tests on main after both merges:** backend 362/362 (with 0013: 361/362, the one failure was the load-sensitive signer p99 gate, now fixed under T-001); web 69/69; admin 129 unit/db + 183 authorization-matrix; contracts 137/137 (unchanged).
+- **T-001 (partly):** the signer speed test now gates only the median in the unit suite; the full p50/p99 budget is `npm run perf:signer` (PT_PERF_GATES=1). Other timing checks listed in TASKS remain.
+- **Next:** merge S-01 (branch `t-021-property-onboarding`, migration 0014) after re-running checks on top of 0012/0013; then S-07, S-02, 6b.
+
 - **Last audited commit:** `main` @ `41241b3` "test(signer): gate the speed test on the median on CI" (2026-10-13), 60 commits.
 - **Audit date:** 2026-10-13.
 
