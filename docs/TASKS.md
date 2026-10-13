@@ -136,8 +136,20 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - P high, C M, Dep T-033 for real anchors. Tests: values equal `chain` read model and contract views.
 
 ### T-028 Notifications
+- Status (2026-10-13): **backend done on a branch** (not merged), Partial overall: migration `0017_notify.sql` (schema `notify`, N-1..N-9) and `@pt/notify` (catalogue, sealed contacts, consent, EN/UR templates, rendering, worker with record-before-send and provider lookup, retries, dead letters, rate limits, mock providers, CLI `notify:setup|run|status`), ADR 0013 Proposed; 38 tests. Numbered 0017 after the S-02 (0015) and 6b (0016) branches: merge those first, or the runner refuses the gap (the notify tests use a renumbered copy).
 - Outcome: SMS/email/push for payments, payouts, account changes (B-4 alerts), freezes.
 - P high, C M, Dep provider choice. Tests: every sensitive change triggers exactly one notification; no PII in payloads beyond policy.
+- **Producer wiring (follow-ups, one per module; each calls `notify.enqueue` in the SAME transaction as its business change, preferably inside its own SQL function via `CREATE OR REPLACE` in that module's next migration, and grants `pt_notify_producer` to its service role; no `NOTIFY` listener as a substitute):**
+  1. Bank, `bank.register_payee` (0009): `security.payout_account_added` (no previous account) or `security.payout_account_changed` (previous last4), `active_from` = registration + 72 h; key `bank:payee:<payeeId>`; recipient = the KYC subject.
+  2. Bank, cooling-off end: periodic sweep over `bank.payees` with `active_from <= now()` and not superseded → `security.payout_account_active`; key `bank:payee-active:<payeeId>` (idempotent, so the sweep may repeat). Schedule with the other services (T-034).
+  3. Bank, payout line paid (`bank.submit_payout_batch` / line confirmed, not returned): `rent.paid` (token, net amount in paisa, period); key `bank:payout:<batchId>:<line>`. Also a later `rent.held` kind for held lines (S-03 §10).
+  4. KYC, `kyc.evaluate` and `kyc.revoke` (0009, where `kyc_alert` is raised): `security.kyc_status_changed` with the generic word only (verified, expired, action_required, closed); compliance to confirm the mapping from review/rejected/revoked so nothing tips off a sanctions match (S-06 §9). Key `kyc:decision:<decisionId>`.
+  5. Freeze and unfreeze: `security.account_frozen` / `security.account_unfrozen` when the freeze is confirmed on chain (indexer read model, `chain.apply_batch` freeze actions, or the offboarding worker after the outbox confirms `compliance.freeze`), and from compliance cases (T-005); key `freeze:<txHash>:<logIndex>`. Mapping wallet → subject via `kyc.wallets`.
+  6. Signer maker-checker: a request above the threshold waiting for approval (`DeferredError` path in `@pt/signer`) → `security.large_transaction_pending` for the investor whose custodial wallet it concerns (amount in paisa, reference = outbox command or request id without long digit runs); key `signer:approval:<requestId>`.
+  7. Website sign-in (T-030, `web/`): `security.new_device_sign_in` (coarse device label, time) on a device not seen before; the contact and preference screens (contacts registered only after a one-time code to that contact).
+  8. Offering (S-02, `backend/packages/offering`, migration 0015): `offering.reservation_expiring` 2 h before expiry (sweep); key `offering:reservation-expiring:<reservationId>`; further S-02 §10 kinds in a later notify migration.
+  9. Officer notices (S-01 §9 reviews/IC/trustee, S-02/S-03 operations and trustee items) need new kinds and templates (category transactional, recipient type officer).
+- Other follow-ups: real SMS and e-mail providers with idempotency keys and lookup (T-031); push (T-040); `notify:run` as a service and `notify_alert` to on-call (T-034, T-035); re-seal job for a `NOTIFY_DATA_KEY` rotation; retention rule for superseded contacts (legal).
 
 ### T-030 Investor passkey login
 - Outcome: replace demo personas with WebAuthn passkeys (AAL2), device binding, session management.

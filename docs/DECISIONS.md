@@ -18,6 +18,7 @@ Index of architecture decision records and other recorded decisions, as of `main
 | [0010](decisions/0010-website-integration.md) | Website on the read model, outbox and signing service; demo signer retired | Accepted | 2026-10-13 | Yes |
 | [0011](decisions/0011-admin-portal.md) | Internal portals: FIDO2 officers, step-up, roles and SoD in the DB, audit | Accepted | 2026-10-13 | Yes |
 | [0012](decisions/0012-server-stack-as-built.md) | Server stack as built (supersedes parts of 0001) | Accepted | 2026-10-13 | Yes |
+| [0013](decisions/0013-notifications.md) | Notifications: sealed contacts, consent, record-before-send delivery with provider lookup | Proposed (T-028) | 2026-10-13 | On a branch, mock providers only; producers not wired |
 
 ## 2. ADR 0001 drift (resolved 2026-10-13 by [ADR 0012](decisions/0012-server-stack-as-built.md); kept for history)
 

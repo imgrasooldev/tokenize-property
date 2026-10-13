@@ -22,6 +22,7 @@
 | `kyc` | 0009 | investor identity subjects, checks, decisions |
 | `bank` | 0009, 0010 | bank events, credits, payees, payout batches |
 | `property` | 0014 (branch `t-021-property-onboarding`, not on `main`) | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
+| `notify` | 0017 (branch, task T-028) | notification recipients, sealed contacts, preferences, templates, notifications, deliveries, attempts, rate limits, audit (ADR 0013) |
 | `webdemo` | runtime DDL (web) | prototype investors, subscriptions, top-ups, orders, trades |
 
 `0001` revokes `CREATE` on `public` and all rights on the five first schemas from `PUBLIC`.
@@ -135,6 +136,25 @@ Numbered 0014 because 0012 (Step 5h) and 0013 (Step 6a) are on other branches; u
 
 Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (submissions and the duplicate check).
 
+### 0017 notify (N-1..N-9; ADR 0013, task T-028)
+
+Numbered 0017 because 0015 (S-02 offering) and 0016 (Step 6b) are on other branches; until they are merged the runner's no-gap rule refuses 0017 on a database built from this branch alone (the notify tests use a renumbered copy, `backend/packages/notify/test/helpers.ts`).
+
+| Table | Key columns and constraints |
+|---|---|
+| `notify.event_kinds` | kind, category `security`/`transactional`, typed placeholders (`utc`, `paisa`, `last4`, `code`, `label`, `word` with choices); seeded, immutable |
+| `notify.templates` | kind, channel `sms`/`email`/`push`, locale `en`/`ur`, version (insert-only, latest wins, English fallback), subject (e-mail only, no CR/LF), body (SMS ≤ 500 characters), body SHA-256; placeholders checked against the kind |
+| `notify.recipients` | uuid; `subject_type` investor (KYC subject uuid) or officer (officer id); locale; only the locale may change |
+| `notify.contacts` | recipient, channel `sms`/`email`, `lookup_hash` (HMAC-SHA256 under `NOTIFY_LOOKUP_KEY`), `sealed` (AES-256-GCM bound to recipient, channel, hash), `key_version`; one current per recipient and channel; superseded once, never edited or deleted |
+| `notify.preferences` | per recipient and channel, transactional notices only; append-only (latest row wins, none = on) |
+| `notify.notifications` | idempotency key (unique), kind, category, recipient, params (validated by `notify.params_problem`), content hash, status `queued`/`suppressed`/`undeliverable`; immutable |
+| `notify.deliveries` | one per notification and contact; `uid` (provider idempotency key), contact and template bound at enqueue; status `pending → claimed → sending → sent`, exits `dead` → `pending` (operator retry) or `abandoned`; lease; attempts/max (8 security, 5 transactional); provider message id written once on `sent` |
+| `notify.attempts` | one open attempt per delivery; recorded before the provider call; outcome `accepted`/`not_accepted`/`rejected`/`unknown`, provider message id, SHA-256 of the rendered message; finished once |
+| `notify.rate_limits` | max deliveries per recipient, channel and rolling hour, per category |
+| `notify.audit` | hash-chained (`pt-notify-audit-v1`, UTC) |
+
+API: `notify.enqueue` (producers, in their transaction), `register_recipient`, `register_contact`, `set_preference`, `set_locale` (service), `claim`, `delivery_material`, `begin_attempt`, `record_sent`, `record_failure`, `extend_lease`, `open_attempt_started` (worker), `operator_decide`, `add_template`, `stats`, `verify_audit` (operator). NOTIFY channels: `notify` (new work, at commit), `notify_alert` (dead letter, undeliverable security notice). Advisory locks: 586586170 (audit), 586586171 (rate limit per recipient and channel), 586586172 (contact registration).
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -146,6 +166,7 @@ Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (subm
 | Recon | runs, findings, statements, gate events | `recon.verify_audit()` |
 | Anchor | history; anchor inputs immutable | public anchor + `anchor:verify` |
 | KYC / bank | all records | `kyc.verify_audit()`, `bank.verify_audit()` |
+| Notify (0017) | event kinds, templates, preferences, notifications, audit; recipients (locale only), contacts (superseded once), deliveries (state edges only), attempts (finished once) | `notify.verify_audit()` (also re-checks sent deliveries) |
 | Property (0014) | all records; requests, duties, meetings, persons and valuers decided or ended once | `property.verify_audit()` (also replays states and re-checks document and review hashes) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
@@ -164,6 +185,7 @@ All NOLOGIN, created idempotently:
 | 0007 | `pt_anchor_writer`, `pt_anchor_reader` |
 | 0009 | `pt_kyc_service`, `pt_kyc_officer`, `pt_kyc_reader`, `pt_bank_service`, `pt_bank_operator`, `pt_bank_reader` |
 | 0014 | `pt_property_writer`, `pt_property_reviewer`, `pt_property_admin`, `pt_property_reader` |
+| 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
