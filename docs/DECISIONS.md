@@ -12,9 +12,12 @@ Index of architecture decision records and other recorded decisions, as of `main
 | [0004](decisions/0004-outbox.md) | Outbox semantics, exactly-once on chain | Accepted (owner 2026-10-12) | 2026-10-12 | Yes (`0003_outbox.sql`, `@pt/outbox`) |
 | [0005](decisions/0005-signing-service.md) | Signing service, policy engine, maker-checker | Accepted (owner 2026-10-12) | 2026-10-12 | Yes, local keystore only; HSM/MPC KeyProvider missing |
 | [0006](decisions/0006-indexer.md) | Indexer and chain read model | Accepted (owner 2026-10-12) | 2026-10-12 | Yes; website does not read from it yet (5h) |
-| [0007](decisions/0007-reconciliation.md) | Reconciliation and payout freeze | Proposed ("awaiting lead review") | 2026-10-12 | Yes, merged 2026-10-12; status line not updated |
+| [0007](decisions/0007-reconciliation.md) | Reconciliation and payout freeze | Accepted (2026-10-12; passing on the demo server 2026-10-13) | 2026-10-12 | Yes, merged 2026-10-12; status line not updated |
 | [0008](decisions/0008-public-anchor.md) | Public-chain anchoring | Proposed (public L2 pending owner) | 2026-10-12 | Yes on a local Anvil stand-in |
-| [0009](decisions/0009-kyc-and-bank.md) | KYC and bank | Proposed ("awaiting lead review"); decisions of 2026-10-13 added | 2026-10-13 | Yes with mock providers; status line not updated |
+| [0009](decisions/0009-kyc-and-bank.md) | KYC and bank | Accepted (real providers pending, T-031) | 2026-10-13 | Yes with mock providers; status line not updated |
+| [0010](decisions/0010-website-integration.md) | Website on the read model, outbox and signing service; demo signer retired | Accepted | 2026-10-13 | Yes |
+| [0011](decisions/0011-admin-portal.md) | Internal portals: FIDO2 officers, step-up, roles and SoD in the DB, audit | Accepted | 2026-10-13 | Yes |
+| [0012](decisions/0012-server-stack-as-built.md) | Server stack as built (supersedes parts of 0001) | Accepted | 2026-10-13 | Yes |
 
 ## 2. ADR 0001 drift (resolved 2026-10-13 by [ADR 0012](decisions/0012-server-stack-as-built.md); kept for history)
 
