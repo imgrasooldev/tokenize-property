@@ -2,6 +2,11 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-044 investor offering screens (2026-10-13, branch `t-021-offering-screens`, not merged)
+
+- Website: `/offerings`, `/offerings/[id]` (reserve with document acceptance; KYC-verified investors only), `/subscriptions` (timeline, payment instructions with countdown, refund status, cancel). Migration `0018_web_offering.sql` grants `pt_web` six `offering.web_*` functions only. Not built: withdrawal (OF-22) button, investor category choice (retail only), document download (no document store), notifications.
+- Not verified in a browser (no seeded live offering in a shared database; see the branch report). Tests: see docs/TASKS.md T-044.
+
 ## Latest update (2026-10-13, Step 6b built on a branch)
 
 - **Step 6b (T-004) built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`). The approvals portal: inbox; signing requests shown as the exact call (decoded from the calldata, call hash) and decided by the **signing service** through a new admin-scoped HTTP client and one-time database tickets; payout batches (lines, held lines, gate, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker requests; a reason and a fresh security-key step-up on every decision; maker != checker enforced by the backend; officer names bound to officer sessions; S-01 duties linked to officer roles (S-01 refinement 10). **Merge S-02 (0015) first**: until then the backend runner refuses the gap (tests use a renumbered copy).

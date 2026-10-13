@@ -18,6 +18,15 @@ export function hmac(purpose: "session" | "cnic", data: string): string {
   return createHmac("sha256", key).update(data).digest("base64url");
 }
 
+/**
+ * A keyed SHA-256 (hex) for records the backend keeps about a website request without the raw value
+ * (offering document acceptance, OF-10: session and device). Domain-separated from the session MAC.
+ */
+export function keyedHash(purpose: "offering-session" | "offering-device", data: string): string {
+  return createHmac("sha256", secret("WEB_SESSION_SECRET")).update(`${purpose}
+${data}`).digest("hex");
+}
+
 export function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);

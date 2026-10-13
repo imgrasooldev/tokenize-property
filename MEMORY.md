@@ -124,6 +124,8 @@ Rule: a step starts only after the previous gate passes and the owner approves.
 - **TypeScript pinned to 6.0.3** because typescript-eslint supports `<6.1`. `.npmrc` sets `ignore-scripts=true` and `save-exact=true`.
 - CI had job-level `if: hashFiles(...)`, which GitHub does not allow there; it was removed on 2026-10-10. Pushes before then may not have run CI. Check the Actions tab.
 
+- **Investor offering screens (T-044, branch `t-021-offering-screens`, migration 0018):** the website reaches the offering schema only through `offering.web_*` wrappers (KYC gate in `web_reserve`, actors `web:<investor uuid>`, reads scoped to one KYC subject, blocked/disputed shown as `under_review`). The lead called it T-021, but T-021 is S-01, so it is filed as T-044. Web integration tests build a scratch database with the backend's offering world (`backend/packages/offering/test/world.ts`, imported dynamically) and point the website pool at it: `WEB_DB_NAME=pt_scratch_<n>_<n>` is honoured only under vitest (`VITEST=true`). They skip without backend `node_modules`, `backend/.env.local` with `WEB_PG_*`, or PostgreSQL. A shared `property_token_test` has no officers, so a live offering cannot be seeded there without bootstrapping admins (avoid: bootstrap is once per database).
+
 ## 6. How to work on the code
 
 ```bash

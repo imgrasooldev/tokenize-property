@@ -801,6 +801,33 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
   .vcheck { padding: 12px 10px; }
 }
 
+/* ---------------------------------------------------------------- offerings (S-02) */
+.offer-grid { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.offer-card { display: grid; gap: 12px; align-content: start; min-inline-size: 0; }
+.offer-title { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+.offer-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.raise { display: grid; gap: 6px; }
+.sub-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 16px; }
+.sub-card { display: grid; gap: 12px; min-inline-size: 0; }
+.sub-card.hl { border-color: rgba(34, 227, 240, 0.55); }
+.sub-card .kv3 { margin-block: 0; }
+.otl { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-size: 13px; }
+.otl li { display: flex; gap: 8px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--stroke); border-radius: 12px; min-inline-size: 0; color: var(--muted); }
+.otl li.done { color: var(--text); border-color: rgba(59, 232, 155, 0.35); }
+.otl li.current { color: var(--text); border-color: rgba(255, 181, 71, 0.55); background: rgba(255, 181, 71, 0.06); }
+.otl li.stopped { border-style: dashed; }
+.otl-dot { inline-size: 18px; flex: 0 0 18px; text-align: center; font-weight: 700; }
+.otl li.done .otl-dot { color: var(--up); }
+.otl li.current .otl-dot { color: var(--amber); }
+.otl li.stopped .otl-dot { color: var(--down); }
+.big-code { font-size: 17px; letter-spacing: 1px; color: var(--cyan); }
+.seg-field { border: 1px solid var(--stroke); border-radius: 12px; padding: 8px 12px 10px; margin: 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.seg-field legend { font-size: 13px; color: var(--muted); padding-inline: 4px; }
+.alert.small { padding: 4px 10px; font-size: 12.5px; }
+@media (max-width: 700px) {
+  .otl { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ---------------------------------------------------------------- reduced motion */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

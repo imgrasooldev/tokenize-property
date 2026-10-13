@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import type { Dict, Lang } from "@/lib/i18n";
+import { offeringDict } from "@/lib/i18n-offering";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
@@ -73,7 +74,7 @@ async function viewer(): Promise<{ lang: Lang; t: Dict; investor: InvestorRow | 
   return { lang, t, investor };
 }
 
-export type PublicKey = "explore" | "properties" | "market" | "portfolio" | "verify" | "none";
+export type PublicKey = "explore" | "properties" | "offerings" | "market" | "portfolio" | "verify" | "none";
 
 /** Public site header: live status rail plus the main navigation. */
 export async function SiteHeader({ active, minimal = false }: { active: PublicKey; minimal?: boolean }) {
@@ -81,6 +82,7 @@ export async function SiteHeader({ active, minimal = false }: { active: PublicKe
   const links: { key: PublicKey | "ai" | "proofs"; href: string; label: string }[] = [
     { key: "explore", href: "/", label: t.navExplore },
     { key: "properties", href: "/properties", label: t.navProperties },
+    { key: "offerings", href: "/offerings", label: offeringDict(lang).navOfferings },
     { key: "market", href: "/market", label: t.navMarket },
     { key: "portfolio", href: "/portfolio", label: t.navPortfolio },
     { key: "verify", href: "/verify", label: t.navVerify },
@@ -223,7 +225,7 @@ export function PublicPage({ active, children, minimal = false }: { active: Publ
   );
 }
 
-export type PortalKey = "portfolio" | "invest" | "market" | "rent" | "properties" | "account";
+export type PortalKey = "portfolio" | "invest" | "subscriptions" | "market" | "rent" | "properties" | "account";
 
 function initials(name: string): string {
   // Words that start with a letter only, so "Bob (demo)" gives "B", not "B(".
@@ -247,6 +249,7 @@ export async function PortalShell({
   const items: { key: PortalKey; href: string; icon: string; label: string }[] = [
     { key: "portfolio", href: "/portfolio", icon: "◧", label: t.navPortfolio },
     { key: "invest", href: `/properties/${LIVE_SYMBOL}`, icon: "⬡", label: t.invest },
+    { key: "subscriptions", href: "/subscriptions", icon: "◫", label: offeringDict(lang).navMySubs },
     { key: "market", href: "/market", icon: "⇄", label: t.navMarket },
     { key: "rent", href: "/portfolio#rent", icon: "₨", label: t.rentAndProofs },
     { key: "properties", href: "/properties", icon: "⌂", label: t.navProperties },

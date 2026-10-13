@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { hmac, safeEqual } from "./secrets";
+import { hmac, keyedHash, safeEqual } from "./secrets";
 
 const COOKIE = "pt_session";
 const TTL_SECONDS = 8 * 60 * 60;
@@ -32,4 +32,11 @@ export async function currentInvestorId(): Promise<string | null> {
   if (!safeEqual(sig, hmac("session", `${id}.${exp}`))) return null;
   if (Number(exp) < Math.floor(Date.now() / 1000)) return null;
   return id;
+}
+
+/** Keyed hash of the current session cookie (never the cookie itself), or null without a valid session. */
+export async function sessionFingerprint(): Promise<string | null> {
+  if (!(await currentInvestorId())) return null;
+  const raw = (await cookies()).get(COOKIE)?.value ?? "";
+  return keyedHash("offering-session", raw);
 }

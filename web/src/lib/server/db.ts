@@ -38,6 +38,12 @@ export function backendEnv(): Map<string, string> {
  * WEB_PG_USER / WEB_PG_PASSWORD to backend/.env.local. Without them the website refuses to start
  * its database pool rather than fall back to the admin.
  */
+function testDatabase(name: string | undefined): string | null {
+  if (name === "property_token_test") return name;
+  if (process.env.VITEST === "true" && name !== undefined && /^pt_scratch_[0-9]{1,16}_[0-9]{1,8}$/.test(name)) return name;
+  return null;
+}
+
 function localDbSettings(): pg.PoolConfig {
   const env = backendEnv();
   const user = env.get("WEB_PG_USER");
@@ -49,8 +55,9 @@ function localDbSettings(): pg.PoolConfig {
     port: Number(env.get("PG_PORT") ?? 5433),
     user,
     password,
-    // Tests point this at property_token_test; nothing else sets it.
-    database: process.env.WEB_DB_NAME === "property_token_test" ? "property_token_test" : "property_token",
+    // Tests point this at property_token_test, or (vitest only) at a throw-away database made by the
+    // backend's test helpers (pt_scratch_<n>_<n>); nothing else sets it.
+    database: testDatabase(process.env.WEB_DB_NAME) ?? "property_token",
     application_name: "web-prototype",
     // Page reads, the live feed snapshot (4 parallel queries), the matcher and the settlement
     // follower (which holds its lock connection during a pass) share this pool.
