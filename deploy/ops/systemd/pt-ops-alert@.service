@@ -1,0 +1,15 @@
+[Unit]
+Description=Property Token alert for failed unit %i
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+SupplementaryGroups=systemd-journal
+EnvironmentFile=-/etc/pt-ops/ops.env
+ExecStart=/usr/local/lib/pt-ops/pt-unit-failed.sh %i
+TimeoutStartSec=60
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only

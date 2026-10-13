@@ -1,0 +1,9 @@
+[Unit]
+Description=Property Token reconciliation, daily 03:00 Pakistan time (after the PKT midnight bank cut-off)
+
+[Timer]
+OnCalendar=*-*-* 22:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

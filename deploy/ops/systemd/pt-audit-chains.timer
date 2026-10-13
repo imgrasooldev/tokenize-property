@@ -1,0 +1,9 @@
+[Unit]
+Description=Property Token audit chain verification, daily 04:00 Pakistan time
+
+[Timer]
+OnCalendar=*-*-* 23:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

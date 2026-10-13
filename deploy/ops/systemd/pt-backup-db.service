@@ -1,0 +1,21 @@
+[Unit]
+Description=Property Token encrypted PostgreSQL backup (public-key encrypted, SHA-256 manifest, GFS retention)
+Documentation=file:///home/ubuntu/property-token/docs/runbooks/backup-restore.md
+After=pt-stack.service
+OnFailure=pt-ops-alert@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=-/etc/pt-ops/ops.env
+ExecStart=/usr/local/lib/pt-ops/pt-backup-db.sh
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/backups/pt /var/lib/pt-ops
