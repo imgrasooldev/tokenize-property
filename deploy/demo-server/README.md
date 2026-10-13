@@ -25,7 +25,7 @@ scp chain/tools/besu-26.9.0.zip ubuntu@51.79.144.40:property-token/chain/tools/
 cd property-token && (cd chain/tools && unzip -q besu-26.9.0.zip)
 sudo bash deploy/demo-server/provision.sh   # OS packages, firewall, swap, services, CI key
 bash deploy/demo-server/setup.sh            # build, chain, database, contracts, demo data
-sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-web pt-console pt-admin
+sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-anchor-chain pt-anchor pt-web pt-console pt-admin
 (cd backend && npm run seed:local && npm run rent:book)   # once the indexer has caught up
 ```
 
@@ -67,6 +67,8 @@ the chain does not match the read model; fail closed, find the cause, ADR 0006).
 | `pt-outbox` | Outbox worker: every chain command through the signing service | – |
 | `pt-kyc` | KYC API for the website's sign-up (mock providers) | 4910 |
 | `pt-offboarding` | Queues a freeze when an investor loses verification | – |
+| `pt-anchor-chain` | Anvil stand-in for the public anchor L2 (chain 586650, 127.0.0.1:8650, state in `chain/data/anchor/`) until the owner picks the L2 (ADR 0008) | – |
+| `pt-anchor` | Anchoring job: every 15 min commits the ledger head and a Besu block to `StateAnchor` (exit 3 = AnchorAlarm, not restarted: investigate, never delete anchor records) | `cd backend && npm run anchor:status` / `anchor:verify` |
 
 `update.sh` installs new or changed `pt-*.service` units, enables and restarts the five services
 and runs the setup steps, all idempotent: `kyc:setup` and `signer:setup` create secrets only when
