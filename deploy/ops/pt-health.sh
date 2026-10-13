@@ -126,7 +126,7 @@ SELECT to_regclass('chain.cursors') IS NOT NULL AS has_chain,
        to_regprocedure('recon.payout_gate()') IS NOT NULL AS has_recon,
        to_regclass('anchor.anchors') IS NOT NULL AS has_anchor \gset
 \if :has_chain
-SELECT 'idx|' || deployment || '|' || block_number || '|' || (halted_at IS NOT NULL) || '|' ||
+SELECT 'idx|' || deployment || '|' || block_number || '|' || CASE WHEN halted_at IS NOT NULL THEN 't' ELSE 'f' END || '|' ||
        extract(epoch FROM now() - updated_at)::bigint || '|' || left(regexp_replace(coalesce(halt_reason, ''), '[|\n\r]', ' ', 'g'), 160)
 FROM chain.cursors ORDER BY deployment;
 \endif
@@ -143,7 +143,8 @@ SELECT 'signer|' || count(*) || '|' || coalesce(extract(epoch FROM now() - min(c
 FROM signer.requests WHERE status = 'pending_approval';
 \endif
 \if :has_recon
-SELECT 'recon|' || allowed || '|' || frozen || '|' || coalesce(last_status, 'none') || '|' ||
+-- Booleans concatenated into text read 'true'/'false' (not 't'/'f'), so they are mapped explicitly.
+SELECT 'recon|' || CASE WHEN allowed THEN 't' ELSE 'f' END || '|' || CASE WHEN frozen THEN 't' ELSE 'f' END || '|' || coalesce(last_status, 'none') || '|' ||
        coalesce(extract(epoch FROM now() - last_finished)::bigint, -1) || '|' || left(regexp_replace(coalesce(reason, ''), '[|\n\r]', ' ', 'g'), 160)
 FROM recon.payout_gate();
 \endif
