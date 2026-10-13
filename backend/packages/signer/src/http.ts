@@ -1,14 +1,15 @@
 import { createServer, type Server } from "node:http";
 import { authHeaders, HmacAuthenticator, readBody, sendJson, type Client } from "@pt/http-auth";
 import { z } from "zod";
-import type { SignInput, SignResult } from "./service.ts";
+import type { OfficerDecisionResult, PreviewResult, SignInput, SignResult } from "./service.ts";
 
 /**
  * Internal HTTP API of the signing service. Bound to an internal interface only (127.0.0.1 here;
  * a private network with mTLS in production). Every request is authenticated with an HMAC over
  * method, path, timestamp, a one-time nonce and the body hash (@pt/http-auth); stale or replayed
  * requests and oversized bodies are refused, and each client may call only its own paths (the
- * website may create custodial wallets but never ask for a signature). Errors never echo internals.
+ * website may create custodial wallets but never ask for a signature; the admin portal may only
+ * preview and decide pending requests, never ask for a signature). Errors never echo internals.
  */
 
 export interface SignerApi {
@@ -17,15 +18,21 @@ export interface SignerApi {
   release(requestId: string, actor: string): Promise<boolean>;
   /** Creates a custodial wallet inside the signing service; returns its address only. */
   createWallet?(createdBy: string): Promise<{ address: string }>;
+  /** Step 6b: the exact call a pending request would sign, decoded, with live policy checks. */
+  preview?(requestId: string): Promise<PreviewResult | null>;
+  /** Step 6b: an officer's decision, carried by a one-time ticket from the admin database. */
+  decideAsOfficer?(input: unknown): Promise<OfficerDecisionResult>;
 }
 
 export { authHeaders, type Client };
 
 const MAX_BODY = 32 * 1024;
-const PATHS = ["/v1/sign", "/v1/broadcast", "/v1/release", "/v1/custody/wallets"] as const;
+const PATHS = ["/v1/sign", "/v1/broadcast", "/v1/release", "/v1/custody/wallets", "/v1/requests/preview", "/v1/decide"] as const;
 /** What the outbox worker may call; the website's client is limited to custody. */
 export const OUTBOX_SCOPE = ["/v1/sign", "/v1/broadcast", "/v1/release"] as const;
 export const WEB_SCOPE = ["/v1/custody/wallets"] as const;
+/** The admin portal (Step 6b): preview and decide pending requests only; it can never ask for a signature. */
+export const ADMIN_SCOPE = ["/v1/requests/preview", "/v1/decide"] as const;
 
 const idBody = z.object({ requestId: z.uuid() });
 const walletBody = z.strictObject({});
@@ -70,6 +77,24 @@ export function createSignerServer(api: SignerApi, clients: Client[], opts: { no
           sendJson(res, 200, await api.request(json as SignInput, a.client.id));
           return;
         }
+        if (path === "/v1/requests/preview" || path === "/v1/decide") {
+          if (!api.preview || !api.decideAsOfficer) {
+            sendJson(res, 404, { error: "not_found" });
+            return;
+          }
+          if (path === "/v1/decide") {
+            sendJson(res, 200, await api.decideAsOfficer(json));
+            return;
+          }
+          const id = idBody.safeParse(json);
+          if (!id.success) {
+            sendJson(res, 400, { error: "bad_request" });
+            return;
+          }
+          const preview = await api.preview(id.data.requestId);
+          sendJson(res, preview ? 200 : 404, preview ?? { error: "not_found" });
+          return;
+        }
         if (path === "/v1/custody/wallets") {
           if (!api.createWallet || !walletBody.safeParse(json).success) {
             sendJson(res, api.createWallet ? 400 : 404, { error: api.createWallet ? "bad_request" : "not_found" });
@@ -101,7 +126,7 @@ export class SignerClient {
     private readonly client: Client,
   ) {}
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  private async post(path: string, body: unknown, allow404 = false): Promise<unknown> {
     const s = JSON.stringify(body);
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
@@ -109,6 +134,7 @@ export class SignerClient {
       body: s,
       signal: AbortSignal.timeout(20_000),
     });
+    if (allow404 && res.status === 404) return null;
     if (!res.ok) throw new Error(`signer ${path} returned ${String(res.status)}`);
     return res.json();
   }
@@ -129,5 +155,15 @@ export class SignerClient {
 
   async createWallet(): Promise<{ address: string }> {
     return (await this.post("/v1/custody/wallets", {})) as { address: string };
+  }
+
+  /** Step 6b (admin scope): what a pending request would sign; null if unknown. */
+  async preview(requestId: string): Promise<PreviewResult | null> {
+    return (await this.post("/v1/requests/preview", { requestId }, true)) as PreviewResult | null;
+  }
+
+  /** Step 6b (admin scope): an officer's decision with its one-time ticket. */
+  async decide(input: { requestId: string; decision: "approve" | "reject"; reason: string; ticket: string; callHash: string }): Promise<OfficerDecisionResult> {
+    return (await this.post("/v1/decide", input)) as OfficerDecisionResult;
   }
 }

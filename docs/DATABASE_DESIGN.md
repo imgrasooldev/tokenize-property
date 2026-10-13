@@ -157,6 +157,22 @@ Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (subm
 
 `bank.book_credit` is replaced (cancelled codes go to suspense) and a trigger on `bank.credits` confirms the reservation of a matched subscription credit in the same transaction. Lock order: payment code 586586098 → ledger 586586002 → bank audit 586586095 → offering audit 586586150; per-investor lock 586586151; rows locked `FOR NO KEY UPDATE`.
 
+### 0016 admin approvals (A-1..A-7; Step 6b, task T-004, ADR 0011 section 10)
+
+Numbered 0016 because 0015 is the offering module (S-02) built in parallel; merge 0015 first (no-gap rule). Tests build databases from a renumbered copy (`contiguousMigrations()` in `backend/packages/db/test/helpers.ts`); the admin portal's own runner applies files in order without the gap check.
+
+| Object | Purpose |
+|---|---|
+| `admin.role_permissions` (+9 rows) | `approvals.read` for auditors; `approvals.decide` (ops checker), `approvals.request` (ops maker), `property.read` (maker, checker, compliance, auditor), `property.decide` (checker, compliance); `admin.expected_role_matrix_digest()` fixed again |
+| `admin.decision_context` | (txid, handle) while an admin function acts for an officer; triggers on `signer.approvals`, `recon.unfreeze_requests`, `bank.payout_batches` refuse an officer's handle without it (A-3) |
+| `admin.signer_tickets` | one-time decision tickets (SHA-256 only, 2 minutes, bound to session, request, decision, reason, payload hash and call hash); used once, never deleted |
+| `admin.issue_signer_ticket`, `signer.decide_officer` (+ internal `admin.redeem_signer_ticket`, `complete_signer_ticket`) | the two halves of a signing decision: the portal gets a ticket, the signing service redeems it and runs `signer.decide` under the officer's handle (A-5) |
+| `admin.decide_unfreeze`, `request_unfreeze`, `decide_payout_batch`, `decide_property_request` | session + permission + step-up, then the backend function under the officer's handle; refusals returned as `{ok:false, error}` and audited (A-2, A-4) |
+| `admin.approvals_inbox`, `signer_request`, `payout_batch`, `unfreeze_request`, `property_request` | reads for the portal (no personal data: subject id prefixes, IBAN last four, no sealed values) with the reasons a decision is unavailable |
+| `admin.duty_roles`, `admin.officer_holds`, trigger `staff_duties_officer`, replaced `property.has_duty` | S-01 duties need a portal officer with a matching role and count only while that officer is active and holds it (A-7) |
+
+Grants: `pt_admin_portal` gets EXECUTE on the five reads and five decision functions only; `pt_signer` gets EXECUTE on `signer.decide_officer`. No new table grants.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -170,6 +186,8 @@ Advisory locks: 586586140 (audit), 586586141 (sponsor creation), 586586142 (subm
 | KYC / bank | all records | `kyc.verify_audit()`, `bank.verify_audit()` |
 | Property (0014) | all records; requests, duties, meetings, persons and valuers decided or ended once | `property.verify_audit()` (also replays states and re-checks document and review hashes) |
 | Offering (0015) | all records; requests, duties, refunds decided or sent once; subscription facts set once | `offering.verify_audit()` (replays states, re-checks batch digests, finds rows without audit, incl. bank cancellations and refunds) |
+
+| Admin approvals (0016) | signer tickets used once, never deleted; decisions, refusals and views in `admin.audit` | `admin.verify_audit()` (role matrix digest updated in 0016) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
 

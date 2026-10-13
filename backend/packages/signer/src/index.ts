@@ -20,5 +20,17 @@ export {
   type TransferFacts,
   type TransferRule,
 } from "./policy.ts";
-export { SignerService, payoutGateDenial, viemChainReader, signInput, type ChainReader, type SignInput, type SignResult } from "./service.ts";
-export { createSignerServer, SignerClient, authHeaders, OUTBOX_SCOPE, WEB_SCOPE, type Client, type SignerApi } from "./http.ts";
+export {
+  SignerService,
+  payoutGateDenial,
+  viemChainReader,
+  signInput,
+  officerDecision,
+  type ChainReader,
+  type SignInput,
+  type SignResult,
+  type PreviewResult,
+  type OfficerDecisionResult,
+} from "./service.ts";
+export { describeCall, callHashOf, type CallPreview, type CallArg } from "./preview.ts";
+export { createSignerServer, SignerClient, authHeaders, ADMIN_SCOPE, OUTBOX_SCOPE, WEB_SCOPE, type Client, type SignerApi } from "./http.ts";

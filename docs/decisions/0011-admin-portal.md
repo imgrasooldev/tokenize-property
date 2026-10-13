@@ -1,6 +1,6 @@
 # ADR 0011: Internal portals, Step 6a foundation (officer authentication, roles, audit, exposure)
 
-- Status: Accepted (owner approved Step 6 on 2026-10-13; reviewed, tested (129 unit/db + 183 authorization-matrix) and deployed by the lead 2026-10-13)
+- Status: Accepted (owner approved Step 6 on 2026-10-13; reviewed, tested (129 unit/db + 183 authorization-matrix) and deployed by the lead 2026-10-13) Section 10 added for Step 6b (2026-10-13, migration 0016; reviewed and merged by the lead 2026-10-13).
 - Date: 2026-10-13
 - Builds on: ADR 0001 (one Next.js app for the internal portals), ADR 0005 (maker-checker in the signer), ADR 0007 (payout gate), ADR 0009 (KYC status views, two-officer reviews), product map items 5 to 7
 - Addresses: threats INF-2 (admin panel exposed), P-1 (single insider), P-3 (admin action without trace), K-5 (departing employee keeps access), API-1 (account takeover) for staff, and the new ones in the threat model section 4.11 (AD-1..AD-8)
@@ -73,6 +73,63 @@ Operations overview (chain health from Besu RPC: head, block time, QBFT validato
 
 Production: a separate host name, reachable only over the VPN, behind SSO in front of the portal (defence in depth; the portal's own WebAuthn stays mandatory), TLS, IP allow-list (threat INF-2). Demo server (owner decision, option A): `pt-admin.service` binds **127.0.0.1:3300** only, is **not** in nginx and the port is not opened in ufw; officers use `ssh -L 3300:127.0.0.1:3300` and open `http://localhost:3300`.
 
+### 10. Step 6b: operations approvals (addendum, 2026-10-13, task T-004, migration 0016)
+
+The portal shows pending work and carries officers' decisions to the backend authority that owns
+them; it never decides anything itself, and its database role still cannot call a backend decision
+function.
+
+- **What is decided where.** Signing requests (ADR 0005): by the **signing service**. Payout batches
+  (ADR 0009): `bank.decide_payout_batch` (maker-checker, payout gate, payability). Unfreeze requests
+  (ADR 0007): `recon.request_unfreeze` / `recon.decide_unfreeze` (maker-checker, a run that passed
+  after the freeze). S-01 requests: `property.decide_request` (duties, OB-SOD-1, expiry, guards). The
+  portal reaches the SQL ones only through `admin.decide_*` / `admin.request_unfreeze`, which check
+  the session, the permission and a step-up younger than five minutes (`admin.require_step_up`) and
+  then call the backend function **under the officer's handle** in the same transaction. Refusals
+  by the backend come back as `{ok: false, error}` and are audited (`approval.refused`).
+- **Signer decisions via the signing service's HTTP API.** The portal has its own `@pt/http-auth`
+  client `admin-portal` (secret `SIGNER_CLIENT_SECRET_ADMIN`, created by `npm run
+  signer:admin-client`, never printed) with scope `/v1/requests/preview` and `/v1/decide` only; it
+  can never ask for a signature. A decision is two steps: (1) `admin.issue_signer_ticket` checks
+  session, `approvals.decide`, step-up, that the request's payload hash is the one the officer saw
+  and that this officer may decide (not the requester, not a second approval by the same officer,
+  still pending), then stores a one-time ticket (32 random bytes, only the SHA-256, 2 minutes, bound
+  to session, request, decision, reason, payload hash and call hash); (2) the portal sends the
+  decision with the ticket to the signing service, which recomputes the exact call from the request
+  and the active policy, refuses if its hash differs from the one shown, and runs
+  `signer.decide_officer`: the ticket is redeemed (the session, permission and step-up are checked
+  again), `signer.decide` runs under the officer's handle, the outcome is recorded in both audits.
+  Neither the portal nor the service can decide alone: the portal cannot run `signer.*`, the
+  service cannot create tickets.
+- **What you see is what you sign.** The detail page shows the call built exactly as the policy
+  engine builds it at signing time (`backend/packages/signer/src/preview.ts`), with the arguments
+  **decoded back from the calldata**, the selector, `to`, `from`, chain, gas limit, the policy rules
+  and a live policy evaluation, plus the call hash (SHA-256 over request, kind, chain, policy id and
+  version, from, to, data, gas and payload hash). Payout decisions are bound to the batch's items
+  digest, unfreezes to the freeze they lift, S-01 decisions to the request digest; a mismatch is
+  refused ("the request differs from what you reviewed").
+- **Officer names are bound to sessions (open item 3 closed).** A signer approval, an unfreeze
+  request or decision, or a payout batch created, decided or submitted under a portal officer's
+  handle is refused by a trigger unless the admin function that checked that officer's session
+  bound the name in the same transaction (`admin.decision_context`, writable by no backend role).
+  Command-line operator names that are not officer handles keep working (break-glass), audited as
+  before.
+- **Permissions (role matrix changed, digest fixed again).** `approvals.read` (+ auditor),
+  `approvals.decide` (operations checker), `approvals.request` (operations maker: ask for an
+  unfreeze), `property.read` (maker, checker, compliance, auditor), `property.decide` (checker,
+  compliance; the S-01 duty decides the rest).
+- **S-01 duties linked to officers (S-01 refinement 10).** A duty needs a portal officer with a
+  matching role: onboarding only for operations makers, compliance and senior compliance only for
+  compliance officers, trustee only for trustee officers, due diligence and investment committee for
+  any platform officer (maker, checker, compliance). `property.has_duty` also needs the officer to be
+  active and still hold the role, so revoking the role or disabling the officer ends the duty at once.
+- **Audit.** Every view of the inbox and of each item (`page.view` with the item's path), every
+  ticket, decision, refusal and unfreeze request in `admin.audit`; the backend writes its own audit
+  as before (`signer.audit`, `recon.audit`, `bank.audit`, `property.audit`).
+- **Not in 6b.** Payout batch creation and submission stay with the bank service (record before
+  send, bank file built from sealed IBANs); bank statement import, suspense returns, outbox review
+  decisions and signer policy changes stay on the command line for now.
+
 ## Consequences
 
 - Every later approval (6b to 6d) gets identity, segregation of duties, step-up and audit for free by calling `admin.require` and `admin.require_step_up` from its own database function.
@@ -88,10 +145,32 @@ Production: a separate host name, reachable only over the VPN, behind SSO in fro
 - HTTP authorisation matrix against the production build (183): every page and API route × six roles, anonymous and an investor website cookie; CSRF and same-origin on every mutating route; session expiry over HTTP; headers, Host check, export manifest checked against the audit entry; logout.
 - End to end in Edge with a Chrome DevTools Protocol virtual FIDO2 key (3): enrolment from a link (single use), sign-in, step-up, sign-out; two administrators invite and approve with step-up; the new officer enrols, lands on the overview and is refused officer management; the admin chain is intact.
 
+## Tests (Step 6b)
+
+- Backend: call preview equals the policy engine's calldata for every kind (5); officer decisions
+  through the signing service's HTTP API end to end without a chain: a mint waits in the outbox, two
+  checkers approve with tickets, the outbox proceeds and the request is signed; refusals for
+  maker == checker, the same officer twice, a reused ticket, a stale step-up at issue and at
+  redemption, a changed call, a non-checker, an officer name on the command line, wrong client
+  scopes (5); payout batch gated by a frozen gate, unfreeze maker-checker after a passed run, officer
+  names bound (2); S-01 request decided through the portal API with maker == checker refused by the
+  backend, duties linked to roles, revoked role and disabled officer end duties (3).
+- Admin database: authorisation matrix extended by 10 functions × 7 (70); portal role cannot reach
+  any backend decision function or ticket; step-up for every decision; maker == checker end to end;
+  ticket binding, expiry, single use, ended session; audit (8).
+- HTTP matrix against the production build: 11 new routes × 8 callers, CSRF and same-origin on the 5
+  new mutating routes, plus 4 flows with a real signing service (signer approval as shown, stale
+  step-up, second approval refused, changed call refused; payout refused while frozen; unfreeze
+  requested and approved after a passed run; views and decisions audited).
+- End to end in Edge with virtual FIDO2 keys (2): two checkers approve a mint with their keys and the
+  signing service decides; a maker asks for an unfreeze and a checker approves it after a passed run.
+
 ## Open items
 
 1. AAGUID allow-list of approved hardware keys (FIDO MDS) and the SSO in front of the portal, before the pilot.
-2. Backup key per officer and a key-replacement ceremony (6b).
-3. Bind the backend's operator names to officer sessions (6b).
+2. Backup key per officer and a key-replacement ceremony (moved to 6c).
+3. ~~Bind the backend's operator names to officer sessions (6b).~~ Done in 0016 for signer approvals, unfreezes and payout batches; S-01 actors are linked to officers (role, active) but the property command line can still act under an officer's handle (break-glass, server access needed): bind it when the S-01 screens move into the portal.
 4. Alert wiring for `admin_alert` (counter regression) and for repeated sign-in failures.
 5. Urdu UI (later; the investor website already has it).
+6. Cross-check in `admin.verify_audit()` that every backend decision under an officer's handle has its `approval.decided` entry (today each chain verifies separately).
+7. A signer policy that changes after an approval but before signing: the service signs with the new policy (as before 6b); consider re-checking the approved call hash at signing time.

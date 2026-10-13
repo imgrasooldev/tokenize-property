@@ -16,7 +16,8 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Operations",
     items: [
       { href: "/", label: "Overview", icon: "◉", need: "ops.read" },
-      { href: "/approvals", label: "Approvals", icon: "✓", need: "approvals.read", tag: "6b" },
+      { href: "/approvals", label: "Approvals", icon: "✓", need: "approvals.read" },
+      { href: "/approvals/property", label: "Property & KYB", icon: "⌂", need: "property.read" },
       { href: "/audit", label: "Audit trail", icon: "⛓", need: null },
     ],
   },
@@ -53,6 +54,10 @@ export function Shell({
   children: ReactNode;
 }) {
   const visible = (i: NavItem) => (i.href === "/audit" ? canSeeAudit(officer) : i.need === null || officer.permissions.has(i.need));
+  // The one nav entry for this page: the longest href that is the page itself or a parent of it.
+  const active = SECTIONS.flatMap((s) => s.items)
+    .filter((i) => current === i.href || (i.href !== "/" && current.startsWith(`${i.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <div className="app">
       <a className="skip" href="#main">
@@ -78,7 +83,7 @@ export function Shell({
                     key={i.href}
                     className="nav"
                     href={i.href}
-                    aria-current={current === i.href || (i.href !== "/" && current.startsWith(`${i.href}/`)) ? "page" : undefined}
+                    aria-current={active === i.href ? "page" : undefined}
                   >
                     <span className="ico" aria-hidden="true">
                       {i.icon}

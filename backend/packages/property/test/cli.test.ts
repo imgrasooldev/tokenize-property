@@ -5,6 +5,7 @@ import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
+import { officerForDuty } from "../../db/test/officers.ts";
 import { contiguousMigrations } from "./helpers.ts";
 
 /** Smoke test of the operator CLI (npm run property:*) against a scratch database. */
@@ -22,6 +23,8 @@ const secrets = {
 beforeAll(async () => {
   const s = await scratchDatabase();
   await migrate(s.client, contiguousMigrations());
+  // Migration 0016 (A-7): the duty below needs an officer of the admin portal (operations maker).
+  await officerForDuty(s.client, "onb-cli", "onboarding");
   settings = s.settings;
   drop = s.drop;
 }, 120_000);

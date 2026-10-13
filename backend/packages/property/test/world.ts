@@ -3,6 +3,7 @@ import { mockProviders, KycService, Peppers } from "@pt/kyc";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
+import { officerForDuty } from "../../db/test/officers.ts";
 import { SponsorSecrets } from "../src/crypto.ts";
 import { PropertyService, runAction, type ActionInput, type ActionName, type ActionResult, type Identifiers } from "../src/service.ts";
 import { contiguousMigrations } from "./helpers.ts";
@@ -107,6 +108,8 @@ export async function makeWorld(): Promise<World> {
 }
 
 export async function grant(w: World, actor: string, duty: string): Promise<void> {
+  // Migration 0016 (A-7): a duty needs an officer of the admin portal with a matching role.
+  await officerForDuty(w.client, actor, duty);
   const id = await w.run("requestDuty", { actor, duty: duty as "onboarding", by: O.adm1, reason: "assigned by the operations head" });
   await w.run("decideDuty", { dutyId: id, by: O.adm2, approve: true, reason: "checked against the HR record" });
 }

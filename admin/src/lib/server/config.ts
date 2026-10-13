@@ -3,8 +3,9 @@ import { join } from "node:path";
 
 /**
  * Portal settings. Environment variables win; locally they come from admin/.env.local (written by
- * `npm run setup:local`, git-ignored). No secret other than the database password exists: session
- * tokens are random and only their hashes are stored, and CSRF tokens derive from the session.
+ * `npm run setup:local` and backend `npm run signer:admin-client`, git-ignored). Two secrets exist:
+ * the database password and the signing service client secret (Step 6b: preview and decide only).
+ * Session tokens are random and only their hashes are stored; CSRF tokens derive from the session.
  */
 function localEnv(): Map<string, string> {
   const env = new Map<string, string>();
@@ -45,6 +46,15 @@ export const config = {
   https: origin.protocol === "https:",
   chainRpcUrl: setting("CHAIN_RPC_URL", "http://127.0.0.1:8545") ?? "http://127.0.0.1:8545",
   trustProxy: setting("ADMIN_TRUST_PROXY") === "1",
+  /**
+   * The signing service (ADR 0005) and the portal's own client (scope: preview and decide only,
+   * never sign). Without a secret the portal shows signing requests but cannot decide them.
+   */
+  signer: {
+    url: setting("SIGNER_URL", "http://127.0.0.1:4900") ?? "http://127.0.0.1:4900",
+    clientId: "admin-portal",
+    secret: setting("SIGNER_CLIENT_SECRET_ADMIN", "") ?? "",
+  },
   db: {
     host: setting("ADMIN_PG_HOST", "127.0.0.1") ?? "127.0.0.1",
     port: Number(setting("ADMIN_PG_PORT", "5433")),

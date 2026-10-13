@@ -79,6 +79,24 @@ export function migrationsUpTo(last: string): string {
   return dir;
 }
 
+/**
+ * A temporary copy of the migrations directory with contiguous numbering. While a migration of a
+ * parallel branch is missing (Step 6b's 0016 is written before S-02's 0015 is merged), the runner
+ * refuses the gap; this copy renumbers the files after it. Once both are merged it is identical to
+ * the real directory. Scratch databases only.
+ */
+export function contiguousMigrations(): string {
+  const src = fileURLToPath(new URL("../migrations", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "pt-migrations-contiguous-"));
+  const files = readdirSync(src)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  files.forEach((f, i) => {
+    copyFileSync(join(src, f), join(dir, `${String(i + 1).padStart(4, "0")}${f.slice(4)}`));
+  });
+  return dir;
+}
+
 /** Adds the remaining migrations (after `last`) to a directory made by `migrationsUpTo`. */
 export function addMigrationsAfter(dir: string, last: string): void {
   const src = fileURLToPath(new URL("../migrations", import.meta.url));

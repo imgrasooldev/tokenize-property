@@ -53,6 +53,7 @@ echo "== backend setup (idempotent, no secrets printed)"
 (cd backend \
   && npm run --silent kyc:setup >/dev/null \
   && npm run --silent signer:setup >/dev/null \
+  && npm run --silent signer:admin-client >/dev/null \
   && npm run --silent db:web-role >/dev/null \
   && npm run --silent signer:import-web-wallets >/dev/null) \
   || { echo "backend setup failed; the website keeps running the previous build" >&2; exit 7; }
