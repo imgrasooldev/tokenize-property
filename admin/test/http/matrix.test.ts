@@ -508,7 +508,9 @@ describe("compliance over HTTP (Step 6c)", () => {
   it("pages show masked identifiers only (no CNIC, IBAN or name)", async () => {
     for (const p of ["/compliance", "/compliance/kyc", `/compliance/kyc/${resolve("{kycCase}")}`, "/compliance/screening", `/compliance/freezes/${resolve("{freeze}")}`, `/compliance/str/${resolve("{str}")}`]) {
       const html = await (await req(p, { who: "compliance_officer" })).text();
-      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}|PK\d{2}[A-Z]{4}/);
+      // A bare 13-digit run counts only outside hex strings: wallet addresses, case refs and digests
+      // on these pages are random hex and sometimes contain 13 decimal digits in a row (flaky on CI).
+      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|(?<![0-9a-fA-F])\d{13}(?![0-9a-fA-F])|PK\d{2}[A-Z]{4}/);
     }
     expect(await (await req(`/compliance/kyc/${resolve("{kycCase}")}`, { who: "compliance_officer" })).text()).toMatch(/\*{5}-\*{4}\d{3}-\d/);
   });
