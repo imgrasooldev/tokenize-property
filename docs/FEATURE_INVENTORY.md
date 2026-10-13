@@ -71,6 +71,7 @@ The owner's 16-stage lifecycle brief is not in the repository. The stages below 
 | Payout batches (maker-checker, recon gate, deterministic file, SHA-256 before send) | Done | `0009` `bank.payout_batches`, `B/bank/src/payout-file.ts` | recon |
 | Held payouts and follow-up batches | Done | `0010_held_payouts.sql` | |
 | On-chain payout record through outbox | Done | `0011` `bank.distribution_file_hash`; `BankServiceOptions.distributionRegistry` | signer |
+| Sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance (S-01) | Done in the backend on branch `t-021-property-onboarding` (not on `main`; no UI; document anchoring and recon wiring later) | `0014_property.sql`, `B/property/src/*`; `property-db.test.ts` (35), `property-model.test.ts` (1), `rules.test.ts` (11), `cli.test.ts` (1) | `@pt/kyc`; Step 6 portals for screens |
 | Rent publish/finalize through backend | Missing | only `chain/rent.py` (dev keys) | 5h / ops portal |
 | Ledger producers for `sub:*` / `rent:distribution:*` journals | Missing | recon conventions `B/recon/src/conventions.ts`; only bench/tests write them | 5h |
 | Burn / redemption kind in signer | Missing | `KINDS` has no burn | exit workflow |
