@@ -1,16 +1,14 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type pg from "pg";
 import type { Address, Hex } from "viem";
-import { tokenAbi } from "../abis";
 import { candles, checkNewOrder, nextMatch, type BookOrder, type Candle, type OrderProblem, type Side } from "../market-rules";
 import { findProperty } from "../properties";
-import { liveToken } from "./chain";
-import { db, investorById, type InvestorRow } from "./db";
-import { NotSentError, publicClient, RevertedError, send, txOutcome, waitSuccess } from "./demo-signer";
+import { txBlock, txOutcome } from "./chain";
+import { db, investorById, tx, type InvestorRow } from "./db";
 import { balanceOf, openAccount, postJournal } from "./ledger";
 import type { MarketView } from "../market-view";
-import { isVerifiedOnChain } from "./onboarding";
-import { signerFor } from "./wallets";
+import { commandStates, enqueue } from "./outbox";
+import { holdingOf, indexStatus, liveToken, registeredOnChain, transfersInTx } from "./readmodel";
 
 /**
  * W4 DEMO secondary market. Secondary trading needs SECP approval and a licensed intermediary;
@@ -20,12 +18,14 @@ import { signerFor } from "./wallets";
  * cost from cash into a per-order escrow account before it can match; the ledger refuses any
  * overdraft. Tokens: a sell order may offer only tokens that are on chain and not already offered.
  *
- * Settlement (delivery versus payment): a single matcher (PostgreSQL advisory lock) records the
- * trade and the fills, then the seller's custodial wallet transfers the tokens on chain (the token
- * re-checks identity, limits, freeze and pause). Only after the transfer is confirmed does the
- * cash move from the buyer's escrow to the seller. A refused or reverted transfer cancels both
- * orders and releases the escrow; an unknown outcome is held for review and resolved from the
- * transaction receipt.
+ * Settlement (delivery versus payment), Step 5h (ADR 0010): a single matcher (PostgreSQL advisory
+ * lock) records the trade, the fills and an outbox `token.transfer` command in ONE transaction. The
+ * outbox worker has the signing service sign the transfer with the seller's custodial wallet (the
+ * service holds the key; the website never does) only while the buyer's escrow holds the trade's
+ * cost; the token re-checks identity, limits, freeze and pause. Only when the read model shows the
+ * transfer does the cash move from the buyer's escrow to the seller (settlement follower). A
+ * refused or reverted transfer cancels both orders and releases the escrow; anything unknown is
+ * held for review.
  */
 
 const MATCHER_LOCK = 586_586_030;
@@ -65,24 +65,10 @@ export interface TradeRow {
   status: "settling" | "settled" | "failed" | "review";
   transfer_tx: Hex | null;
   transfer_nonce: number | null;
+  command_id: string | null;
   note: string | null;
   created_at: Date;
   updated_at: Date;
-}
-
-async function tx<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
-  const client = await (await db()).connect();
-  try {
-    await client.query("BEGIN");
-    const out = await fn(client);
-    await client.query("COMMIT");
-    return out;
-  } catch (e) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw e;
-  } finally {
-    client.release();
-  }
 }
 
 const owed = async (d: Db, code: string) => -(await balanceOf(d, code));
@@ -138,12 +124,16 @@ export async function placeOrder(
 ): Promise<{ orderId: string } | { error: PlaceError }> {
   const p = findProperty(input.symbol);
   if (p?.status !== "live") return { error: "notLive" };
-  if (investor.kyc_status !== "verified" || (await isVerifiedOnChain(investor.wallet_address)) !== true) {
+  if (investor.kyc_status !== "verified" || (await registeredOnChain(investor.wallet_address)) !== true) {
     return { error: "unverified" };
   }
   const live = await liveToken(p.symbol, true);
   if (!live) return { error: "chain" };
   if (live.paused) return { error: "paused" };
+  // Read model balance. A trade or subscription stays "in flight" until the read model shows its
+  // transfer or mint (the follower settles only then), so read model + in flight never misses one.
+  const balance = await holdingOf(investor.wallet_address);
+  if (balance === null) return { error: "chain" };
 
   const result = await tx(async (c): Promise<{ orderId: string } | { error: PlaceError }> => {
     // One order placement at a time per investor, so reservations cannot race each other.
@@ -155,8 +145,6 @@ export async function placeOrder(
     const existing = again.rows[0]?.id;
     if (existing) return { orderId: existing };
 
-    // Order matters: read the book and in-flight trades BEFORE the chain balance. A trade that
-    // settles in between is then counted twice (conservative), never zero times (oversell).
     const { rows: mine } = await c.query<{ side: Side; remaining: string; best: string }>(
       `SELECT side, sum(tokens - filled) AS remaining,
               CASE WHEN side = 'buy' THEN max(price_paisa) ELSE min(price_paisa) END AS best
@@ -168,17 +156,17 @@ export async function placeOrder(
     const opposite = input.side === "buy" ? openSell : openBuy;
     const sellingNow = await inFlight(c, investor.id, p.symbol, "seller_id");
     const buyingNow = await inFlight(c, investor.id, p.symbol, "buyer_id");
-    const balance = await publicClient
-      .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
-      .catch(() => null);
-    if (balance === null) return { error: "chain" };
+    const { rows: subs } = await c.query<{ n: string }>(
+      "SELECT coalesce(sum(tokens), 0) AS n FROM webdemo.subscriptions WHERE investor_id = $1 AND symbol = $2 AND status IN ('paid', 'minting', 'review')",
+      [investor.id, p.symbol],
+    );
     const problem = checkNewOrder({
       side: input.side,
       tokens: input.tokens,
       pricePaisa: input.price,
       navPkr: p.navPkr,
       freeTokens: balance - BigInt(openSell?.remaining ?? "0") - sellingNow,
-      committedHolding: balance + BigInt(openBuy?.remaining ?? "0") + buyingNow,
+      committedHolding: balance + BigInt(openBuy?.remaining ?? "0") + buyingNow + BigInt(subs[0]?.n ?? "0"),
       cashPaisa: await owed(c, cashAccount(investor.id)),
       ownOppositeBest: opposite ? BigInt(opposite.best) : null,
     });
@@ -212,10 +200,15 @@ export async function placeOrder(
   return result;
 }
 
-/** Escrow of a buy order that is free to return: its balance minus trades still awaiting review. */
+/**
+ * Escrow of a buy order that is free to return: its balance minus every trade not settled yet.
+ * Since Step 5h trades settle asynchronously, so a trade still "settling" keeps its cost in escrow:
+ * the signing service delivers only while the escrow holds it (DvP), and it must not be released
+ * under a transfer that may still be mined.
+ */
 async function releasable(c: Db, orderId: string): Promise<bigint> {
   const { rows } = await c.query<{ n: string | null }>(
-    "SELECT sum(price_paisa * tokens) AS n FROM webdemo.trades WHERE buy_order = $1 AND status = 'review'",
+    "SELECT sum(price_paisa * tokens) AS n FROM webdemo.trades WHERE buy_order = $1 AND status IN ('settling', 'review')",
     [orderId],
   );
   return (await owed(c, escrowAccount(orderId))) - BigInt(rows[0]?.n ?? "0");
@@ -313,7 +306,6 @@ export async function runMatcher(symbol: string): Promise<void> {
       const { rows } = await client.query<{ ok: boolean }>("SELECT pg_try_advisory_lock($1) AS ok", [MATCHER_LOCK]);
       if (!rows[0]?.ok) return;
       try {
-        await resolveReviews();
         let guard = 0;
         while (guard++ < 500 && (await matchOnce(symbol))) {
           // keep matching
@@ -328,6 +320,11 @@ export async function runMatcher(symbol: string): Promise<void> {
   }
 }
 
+/**
+ * Records one match: the fills, the trade and its outbox `token.transfer` command in ONE
+ * transaction (O-1). Nothing is sent here; the outbox worker and the signing service do that, and
+ * the settlement follower moves the cash once the read model shows the transfer.
+ */
 async function matchOnce(symbol: string): Promise<boolean> {
   const pool = await db();
   const bid = await best(pool, symbol, "buy");
@@ -335,8 +332,21 @@ async function matchOnce(symbol: string): Promise<boolean> {
   const m = nextMatch(bid, ask);
   if (!m || !bid || !ask) return false;
 
+  const [buyer, seller, live] = await Promise.all([investorById(bid.investorId), investorById(ask.investorId), liveToken(symbol, true)]);
+  // Nothing recorded and nobody at fault: keep both orders, stop matching for now.
+  if (!buyer || !seller || !live) return false;
+  const custodial = await pool.query("SELECT 1 FROM signer.custodial_wallets WHERE address = $1", [seller.wallet_address.toLowerCase()]);
+  if (custodial.rowCount !== 1) {
+    // The signing service does not hold the seller's key, so this offer can never be delivered.
+    await pool.query(
+      "UPDATE webdemo.orders SET status = 'cancelled', note = 'cancelled: seller wallet not in custody; nothing was sent', updated_at = clock_timestamp() WHERE id = $1 AND status = 'open'",
+      [ask.id],
+    );
+    return true;
+  }
+
   const tradeId = randomUUID();
-  const recorded = await tx(async (c) => {
+  return tx(async (c) => {
     const fill = async (o: OrderRow) =>
       c.query(
         `UPDATE webdemo.orders SET filled = filled + $2,
@@ -350,52 +360,24 @@ async function matchOnce(symbol: string): Promise<boolean> {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settling')`,
       [tradeId, symbol, bid.id, ask.id, bid.investorId, ask.investorId, m.pricePaisa.toString(), m.tokens.toString()],
     );
+    const command = await enqueue(
+      c,
+      `web:trade:${tradeId}:transfer`,
+      "token.transfer",
+      {
+        token: live.address,
+        from: seller.wallet_address.toLowerCase(),
+        to: buyer.wallet_address.toLowerCase(),
+        amount: m.tokens.toString(),
+        trade: tradeId,
+        escrowAccount: escrowAccount(bid.id),
+        costPaisa: (m.pricePaisa * m.tokens).toString(),
+      },
+      `web:trade:${tradeId}`,
+    );
+    await c.query("UPDATE webdemo.trades SET command_id = $2 WHERE id = $1", [tradeId, command.toString()]);
     return true;
   }).catch(() => false);
-  if (!recorded) return false;
-
-  const [buyer, seller, live] = await Promise.all([investorById(bid.investorId), investorById(ask.investorId), liveToken(symbol, true)]);
-  if (!buyer || !seller || !live) {
-    // Nothing sent and nobody at fault: undo the match, keep both orders, stop matching for now.
-    await undoTrade(tradeId, "chain or investor record unavailable; nothing was sent", { buy: false, sell: false });
-    return false;
-  }
-  let signer: ReturnType<typeof signerFor>;
-  try {
-    signer = signerFor(seller);
-  } catch {
-    await undoTrade(tradeId, "seller's custodial key unavailable; nothing was sent", { buy: false, sell: true });
-    return true;
-  }
-  let hash: Hex;
-  try {
-    hash = await send(
-      signer,
-      { address: live.address, abi: tokenAbi, functionName: "transfer", args: [buyer.wallet_address, m.tokens] },
-      async (signed) => {
-        // Durable before broadcast, and only while the trade is still settling.
-        const r = await pool.query(
-          "UPDATE webdemo.trades SET transfer_tx = $2, transfer_nonce = $3, updated_at = clock_timestamp() WHERE id = $1 AND status = 'settling'",
-          [tradeId, signed.hash, signed.nonce],
-        );
-        if (r.rowCount !== 1) throw new Error("trade is no longer settling");
-      },
-    );
-  } catch (e) {
-    // A compliance refusal cannot tell which side is at fault, so both orders are cancelled.
-    if (e instanceof NotSentError) await undoTrade(tradeId, "transfer refused before sending (on-chain compliance)", { buy: true, sell: true });
-    else await reviewTrade(tradeId, "transfer broadcast failed; outcome unknown");
-    return true;
-  }
-  try {
-    await waitSuccess(hash);
-  } catch (e) {
-    if (e instanceof RevertedError) await undoTrade(tradeId, `transfer reverted (${hash})`, { buy: true, sell: true });
-    else await reviewTrade(tradeId, "transfer not confirmed in time");
-    return true;
-  }
-  await settleTrade(tradeId, hash);
-  return true;
 }
 
 async function settleTrade(tradeId: string, hash: Hex): Promise<void> {
@@ -457,41 +439,114 @@ async function undoTrade(tradeId: string, reason: string, cancel: { buy: boolean
   });
 }
 
-async function reviewTrade(tradeId: string, reason: string): Promise<void> {
+async function setTradeStatus(tradeId: string, status: "settling" | "review", reason: string | null): Promise<void> {
   await (await db()).query(
-    `UPDATE webdemo.trades SET status = 'review', note = $2, updated_at = clock_timestamp()
-     WHERE id = $1 AND status = 'settling'`,
-    [tradeId, reason.slice(0, 300)],
+    `UPDATE webdemo.trades SET status = $2, note = $3, updated_at = clock_timestamp()
+     WHERE id = $1 AND status IN ('settling', 'review') AND (status <> $2 OR note IS DISTINCT FROM $3)`,
+    [tradeId, status, reason?.slice(0, 300) ?? null],
   );
 }
 
+type OpenTrade = TradeRow & { seller_wallet: Address; buyer_wallet: Address; stale: boolean };
+
+let lastSlowTradePass = 0;
+
 /**
- * Resolves trades held for review from the chain (runs under the matcher lock):
- * - success: settle; reverted or dropped (nonce taken by another transaction): undo;
- * - no recorded transaction: nothing was ever broadcast (the hash is recorded first, and only
- *   while the trade is settling), so undo;
- * - still pending or unknown: leave it.
- * Trades left in "settling" by a crashed process (older than two minutes) are reviewed too.
+ * One pass over every unfinished trade (called by the settlement follower; ADR 0010 §2). Runs
+ * under the matcher lock, like cancels, so fills and escrow never change underneath it; if the
+ * matcher is busy it does nothing this time.
+ *   confirmed + read model shows seller -> buyer of this amount in that transaction: settle (DvP);
+ *   failed (final) + no recorded transaction, or the chain proves it reverted or was dropped: undo;
+ *   review, or anything that does not match: review (operations).
  */
-async function resolveReviews(): Promise<void> {
+export async function settleTrades(): Promise<void> {
   const pool = await db();
-  await pool.query(
-    `UPDATE webdemo.trades SET status = 'review', note = 'interrupted; waiting for reconciliation', updated_at = clock_timestamp()
-     WHERE status = 'settling' AND updated_at < now() - interval '2 minutes'`,
-  );
-  const { rows } = await pool.query<TradeRow & { seller_wallet: Address }>(
-    `SELECT t.*, i.wallet_address AS seller_wallet FROM webdemo.trades t
-     JOIN webdemo.investors i ON i.id = t.seller_id WHERE t.status = 'review' ORDER BY t.created_at LIMIT 50`,
-  );
-  for (const t of rows) {
-    if (!t.transfer_tx || t.transfer_nonce === null) {
-      await undoTrade(t.id, "no transfer was ever sent", { buy: true, sell: true });
-      continue;
+  const client = await pool.connect();
+  try {
+    const { rows: lock } = await client.query<{ ok: boolean }>("SELECT pg_try_advisory_lock($1) AS ok", [MATCHER_LOCK]);
+    if (!lock[0]?.ok) return;
+    try {
+      const { rows } = await pool.query<OpenTrade>(
+        `SELECT t.*, s.wallet_address AS seller_wallet, b.wallet_address AS buyer_wallet, t.updated_at < now() - interval '2 minutes' AS stale
+         FROM webdemo.trades t JOIN webdemo.investors s ON s.id = t.seller_id JOIN webdemo.investors b ON b.id = t.buyer_id
+         WHERE t.status IN ('settling', 'review') ORDER BY t.created_at LIMIT 200`,
+      );
+      if (rows.length === 0) return;
+      const states = await commandStates(pool, rows.map((r) => r.command_id));
+      const cursor = (await indexStatus())?.block ?? null;
+      // Trades in review and pre-5h trades need chain reads and rarely change: every 30 s only.
+      const slow = Date.now() - lastSlowTradePass >= 30_000;
+      if (slow) lastSlowTradePass = Date.now();
+      for (const t of rows) {
+        const cmd = t.command_id ? states.get(t.command_id) : undefined;
+        if ((t.status === "review" || !t.command_id) && !slow && !(cmd && cmd.status !== "review" && cmd.status !== "failed")) continue;
+        if (!t.command_id) {
+          await settleLegacyTrade(t);
+          continue;
+        }
+        if (!cmd) continue;
+        const delivered = cmd.txHash ? await transfersInTx(t.seller_wallet, cmd.txHash) : [];
+        if (delivered === undefined) continue; // read model unavailable: decide nothing
+        const match = delivered.some((d) => d.to === t.buyer_wallet.toLowerCase() && d.amount === BigInt(t.tokens));
+        if (match && cmd.txHash) {
+          await settleTrade(t.id, cmd.txHash);
+          continue;
+        }
+        switch (cmd.status) {
+          case "confirmed": {
+            if (delivered.length > 0) {
+              await setTradeStatus(t.id, "review", "the transfer on chain does not match the trade");
+              break;
+            }
+            // Not indexed yet, unless the indexer is already past the transaction's block.
+            const block = cmd.txHash ? await txBlock(cmd.txHash) : null;
+            if (block !== null && cursor !== null && cursor >= block) await setTradeStatus(t.id, "review", "confirmed transfer missing from the read model");
+            break;
+          }
+          case "failed": {
+            if (!cmd.txHash || !cmd.txFrom || cmd.txNonce === null) {
+              // Refused before anything was sent (policy, compliance, simulation): it can never happen.
+              await undoTrade(t.id, `transfer refused before sending: ${cmd.lastError ?? "refused"}`, { buy: true, sell: true });
+              break;
+            }
+            const outcome = await txOutcome(cmd.txHash, cmd.txFrom, cmd.txNonce);
+            if (outcome === "reverted" || outcome === "dropped") await undoTrade(t.id, `transfer ${outcome} (${cmd.txHash})`, { buy: true, sell: true });
+            else if (outcome !== "success") await setTradeStatus(t.id, "review", `transfer command failed; transaction ${outcome}`);
+            break; // success: wait for the read model
+          }
+          case "review":
+            await setTradeStatus(t.id, "review", `held for operations: ${cmd.lastError ?? "outcome unknown"}`);
+            break;
+          default:
+            if (t.status === "review") await setTradeStatus(t.id, "settling", null);
+        }
+      }
+    } finally {
+      await client.query("SELECT pg_advisory_unlock($1)", [MATCHER_LOCK]);
     }
-    const outcome = await txOutcome(t.transfer_tx, t.seller_wallet, t.transfer_nonce);
-    if (outcome === "success") await settleTrade(t.id, t.transfer_tx);
-    else if (outcome === "reverted" || outcome === "dropped") await undoTrade(t.id, `transfer ${outcome} (${t.transfer_tx})`, { buy: true, sell: true });
+  } finally {
+    client.release();
   }
+}
+
+/**
+ * Trades from before Step 5h (sent by the old demo signer, no outbox command): resolved from the
+ * read model and the chain exactly as before, and never sent again.
+ */
+async function settleLegacyTrade(t: OpenTrade): Promise<void> {
+  if (t.status === "settling" && !t.stale) return;
+  if (!t.transfer_tx || t.transfer_nonce === null) {
+    await undoTrade(t.id, "no transfer was ever sent", { buy: true, sell: true });
+    return;
+  }
+  const delivered = await transfersInTx(t.seller_wallet, t.transfer_tx);
+  if (delivered?.some((d) => d.to === t.buyer_wallet.toLowerCase() && d.amount === BigInt(t.tokens))) {
+    await settleTrade(t.id, t.transfer_tx);
+    return;
+  }
+  const outcome = await txOutcome(t.transfer_tx, t.seller_wallet, BigInt(t.transfer_nonce));
+  if (outcome === "reverted" || outcome === "dropped") await undoTrade(t.id, `transfer ${outcome} (${t.transfer_tx})`, { buy: true, sell: true });
+  else if (t.status === "settling") await setTradeStatus(t.id, "review", "interrupted; waiting for reconciliation");
 }
 
 // ------------------------------------------------------------------ read models
@@ -582,12 +637,7 @@ async function readSnapshot(symbol: string): Promise<MarketSnapshot> {
 /** Cash available and tokens not yet offered, for the order form. */
 export async function positionOf(investor: InvestorRow, symbol: string): Promise<{ cashPaisa: bigint; freeTokens: bigint | null }> {
   const pool = await db();
-  const live = await liveToken(symbol);
-  const balance = live
-    ? await publicClient
-        .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
-        .catch(() => null)
-    : null;
+  const balance = (await liveToken(symbol)) ? await holdingOf(investor.wallet_address) : null;
   const { rows } = await pool.query<{ n: string | null }>(
     "SELECT sum(tokens - filled) AS n FROM webdemo.orders WHERE investor_id = $1 AND symbol = $2 AND side = 'sell' AND status = 'open'",
     [investor.id, symbol],

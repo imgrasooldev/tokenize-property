@@ -34,8 +34,8 @@ export async function loginAs(page: Page, who: "Alice" | "Bob"): Promise<void> {
   await expect(page).toHaveURL(/\/account$/);
 }
 
-/** A random CNIC that does not end in 0 (0 simulates a NADRA failure). */
+/** A random CNIC the mock NADRA accepts: last digit 1-7 (0 = not found, 8 = name mismatch, 9 = unavailable). */
 export function randomCnic(): string {
   const d = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join("");
-  return `${d(5)}-${d(7)}-${String(1 + Math.floor(Math.random() * 9))}`;
+  return `${d(5)}-${d(7)}-${String(1 + Math.floor(Math.random() * 7))}`;
 }

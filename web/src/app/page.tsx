@@ -8,7 +8,7 @@ import { MIN_TOKENS } from "@/lib/invest-rules";
 import { PROPERTIES } from "@/lib/properties";
 import { shortHash } from "@/lib/pulse-view";
 import { sampleScore } from "@/lib/sample-ai";
-import { liveToken } from "@/lib/server/chain";
+import { liveToken } from "@/lib/server/readmodel";
 import { getDict } from "@/lib/server/lang";
 import { marketSnapshot } from "@/lib/server/market";
 import { chainPulse } from "@/lib/server/pulse";

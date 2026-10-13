@@ -1,0 +1,19 @@
+[Unit]
+Description=Property Token demo: a few demo-market trades between the personas (keeps the chart alive)
+After=pt-stack.service pt-signer.service pt-outbox.service pt-indexer.service
+Requires=pt-stack.service
+
+[Service]
+# One short run: Alice and Bob trade through the real market code; every delivery goes through the
+# outbox and the signing service (ADR 0010). Started only by pt-demo-market.timer, which is OFF
+# unless /etc/pt/demo-market.enabled exists (deploy/demo-server/README.md).
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/web
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+Environment=NODE_OPTIONS=--max-old-space-size=192
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs tools/market-demo.ts 6 20
+TimeoutStartSec=15min
+MemoryMax=320M
+NoNewPrivileges=true
+PrivateTmp=true

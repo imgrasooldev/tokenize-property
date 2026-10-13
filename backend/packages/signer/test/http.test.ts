@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authHeaders, createSignerServer, SignerClient, type Client, type SignerApi } from "../src/http.ts";
+import { authHeaders, createSignerServer, OUTBOX_SCOPE, SignerClient, WEB_SCOPE, type Client, type SignerApi } from "../src/http.ts";
 
 const client: Client = { id: "outbox-worker", secret: Buffer.alloc(32, 7) };
 const calls: string[] = [];
@@ -52,6 +52,22 @@ describe("signer HTTP API", () => {
     expect((await raw("/v1/sign", body.replace("cmd:http:2", "cmd:http:9"), tampered)).status).toBe(401);
     const wrongPath = authHeaders(client, "POST", "/v1/release", body);
     expect((await raw("/v1/sign", body, wrongPath)).status).toBe(401);
+  });
+
+  it("limits each client to its scope: the website may create wallets but never ask for a signature", async () => {
+    const web: Client = { id: "web", secret: Buffer.alloc(32, 9), scope: WEB_SCOPE };
+    const worker: Client = { ...client, scope: OUTBOX_SCOPE };
+    const scoped = createSignerServer({ ...api, createWallet: (by) => Promise.resolve({ address: `0x${by === "web" ? "ab" : "cd"}${"0".repeat(38)}` }) }, [web, worker]);
+    await new Promise<void>((r) => scoped.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${String((scoped.address() as AddressInfo).port)}`;
+    try {
+      expect(await new SignerClient(url, web).createWallet()).toEqual({ address: `0xab${"0".repeat(38)}` });
+      await expect(new SignerClient(url, web).sign({ commandRef: "cmd:http:web", kind: "issuance.mint", payload: {} })).rejects.toThrow(/403/);
+      await expect(new SignerClient(url, worker).createWallet()).rejects.toThrow(/403/);
+      expect(calls).not.toContain("sign:web:cmd:http:web");
+    } finally {
+      scoped.close();
+    }
   });
 
   it("refuses oversized bodies, non-JSON and unknown routes, and never echoes internals", async () => {

@@ -3,7 +3,7 @@ import { PublicPage, Sample, Spark } from "@/components/Shell";
 import { formatNumber, formatPkr, loc } from "@/lib/i18n";
 import { PROPERTIES } from "@/lib/properties";
 import { sampleScore } from "@/lib/sample-ai";
-import { liveToken } from "@/lib/server/chain";
+import { liveToken } from "@/lib/server/readmodel";
 import { getDict } from "@/lib/server/lang";
 
 export const dynamic = "force-dynamic";

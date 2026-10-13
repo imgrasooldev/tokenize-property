@@ -1,24 +1,40 @@
 import { createHash } from "node:crypto";
 import type pg from "pg";
 import { createPublicClient, http, keccak256, type Hex } from "viem";
-import { distributionRegistryAbi, identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
+import { distributionRegistryAbi, idFactoryAbi, identityAbi, identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
 import { z } from "zod";
-import type { KeyProvider } from "./keystore.ts";
+import { custodialRef, type CustodyProvider, type KeyProvider } from "./keystore.ts";
 import {
+  claimHash,
+  claimId,
   evaluateFreeze,
+  evaluateIdentityClaim,
+  evaluateIdentityCreate,
+  evaluateIdentityRegister,
   evaluateMint,
   evaluateRecordPayout,
+  evaluateTransfer,
   freezePayload,
+  identityClaimPayload,
+  identityCreatePayload,
+  identityRegisterPayload,
   isPayoutKind,
   KINDS,
   mintPayload,
   parseRule,
   recordPayoutPayload,
+  requestKeyRef,
+  transferPayload,
   type AnyRule,
   type Decision,
   type FreezeRule,
+  type IdentityClaimRule,
+  type IdentityCreateRule,
+  type IdentityRegisterRule,
   type MintRule,
+  type OnboardingFacts,
   type RecordPayoutRule,
+  type TransferRule,
 } from "./policy.ts";
 
 /**
@@ -43,6 +59,20 @@ export interface ChainReader {
   distribution(rule: RecordPayoutRule, id: bigint): Promise<{ status: string; token: string }>;
   /** "dropped" only when there is no receipt and the sender's mined nonce is past this one. */
   txState(hash: Hex, from: Hex, nonce: bigint): Promise<"mined" | "dropped" | "pending">;
+  /** Facts for a DvP delivery (token.transfer). Optional so older test doubles keep compiling. */
+  transferFacts?: (rule: TransferRule, from: Hex, to: Hex) => Promise<{ recipientVerified: boolean; paused: boolean; senderFrozen: boolean; freeBalance: bigint }>;
+  /** IdFactory.getIdentity(wallet) (zero address if none). */
+  identityOf?: (idFactory: Hex, wallet: Hex) => Promise<string>;
+  /** IdentityRegistry.contains(wallet). */
+  isRegistered?: (identityRegistry: Hex, wallet: Hex) => Promise<boolean>;
+  /** Issuer of the claim with this id on the identity (zero address if none). */
+  claimIssuerOf?: (identity: Hex, claimId: Hex) => Promise<string>;
+}
+
+/** A chain reader without the optional onboarding/transfer facts denies those kinds (fail closed). */
+function need<T>(f: T | undefined, what: string): T {
+  if (f === undefined) throw new Error(`chain reader cannot read ${what}`);
+  return f;
 }
 
 export function viemChainReader(rpcUrl: string): ChainReader {
@@ -73,6 +103,23 @@ export function viemChainReader(rpcUrl: string): ChainReader {
       return { recipientVerified, supply, cap, paused };
     },
     isFrozen: (rule, account) => c.readContract({ address: rule.token as Hex, abi: tokenAbi, functionName: "isFrozen", args: [account] }),
+    transferFacts: async (rule, from, to) => {
+      const token = rule.token as Hex;
+      const [recipientVerified, paused, senderFrozen, balance, frozen] = await Promise.all([
+        c.readContract({ address: rule.identityRegistry as Hex, abi: identityRegistryAbi, functionName: "isVerified", args: [to] }),
+        c.readContract({ address: token, abi: tokenAbi, functionName: "paused" }),
+        c.readContract({ address: token, abi: tokenAbi, functionName: "isFrozen", args: [from] }),
+        c.readContract({ address: token, abi: tokenAbi, functionName: "balanceOf", args: [from] }),
+        c.readContract({ address: token, abi: tokenAbi, functionName: "getFrozenTokens", args: [from] }),
+      ]);
+      return { recipientVerified, paused, senderFrozen, freeBalance: balance - frozen };
+    },
+    identityOf: async (idFactory, wallet) => (await c.readContract({ address: idFactory, abi: idFactoryAbi, functionName: "getIdentity", args: [wallet] })).toLowerCase(),
+    isRegistered: (registry, wallet) => c.readContract({ address: registry, abi: identityRegistryAbi, functionName: "contains", args: [wallet] }),
+    claimIssuerOf: async (identity, id) => {
+      const claim = await c.readContract({ address: identity, abi: identityAbi, functionName: "getClaim", args: [id] });
+      return claim[2].toLowerCase();
+    },
     distribution: async (rule, id) => {
       const d = await c.readContract({ address: rule.registry as Hex, abi: distributionRegistryAbi, functionName: "getDistribution", args: [id] });
       return { status: DISTRIBUTION_STATUS[d.status] ?? "unknown", token: d.token.toLowerCase() };
@@ -169,10 +216,99 @@ export class SignerService {
 
   /** Facts are read fresh for every decision, per kind; the evaluation itself is a pure function. */
   private async evaluate(c: pg.ClientBase, kind: string, rule: AnyRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
-    if (kind === "compliance.freeze") return this.evaluateFreeze(c, rule as FreezeRule, payload, excludeRequest);
-    if (kind === "rent.record_payout") return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
-    if (kind !== "issuance.mint") return { decision: "deny", reason: `no evaluator for ${kind}` };
-    return this.evaluateMint(c, rule as MintRule, payload, excludeRequest);
+    switch (kind) {
+      case "issuance.mint":
+        return this.evaluateMint(c, rule as MintRule, payload, excludeRequest);
+      case "compliance.freeze":
+        return this.evaluateFreeze(c, rule as FreezeRule, payload, excludeRequest);
+      case "rent.record_payout":
+        return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
+      case "token.transfer":
+        return this.evaluateTransfer(c, rule as TransferRule, payload, excludeRequest);
+      case "identity.create":
+      case "identity.add_claim":
+      case "identity.register":
+        return this.evaluateOnboarding(c, kind, rule, payload, excludeRequest);
+      default:
+        return { decision: "deny", reason: `no evaluator for ${kind}` };
+    }
+  }
+
+  /** Requests of a kind signed (or about to be) since midnight Pakistan time, all keys; excludes one request. */
+  private async signedToday(c: pg.ClientBase, kind: string, excludeRequest: string | null, sumAmounts: boolean): Promise<bigint> {
+    const { rows } = await c.query<{ n: string }>(
+      `SELECT ${sumAmounts ? "coalesce(sum(amount), 0)" : "count(*)"} AS n FROM signer.requests
+       WHERE kind = $1 AND status IN ('approved', 'signed', 'broadcast')
+         AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi')
+         AND ($2::uuid IS NULL OR id <> $2::uuid)`,
+      [kind, excludeRequest],
+    );
+    return BigInt(rows[0]?.n ?? "0");
+  }
+
+  private async isCustodial(c: pg.ClientBase, wallet: string): Promise<boolean> {
+    const { rowCount } = await c.query("SELECT 1 FROM signer.custodial_wallets WHERE address = $1", [wallet.toLowerCase()]);
+    return rowCount === 1 && this.keys.refs().includes(custodialRef(wallet));
+  }
+
+  private async evaluateTransfer(c: pg.ClientBase, rule: TransferRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = transferPayload.safeParse(payload);
+    const closed = { chainId: 0, fromCustodial: false, recipientVerified: false, paused: true, senderFrozen: true, freeBalance: 0n, escrowHeld: 0n, signedToday: 0n };
+    if (!p.success) return evaluateTransfer(rule, payload, closed);
+    const from = p.data.from.toLowerCase() as Hex;
+    const to = p.data.to.toLowerCase() as Hex;
+    // Chain reads run in parallel with the database reads; one client runs one query at a time.
+    const db = async () => {
+      const custodial = await this.isCustodial(c, from);
+      const escrow = await c.query<{ n: string }>("SELECT ledger.escrow_held($1) AS n", [p.data.escrowAccount]);
+      const used = await this.signedToday(c, "token.transfer", excludeRequest, true);
+      return { custodial, escrowHeld: BigInt(escrow.rows[0]?.n ?? "0"), used };
+    };
+    const [chainId, chainFacts, facts] = await Promise.all([this.chain.chainId(), need(this.chain.transferFacts, "transfer facts")(rule, from, to), db()]);
+    return evaluateTransfer(rule, payload, { chainId, ...chainFacts, fromCustodial: facts.custodial, escrowHeld: facts.escrowHeld, signedToday: facts.used });
+  }
+
+  private async evaluateOnboarding(c: pg.ClientBase, kind: string, rule: AnyRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const closed: OnboardingFacts = { chainId: 0, custodial: false, kycVerified: false, onChainIdentity: "0x0000000000000000000000000000000000000000", signedToday: 0 };
+    const parsed = kind === "identity.create" ? identityCreatePayload.safeParse(payload) : kind === "identity.add_claim" ? identityClaimPayload.safeParse(payload) : identityRegisterPayload.safeParse(payload);
+    const idFactory = (rule as IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule).idFactory as Hex;
+    let facts = closed;
+    if (parsed.success) {
+      const wallet = parsed.data.wallet.toLowerCase() as Hex;
+      const db = async () => {
+        const custodial = await this.isCustodial(c, wallet);
+        const kyc = await c.query<{ ok: boolean }>("SELECT kyc.is_verified($1) AS ok", [wallet]);
+        const used = await this.signedToday(c, kind, excludeRequest, false);
+        return { custodial, kycVerified: kyc.rows[0]?.ok === true, signedToday: Number(used) };
+      };
+      const [chainId, identity, dbFacts] = await Promise.all([this.chain.chainId(), need(this.chain.identityOf, "identities")(idFactory, wallet), db()]);
+      facts = { chainId, onChainIdentity: identity, ...dbFacts };
+    }
+    if (kind === "identity.create") return evaluateIdentityCreate(rule as IdentityCreateRule, payload, facts);
+    if (kind === "identity.add_claim") {
+      const r = rule as IdentityClaimRule;
+      const p = identityClaimPayload.safeParse(payload);
+      // The claim key signs only for a verified owner's own identity; otherwise nothing is signed.
+      let claimSignature: Hex | null = null;
+      if (p.success && facts.kycVerified && facts.custodial && facts.onChainIdentity === p.data.identity.toLowerCase() && r.topics.includes(p.data.topic)) {
+        claimSignature = await this.keys.signMessage(r.claimKeyRef, claimHash(p.data.identity.toLowerCase(), p.data.topic));
+      }
+      return evaluateIdentityClaim(r, payload, { ...facts, claimSignature });
+    }
+    const r = rule as IdentityRegisterRule;
+    const p = identityRegisterPayload.safeParse(payload);
+    let alreadyRegistered = true;
+    let topicsWithClaim: number[] = [];
+    if (p.success && facts.onChainIdentity === p.data.identity.toLowerCase()) {
+      const identity = p.data.identity.toLowerCase() as Hex;
+      const [registered, issuers] = await Promise.all([
+        need(this.chain.isRegistered, "the identity registry")(r.identityRegistry as Hex, p.data.wallet.toLowerCase() as Hex),
+        Promise.all(r.topics.map((t) => need(this.chain.claimIssuerOf, "claims")(identity, claimId(r.claimIssuer.toLowerCase(), t)))),
+      ]);
+      alreadyRegistered = registered;
+      topicsWithClaim = r.topics.filter((_t, i) => issuers.at(i) === r.claimIssuer.toLowerCase());
+    }
+    return evaluateIdentityRegister(r, payload, { ...facts, alreadyRegistered, topicsWithClaim });
   }
 
   private async evaluateFreeze(c: pg.ClientBase, rule: FreezeRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
@@ -271,7 +407,7 @@ export class SignerService {
     const decision: Decision = policy
       ? await this.evaluate(c, input.kind, policy.rule, input.payload, null)
       : { decision: "deny", reason: `no active policy for ${input.kind}` };
-    const keyRef = decision.decision === "allow" ? decision.keyRef : (policy?.rule.keyRef ?? null);
+    const keyRef = decision.decision === "allow" ? decision.keyRef : policy ? requestKeyRef(input.kind, policy.rule, input.payload) : null;
     if (keyRef === null || !this.keys.refs().includes(keyRef)) {
       await this.audit(c, requestedBy, "request.denied", null, { commandRef: input.commandRef, reason: decision.decision === "deny" ? decision.reason : "signing key not loaded" });
       return { status: "denied", reason: decision.decision === "deny" ? decision.reason : "signing key not loaded" };
@@ -371,6 +507,18 @@ export class SignerService {
     await c.query("UPDATE signer.requests SET status = 'signed', nonce = $2, tx_hash = $3 WHERE id = $1", [req.id, nonce.toString(), txHash]);
     await this.audit(c, requestedBy, "request.signed", req.id, { hash: txHash, nonce: nonce.toString(), from });
     return { status: "signed", requestId: req.id, raw, hash: txHash, nonce, from };
+  }
+
+  /**
+   * Creates a custodial investor wallet (ADR 0010): the key is generated inside the key provider and
+   * recorded with its address in signer.custodial_wallets (W-1). Only the address is returned.
+   */
+  async createWallet(createdBy: string): Promise<{ address: string }> {
+    const custody = this.keys as Partial<CustodyProvider>;
+    if (typeof custody.createCustodialKey !== "function") throw new Error("this key provider cannot create custodial wallets");
+    const { address } = await custody.createCustodialKey();
+    await this.pool.query("SELECT signer.register_custodial_wallet($1, 'generated', $2)", [address, createdBy]);
+    return { address };
   }
 
   /** The caller recorded and broadcast the transaction. */

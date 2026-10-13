@@ -35,4 +35,9 @@ python3 chain/flow.py
 echo "== a rent distribution to verify on the website"
 python3 chain/rent.py 300000
 
-echo "setup done; start the services with: sudo systemctl start pt-stack pt-web pt-console"
+echo "== backend services' secrets, keys and the website's database role (idempotent, nothing printed)"
+(cd backend && npm run --silent kyc:setup >/dev/null && npm run --silent signer:setup >/dev/null && npm run --silent db:web-role >/dev/null)
+
+echo "setup done; start the services with:"
+echo "  sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-web pt-console"
+echo "then, once the indexer has caught up (npm run indexer:status in backend/): npm run seed:local && npm run rent:book"

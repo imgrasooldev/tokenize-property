@@ -3,15 +3,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cancelOrderAction } from "@/app/actions/market";
 import { MarketLive } from "@/components/MarketLive";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { OrderPanel } from "@/components/OrderPanel";
 import { PortalShell, PublicPage } from "@/components/Shell";
 import { formatNumber, formatPrice, loc } from "@/lib/i18n";
 import { priceBand } from "@/lib/market-rules";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById } from "@/lib/server/db";
+import { nudgeFollower } from "@/lib/server/follower";
 import { getDict } from "@/lib/server/lang";
 import { marketSnapshot, nudgeMatcher, ordersOf, positionOf, toView, tradesOf } from "@/lib/server/market";
-import { isVerifiedOnChain } from "@/lib/server/onboarding";
+import { registeredOnChain } from "@/lib/server/readmodel";
 import { currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +40,16 @@ export default async function MarketPage() {
 
   // Picks up anything left crossing or held for review (e.g. after a restart); throttled, non-blocking.
   nudgeMatcher(p.symbol);
+  // Settlement runs in the background; a visit also wakes it (never waits for it).
+  void nudgeFollower();
   const view = toView(await marketSnapshot(p.symbol));
-  const verified = investor ? (await isVerifiedOnChain(investor.wallet_address)) === true : false;
+  const verified = investor ? (await registeredOnChain(investor.wallet_address)) === true : false;
   const [position, orders, trades] = investor
     ? await Promise.all([positionOf(investor, p.symbol), ordersOf(investor.id), tradesOf(investor.id)])
     : [null, [], []];
   const band = priceBand(p.navPkr);
+  // My trades settle in the background (outbox, signing service, chain index): refresh while one is on its way.
+  const settling = trades.some((tr) => tr.status === "settling");
   const rs = (paisa: string | bigint) => Number(paisa) / 100;
 
   return frame(
@@ -51,6 +57,7 @@ export default async function MarketPage() {
       {loc(p.name, lang)} <span className="mu sym">· {p.symbol}</span>
     </>,
     <>
+      {settling && <AutoRefresh seconds={2} />}
       <div className="alert demo" role="note">
         <strong>{t.demo}:</strong> {t.marketDemo}
       </div>

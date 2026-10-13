@@ -2,14 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PortalShell, Sample } from "@/components/Shell";
 import { VerifyRent } from "@/components/VerifyRent";
-import { tokenAbi } from "@/lib/abis";
 import { formatNumber, formatPkr, formatPrice, loc, type Dict } from "@/lib/i18n";
 import { MAX_HOLDING_TOKENS } from "@/lib/invest-rules";
 import { PROPERTIES } from "@/lib/properties";
-import { liveToken } from "@/lib/server/chain";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { db, investorById } from "@/lib/server/db";
-import { publicClient } from "@/lib/server/demo-signer";
-import { investorAccount, reconcileThrottled, refUsedOnChain, subscriptionsOf, type SubscriptionStatus } from "@/lib/server/invest";
+import { nudgeFollower } from "@/lib/server/follower";
+import { investorAccount, phasesOf, subscriptionsOf, type SubscriptionStatus } from "@/lib/server/invest";
+import type { Phase } from "@/lib/server/outbox";
+import { holdingOf, indexStatus, liveToken, usedRefs } from "@/lib/server/readmodel";
 import { getDict } from "@/lib/server/lang";
 import { balanceOf, chainProblemsCached } from "@/lib/server/ledger";
 import { cashOf, escrowMatches, escrowOf, ordersOf, tradesOf } from "@/lib/server/market";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-function statusChip(s: SubscriptionStatus, t: Dict) {
+function statusChip(s: SubscriptionStatus, t: Dict, phase?: Phase) {
   switch (s) {
     case "done":
       return <span className="chip green">{t.subDone}</span>;
@@ -29,7 +30,7 @@ function statusChip(s: SubscriptionStatus, t: Dict) {
     case "review":
       return <span className="chip red">{t.subReview}</span>;
     case "minting":
-      return <span className="chip amber">{t.subMinting}</span>;
+      return <span className="chip amber">{phase === "approval" ? t.subApproval : phase === "confirming" ? t.subConfirming : phase === "queued" ? t.subQueued : t.subMinting}</span>;
     case "paid":
       return <span className="chip amber">{t.subPaid}</span>;
   }
@@ -47,32 +48,34 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const { sub } = await searchParams;
   const highlight = sub && UUID.test(sub) ? sub : null;
 
-  await reconcileThrottled(investor).catch(() => undefined);
+  // Settlement runs in the background (follower); a visit only wakes it, never waits for the chain.
+  void nudgeFollower();
   const subs = await subscriptionsOf(investor.id);
 
   const holdings = await Promise.all(
     PROPERTIES.filter((p) => p.status === "live").map(async (p) => {
       const live = await liveToken(p.symbol);
-      const tokens = live
-        ? await publicClient
-            .readContract({ address: live.address, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
-            .catch(() => null)
-        : null;
+      const tokens = live ? await holdingOf(investor.wallet_address) : null;
       return { p, live, tokens };
     }),
   );
   const pool = await db();
-  const [ledgerBalance, problems, onChain, distributions, cash, escrow, escrowOk, orders, trades] = await Promise.all([
+  const [ledgerBalance, problems, used, distributions, cash, escrow, escrowOk, orders, trades, phases, index] = await Promise.all([
     balanceOf(pool, investorAccount(investor.id)).catch(() => null),
     chainProblemsCached(pool).catch(() => null),
-    Promise.all(subs.map((s) => (s.status === "done" || s.status === "refunded" ? refUsedOnChain(s.ref_id) : Promise.resolve(null)))),
+    usedRefs(subs.filter((s) => s.status === "done" || s.status === "refunded").map((s) => s.ref_id)),
     distributionsFor(investor.wallet_address),
     cashOf(investor.id).catch(() => null),
     escrowOf(investor.id).catch(() => null),
     escrowMatches(investor.id).catch(() => false),
     ordersOf(investor.id).catch(() => []),
     tradesOf(investor.id).catch(() => []),
+    phasesOf(subs).catch(() => new Map<string, Phase>()),
+    indexStatus(),
   ]);
+  // The chain index's view of each subscription's reference (null: index unavailable).
+  const onChain = subs.map((s) => (used === null || (s.status !== "done" && s.status !== "refunded") ? null : used.has(s.ref_id)));
+  const pendingWork = subs.some((s) => s.status === "paid" || s.status === "minting") || trades.some((tr) => tr.status === "settling");
   const openOrders = orders.filter((o) => o.status === "open").length;
 
   // Money the ledger holds for this investor awaiting tokens must equal the open subscriptions.
@@ -147,7 +150,18 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             ? t.receiptDone.replace("{n}", formatNumber(BigInt(justPlaced.tokens), lang)).replace("{s}", justPlaced.symbol)
             : justPlaced.status === "refunded"
               ? t.receiptRefunded
-              : t.receiptReview}
+              : justPlaced.status === "review"
+                ? t.receiptReview
+                : t.receiptQueued.replace(
+                    "{p}",
+                    phases.get(justPlaced.id) === "approval" ? t.subApproval : phases.get(justPlaced.id) === "confirming" ? t.subConfirming : t.subQueued,
+                  )}
+        </div>
+      )}
+      {pendingWork && <AutoRefresh seconds={2} />}
+      {index && (index.halted || index.stale) && (
+        <div className="alert" role="status" style={{ marginBlockEnd: 16 }}>
+          {index.halted ? t.readModelHalted : t.readModelDown}
         </div>
       )}
 
@@ -189,7 +203,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             <div className="row-between">
               <h2>{t.holdingsTitle}</h2>
               <span className="chip ok">
-                <span className="dot" aria-hidden="true" /> balanceOf
+                <span className="dot" aria-hidden="true" /> chain index
               </span>
             </div>
             <div className="table-wrap">
@@ -223,7 +237,9 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                 </tbody>
               </table>
             </div>
-            <p className="note">{t.holdingsNote}</p>
+            <p className="note">
+              {t.holdingsNote} {index ? t.asOfBlock.replace("{b}", index.block.toString()) : t.readModelDown}
+            </p>
           </section>
 
           <div className="ai-box">
@@ -273,7 +289,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                         </td>
                         <td>{formatPkr(rupees(BigInt(s.amount_paisa)), lang)}</td>
                         <td>
-                          {statusChip(s.status, t)}
+                          {statusChip(s.status, t, phases.get(s.id))}
                           {onChain.at(i) === true && (
                             <span className="chip green" title={t.refUsedTip}>
                               ⛓ ✓

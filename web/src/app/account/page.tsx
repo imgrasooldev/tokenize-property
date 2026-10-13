@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { PortalShell, Sample } from "@/components/Shell";
-import { tokenAbi } from "@/lib/abis";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { formatNumber } from "@/lib/i18n";
-import { latestDeployment } from "@/lib/server/chain";
 import { investorById } from "@/lib/server/db";
-import { publicClient } from "@/lib/server/demo-signer";
 import { getDict } from "@/lib/server/lang";
-import { isVerifiedOnChain } from "@/lib/server/onboarding";
+import { onboardingProgress } from "@/lib/server/onboarding";
+import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
 import { currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -17,22 +16,36 @@ export default async function AccountPage() {
   if (!investor) redirect("/login");
   const { lang, t } = await getDict();
 
-  const token = latestDeployment()?.get("token");
-  const [verified, balance] = await Promise.all([
-    isVerifiedOnChain(investor.wallet_address),
-    token
-      ? publicClient
-          .readContract({ address: token, abi: tokenAbi, functionName: "balanceOf", args: [investor.wallet_address] })
-          .catch(() => null)
-      : Promise.resolve(null),
+  // Read model (ADR 0010): as of the indexer cursor, never a chain call per page.
+  const onboarding = investor.onboard_step === "identity" || investor.onboard_step === "claims" || investor.onboard_step === "register";
+  const [verified, balance, index, progress] = await Promise.all([
+    registeredOnChain(investor.wallet_address),
+    holdingOf(investor.wallet_address),
+    indexStatus(),
+    onboarding ? onboardingProgress(investor.id) : Promise.resolve(null),
   ]);
   const status = investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
-  const steps = investor.persona
-    ? [t.stepIdentity, t.stepClaims, t.stepRegistered]
-    : [t.stepNadra, t.stepLiveness, t.stepIdentity, t.stepClaims, t.stepRegistered];
+  const chainSteps = [t.stepIdentity, t.stepClaims, t.stepRegistered];
+  const steps = investor.persona ? chainSteps : [t.stepNadra, t.stepLiveness, ...chainSteps];
+  // How many of the steps are done: KYC steps are done once the account exists (the KYC service
+  // verified the person); chain steps follow the outbox commands until registration is indexed.
+  const failed = investor.onboard_step === "failed";
+  const chainDone = progress ? progress.done : failed ? 0 : chainSteps.length;
+  const doneCount = steps.length - chainSteps.length + chainDone;
 
   return (
     <PortalShell active="account" title={t.accountTitle}>
+      {onboarding && (
+        <div className="alert" role="status" style={{ marginBlockEnd: 16 }}>
+          {progress?.waiting ? t.onboardApproval : t.onboardPending.replace("{n}", String(progress?.done ?? 0)).replace("{t}", String(progress?.total ?? 3))}
+          <AutoRefresh seconds={2} />
+        </div>
+      )}
+      {failed && (
+        <div className="alert" role="status" style={{ marginBlockEnd: 16 }}>
+          {t.onboardFailed}
+        </div>
+      )}
       <div className="kpi-strip">
         <div>
           <small>{t.kycStatus}</small>
@@ -85,13 +98,14 @@ export default async function AccountPage() {
           <section className="panel">
             <h2>{t.howVerified}</h2>
             <div className="timeline">
-              {steps.map((s) => (
+              {steps.map((s, i) => (
                 <div className="ti two" key={s}>
-                  <span className="chip green">✓</span>
+                  <span className={`chip ${i < doneCount ? "green" : failed ? "red" : "amber"}`}>{i < doneCount ? "✓" : failed ? "✗" : "…"}</span>
                   <span>{s}</span>
                 </div>
               ))}
             </div>
+            <p className="fine">{index ? t.asOfBlock.replace("{b}", index.block.toString()) : t.readModelDown}</p>
           </section>
           <section className="panel">
             <div className="row-between">

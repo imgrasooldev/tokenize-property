@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { investSchema } from "@/lib/invest-rules";
 import { investorById } from "@/lib/server/db";
+import { nudgeFollower } from "@/lib/server/follower";
 import { placeOrder, type InvestError } from "@/lib/server/invest";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
@@ -12,7 +13,7 @@ export interface InvestState {
   error?: InvestError | "input" | "rate";
 }
 
-/** Invest in a live property: mock Raast payment, ledger, then a real mint on the local chain. */
+/** Invest in a live property: mock Raast payment and ledger, then the mint through the outbox and the signing service (ADR 0010). */
 export async function invest(_prev: InvestState, formData: FormData): Promise<InvestState> {
   const id = await currentInvestorId();
   const investor = id ? await investorById(id) : null;
@@ -35,5 +36,6 @@ export async function invest(_prev: InvestState, formData: FormData): Promise<In
     return { error: "generic" };
   }
   if ("error" in result) return { error: result.error };
+  void nudgeFollower();
   redirect(`/portfolio?sub=${result.subscriptionId}`);
 }

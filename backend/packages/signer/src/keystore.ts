@@ -3,7 +3,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inspect, promisify } from "node:util";
 import type { Hex, TransactionSerializableLegacy } from "viem";
-import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { z } from "zod";
 
 /**
@@ -15,6 +15,22 @@ export interface KeyProvider {
   refs(): string[];
   address(ref: string): Hex;
   signTransaction(ref: string, tx: TransactionSerializableLegacy): Promise<Hex>;
+  /** EIP-191 signature over a 32-byte hash (ONCHAINID claims). */
+  signMessage(ref: string, hash: Hex): Promise<Hex>;
+}
+
+/**
+ * Custody of investor wallets (ADR 0010): a new key is generated INSIDE the provider (production:
+ * inside the HSM/MPC) and only its address leaves. Refs are "w" + the lower-case address.
+ */
+export interface CustodyProvider extends KeyProvider {
+  createCustodialKey(): Promise<{ ref: string; address: Hex }>;
+}
+
+/** Key reference of a custodial wallet. */
+export function custodialRef(address: string): string {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new Error("invalid address");
+  return `w${address.slice(2).toLowerCase()}`;
 }
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: { N: number; r: number; p: number; maxmem: number }) => Promise<Buffer>;
@@ -59,13 +75,18 @@ export async function writeKeyFile(dir: string, ref: string, privateKey: Hex, pa
 }
 
 /** Keys decrypted into memory at startup. The class never exposes key material, even to logging. */
-export class FileKeystore implements KeyProvider {
+export class FileKeystore implements CustodyProvider {
   readonly #accounts = new Map<string, PrivateKeyAccount>();
+  readonly #dir: string;
+  readonly #passphrase: string;
 
-  private constructor() {}
+  private constructor(dir: string, passphrase: string) {
+    this.#dir = dir;
+    this.#passphrase = passphrase;
+  }
 
   static async open(dir: string, passphrase: string): Promise<FileKeystore> {
-    const ks = new FileKeystore();
+    const ks = new FileKeystore(dir, passphrase);
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- configured directory
     for (const name of await readdir(dir)) {
       if (!/^[a-z][a-z0-9_]{2,40}\.json$/.test(name)) continue;
@@ -106,6 +127,37 @@ export class FileKeystore implements KeyProvider {
     const a = this.#accounts.get(ref);
     if (!a) throw new Error(`unknown key ${ref}`);
     return a.signTransaction(tx);
+  }
+
+  async signMessage(ref: string, hash: Hex): Promise<Hex> {
+    const a = this.#accounts.get(ref);
+    if (!a) throw new Error(`unknown key ${ref}`);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("only 32-byte hashes are signed");
+    return a.signMessage({ message: { raw: hash } });
+  }
+
+  /**
+   * Generates a new key, writes it encrypted (never overwriting a file) and loads it. The ref is
+   * derived from the new address, so a caller can neither choose nor replace a platform key.
+   */
+  async createCustodialKey(): Promise<{ ref: string; address: Hex }> {
+    const key = generatePrivateKey();
+    const account = privateKeyToAccount(key);
+    const ref = custodialRef(account.address);
+    if (this.#accounts.has(ref)) throw new Error(`key ${ref} already exists`);
+    await writeKeyFile(this.#dir, ref, key, this.#passphrase);
+    this.#accounts.set(ref, account);
+    return { ref, address: account.address.toLowerCase() as Hex };
+  }
+
+  /** Imports an existing key as a custodial wallet (local development and the one-time move of demo wallets only). */
+  async importCustodialKey(privateKey: Hex): Promise<{ ref: string; address: Hex; created: boolean }> {
+    const account = privateKeyToAccount(privateKey);
+    const ref = custodialRef(account.address);
+    if (this.#accounts.has(ref)) return { ref, address: account.address.toLowerCase() as Hex, created: false };
+    await writeKeyFile(this.#dir, ref, privateKey, this.#passphrase);
+    this.#accounts.set(ref, account);
+    return { ref, address: account.address.toLowerCase() as Hex, created: true };
   }
 
   toJSON(): object {

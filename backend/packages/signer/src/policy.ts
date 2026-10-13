@@ -1,6 +1,7 @@
-import { encodeFunctionData, type Hex } from "viem";
+import { encodeAbiParameters, encodeFunctionData, keccak256, type Hex } from "viem";
 import { z } from "zod";
-import { distributionRegistryAbi, freezeGuardAbi, issuanceGuardAbi } from "@pt/contracts";
+import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
+import { custodialRef } from "./keystore.ts";
 
 /**
  * Policy engine (deny by default). Each command kind has one active, versioned policy (approved
@@ -56,7 +57,15 @@ export type Decision =
   /** amount: token units for a mint; null for kinds that move no amount (limits count requests instead). */
   | { decision: "allow"; approvalsNeeded: number; amount: bigint | null; keyRef: string; to: Hex; data: Hex; gas: bigint };
 
-export const KINDS = ["issuance.mint", "compliance.freeze", "rent.record_payout"] as const;
+export const KINDS = [
+  "issuance.mint",
+  "compliance.freeze",
+  "rent.record_payout",
+  "token.transfer",
+  "identity.create",
+  "identity.add_claim",
+  "identity.register",
+] as const;
 export type Kind = (typeof KINDS)[number];
 
 // ------------------------------------------------------------------ compliance.freeze (Step 5h)
@@ -161,7 +170,245 @@ export function evaluateRecordPayout(rule: RecordPayoutRule, payload: unknown, f
   };
 }
 
-export type AnyRule = MintRule | FreezeRule | RecordPayoutRule;
+// ------------------------------------------------------------------ token.transfer (Step 5h, ADR 0010)
+
+const ESCROW = /^web:order:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:escrow$/;
+const amount18 = z.string().regex(/^[1-9][0-9]{0,17}$/);
+
+/**
+ * Delivery leg of a DvP trade on the demo market: tokens from the seller's CUSTODIAL wallet to a
+ * verified buyer, only while the buyer's payment is locked in the trade's escrow (migration 0012, W-3).
+ */
+export const transferRule = z.object({
+  chainId: z.number().int().positive(),
+  token: address,
+  identityRegistry: address,
+  maxPerCommand: uint,
+  maxPerDay: uint,
+  /** Transfers above this many tokens need maker-checker approval. */
+  approvalAbove: uint,
+  approvals: z.number().int().min(1).max(5),
+  // A transfer with the compliance modules uses about 370k; with 400k the 63/64 rule ran out of gas in a module call (found on Besu).
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("1000000"),
+});
+export type TransferRule = z.infer<typeof transferRule>;
+
+export const transferPayload = z.strictObject({
+  token: address,
+  from: address,
+  to: address,
+  amount: amount18,
+  trade: z.uuid(),
+  escrowAccount: z.string().regex(ESCROW),
+  costPaisa: amount18,
+});
+
+export interface TransferFacts {
+  chainId: number;
+  /** The sender is a custodial wallet of this signing service (signer.custodial_wallets). */
+  fromCustodial: boolean;
+  recipientVerified: boolean;
+  paused: boolean;
+  senderFrozen: boolean;
+  /** balanceOf(from) minus its frozen tokens. */
+  freeBalance: bigint;
+  /** What the trade's escrow account holds (ledger.escrow_held). */
+  escrowHeld: bigint;
+  /** Tokens already signed today under this kind (excluding this request). */
+  signedToday: bigint;
+}
+
+export function evaluateTransfer(rule: TransferRule, payload: unknown, facts: TransferFacts): Decision {
+  const p = transferPayload.safeParse(payload);
+  if (!p.success) return { decision: "deny", reason: `malformed payload: ${p.error.issues.map((i) => i.path.join(".")).join(", ")}` };
+  const { token, from, to } = p.data;
+  const amount = BigInt(p.data.amount);
+  const cost = BigInt(p.data.costPaisa);
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (token.toLowerCase() !== rule.token.toLowerCase()) return { decision: "deny", reason: "target is not the approved token" };
+  if (from.toLowerCase() === to.toLowerCase()) return { decision: "deny", reason: "sender and recipient are the same wallet" };
+  if (!facts.fromCustodial) return { decision: "deny", reason: "sender is not a custodial wallet of this signing service" };
+  if (amount > BigInt(rule.maxPerCommand)) return { decision: "deny", reason: `amount ${amount.toString()} above per-command limit ${rule.maxPerCommand}` };
+  if (facts.signedToday + amount > BigInt(rule.maxPerDay)) return { decision: "deny", reason: `daily limit ${rule.maxPerDay} would be exceeded` };
+  if (!facts.recipientVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
+  if (facts.paused) return { decision: "deny", reason: "token is paused" };
+  if (facts.senderFrozen) return { decision: "deny", reason: "sender is frozen" };
+  if (facts.freeBalance < amount) return { decision: "deny", reason: "sender does not hold enough unfrozen tokens" };
+  if (facts.escrowHeld < cost) return { decision: "deny", reason: "the buyer's payment is not locked in escrow (delivery versus payment)" };
+  return {
+    decision: "allow",
+    approvalsNeeded: amount > BigInt(rule.approvalAbove) ? rule.approvals : 0,
+    amount,
+    keyRef: custodialRef(from),
+    to: rule.token.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: tokenAbi, functionName: "transfer", args: [to as Hex, amount] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+// ------------------------------------------------------------------ onboarding (Step 5h, ADR 0010)
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const countRule = {
+  chainId: z.number().int().positive(),
+  maxPerDay: z.number().int().min(1).max(100_000),
+  /** Onboarding steps are routine and gated by KYC; a policy may still require approvals. */
+  approvals: z.number().int().min(0).max(5).default(0),
+};
+
+/** Facts shared by the onboarding kinds. */
+export interface OnboardingFacts {
+  chainId: number;
+  /** The wallet is a custodial wallet of this signing service. */
+  custodial: boolean;
+  /** kyc.is_verified(wallet): the KYC service verified the wallet's owner (ADR 0009). */
+  kycVerified: boolean;
+  /** IdFactory.getIdentity(wallet); the zero address if none. */
+  onChainIdentity: string;
+  /** Requests of this kind signed today (excluding this request). */
+  signedToday: number;
+}
+
+function onboardingDenial(rule: { chainId: number; maxPerDay: number }, wallet: string, facts: OnboardingFacts): string | null {
+  if (facts.chainId !== rule.chainId) return `wrong chain ${String(facts.chainId)}`;
+  if (!facts.custodial) return `wallet ${wallet.toLowerCase()} is not a custodial wallet of this signing service`;
+  if (!facts.kycVerified) return "the wallet's owner is not KYC-verified";
+  if (facts.signedToday + 1 > rule.maxPerDay) return `daily limit of ${String(rule.maxPerDay)} would be exceeded`;
+  return null;
+}
+
+const malformed = (e: z.ZodError): Decision => ({ decision: "deny", reason: `malformed payload: ${e.issues.map((i) => i.path.join(".")).join(", ")}` });
+
+export const identityCreateRule = z.object({
+  ...countRule,
+  keyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  idFactory: address,
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("3000000"),
+});
+export type IdentityCreateRule = z.infer<typeof identityCreateRule>;
+export const identityCreatePayload = z.strictObject({ idFactory: address, wallet: address, salt: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/) });
+
+export function evaluateIdentityCreate(rule: IdentityCreateRule, payload: unknown, facts: OnboardingFacts): Decision {
+  const p = identityCreatePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  if (p.data.idFactory.toLowerCase() !== rule.idFactory.toLowerCase()) return { decision: "deny", reason: "target is not the approved IdFactory" };
+  const denial = onboardingDenial(rule, p.data.wallet, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (facts.onChainIdentity.toLowerCase() !== ZERO_ADDRESS) return { decision: "deny", reason: "the wallet already has an identity" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.idFactory.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: idFactoryAbi, functionName: "createIdentity", args: [p.data.wallet as Hex, p.data.salt] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export const identityClaimRule = z.object({
+  ...countRule,
+  /** The claim key (a CLAIM key of the trusted ClaimIssuer); the transaction itself is signed by the wallet. */
+  claimKeyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  idFactory: address,
+  claimIssuer: address,
+  topics: z.array(z.number().int().min(1).max(1_000_000)).min(1).max(8),
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("1000000"),
+});
+export type IdentityClaimRule = z.infer<typeof identityClaimRule>;
+export const identityClaimPayload = z.strictObject({ wallet: address, identity: address, topic: z.number().int().min(1).max(1_000_000) });
+
+/** The claim data, exactly as the contract tests and chain/flow.py use it. */
+export function claimData(topic: number): Hex {
+  return encodeAbiParameters([{ type: "string" }, { type: "uint256" }], ["verified", BigInt(topic)]);
+}
+/** What the claim key signs (EIP-191): keccak256(abi.encode(identity, topic, data)), as ONCHAINID verifies it. */
+export function claimHash(identity: string, topic: number): Hex {
+  return keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }, { type: "bytes" }], [identity as Hex, BigInt(topic), claimData(topic)]));
+}
+/** ONCHAINID claim id: keccak256(abi.encode(issuer, topic)). */
+export function claimId(issuer: string, topic: number): Hex {
+  return keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [issuer as Hex, BigInt(topic)]));
+}
+
+export function evaluateIdentityClaim(rule: IdentityClaimRule, payload: unknown, facts: OnboardingFacts & { claimSignature: Hex | null }): Decision {
+  const p = identityClaimPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { wallet, identity, topic } = p.data;
+  if (!rule.topics.includes(topic)) return { decision: "deny", reason: `topic ${String(topic)} is not allowed` };
+  const denial = onboardingDenial(rule, wallet, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (facts.onChainIdentity.toLowerCase() === ZERO_ADDRESS) return { decision: "deny", reason: "the wallet has no identity yet" };
+  if (facts.onChainIdentity.toLowerCase() !== identity.toLowerCase()) return { decision: "deny", reason: "identity is not the wallet's identity in the IdFactory" };
+  if (!facts.claimSignature) return { decision: "deny", reason: "claim signature unavailable" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: custodialRef(wallet),
+    to: identity.toLowerCase() as Hex,
+    data: encodeFunctionData({
+      abi: identityAbi,
+      functionName: "addClaim",
+      args: [BigInt(topic), 1n, rule.claimIssuer as Hex, facts.claimSignature, claimData(topic), ""],
+    }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export const identityRegisterRule = z.object({
+  ...countRule,
+  keyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  registrarGuard: address,
+  identityRegistry: address,
+  idFactory: address,
+  claimIssuer: address,
+  countries: z.array(z.number().int().min(1).max(999)).min(1).max(50),
+  /** Every topic must hold a claim from the trusted issuer before registration. */
+  topics: z.array(z.number().int().min(1).max(1_000_000)).min(1).max(8),
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("1000000"),
+});
+export type IdentityRegisterRule = z.infer<typeof identityRegisterRule>;
+export const identityRegisterPayload = z.strictObject({ registrarGuard: address, wallet: address, identity: address, country: z.number().int().min(1).max(999) });
+
+export function evaluateIdentityRegister(
+  rule: IdentityRegisterRule,
+  payload: unknown,
+  facts: OnboardingFacts & { alreadyRegistered: boolean; topicsWithClaim: number[] },
+): Decision {
+  const p = identityRegisterPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { registrarGuard, wallet, identity, country } = p.data;
+  if (registrarGuard.toLowerCase() !== rule.registrarGuard.toLowerCase()) return { decision: "deny", reason: "target is not the approved RegistrarGuard" };
+  if (!rule.countries.includes(country)) return { decision: "deny", reason: `country ${String(country)} is not allowed` };
+  const denial = onboardingDenial(rule, wallet, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (identity.toLowerCase() === ZERO_ADDRESS || facts.onChainIdentity.toLowerCase() !== identity.toLowerCase()) {
+    return { decision: "deny", reason: "identity is not the wallet's identity in the IdFactory" };
+  }
+  const missing = rule.topics.filter((t) => !facts.topicsWithClaim.includes(t));
+  if (missing.length) return { decision: "deny", reason: `identity has no claim from the trusted issuer for topic ${missing.join(", ")}` };
+  if (facts.alreadyRegistered) return { decision: "deny", reason: "wallet is already registered" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.registrarGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: registrarGuardAbi, functionName: "register", args: [wallet as Hex, identity as Hex, country] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule;
+
+/** The key a request of this kind would be signed with (for the audit of a denial); null if unknown. */
+export function requestKeyRef(kind: string, rule: AnyRule, payload: unknown): string | null {
+  if ("keyRef" in rule) return rule.keyRef;
+  const p = (payload ?? {}) as { from?: unknown; wallet?: unknown };
+  const wallet = kind === "token.transfer" ? p.from : p.wallet;
+  return typeof wallet === "string" && /^0x[0-9a-fA-F]{40}$/.test(wallet) ? custodialRef(wallet) : null;
+}
 
 /**
  * Kinds that move money out or settle rent (none exist yet). Whatever their own policy says, they
@@ -180,6 +427,10 @@ export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "issuance.mint") return mintRule.parse(rule);
   if (kind === "compliance.freeze") return freezeRule.parse(rule);
   if (kind === "rent.record_payout") return recordPayoutRule.parse(rule);
+  if (kind === "token.transfer") return transferRule.parse(rule);
+  if (kind === "identity.create") return identityCreateRule.parse(rule);
+  if (kind === "identity.add_claim") return identityClaimRule.parse(rule);
+  if (kind === "identity.register") return identityRegisterRule.parse(rule);
   throw new Error(`no policy schema for kind ${kind}`);
 }
 

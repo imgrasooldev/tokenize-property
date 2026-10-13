@@ -54,7 +54,7 @@ Before the fixed gas limit: p50 738 ms. Besu reads vary from run to run; the ide
 
 ## Consequences
 
-- The web prototype still uses its demo signer. It moves onto outbox + signer next.
+- The web prototype moved onto outbox + signer in Step 5h ([ADR 0010](0010-website-integration.md)): the demo signer is gone, investor wallets are custodial wallets of this service (`KeyProvider.signMessage` and a custody provider were added for that), and the new kinds `token.transfer`, `identity.create`, `identity.add_claim` and `identity.register` follow the same deny-by-default rules. API clients are scoped per path (`@pt/http-auth`).
 - Production needs, in this order:
   - an HSM/MPC `KeyProvider`
   - mTLS between services

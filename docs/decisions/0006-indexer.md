@@ -119,7 +119,7 @@ Found while measuring: PostgreSQL's regex engine takes about 50 µs per match fo
 
 ## Consequences
 
-- Reads move to `chain.*` via `@pt/indexer` queries (Step 5h moves the website). The UI shows "pending" for anything newer than the cursor.
+- Reads move to `chain.*` via `@pt/indexer` queries. **Done for the website in Step 5h** ([ADR 0010](0010-website-integration.md)): figures are "as of block N", anything the website started that the read model does not show yet is listed as pending, and subscriptions and trades are settled only once the read model shows their events.
 - Production runs the indexer as a login role in `pt_chain_writer`; verify and portals use `pt_chain_reader`.
 - Production also needs: a daily `indexer:verify` with alerting, `chain_alert` wired to on-call, and an operator runbook for halts. The usual answer to a halt is a rebuild into a fresh database after the cause is found, not clearing the halt.
 - Besu with Bonsai storage keeps recent state only. `verify` reads state at the pinned cursor block, so run it while the indexer is near the head.

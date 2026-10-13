@@ -1,0 +1,23 @@
+[Unit]
+Description=Property Token demo: chain indexer (read model in schema chain, follows the local chain)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Small heap: a 4 GB box shared with four Besu validators, PostgreSQL and the website.
+Environment=NODE_OPTIONS=--max-old-space-size=160
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/indexer/src/cli.ts run
+Restart=always
+RestartSec=5
+# Exit 3 = HALTED: the chain does not match the read model. Fail closed: never restart blindly;
+# find the cause (ADR 0006). The website then shows the index as halted and nothing settles.
+RestartPreventExitStatus=3
+MemoryMax=320M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

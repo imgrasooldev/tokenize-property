@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { keccak256, stringToBytes, type Address, type Hex } from "viem";
 import { z } from "zod";
 import { distributionRegistryAbi } from "../abis";
-import { latestDeployment } from "./chain";
-import { publicClient } from "./demo-signer";
+import { latestDeployment, publicClient } from "./chain";
+import { distributionsOfToken } from "./readmodel";
 
 /**
  * Rent distributions: the chain holds the Merkle root, the total and the statement hash; the rent
@@ -82,37 +82,25 @@ function readStatements(token: Address): Map<number, StatementFile> {
   return out;
 }
 
-/** All distributions of the current token, newest first, with this wallet's entitlement. */
+/**
+ * All distributions of the current token, newest first, with this wallet's entitlement. Read from
+ * the indexer's read model (ADR 0010 §1); the entitlement comes from the published statement and
+ * is checked against the chain only when the investor asks (verifyEntitlement).
+ */
 export async function distributionsFor(wallet: Address): Promise<Distribution[] | null> {
-  const d = latestDeployment();
-  const registry = d?.get("distributions");
-  const token = d?.get("token");
-  if (!registry || !token) return null;
-  try {
-    const count = await publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "distributionCount" });
-    const statements = loadStatements(token);
-    const out: Distribution[] = [];
-    for (let id = count; id >= 1n && out.length < 24; id--) {
-      const x = await publicClient.readContract({ address: registry, abi: distributionRegistryAbi, functionName: "getDistribution", args: [id] });
-      if (x.token.toLowerCase() !== token.toLowerCase()) continue;
-      const file = statements.get(Number(id));
-      const line = file?.entitlements.find((e) => e.wallet === wallet.toLowerCase());
-      out.push({
-        id,
-        status: STATUS[x.status] ?? "none",
-        recordBlock: x.recordBlock,
-        publishedAt: new Date(Number(x.publishedAt) * 1000),
-        root: x.merkleRoot,
-        totalPaisa: x.totalPaisa,
-        statementHash: x.statementHash,
-        mine: line ? { amountPaisa: BigInt(line.amountPaisa), tokens: BigInt(line.tokens), proof: line.proof as Hex[] } : null,
-        statementAvailable: file !== undefined,
-      });
-    }
-    return out;
-  } catch {
-    return null;
-  }
+  const token = latestDeployment()?.get("token");
+  const rows = await distributionsOfToken(24);
+  if (!token || rows === null) return null;
+  const statements = loadStatements(token);
+  return rows.map((x) => {
+    const file = statements.get(Number(x.id));
+    const line = file?.entitlements.find((e) => e.wallet === wallet.toLowerCase());
+    return {
+      ...x,
+      mine: line ? { amountPaisa: BigInt(line.amountPaisa), tokens: BigInt(line.tokens), proof: line.proof as Hex[] } : null,
+      statementAvailable: file !== undefined,
+    };
+  });
 }
 
 export interface VerifyResult {

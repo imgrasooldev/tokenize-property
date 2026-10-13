@@ -1,14 +1,16 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
-import { db } from "@/lib/server/db";
-import { onboardOnChain } from "@/lib/server/onboarding";
+import { db, tx } from "@/lib/server/db";
+import { nudgeFollower } from "@/lib/server/follower";
+import { startOnboarding } from "@/lib/server/onboarding";
 import { upsertPersona } from "@/lib/server/personas";
 import { clientKey, take } from "@/lib/server/rate-limit";
 import { logError } from "@/lib/server/log";
-import { encrypt, hmac } from "@/lib/server/secrets";
+import { hmac } from "@/lib/server/secrets";
+import { createCustodialWallet, kycOnboard } from "@/lib/server/services";
 import { endSession, startSession } from "@/lib/server/session";
 
 /** Signs in as one of the two pre-verified demo investors. */
@@ -47,9 +49,12 @@ const signUpSchema = z.object({
 });
 
 /**
- * Sign-up with mock KYC, then real on-chain onboarding.
- * Data minimisation: the full CNIC and phone number are never stored. We keep the last digits for
- * display and an HMAC (with a secret pepper) to enforce one account per CNIC.
+ * Sign-up (ADR 0010 §5): a custodial wallet from the signing service, KYC through the KYC service
+ * (mock NADRA, liveness and sanctions providers; status derived in its database), then on-chain
+ * onboarding through the outbox and the signing service. The account page shows the progress.
+ * Data minimisation: the full CNIC and phone number are never stored by the website. It keeps the
+ * last digits for display and an HMAC (with a secret pepper) to enforce one account per CNIC; the
+ * KYC service keeps only its own peppered hashes (ADR 0009).
  */
 export async function signUp(_prev: SignUpState, formData: FormData): Promise<SignUpState> {
   if (!take("signup", await clientKey())) return { error: "rate" };
@@ -71,44 +76,51 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
   }
   const { fullName, cnic, phone } = parsed.data;
 
-  // Mock NADRA Verisys: CNICs ending in 0 are "not found", to demonstrate the rejection path.
-  if (cnic.endsWith("0")) {
-    return { error: "nadra" };
-  }
-
   const pool = await db();
   const cnicHmac = hmac("cnic", cnic.replaceAll("-", ""));
   const dup = await pool.query("SELECT 1 FROM webdemo.investors WHERE cnic_hmac = $1", [cnicHmac]);
   if (dup.rowCount) return { error: "duplicate" };
 
-  const key = generatePrivateKey();
-  const account = privateKeyToAccount(key);
-  let id: string | undefined;
+  // 1. A wallet held by the signing service (the website never sees a key).
+  let wallet: `0x${string}`;
   try {
-    const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO webdemo.investors (display_name, cnic_last4, cnic_hmac, phone_last3, wallet_address, wallet_key_enc, kyc_status, kyc_note)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'NADRA (mock) passed; liveness (simulated) passed') RETURNING id`,
-      [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), account.address, encrypt(key)],
-    );
-    id = rows[0]?.id;
+    wallet = await createCustodialWallet();
+  } catch (e) {
+    logError("signUp wallet", e);
+    return { error: "chain" };
+  }
+
+  // 2. KYC by the KYC service (mock NADRA: CNIC ending 0 = not found, 8 = name mismatch, 9 = down).
+  const kyc = await kycOnboard({ cnic, fullName, livenessSessionId: `web-${randomUUID()}`, wallet });
+  if (!kyc.ok) return { error: kyc.error === "duplicate" ? "duplicate" : kyc.error === "invalid" ? "generic" : "kycDown" };
+  if (kyc.status !== "verified") {
+    const nadra = kyc.checks.find((c) => c.kind === "nadra");
+    if (nadra?.outcome === "fail") return { error: "nadra" };
+    if (nadra?.outcome === "error") return { error: "kycDown" };
+    return { error: "kyc" };
+  }
+
+  // 3. The investor row and the first onboarding command, in one transaction.
+  let id: string;
+  try {
+    id = await tx(async (c) => {
+      const { rows } = await c.query<{ id: string }>(
+        `INSERT INTO webdemo.investors (display_name, cnic_last4, cnic_hmac, phone_last3, wallet_address, kyc_status, kyc_note, kyc_subject)
+         VALUES ($1, $2, $3, $4, $5, 'pending', 'KYC service verified (mock providers); registering on chain', $6) RETURNING id`,
+        [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), wallet, kyc.subjectId],
+      );
+      const newId = rows[0]?.id;
+      if (!newId) throw new Error("insert failed");
+      await startOnboarding(c, newId, wallet);
+      return newId;
+    });
   } catch (e) {
     // Two sign-ups with the same CNIC at once: the unique index refuses the second.
     if (e instanceof Error && "code" in e && e.code === "23505") return { error: "duplicate" };
     logError("signUp insert", e);
     return { error: "generic" };
   }
-  if (!id) return { error: "generic" };
-
-  try {
-    const { identity } = await onboardOnChain(account, `web-${id}`);
-    await pool.query("UPDATE webdemo.investors SET identity_address = $2, kyc_status = 'verified' WHERE id = $1", [id, identity]);
-  } catch (e) {
-    // Not registered: remove the pending record so the same person can simply try again. A partly
-    // created ONCHAINID stays unregistered on chain and cannot hold tokens.
-    logError("signUp onboarding", e);
-    await pool.query("DELETE FROM webdemo.investors WHERE id = $1 AND kyc_status = 'pending'", [id]);
-    return { error: "chain" };
-  }
+  void nudgeFollower();
   await startSession(id);
   redirect("/account");
 }

@@ -1,0 +1,22 @@
+[Unit]
+Description=Property Token demo: outbox worker (executes chain commands through the signing service)
+After=pt-stack.service pt-signer.service
+Requires=pt-stack.service
+Wants=pt-signer.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+Environment=NODE_OPTIONS=--max-old-space-size=160
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/signer/src/outbox-worker.ts
+# Safe to restart at any moment: after a crash the outbox decides from the database and the chain
+# (record before broadcast, ADR 0004).
+Restart=always
+RestartSec=5
+MemoryMax=320M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

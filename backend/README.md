@@ -1,6 +1,6 @@
 # Backend (Step 5)
 
-TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md), [0006](../docs/decisions/0006-indexer.md) and [0007](../docs/decisions/0007-reconciliation.md).
+TypeScript services that keep the books and talk to the chain: ledger, outbox, signing service, indexer, reconciliation. See [docs/decisions/0001-stack.md](../docs/decisions/0001-stack.md), [0003](../docs/decisions/0003-backend-data.md), [0004](../docs/decisions/0004-outbox.md), [0005](../docs/decisions/0005-signing-service.md), [0006](../docs/decisions/0006-indexer.md), [0007](../docs/decisions/0007-reconciliation.md), [0009](../docs/decisions/0009-kyc-and-bank.md) and [0010](../docs/decisions/0010-website-integration.md).
 
 ## Status
 
@@ -14,7 +14,7 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | 5f | Reconciliation (chain vs ledger vs bank), payout freeze (ADR 0007) | Done |
 | 5f-2 | Public-chain anchoring of the Besu chain and the ledger head (ADR 0008) | Done on a local Anvil stand-in; public L2 pending the owner |
 | 5g | KYC and bank: identity checks, signed Raast webhooks, payout accounts and batches, mock providers and mock bank (ADR 0009) | Done (mock providers; real NADRA, liveness, sanctions and bank pending partner contracts) |
-| 5h | Integration tests against PostgreSQL + Besu | Planned |
+| 5h | Integration: website on the read model, the outbox and the signing service (custody, new kinds), KYC API, offboarding, held payouts, payout records, reconciliation bookings, demo-server services (ADR 0010) | Done |
 
 ## Packages
 
@@ -32,7 +32,8 @@ TypeScript services that keep the books and talk to the chain: ledger, outbox, s
 | `@pt/recon` | Reconciliation: one snapshot pinned to the read model's block, pure deterministic checks (issuance, supply, holdings, cash, rent, integrity), findings recorded atomically; blocking findings freeze payouts until two operators unfreeze; mock bank statement import |
 | `@pt/kyc` | KYC onboarding: NADRA, liveness and sanctions behind interfaces (realistic mocks), peppered CNIC/name hashes and sealed name (no readable personal data in the database), status derived in the database, maker-checker sanctions reviews |
 | `@pt/bank` | Bank side: signed webhook endpoint, Raast credits matched to payment codes (or suspense), payout accounts with title match and 72-hour cooling-off, maker-checker payout batches gated by reconciliation, deterministic bank file; `MockBank` plays the outside bank (own records, statements in `pt-mock-bank-v1`) |
-| `@pt/demo-console` | **Live Demo Console** for team presentations (local only) |
+| `@pt/http-auth` | HMAC request signing for the internal APIs (method, path, time, one-time nonce, body hash; 30 s skew, replay refused) with per-client path scopes; used by the signing service and the KYC API |
+| `@pt/demo-console` | **Live Demo Console** for team presentations (local only), and the local/demo bookings for reconciliation (`seed:local`, `rent:book`, `recon:demo-bank`) |
 
 ## Outbox (Step 5c)
 
@@ -208,6 +209,22 @@ Measured on this laptop (`npm run bank:bench -- 1000`): KYC onboarding with the 
 
 Tests: 22 KYC and 37 bank (see ADR 0009), including a scan of every KYC row for personal data, ten concurrent deliveries of one event, a sealed IBAN swapped between investors, and a property test where lost webhooks always show up in reconciliation and, after the bank's retry, the ledger equals the bank line by line. Three deliberate rule breaks (third-party payer accepted, suspense booked without its reference, no cooling-off) each make tests fail.
 
+## Website integration (Step 5h, ADR 0010)
+
+The website signs nothing and reads no chain data per request: it reads the read model (`chain.*`), enqueues `issuance.mint`, `token.transfer` and the onboarding commands in the same transaction as its ledger entries, and the outbox worker executes them through the signing service. Migration `0012_website.sql`:
+
+| Rule | What it guarantees |
+|---|---|
+| W-1 | Custodial investor wallets: generated inside the signing service (or imported on the local dev chain only), recorded append-only with their key in one audited call; a platform key can never become a wallet |
+| W-2 | `token.transfer` only from a custodial wallet (the signer reads that fact itself) |
+| W-3 | Delivery versus payment: a transfer is signed only while the trade's escrow in the ledger holds its cost (`ledger.escrow_held`, market escrows only) |
+| W-4 | The website's own records (`webdemo`) are created by the migration; the website runs no DDL |
+| W-5 | The website connects as `pt_web_app` (member of `pt_web` only): its own tables without DELETE/TRUNCATE, the ledger and outbox only through their functions, read-only read model; tested to be refused everything else |
+
+New signing kinds (deny by default, chain and contract pinned, daily limits, simulated, facts read fresh): `token.transfer` (custodial sender, verified recipient, not paused or frozen, enough unfrozen tokens, escrow, maker-checker above 10,000 tokens locally), `identity.create`, `identity.add_claim` (claim signed by the claim key, the transaction by the investor's custodial wallet) and `identity.register`, each only for a custodial wallet whose owner `kyc.is_verified`. The signer API has client scopes: `outbox-worker` may sign, broadcast and release; `web` may only create a custodial wallet. The KYC service has its own HMAC API for the website's sign-up (`npm run kyc:serve`).
+
+Measured on this laptop (local Besu, 2-second blocks; the machine was shared with another busy test run, CPU often near 100%): an investment accepted to settled (payment, outbox, signer, block, index, follower) in 4–5 s; a trade matched to settled in 13–16 s (about 9 s of it the signer and outbox under load, then one block and the index); a sign-up end-to-end test (NADRA failure, KYC, four on-chain steps, duplicate refusal) in about 30 s; a settlement follower pass over the test database 150–650 ms. Signer own work unchanged: p50 10.7 ms, p99 25.4 ms (idle machine).
+
 ## Live Demo Console
 
 ```bash
@@ -256,6 +273,21 @@ npm ci --ignore-scripts
 npm run migrate            # property_token   (add -- --test for property_token_test)
 npm run gen:abis           # after `forge build` in contracts/
 npm run check              # typecheck + lint (0 warnings) + tests
+
+# services (Step 5h; each once set up with the idempotent setup commands)
+npm run kyc:setup && npm run signer:setup && npm run db:web-role   # secrets in .env.local, dev keys, policies, website role
+npm run indexer            # read model
+npm run signer             # signing service, 127.0.0.1:4900
+npm run outbox             # outbox worker (every kind through the signer)
+npm run kyc:serve          # KYC API for the website, 127.0.0.1:4910
+npm run kyc:offboard       # freezes for investors who lost their verification
+npm run signer:decide -- <requestId> <operator> approve|reject "<reason>"   # maker-checker
+
+# local/demo bookings so reconciliation passes on the local chain (dev chain only)
+npm run seed:local         # chain/flow.py's scenario mint as Alice's seed subscription
+npm run rent:book          # rent collected (published) and distributed (finalized)
+npm run recon:demo-bank    # the demo bank's statements from the website's payment records
+npm run recon              # 0 findings on a freshly set-up stack (see recon/test/local-stack.test.ts)
 ```
 
 ## Supply-chain rules (`.npmrc`)

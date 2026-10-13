@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Updates the demo server to one exact commit of main: code, dependencies, migrations, web build,
+# Updates the demo server to one exact commit of main: code, dependencies, migrations, backend setup
+# and services (Step 5h), web build,
 # mockups and nginx config, then restarts the website and console. The chain and its data stay.
 #   bash deploy/demo-server/update.sh <40-character commit SHA>
 # Run by the "Deploy demo" GitHub workflow through ci-entry.sh, or by hand on the server.
@@ -44,6 +45,40 @@ trap 'sudo systemctl start pt-web || true' EXIT
 echo "== backend dependencies and migrations"
 (cd backend && npm ci --ignore-scripts --no-audit --no-fund --silent && npm run --silent migrate)
 
+# Step 5h (ADR 0010): the website signs nothing and reads the chain index; the backend services do
+# the rest. Every step below is idempotent: secrets are created only when missing (appended to the
+# git-ignored backend/.env.local, never printed), policies are proposed only when they changed, and
+# a wallet moves into custody only once.
+echo "== backend setup (idempotent, no secrets printed)"
+(cd backend \
+  && npm run --silent kyc:setup >/dev/null \
+  && npm run --silent signer:setup >/dev/null \
+  && npm run --silent db:web-role >/dev/null \
+  && npm run --silent signer:import-web-wallets >/dev/null) \
+  || { echo "backend setup failed; the website keeps running the previous build" >&2; exit 7; }
+
+echo "== systemd units (install new or changed ones, enable, restart the backend services)"
+changed=0
+for unit in deploy/demo-server/pt-*.service deploy/demo-server/pt-*.timer; do
+  name=$(basename "$unit")
+  if ! sudo cmp -s "$unit" "/etc/systemd/system/$name"; then
+    sudo cp "$unit" "/etc/systemd/system/$name"
+    changed=1
+  fi
+done
+[ "$changed" = 1 ] && sudo systemctl daemon-reload
+BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding"
+sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
+# The signer reloads its keystore (new custodial wallets) and policies only on start.
+sudo systemctl restart $BACKEND_UNITS
+# Optional demo liquidity (a few persona trades every four hours): OFF unless the owner or lead
+# created the flag file /etc/pt/demo-market.enabled. Re-applied on every deploy, so it is idempotent.
+if [ -f /etc/pt/demo-market.enabled ]; then
+  sudo systemctl enable --now pt-demo-market.timer >/dev/null 2>&1
+else
+  sudo systemctl disable --now pt-demo-market.timer >/dev/null 2>&1 || true
+fi
+
 echo "== web build (the site is down for about two minutes)"
 sudo systemctl stop pt-web
 (cd web && npm ci --ignore-scripts --no-audit --no-fund --silent \
@@ -60,7 +95,21 @@ if ! sudo cmp -s deploy/demo-server/nginx.conf /etc/nginx/sites-available/proper
   sudo nginx -t && sudo systemctl reload nginx
 fi
 
+echo "== demo bookings for reconciliation (after the indexer caught up; failures are reported, not fatal)"
+for _ in $(seq 1 60); do
+  (cd backend && npm run --silent indexer:status 2>/dev/null | grep -Eq ' \(([0-9]|[1-9][0-9]) behind\)') && break
+  sleep 5
+done
+(cd backend && npm run --silent seed:local && npm run --silent rent:book) || echo "WARNING: seed:local / rent:book did not complete; reconciliation will report it" >&2
+
 echo "== smoke test"
+for svc in http://127.0.0.1:4900/v1/health http://127.0.0.1:4910/v1/health; do
+  for _ in $(seq 1 30); do curl -sf -o /dev/null "$svc" && break; sleep 2; done
+  curl -sf -o /dev/null "$svc" || { echo "service $svc is not answering" >&2; exit 8; }
+done
+for unit in pt-indexer pt-outbox pt-offboarding; do
+  sudo systemctl is-active --quiet "$unit" || { echo "$unit is not running" >&2; exit 8; }
+done
 for _ in $(seq 1 30); do
   code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/login || true)
   [ "$code" = 200 ] && { echo "website up ($SHA)"; exit 0; }
