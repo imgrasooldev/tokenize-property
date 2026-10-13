@@ -86,6 +86,8 @@ jobs:
         run: npm run test
       - name: ABIs identical to the backend copy
         run: cmp src/lib/abis.ts ../backend/packages/contracts/src/abis.ts
+      - name: Anchor commitment identical to @pt/anchor (S-07 recomputes it in the browser)
+        run: cmp src/lib/anchor-commitment.ts ../backend/packages/anchor/src/commitment.ts
       - name: Production build
         run: npm run build
 

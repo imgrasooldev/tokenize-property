@@ -73,7 +73,7 @@ async function viewer(): Promise<{ lang: Lang; t: Dict; investor: InvestorRow | 
   return { lang, t, investor };
 }
 
-export type PublicKey = "explore" | "properties" | "market" | "portfolio" | "none";
+export type PublicKey = "explore" | "properties" | "market" | "portfolio" | "verify" | "none";
 
 /** Public site header: live status rail plus the main navigation. */
 export async function SiteHeader({ active, minimal = false }: { active: PublicKey; minimal?: boolean }) {
@@ -83,6 +83,7 @@ export async function SiteHeader({ active, minimal = false }: { active: PublicKe
     { key: "properties", href: "/properties", label: t.navProperties },
     { key: "market", href: "/market", label: t.navMarket },
     { key: "portfolio", href: "/portfolio", label: t.navPortfolio },
+    { key: "verify", href: "/verify", label: t.navVerify },
     { key: "ai", href: "/#ai", label: t.navAi },
     { key: "proofs", href: "/#proof", label: t.navProofs },
   ];
@@ -176,6 +177,9 @@ export async function SiteFooter() {
           <div>
             <h5>{t.footTech}</h5>
             <ul>
+              <li>
+                <Link href="/verify">{t.navVerify}</Link>
+              </li>
               <li>
                 <Link href="/#proof">{t.navProofs}</Link>
               </li>

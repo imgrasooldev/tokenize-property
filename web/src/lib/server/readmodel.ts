@@ -16,6 +16,8 @@ export interface IndexStatus {
   halted: string | null;
   /** The cursor has not moved for 60 s (indexer stopped or far behind). */
   stale: boolean;
+  /** Time of the cursor block (the last block fully applied), when the read model holds it. */
+  blockTime: Date | null;
 }
 
 let statusCache: { at: number; value: Promise<IndexStatus | null> } | null = null;
@@ -31,12 +33,15 @@ async function readStatus(): Promise<IndexStatus | null> {
   const id = deploymentId();
   if (!id) return null;
   try {
-    const { rows } = await (await db()).query<{ block_number: string; updated_at: Date; halt_reason: string | null; age: number }>(
-      "SELECT block_number, updated_at, halt_reason, extract(epoch FROM now() - updated_at)::float8 AS age FROM chain.cursors WHERE deployment = $1",
+    const { rows } = await (await db()).query<{ block_number: string; updated_at: Date; halt_reason: string | null; age: number; block_time: Date | null }>(
+      `SELECT c.block_number, c.updated_at, c.halt_reason, extract(epoch FROM now() - c.updated_at)::float8 AS age, b.block_time
+       FROM chain.cursors c LEFT JOIN chain.blocks b ON b.number = c.block_number WHERE c.deployment = $1`,
       [id],
     );
     const r = rows[0];
-    return r ? { block: BigInt(r.block_number), updatedAt: r.updated_at, halted: r.halt_reason, stale: r.age > 60 } : null;
+    return r
+      ? { block: BigInt(r.block_number), updatedAt: r.updated_at, halted: r.halt_reason, stale: r.age > 60, blockTime: r.block_time }
+      : null;
   } catch {
     return null;
   }
@@ -47,6 +52,8 @@ export interface LiveToken {
   supply: bigint;
   cap: bigint;
   paused: boolean;
+  /** PauseGuard's reason for the current pause (e.g. "transfer-closed", S-04); null when not paused or not given. */
+  pauseReason: string | null;
   symbol: string;
   /** Block the figures are from (the indexer cursor). */
   asOfBlock: bigint;
@@ -77,14 +84,22 @@ async function readToken(symbol: string): Promise<LiveToken | null> {
   const token = latestDeployment()?.get("token");
   if (!token) return null;
   try {
-    const { rows } = await (await db()).query<{ total_supply: string; trustee_cap: string; paused: boolean; block_number: string }>(
-      `SELECT t.total_supply::text, t.trustee_cap::text, t.paused, c.block_number
+    const { rows } = await (await db()).query<{ total_supply: string; trustee_cap: string; paused: boolean; pause_reason: string | null; block_number: string }>(
+      `SELECT t.total_supply::text, t.trustee_cap::text, t.paused, t.pause_reason, c.block_number
        FROM chain.tokens t JOIN chain.cursors c ON c.deployment = t.deployment WHERE t.token = $1`,
       [token],
     );
     const r = rows[0];
     if (!r) return null;
-    return { address: token, supply: BigInt(r.total_supply), cap: BigInt(r.trustee_cap), paused: r.paused, symbol, asOfBlock: BigInt(r.block_number) };
+    return {
+      address: token,
+      supply: BigInt(r.total_supply),
+      cap: BigInt(r.trustee_cap),
+      paused: r.paused,
+      pauseReason: r.paused ? r.pause_reason : null,
+      symbol,
+      asOfBlock: BigInt(r.block_number),
+    };
   } catch {
     return null;
   }
@@ -199,6 +214,11 @@ export interface DistributionRow {
   root: Hex;
   totalPaisa: bigint;
   statementHash: Hex;
+  rejectReason: string | null;
+  payoutBatchHash: Hex | null;
+  /** Block and time of the latest status change (the publication while still "published"). */
+  updatedBlock: bigint;
+  updatedAt: Date | null;
 }
 
 /** Rent distributions of the live token, newest first (read model); null if unavailable. */
@@ -208,9 +228,23 @@ export async function distributionsOfToken(limit = 24): Promise<DistributionRow[
   const token = d?.get("token");
   if (!registry || !token) return null;
   try {
-    const { rows } = await (await db()).query<{ id: string; status: DistributionRow["status"]; record_block: string; block_time: Date; merkle_root: Hex; total_paisa: string; statement_hash: Hex }>(
-      `SELECT d.id::text, d.status, d.record_block, b.block_time, d.merkle_root, d.total_paisa::text, d.statement_hash
+    const { rows } = await (await db()).query<{
+      id: string;
+      status: DistributionRow["status"];
+      record_block: string;
+      block_time: Date;
+      merkle_root: Hex;
+      total_paisa: string;
+      statement_hash: Hex;
+      reject_reason: string | null;
+      payout_batch_hash: Hex | null;
+      updated_block: string;
+      updated_time: Date | null;
+    }>(
+      `SELECT d.id::text, d.status, d.record_block, b.block_time, d.merkle_root, d.total_paisa::text, d.statement_hash,
+              d.reject_reason, d.payout_batch_hash, d.updated_block, u.block_time AS updated_time
        FROM chain.distributions d JOIN chain.blocks b ON b.number = d.published_block
+       LEFT JOIN chain.blocks u ON u.number = d.updated_block
        WHERE d.registry = $1 AND d.token = $2 ORDER BY d.id DESC LIMIT $3`,
       [registry, token, limit],
     );
@@ -222,6 +256,10 @@ export async function distributionsOfToken(limit = 24): Promise<DistributionRow[
       root: r.merkle_root,
       totalPaisa: BigInt(r.total_paisa),
       statementHash: r.statement_hash,
+      rejectReason: r.reject_reason,
+      payoutBatchHash: r.payout_batch_hash,
+      updatedBlock: BigInt(r.updated_block),
+      updatedAt: r.updated_time,
     }));
   } catch {
     return null;
@@ -242,6 +280,54 @@ export async function registerFigures(): Promise<{ registered: number; holders: 
     );
     const r = rows[0];
     return r ? { registered: Number(r.registered), holders: Number(r.holders) } : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface DocumentRow {
+  id: bigint;
+  docType: number;
+  sha256: Hex;
+  uri: string;
+  supersededBy: bigint | null;
+  addedBlock: bigint;
+  addedAt: Date | null;
+}
+
+/**
+ * DocumentRegistry records of the live token, newest first (read model, S-07 PV-10): hashes and
+ * `pt-doc://` references only; the documents themselves are never on the chain.
+ */
+export async function documentsOfToken(limit = 200): Promise<DocumentRow[] | null> {
+  const d = latestDeployment();
+  const registry = d?.get("documents");
+  const token = d?.get("token");
+  if (!registry || !token) return null;
+  try {
+    const { rows } = await (await db()).query<{
+      id: string;
+      doc_type: number;
+      sha256_hash: Hex;
+      uri: string;
+      superseded_by: string | null;
+      added_block: string;
+      block_time: Date | null;
+    }>(
+      `SELECT d.id::text, d.doc_type, d.sha256_hash, d.uri, d.superseded_by::text, d.added_block, b.block_time
+       FROM chain.documents d LEFT JOIN chain.blocks b ON b.number = d.added_block
+       WHERE d.registry = $1 AND d.token = $2 ORDER BY d.id DESC LIMIT $3`,
+      [registry, token, limit],
+    );
+    return rows.map((r) => ({
+      id: BigInt(r.id),
+      docType: r.doc_type,
+      sha256: r.sha256_hash,
+      uri: r.uri,
+      supersededBy: r.superseded_by === null ? null : BigInt(r.superseded_by),
+      addedBlock: BigInt(r.added_block),
+      addedAt: r.block_time,
+    }));
   } catch {
     return null;
   }

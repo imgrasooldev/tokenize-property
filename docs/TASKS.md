@@ -134,6 +134,8 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 ### T-027 Public verification page
 - Outcome: public page: supply vs trustee register, document hashes, anchors, Merkle self-check for anyone.
 - P high, C M, Dep T-033 for real anchors. Tests: values equal `chain` read model and contract views.
+- Status (2026-10-13): **Partial, on branch `t-027-public-verification`** (awaiting lead review). Built per S-07: `/verify` (EN + Urdu), sections 3.1-3.4, section 6 halted path, disclosures, public `checkProofOnChain` action (rate `publicVerify`). Tests: unit (Merkle against `chain/rent.py` fixtures, commitment vector and byte-identity with `@pt/anchor`, file SHA-256, match/register/freshness/gate rules, EN/UR text parity), integration (view equals contract views at the cursor block; no grant on `anchor`/`recon` shown as such; on-chain proof and +1 paisa; no holder wallet or name in the view), e2e `verify.spec.ts`.
+- Remaining before Done: (1) a migration granting the website role read access to anchor components (`pt_anchor_reader` or a narrower view without `raw_tx`) and to the latest reconciliation status only (a `SECURITY DEFINER` function, no findings); (2) trustee register attestation source and format (S-07 Q-2) so PV-2 can turn green or show `supply.register_mismatch`; (3) public L2 and explorer links (Q-1, T-033); (4) store the latest `anchor:verify` result (with a scheduler, T-034) so PV-22 can show it; (5) public documents for download (PV-12) once a document store exists (T-038).
 
 ### T-028 Notifications
 - Outcome: SMS/email/push for payments, payouts, account changes (B-4 alerts), freezes.

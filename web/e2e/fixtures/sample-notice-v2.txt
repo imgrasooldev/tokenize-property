@@ -1,0 +1,9 @@
+SAMPLE PUBLIC NOTICE (local test network, not a real document)
+
+Property: Gulberg Plaza Floor 3 (sample property, symbol GPF3)
+Subject: Rent collection calendar for the pilot period
+Version: 2 (supersedes version 1: corrected dates)
+
+This text exists only to demonstrate the public verification page (S-07): its SHA-256 is recorded
+in the DocumentRegistry of the local network by `python chain/document.py add`, and anyone can
+check a copy of this file against that record in their own browser.

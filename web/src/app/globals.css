@@ -650,6 +650,50 @@ footer.pub { border-block-start: 1px solid var(--stroke); padding-block: 40px; m
 .seg button.on.buy { background: rgba(59, 232, 155, 0.14); color: var(--up); }
 .seg button.on.sell { background: rgba(255, 107, 129, 0.14); color: var(--down); }
 
+/* ---------------------------------------------------------------- public verification (S-07) */
+.verify-page { display: grid; gap: 16px; }
+.verify-page > * { min-inline-size: 0; }
+.verify-page .page-title { margin-block-end: 0; }
+.vsec { display: grid; gap: 10px; min-inline-size: 0; }
+.vsec h3 { font-size: 14px; margin: 6px 0 2px; }
+.vsec .note, .vsec .fine { margin-block: 0; }
+.asof { inline-size: fit-content; }
+.disclosures summary { cursor: pointer; list-style: none; }
+.disclosures summary::-webkit-details-marker { display: none; }
+.disclosures summary h2 { display: inline; }
+.vcheck { display: grid; gap: 8px; padding: 14px; border: 1px dashed var(--stroke2); border-radius: 14px; min-inline-size: 0; }
+.vcheck > .btn { justify-self: start; }
+/* Hash tables scroll inside their frame on phones instead of breaking every hash. */
+.verify-page .table { min-inline-size: 720px; }
+.verify-page .table td.mono, .verify-page .table td .mono { white-space: nowrap; }
+.vgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vresult { display: grid; gap: 8px; min-inline-size: 0; }
+.vresult .alert { overflow-wrap: anywhere; }
+.vkv { max-inline-size: 760px; }
+.vkv dd { text-align: start; }
+.register p { font-size: 13.5px; color: var(--text2); }
+.honesty { margin: 0; }
+.filepick { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.filepick input { font: inherit; font-size: 13px; color: var(--text2); max-inline-size: 100%; }
+.form textarea, .form select, .entitlement-text {
+  font-family: var(--monof);
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke2);
+  background: rgba(255, 255, 255, 0.03);
+  inline-size: 100%;
+  min-inline-size: 0;
+  resize: vertical;
+}
+.form select { font-family: inherit; font-size: 14px; }
+.form textarea:focus-visible, .form select:focus-visible { outline: none; border-color: rgba(34, 227, 240, 0.7); box-shadow: 0 0 0 4px rgba(34, 227, 240, 0.12); }
+.entitlement { display: grid; gap: 8px; font-size: 13px; }
+.entitlement summary { cursor: pointer; color: var(--cyan); }
+/* Hashes, addresses and JSON read left to right in Urdu mode too. */
+.entitlement-text, .verify-page textarea, .verify-page input.mono { direction: ltr; }
+
 /* lightweight-charts attribution link keeps its own colours */
 .chart a { color: inherit; }
 
@@ -753,6 +797,8 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
   html[dir="rtl"] .hero-title { font-size: 32px; }
   html[dir="rtl"] .sec h2, html[dir="rtl"] .final h2 { font-size: 24px; }
   .glass.table-wrap { padding: 4px 6px 0; }
+  .vgrid { grid-template-columns: minmax(0, 1fr); }
+  .vcheck { padding: 12px 10px; }
 }
 
 /* ---------------------------------------------------------------- reduced motion */

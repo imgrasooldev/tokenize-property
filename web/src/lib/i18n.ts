@@ -5,6 +5,10 @@ const en = {
   navProperties: "Properties",
   navPortfolio: "Portfolio",
   navMarket: "Market",
+  navVerify: "Verify",
+  entitlementExport: "My entitlement for the public check",
+  entitlementExportNote:
+    "Copy this text and paste it on the public verification page: anyone's browser can then check it against the root published on chain. It names your wallet, so share it only if you want to.",
   demoBanner: "Prototype on a local test network. Sample properties and test money only. Not an offer.",
   heroTitle: "Own a share of prime property, from Rs 5,000",
   heroBody:
@@ -499,6 +503,10 @@ const ur: typeof en = {
   navProperties: "جائیدادیں",
   navPortfolio: "پورٹ فولیو",
   navMarket: "مارکیٹ",
+  navVerify: "تصدیق",
+  entitlementExport: "عوامی جانچ کے لیے میرا حق",
+  entitlementExportNote:
+    "یہ متن کاپی کر کے عوامی تصدیقی صفحے پر چسپاں کریں: پھر کوئی بھی براؤزر اسے بلاک چین پر شائع شدہ روٹ سے جانچ سکتا ہے۔ اس میں آپ کا والیٹ درج ہے، اس لیے صرف اپنی مرضی سے شیئر کریں۔",
   demoBanner: "یہ مقامی ٹیسٹ نیٹ ورک پر ایک نمونہ ہے۔ صرف نمونہ جائیدادیں اور ٹیسٹ رقم۔ یہ پیشکش نہیں ہے۔",
   heroTitle: "بہترین جائیداد میں حصہ، صرف 5,000 روپے سے",
   heroBody:

@@ -96,7 +96,7 @@ The owner's 16-stage lifecycle brief is not in the repository. The stages below 
 | CSP with nonce, security headers | Done | `W/proxy.ts`; e2e `security.spec.ts` | |
 | Website on outbox + signer + read model (retire demo signer) | Partial, in progress on a branch (5h) | `W/lib/server/demo-signer.ts` still used by 10 files | 5h |
 | Passkey login, bank linking, tax certificate, AI features | Missing (labelled "Coming soon"/"Sample") | web/README.md "Design" | |
-| Public verification page | Missing | product-map #4 | |
+| Public verification page (S-07, T-027) | Partial (branch `t-027-public-verification`): supply/cap/pause/holders as of the cursor, DocumentRegistry list with a browser-only SHA-256 file check, anchor recomputation in the browser, entitlement check in the browser and on chain, EN + Urdu. Not yet real: trustee register attestation (Q-2, shown "not published"), anchor records and reconciliation status (the website role has no read grant: shown "not available"), public anchor chain (L2 pending, Q-1), anchor:verify result (not stored) | `W/app/verify/page.tsx`, `W/lib/server/verify.ts`, `W/lib/server/anchors.ts`, `W/lib/merkle.ts`, `W/lib/verify-rules.ts`, `W/components/verify/VerifyTools.tsx`, `W/app/actions/verify.ts`; tests `merkle.test.ts`, `verify-rules.test.ts`, `anchor-commitment.test.ts`, `verify.integration.test.ts`, e2e `verify.spec.ts`; demo documents `chain/document.py` | grants for `anchor`/`recon` reads (migration), trustee attestation format, L2 choice |
 
 ### 2.4 Internal portals, mobile, operations
 

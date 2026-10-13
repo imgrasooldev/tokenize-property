@@ -1,0 +1,24 @@
+{
+  "id": 2,
+  "root": "0xa1a158fbd8dea69a09735220a5054f51f1fbec2847d8deeb0907f541c7056622",
+  "statementHash": "0xd08abd12d3355198fb6be51e339014f5555c2e00229898821f07048f649f02db",
+  "statement": "{\"entitlements\":[{\"amountPaisa\":5000500,\"tokens\":10001,\"wallet\":\"0x3ab55575f2dd6c52976b50f64b0a39e97feb6eb5\"},{\"amountPaisa\":24999500,\"tokens\":49999,\"wallet\":\"0xdd76438415d10f6720f4c87c4f488c3ac7eadcec\"}],\"recordBlock\":397,\"token\":\"0x1028c63975433a446f2830543ec7af37ada8a2b8\",\"totalPaisa\":30000000}",
+  "entitlements": [
+    {
+      "wallet": "0x3ab55575f2dd6c52976b50f64b0a39e97feb6eb5",
+      "amountPaisa": 5000500,
+      "tokens": 10001,
+      "proof": [
+        "0x34d195de77e19f7b29bf7c95314f31ef8649c4d77494669d9986f1fa5cc0ac21"
+      ]
+    },
+    {
+      "wallet": "0xdd76438415d10f6720f4c87c4f488c3ac7eadcec",
+      "amountPaisa": 24999500,
+      "tokens": 49999,
+      "proof": [
+        "0x1a64437684b3d10c22454f4aff13e3378798381068ea96ed8d3b0194f73e55c5"
+      ]
+    }
+  ]
+}
