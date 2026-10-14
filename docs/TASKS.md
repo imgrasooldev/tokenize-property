@@ -123,11 +123,13 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Tests: Merkle root/statement equality with the web verifier; policy denials; e2e on Besu.
 
 ### T-023 Property operations
+- Status (2026-10-14): **Partial, on branch `s-03-operations-tax`** (migration 0021, `@pt/tax`, admin `/operations`): collections from bank lines, charges (expense, fees, reserve) with evidence hash and maker-checker, operating statement, calculation at the record block, statement v2, booking. Not built: leases, invoices and payment codes per invoice (OP-1..OP-16), arrears, budgets, fee formulas (fees are entered with evidence), vendor accounts and vendor payment batches, trustee approval above the limit (6d), D13 no-distribution record, record-block rule check (`rent.record_block_rule`), `ops.pool_residual`, `ops.expense_unapproved`, collections in the portal (CLI only), publish/finalize commands (T-022).
 - Outcome: leases, rent invoices, arrears, expenses, reserves, management fee, net distributable amount feeding T-022.
 - P high, C L, Dep T-022. Accept: net distributable = collected - expenses - reserves - fees, all in the ledger; maker-checker on expenses.
 - Tests: ledger balances per property, property tests on rounding (paisa).
 
 ### T-024 FBR withholding tax, statements and tax certificates
+- Status (2026-10-14): **Partial, on branch `s-03-operations-tax`** (migration 0021, ADR 0014 Proposed): versioned placeholder rates with two-officer changes, ATL filer checks (mock), WHT per line in integer paisa (round half up), Merkle leaf = net (format unchanged), WHT and remittance journals, certificate data, sealed CNIC + two-officer FBR filing export, `tax.reconcile` + recon `checkTax`. Not built: exemption certificates (OP-42), Zakat (OP-43), certificate PDF, investor statement pages, CNIC re-collection from investors (website), real ATL provider (T-031), remittance screens (CLI only), confirmed rates and FBR format (LEGAL/TAX).
 - Outcome: withholding per investor class on rent, investor statements, annual tax certificates.
 - P high, C M, Dep T-023; legal/tax input (rates are Unknown in repo).
 - Accept: tax journals reconcile; certificates match ledger. Tests: rate table edge cases, rounding.

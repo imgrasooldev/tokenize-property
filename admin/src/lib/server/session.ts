@@ -184,5 +184,6 @@ export function landingFor(permissions: Set<Permission>): string {
   if (permissions.has("ops.read")) return "/";
   if (permissions.has("officers.read")) return "/officers";
   if (permissions.has("trustee.read")) return "/trustee";
+  if (permissions.has("tax.read")) return "/tax";
   return "/account";
 }

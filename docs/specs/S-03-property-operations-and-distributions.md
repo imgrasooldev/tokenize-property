@@ -1,6 +1,6 @@
 # S-03: Property operations, income and distributions
 
-- Status: Draft for owner review (functional specification; no code yet)
+- Status: Draft for owner review; partly implemented on branch `s-03-operations-tax` (section 16)
 - Date: 2026-10-13
 - Lifecycle stages: 12 (property operations and rent), 13 (income calculation and distribution)
 - Exceptions covered: rent shortfall, tenant dispute, distribution rejected by the trustee, payout returned, investor without a payout account
@@ -348,3 +348,23 @@ Periodic property report (occupancy, rent roll summary, arrears, expenses agains
 - Q-4 Reserve rule and target (10 % / 6 months proposed); may the reserve smooth distributions?
 - Q-5 Expense approval limits for ops and trustee.
 - Q-6 Accounting basis: the ledger stays a cash mirror of the trustee bank; accrual accounts (receivables, prepaid) live in operations and the audited financial statements (recommended).
+
+
+## 16. Implementation status (2026-10-14, branch `s-03-operations-tax`, migration 0021)
+
+Built (Partial; details in docs/TASKS.md T-023/T-024 and docs/DATABASE_DESIGN.md 0021):
+
+- **OP-37 (Q-1 adopted default): Merkle leaf = (wallet, NET paisa)**, leaf format v1 unchanged (`keccak256(bytes.concat(keccak256(abi.encode(wallet, netPaisa))))`, sorted pairs, tree shape as `chain/rent.py`). `/verify`, `web/src/lib/merkle.ts` and the contract need no change; the statement names the leaf format in its `leaf` field. Lines with a net of 0 (possible only for a 1-paisa gross at a rate >= 50 %) have no leaf.
+- **OP-36 rounding rule as built:** WHT = floor((gross x rate_ppm + 500,000) / 1,000,000): the exact amount rounded half up to the paisa; rates are integers in parts per million (150,000 = 15 %). Rounding unit still LEGAL/TAX TO CONFIRM (rupees would be a new rule version).
+- **OP-38 statement as built** (`pt-rent-statement-v2`, canonical JSON, keys sorted, every integer a decimal string): `kind, calculation, token, period, recordDate, recordBlock, incomeType, leaf, totals {collected, expenses, fees, reserveContribution, reserveRelease, distributableGross, wht, net}, entitlements [{wallet, units, netPaisa}], taxScheduleHash`. Tax schedule `pt-tax-schedule-v1`: `kind, calculation, token, period, recordDate, incomeType, rounding: half-up-paisa, rateScale: 1000000, lines [{wallet, subject, units, grossPaisa, status, filerCheck, filerAsOf, flagged, rateId, ratePpm, whtPaisa, netPaisa}]`. Both hashes keccak256. Not in v2 yet: per-fee-type totals, rent-roll hash (no leases).
+- **Q-2 resolved by [ADR 0014](../decisions/0014-sealed-cnic-for-tax.md) (Proposed):** sealed CNIC under a tax-only key, ATL checks by the tax service, two-officer one-time FBR filing export.
+- **Roles:** finance and tax officer of §2 are one portal role `tax_officer` (rates proposed and approved by two different tax officers; exports likewise). Distribution approval is the operations checker; the trustee pre-check (D4) is not built (6d).
+
+Deviations from this spec (to confirm):
+
+1. OP-21: the per-expense limit is a setting (placeholder Rs 1,000,000); above it approval is refused instead of routed to the trustee (no trustee portal yet).
+2. OP-23 fees are entered as charges with an evidence hash, not computed from the offering document's formula.
+3. OP-33 record block: the operator supplies it; the database checks it is indexed, not the timestamp rule (`rent.record_block_rule` not built).
+4. `tax.wht_unremitted` is a warning only (spec: blocking after the due date): freezing payouts would not speed up the remittance; due date (15 days after booking) is a placeholder.
+5. The rent pool is one ledger account per token: an approved expense of a later period uses the same cash; booking an earlier distribution then fails on the ledger's overdraft check rather than spending money twice (safe, but operations must sequence periods).
+6. Rate changes take effect today or later only; past periods are corrected by adjustments, never by a retroactive rate.

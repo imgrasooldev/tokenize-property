@@ -236,6 +236,33 @@ Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); 
 
 Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
 
+### 0021 operations and tax (OT-1..OT-11; spec S-03, tasks T-023/T-024, ADR 0014)
+
+Numbered 0021 because 0020 is reserved for parallel work (no dependency on it); until 0020 is merged the backend runner refuses the gap and tests use `contiguousMigrations()`. Schemas `ops` and `tax`; advisory locks 586586210 (audit), 586586211 (rate versions), 586586212 (calculation per token/period), 586586213 (remittance per token/period), 586586214 (certificate).
+
+| Object | Purpose |
+|---|---|
+| `ops.settings` | `allow_placeholder_rates` (false; local dev only), `filer_check_max_age_days` 30, `expense_ops_limit_paisa` (placeholder Rs 1,000,000, Q-5), `export_valid_hours` 24, `export_ticket_seconds` 120, `wht_due_days` 15 (placeholder); every change audited |
+| `ops.collections` | rent from one recon bank line (used once): source `matched_credit` (bank service already booked it), `suspense_credit` (bank:suspense -> pool, OP-12) or `unbooked_line` (bank -> pool); period = month of the value date; maker-checker; journal `rent:collected:<token>:<period>-c<id>` (external_ref = bank reference) on approval |
+| `ops.charges` | expense / fee (`property_manager`, `trustee`, `platform`) / reserve contribution / reserve release, payee, description, amount, evidence SHA-256; maker-checker; journals `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>` (external_ref = evidence hex); expense/fee above the limit refused (trustee, 6d) |
+| `ops.period_totals()`, `ops.operating_statement()` | OP-30/OP-31 from approved records: net operating cash, distributable gross (never < 0) and shortfall |
+| `ops.distributions` | one live calculation per (token, period), which locks the period; operating statement snapshot, record date/block, income type, sums (CHECK gross = WHT + net = distributable), flagged and placeholder line counts, statement, statement hash, Merkle root, tax schedule and its hash, maker/attacher/checker (all different), on-chain id and journals; states `calculated -> attached -> approved -> booked`, `returned` |
+| `ops.distribution_lines` | wallet, subject (or none), units at the record block, gross (largest remainder), filer status with check id and ATL as-of date, flag, rate id and rate (ppm), WHT, net; CHECKs gross = net + WHT and WHT = floor((gross x ppm + 500,000) / 1,000,000); append-only |
+| `ops.calculate_distribution()`, `attach_statement()`, `decide_distribution()`, `book_distribution()` | calculation from `chain.transfers` up to the record block; statement v2 and tax schedule v1 checked line by line; approval refuses placeholder rates; booking needs the finalized on-chain distribution with the same root, record block, statement hash and total = sum of net, and posts `rent:wht:<token>:<id>` and `rent:distribution:<token>:<id>` together |
+| `tax.income_types`, `tax.rates` | versioned, dated rates per income type and status (`filer`, `non_filer`, `exempt`), rate in ppm, basis, placeholder flag; proposal -> approval by a different officer; effective today or later; seeded PLACEHOLDERS (LEGAL/TAX TO CONFIRM) for `reit_dividend` and `spv_dividend`; no seed for `rent` (slab-based) |
+| `tax.rate_for()`, `tax.withholding()`, `tax.filer_status()` | rate in force at a record date; the rounding rule; OP-41 status (latest ATL result <= 30 days, else non-filer, flagged) |
+| `tax.sealed_cnics`, `tax.filer_checks` | ADR 0014: AES-256-GCM ciphertext bound to subject + peppered CNIC hash (FK to `kyc.cnic_hashes`) + pepper version; ATL results (status, as-of, provider, evidence SHA-256); both append-only |
+| `tax.remittances` | token, period, amount (<= withheld - remitted), CPR, bank reference and account; maker-checker; journal `tax:remit:<token>:<cpr>` (payable -> bank) |
+| `tax.certificates`, `tax.certificate_data()`, `tax.issue_certificate()` | annual certificate data per investor and fiscal year (July-June, by closing year), content SHA-256, superseding chain |
+| `tax.filing_exports`, `tax.export_tickets` | ADR 0014 X-4: requested -> approved (different officer) -> generated once (file SHA-256 and rows recorded before release); tickets single use, at most 10 minutes (setting 2) |
+| `tax.reconcile(token)` | findings `tax.line_arithmetic`, `rent.wht_mismatch`, `tax.payable_mismatch` (per period and whole account), `tax.wht_unremitted` |
+| `ops.audit`, `ops.verify_audit()` | hash-chained (`pt-ops-audit-v1`, UTC) for ops and tax; finds rows without their audit entry |
+| `admin.roles`, `role_conflicts`, `role_permissions` | role `tax_officer`; permissions `operations.read/request/decide`, `tax.read/decide/export`; conflicts tax officer x admin, auditor, trustee, ops maker, compliance; digest fixed again |
+| `admin.operations_periods`, `operations_statement`, `operations_charge`, `operations_distribution`, `tax_overview`, `tax_exports`, `tax_export` | reads (no CNIC or name; investors as 8-character subject references) with blockers and digests |
+| `admin.propose_charge`, `decide_charge`, `decide_distribution`, `propose_tax_rate`, `decide_tax_rate`, `request_tax_export`, `decide_tax_export`, `issue_tax_export_ticket` | writes; step-up on every decision and on every tax action; refusals audited |
+
+Grants: `pt_ops_operator` (operations CLI), `pt_ops_reader`, `pt_tax_service` (only role that reads sealed CNICs or redeems tickets), `pt_recon_writer/reader` EXECUTE `tax.reconcile`, `pt_admin_portal` EXECUTE on the 15 admin functions.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -274,12 +301,13 @@ All NOLOGIN, created idempotently:
 
 | 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
 | 0018 | no new role: `pt_web` (0012) may execute the six `offering.web_*` functions |
+| 0021 | `pt_ops_operator`, `pt_ops_reader`, `pt_tax_service` |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
 ## 6. Ledger account conventions
 
-From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
+From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). S-03 (0021): `vendor:payable:<payee>`, `fees:payable:<payee>`, `reserve:<token>`, `tax:wht-payable:<token>`, `rent:payable:wallet:<wallet>` (holder without a KYC subject); journals `rent:collected:<token>:<period>-c<id>`, `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>`, `rent:wht:<token>:<id>`, `tax:remit:<token>:<cpr>`. The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
 
 ## 7. `webdemo` (runtime, prototype only)
 

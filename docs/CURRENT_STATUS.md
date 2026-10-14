@@ -2,7 +2,11 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, Step 6c merged)
+## Latest update (2026-10-14, S-03 on a branch)
+
+- **S-03 operations + FBR withholding (T-023/T-024) built on branch `s-03-operations-tax`, not merged** (migration `0021_operations_tax.sql`; 0020 reserved for parallel work, merge it first; ADR 0014 Proposed: sealed CNIC for tax). Partial: see TASKS T-023/T-024 for what is not built. Tax rates are PLACEHOLDERS (LEGAL/TAX TO CONFIRM); approval of a distribution with them is refused unless `ops.settings.allow_placeholder_rates` (local dev only).
+
+## Earlier update (2026-10-13, Step 6c merged)
 
 - **Step 6c (T-005) merged from branch `step-6c-compliance-portal`** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).
 - Owner to confirm: investor wording for `suspended`/PEP (tipping-off), SLA values, PEP provider, goAML format.
