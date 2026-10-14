@@ -236,6 +236,23 @@ Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); 
 
 Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
 
+### 0020 recovery (RV-1..RV-10; spec S-06 section 14, task T-026)
+
+Schema `recovery` (role `pt_recovery_worker` runs `recovery.tick`):
+
+| Table | Purpose / rules |
+|---|---|
+| `cases` | `wallet_recovery`, `succession`, `reversal`; `case_ref` = SHA-256 of `pt-case-v1:<uuid>` (caseId on chain); state machine in trigger `guard_case` (opened → approved → executed → closed; opened → rejected / cancelled → closed; reversal opened → closed); identity columns immutable; decisions written once; release proposer ≠ confirmer ≠ maker (CHECK); one live case per wallet / new wallet / journal (partial unique indexes) |
+| `approvals` | one per (case, capacity) and per (case, officer); capacities `operations`, `compliance`, `legal`; digest bound; append-only |
+| `documents` | metadata + SHA-256 only (death certificate, succession certificate, letters of administration, court order, family settlement, re-verification, other); free text refused with CNIC/IBAN/phone; append-only |
+| `heirs` | KYC subject, bound wallet, share numerator/denominator; append-only |
+| `proposals` | one RecoveryGuard request per case (recovery) or per heir with units (succession): outbox keys of propose/execute/cancel, on-chain request id and eta from the read model; enqueued → pending → executed / cancelled, enqueued → failed / cancelled |
+| `wallet_history` | old → new wallet of an executed recovery (the only change `kyc.wallets` accepts, via `rebind_context` and trigger `kyc.guard_wallet`) |
+| `reversal_reasons`, `reversible_kinds` | reference lists (append-only); reversible: `rent_received`, `cash_topup` |
+| `audit` | hash-chained (`pt-recovery-audit-v1`, UTC); `verify_audit()` also finds rows written around the functions |
+
+Functions: `open_case`, `open_reversal`, `set_new_wallet`, `add_document`, `add_heir`, `decide`, `cancel`, `release`, `tick`, `allocation` (floor + largest remainder with a family settlement), `shares_complete` (exact, lcm), `reversal_problem`, `command_allowed` and `pending_from` (signing service), views `recon_requests`, `recon_reversals` (reconciliation). Portal: `admin.recovery_cases|case|open|add_document|add_heir|set_wallet|act|sync`; `admin.audit_rows / verify_chains / record_export` know the source `recovery`. Notify kind `security.wallet_recovery_requested` (EN/UR SMS + e-mail). Admin role `legal_officer`, permissions `recovery.read|request|decide`. Changes `kyc.wallets` from strictly append-only to "append-only except the recovery rebinding" (0009 Y-5 amended).
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |

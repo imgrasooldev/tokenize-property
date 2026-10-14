@@ -9,7 +9,8 @@ import type { OfficerDecisionResult, PreviewResult, SignInput, SignResult } from
  * method, path, timestamp, a one-time nonce and the body hash (@pt/http-auth); stale or replayed
  * requests and oversized bodies are refused, and each client may call only its own paths (the
  * website may create custodial wallets but never ask for a signature; the admin portal may only
- * preview and decide pending requests, never ask for a signature). Errors never echo internals.
+ * preview and decide pending requests and create a custodial wallet, never ask for a signature).
+ * Errors never echo internals.
  */
 
 export interface SignerApi {
@@ -31,8 +32,12 @@ const PATHS = ["/v1/sign", "/v1/broadcast", "/v1/release", "/v1/custody/wallets"
 /** What the outbox worker may call; the website's client is limited to custody. */
 export const OUTBOX_SCOPE = ["/v1/sign", "/v1/broadcast", "/v1/release"] as const;
 export const WEB_SCOPE = ["/v1/custody/wallets"] as const;
-/** The admin portal (Step 6b): preview and decide pending requests only; it can never ask for a signature. */
-export const ADMIN_SCOPE = ["/v1/requests/preview", "/v1/decide"] as const;
+/**
+ * The admin portal: preview and decide pending requests (Step 6b) and create a custodial wallet for a
+ * wallet-recovery case (S-06 RF-9; the key has no rights until a recovery binds it). It can never ask
+ * for a signature.
+ */
+export const ADMIN_SCOPE = ["/v1/requests/preview", "/v1/decide", "/v1/custody/wallets"] as const;
 
 const idBody = z.object({ requestId: z.uuid() });
 const walletBody = z.strictObject({});

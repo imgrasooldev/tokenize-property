@@ -1,7 +1,7 @@
 {
   "name": "property-token-backend",
   "private": true,
-  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications",
+  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications, recovery",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -70,7 +70,9 @@
     "offering:audit": "tsx packages/offering/src/cli.ts audit",
     "notify:setup": "tsx packages/notify/src/cli.ts setup",
     "notify:run": "tsx packages/notify/src/cli.ts run",
-    "notify:status": "tsx packages/notify/src/cli.ts status"
+    "notify:status": "tsx packages/notify/src/cli.ts status",
+    "recovery:tick": "tsx packages/recovery/src/cli.ts tick",
+    "recovery:audit": "tsx packages/recovery/src/cli.ts audit"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -117,7 +117,7 @@ export async function cast(w: World): Promise<Cast> {
   const admin = await bootstrap(w, "admin.one", "Admin One");
   const admin2 = await bootstrap(w, "admin.two", "Admin Two");
   const invited = new Map<string, Actor>();
-  for (const role of ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor"] as const) {
+  for (const role of ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"] as const) {
     invited.set(role, await invite(w, admin, admin2, role.replace("_officer", "").replace("_", "."), role));
   }
   return { admin, admin2, ...Object.fromEntries(invited) } as Cast;
