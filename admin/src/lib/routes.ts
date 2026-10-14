@@ -46,7 +46,18 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  // Step 6d: trustee portal (migration 0023). Trustee officers decide (step-up checked by the database); auditors read.
   { path: "/trustee", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/register", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/register/adjustments/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/cosign", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/cosign/signer/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/cosign/offering/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/distributions", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/distributions/[registry]/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/recon", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/recon/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/recoveries", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -73,6 +84,13 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/compliance/str/[id]/notes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/export", kind: "api", methods: ["POST"], access: "compliance.export", mutating: true },
+  // Step 6d: trustee (migration 0023).
+  { path: "/api/trustee/register/export", kind: "api", methods: ["POST"], access: "trustee.export", mutating: true },
+  { path: "/api/trustee/register/adjustments", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  { path: "/api/trustee/register/adjustments/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  { path: "/api/trustee/cosign/signer/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  { path: "/api/trustee/cosign/offering/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  { path: "/api/trustee/distributions/[registry]/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
@@ -82,6 +100,7 @@ export const AUDIT_SOURCES = {
   ledger: "audit.read.ops",
   admin: "audit.read.admin",
   compliance: "compliance.read",
+  trustee: "trustee.read",
 } as const satisfies Record<string, Permission>;
 export type AuditSource = keyof typeof AUDIT_SOURCES;
 

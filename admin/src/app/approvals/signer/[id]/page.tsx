@@ -186,21 +186,26 @@ export default async function SignerRequestPage({
       <div className="g2">
         <section className="card" aria-labelledby="appr">
           <h2 id="appr">
-            Approvals ({r.approvals.filter((a) => a.decision === "approve").length} of {r.approvalsNeeded}) <span className="sp" />
+            Approvals ({r.platformApprovals} of {r.approvalsNeeded}) <span className="sp" />
             <span className="chip warn">different officers required</span>
+            {r.trusteeApprovalsNeeded > 0 ? (
+              <span className={r.trusteeApprovals >= r.trusteeApprovalsNeeded ? "chip ok" : "chip warn"} data-testid="trustee-approvals">
+                trustee co-signature {r.trusteeApprovals} of {r.trusteeApprovalsNeeded}
+              </span>
+            ) : null}
           </h2>
           <div className="sig">
             {r.approvals.map((a) => (
               <div key={a.operator} className={a.decision === "approve" ? "y" : "n"}>
                 <b className={a.decision === "approve" ? "up" : "dn"}>
-                  {a.decision === "approve" ? "✓" : "✕"} {a.operator}
+                  {a.decision === "approve" ? "✓" : "✕"} {a.operator} {a.capacity === "trustee" ? <span className="chip">trustee</span> : null}
                 </b>
                 <div className="di small">
                   {pkt(a.at)} · {a.reason ?? ""}
                 </div>
               </div>
             ))}
-            {Array.from({ length: Math.max(0, r.approvalsNeeded - r.approvals.filter((a) => a.decision === "approve").length) }, (_, i) => (
+            {Array.from({ length: Math.max(0, r.approvalsNeeded - r.platformApprovals) }, (_, i) => (
               <div key={`open-${String(i)}`}>
                 <b>waiting</b>
                 <div className="di small">a checker who is not the maker</div>

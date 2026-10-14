@@ -236,6 +236,33 @@ Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); 
 
 Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
 
+### 0023 trustee (T-1..T-7; Step 6d, task T-006, ADR 0011 section 12)
+
+Numbered 0023 because 0020-0022 are reserved for parallel work (no dependency on them); until they are merged the backend runner refuses the gap and tests use `contiguousMigrations()` (the admin runner does not check gaps). Schema `trustee`; advisory locks 586586230 (audit), 586586231 (one review per distribution), 586586232 (register balance per token and wallet).
+
+| Object | Purpose |
+|---|---|
+| `signer.trustee_cosign_kinds` | kinds the specs assign to the trustee (`issuance.mint`); append-only |
+| `signer.requests.trustee_approvals_needed` (new column) | 1 when the kind is listed and the request needs platform approvals; set by trigger `requests_trustee_requirement` on insert, immutable (`requests_trustee_guard`), which also refuses `pending_approval -> approved` without both capacities |
+| `signer.approvals.capacity` (new column) | `platform` / `trustee`, set by trigger `approvals_capacity` from the approver's role (active `trustee_officer` officer = trustee) |
+| `signer.decide()` (replaced), `signer.approval_counts()` | counts platform and trustee approvals separately; refuses a platform approval once the platform part is complete and a trustee approval where none is needed |
+| `admin.signer_tickets.capacity` (new column), `admin.guard_signer_ticket()`, `redeem_signer_ticket()`, `complete_signer_ticket()`, `signer_blockers()`, `signer_request()` (replaced) | trustee tickets need `trustee.decide` at issue and redemption; the outcome also goes to `trustee.audit`; detail reads show both capacities |
+| `offering.has_duty()` (replaced), trigger `duties_officer_check`, trigger `request_votes_officer_binding` | for a portal officer the S-02 `trustee` duty is the active `trustee_officer` role and no other duty is allowed (OF-SOD-4); votes under an officer handle only through the portal |
+| `trustee.distribution_reviews` | one decision per (registry, distribution): approve (with the recomputed root, equal to the published root) or reject, reason, digest of what was shown, window end, decider; append-only |
+| `trustee.distribution_blocked()`, triggers `payout_batches_trustee_review` (bank) and `journal_trustee_review` (ledger, only keys `rent:distribution:%`) | a rejected distribution gets no payout batch and no booking |
+| `trustee.register_entries` | the trustee's own unit register per token and wallet: + units on V18 (`active`), - units on `redeemed` (trigger `subscription_events_trustee_register`), and approved adjustments; append-only, balance never below zero; backfilled from existing active subscriptions |
+| `trustee.adjustments` | two-officer register corrections with evidence SHA-256, 72 h, one open per wallet; decided once |
+| `trustee.register_lines()` | register next to `chain.holdings` for one token (full outer join on the wallet) |
+| `trustee.audit` | hash-chained (`pt-trustee-audit-v1`, UTC); `trustee.verify_audit()` also finds reviews, register entries, adjustments and trustee co-signatures without their audit entry |
+| `trustee.recovery_cases_json()` | hook for S-06: returns NULL until S-06 replaces it with its case list |
+| triggers `*_officer_binding` | officer handles in trustee rows only with the admin function on the stack |
+| `admin.role_permissions` (+4) | `trustee.decide`, `trustee.export`, `audit.export` for trustee officers; `trustee.export` for auditors; digest fixed again |
+| `admin.trustee_dashboard`, `trustee_register`, `register_adjustment`, `trustee_cosign_queue`, `trustee_signer_request`, `trustee_offering_request`, `trustee_distributions`, `trustee_distribution`, `trustee_recon`, `trustee_recon_run`, `trustee_recoveries` | reads (`trustee.read`): chain numbers pinned to the indexer cursor (one snapshot), per-action blockers and digests |
+| `admin.issue_trustee_ticket`, `decide_offering_request`, `review_distribution`, `propose_register_adjustment`, `decide_register_adjustment`, `record_register_export` | writes (`trustee.decide`, export `trustee.export`); step-up on every decision; refusals audited as `approval.refused` |
+| `admin.audit_rows`, `verify_chains`, `record_export` (replaced) | new audit source `trustee` |
+
+Grants: `pt_admin_portal` EXECUTE on the 17 new admin functions; `pt_admin_auditor` EXECUTE on `trustee.verify_audit`. No role can read or write a `trustee` table directly.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |

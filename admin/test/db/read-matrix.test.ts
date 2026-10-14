@@ -8,6 +8,8 @@ import { cast, createWorld, sha, token, type Cast, type World } from "../support
 type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "trustee_officer" | "auditor" | "admin" | "nobody";
 const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin", "nobody"];
 
+const MATRIX_TOKEN = `0x${"6".repeat(40)}`;
+
 const EXPECT: Record<string, Who[]> = {
   ops_overview: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
   "audit_rows:signer": ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
@@ -53,6 +55,26 @@ const EXPECT: Record<string, Who[]> = {
   add_str_note: ["compliance_officer"],
   str_act: ["compliance_officer"],
   record_str_export: ["compliance_officer"],
+  // Step 6d (migration 0023): trustee officers decide, auditors read and export, nobody else.
+  "audit_rows:trustee": ["trustee_officer", "auditor"],
+  "record_export:trustee": ["trustee_officer", "auditor"],
+  trustee_dashboard: ["trustee_officer", "auditor"],
+  trustee_register: ["trustee_officer", "auditor"],
+  register_adjustment: ["trustee_officer", "auditor"],
+  trustee_cosign_queue: ["trustee_officer", "auditor"],
+  trustee_signer_request: ["trustee_officer", "auditor"],
+  trustee_offering_request: ["trustee_officer", "auditor"],
+  trustee_distributions: ["trustee_officer", "auditor"],
+  trustee_distribution: ["trustee_officer", "auditor"],
+  trustee_recon: ["trustee_officer", "auditor"],
+  trustee_recon_run: ["trustee_officer", "auditor"],
+  trustee_recoveries: ["trustee_officer", "auditor"],
+  record_register_export: ["trustee_officer", "auditor"],
+  issue_trustee_ticket: ["trustee_officer"],
+  decide_offering_request: ["trustee_officer"],
+  review_distribution: ["trustee_officer"],
+  propose_register_adjustment: ["trustee_officer"],
+  decide_register_adjustment: ["trustee_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -101,6 +123,27 @@ const CALLS: Record<string, string> = {
   add_str_note: "SELECT admin.add_str_note($1, 999999, 'matrix permission probe')",
   str_act: `SELECT admin.str_act($1, 999999, 'start_review', 'matrix permission probe', NULL, '\\x${"a".repeat(64)}')`,
   record_str_export: `SELECT admin.record_str_export($1, 999999, '${"d".repeat(64)}')`,
+  "audit_rows:trustee": "SELECT * FROM admin.audit_rows($1, 'trustee', NULL, NULL, NULL, NULL, NULL, 5)",
+  "record_export:trustee": `SELECT * FROM admin.record_export($1, 'trustee', '{}', 0, 'csv', '${"e".repeat(64)}')`,
+  trustee_dashboard: "SELECT admin.trustee_dashboard($1)",
+  trustee_register: `SELECT admin.trustee_register($1, '${MATRIX_TOKEN}', 10)`,
+  register_adjustment: "SELECT admin.register_adjustment($1, 999999)",
+  trustee_cosign_queue: "SELECT admin.trustee_cosign_queue($1)",
+  trustee_signer_request: "SELECT admin.trustee_signer_request($1, gen_random_uuid())",
+  trustee_offering_request: "SELECT admin.trustee_offering_request($1, 999999)",
+  trustee_distributions: "SELECT admin.trustee_distributions($1)",
+  trustee_distribution: `SELECT admin.trustee_distribution($1, '0x${"7".repeat(40)}', 1)`,
+  trustee_recon: "SELECT admin.trustee_recon($1, 7)",
+  trustee_recon_run: "SELECT admin.trustee_recon_run($1, 999999)",
+  trustee_recoveries: "SELECT admin.trustee_recoveries($1)",
+  // A known token (written in beforeAll as the indexer would): only the permission decides.
+  record_register_export: `SELECT admin.record_register_export($1, '${MATRIX_TOKEN}', 1, 0, '${"f".repeat(64)}')`,
+  // Unknown items: decisions return an audited refusal, so only the permission (and step-up) decides.
+  issue_trustee_ticket: `SELECT admin.issue_trustee_ticket($1, gen_random_uuid(), 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}', '\\x${"b".repeat(64)}', sha256(random()::text::bytea))`,
+  decide_offering_request: `SELECT admin.decide_offering_request($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  review_distribution: `SELECT admin.review_distribution($1, '0x${"7".repeat(40)}', 1, 'reject', 'matrix permission probe', '\\x${"a".repeat(64)}', NULL)`,
+  propose_register_adjustment: `SELECT admin.propose_register_adjustment($1, '0x${"7".repeat(40)}', '0x${"8".repeat(40)}', 5, '${"a".repeat(64)}', 'matrix permission probe')`,
+  decide_register_adjustment: `SELECT admin.decide_register_adjustment($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
 };
 
 const DECISIONS = new Set([
@@ -113,6 +156,11 @@ const DECISIONS = new Set([
   "decide_freeze",
   "str_act",
   "record_str_export",
+  "issue_trustee_ticket",
+  "decide_offering_request",
+  "review_distribution",
+  "propose_register_adjustment",
+  "decide_register_adjustment",
 ]);
 let stepCounter = Date.now();
 let w: World;
@@ -120,6 +168,10 @@ let c: Cast;
 beforeAll(async () => {
   w = await createWorld();
   c = await cast(w);
+  // A token in the read model, written as the indexer registers a deployment.
+  await w.su.query("SELECT chain.register_deployment('dep-matrix', 586586, 0, $1::jsonb, NULL)", [
+    JSON.stringify({ token: MATRIX_TOKEN, issuance: `0x${"1".repeat(40)}`, identityRegistry: `0x${"2".repeat(40)}` }),
+  ]);
 });
 afterAll(async () => {
   await w.drop();
@@ -157,11 +209,11 @@ describe("database authorisation matrix", () => {
   it("verify_chains returns only the chains the officer may read", async () => {
     const chains = async (who: Who) =>
       (await w.portal.query<{ source: string }>("SELECT source FROM admin.verify_chains($1, NULL)", [sessionOf(who)])).rows.map((r) => r.source).sort();
-    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
+    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "signer", "trustee"]);
     expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
     expect(await chains("ops_maker")).toEqual(["ledger", "recon", "signer"]);
     expect(await chains("admin")).toEqual(["admin"]);
-    expect(await chains("trustee_officer")).toEqual([]);
+    expect(await chains("trustee_officer")).toEqual(["trustee"]);
     const code = await w.portal.query("SELECT * FROM admin.verify_chains($1, NULL)", [sessionOf("nobody")]).then(
       () => "ok",
       (e: unknown) => (e as { code?: string }).code,

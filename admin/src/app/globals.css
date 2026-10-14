@@ -51,6 +51,9 @@ p { margin: 0; }
 /* utilities */
 .mono { font-family: var(--monof); font-size: 0.94em; overflow-wrap: anywhere; }
 .up { color: var(--up); } .dn { color: var(--down); } .am { color: var(--amber); } .cy { color: var(--cyan); }
+/* Step 6d: a register line that differs from the chain read model. */
+tr.diff-row td { background: rgba(255, 107, 129, 0.07); }
+.kpi .val.warn { color: var(--amber); }
 .mu { color: var(--muted); } .di { color: var(--dim); }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sp { flex: 1; }

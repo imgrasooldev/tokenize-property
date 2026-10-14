@@ -100,11 +100,15 @@ export interface SignerRequest {
   requestedBy: string;
   status: string;
   approvalsNeeded: number;
+  /** Step 6d (migration 0023): the trustee's co-signature, counted apart from the platform approvals. */
+  trusteeApprovalsNeeded: number;
+  platformApprovals: number;
+  trusteeApprovals: number;
   reason: string | null;
   createdAt: string;
   expiresAt: string;
   policy: { id: number; version: number; proposedBy: string; approvedBy: string | null; active: boolean } | null;
-  approvals: { operator: string; decision: string; reason: string | null; at: string }[];
+  approvals: { operator: string; decision: string; reason: string | null; at: string; capacity: "platform" | "trustee" }[];
   command: { id: number; status: string; createdBy: string; ref: string | null; attempts: number; lastError: string | null; createdAt: string } | null;
   gate: Gate | null;
   blockers: string[];

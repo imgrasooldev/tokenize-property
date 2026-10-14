@@ -8,6 +8,7 @@ import { ROUTES } from "@/lib/routes";
 import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
 import { caseOf, freezePolicies, investor } from "../support/compliance";
+import { distribution, holding, readModelToken, type TestToken } from "../support/trustee";
 import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
 
 /**
@@ -28,6 +29,7 @@ const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"
 const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor"];
 const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
+const TRUSTEE: Role[] = ["trustee_officer", "auditor"];
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -36,7 +38,7 @@ const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/", allowed: OPS },
   { path: "/account", allowed: ROLES },
-  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "admin"], okStatus: 307 },
+  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"], okStatus: 307 },
   { path: "/audit/signer", allowed: OPS },
   { path: "/audit/recon", allowed: OPS },
   { path: "/audit/ledger", allowed: OPS },
@@ -60,7 +62,20 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
-  { path: "/trustee", allowed: ["trustee_officer", "auditor"] },
+  // Step 6d: trustee officers and auditors only (operations, compliance and administrators never).
+  { path: "/trustee", allowed: TRUSTEE },
+  { path: "/audit/trustee", allowed: TRUSTEE },
+  { path: "/trustee/register", allowed: TRUSTEE },
+  { path: "/trustee/register/adjustments/{adjustment}", allowed: TRUSTEE },
+  { path: "/trustee/register/adjustments/999999", allowed: TRUSTEE, okStatus: 404 },
+  { path: "/trustee/cosign", allowed: TRUSTEE },
+  { path: "/trustee/cosign/signer/{signer}", allowed: TRUSTEE },
+  { path: "/trustee/cosign/offering/999999", allowed: TRUSTEE, okStatus: 404 },
+  { path: "/trustee/distributions", allowed: TRUSTEE },
+  { path: "/trustee/distributions/{registry}/{dist}", allowed: TRUSTEE },
+  { path: "/trustee/recon", allowed: TRUSTEE },
+  { path: "/trustee/recon/{run}", allowed: TRUSTEE },
+  { path: "/trustee/recoveries", allowed: TRUSTEE },
 ];
 
 /** Session-protected POST routes: who passes authorisation, and the status they then get. */
@@ -92,11 +107,20 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
   // Without the export button (and a fresh step-up, checked by the database) no file is made: 303 back.
   { path: "/api/compliance/str/{str}/export", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  // Step 6d: trustee officers decide (an incomplete form or a missing step-up: 303 back, nothing decided); auditors may export.
+  { path: "/api/audit/trustee/export", allowed: TRUSTEE, okStatus: 200, form: { format: "csv" } },
+  { path: "/api/trustee/register/export", allowed: TRUSTEE, okStatus: 303, form: {} },
+  { path: "/api/trustee/register/adjustments", allowed: ["trustee_officer"], okStatus: 303, form: { reason: "short" } },
+  { path: "/api/trustee/register/adjustments/{adjustment}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/trustee/cosign/signer/{signer}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/trustee/cosign/offering/1/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/trustee/distributions/{registry}/{dist}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
 function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
+  if (path.startsWith("/api/trustee/")) return "trustee_officer";
   if (path.startsWith("/api/compliance/")) return "compliance_officer";
   if (path.includes("export")) return "auditor";
   if (path.includes("/approvals/property/")) return "compliance_officer";
@@ -172,6 +196,9 @@ function resolve(path: string): string {
 let signer: TestSigner;
 const SIGNER_PORT = 4998;
 let compliance2: Actor;
+let trustee2: Actor;
+let checker2: Actor;
+let tok: TestToken;
 
 beforeAll(async () => {
   w = await createWorld("pt_admin_testhttp");
@@ -196,6 +223,23 @@ beforeAll(async () => {
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
   compliance2 = await invite(w, c.admin, c.admin2, "http.compliance.two", "compliance_officer");
+  // Step 6d items: a token in the read model with a holder, a published distribution in its window,
+  // a register adjustment proposed through the portal function, the latest reconciliation run.
+  trustee2 = await invite(w, c.admin, c.admin2, "http.trustee.two", "trustee_officer");
+  checker2 = await invite(w, c.admin, c.admin2, "http.checker.two", "ops_checker");
+  tok = await readModelToken(w.su, { supply: 250n, cap: 1000n });
+  ids.set("token", tok.token);
+  ids.set("registry", tok.registry);
+  await holding(w.su, tok, `0x${"a1".repeat(20)}`, 250n);
+  ids.set("dist", String((await distribution(w.su, tok, 1)).id));
+  await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [c.trustee_officer.sessionHash, c.trustee_officer.credentialId, Date.now()]);
+  const adj = await w.portal.query<{ r: { ok: boolean; id: number; error?: string } }>(
+    "SELECT admin.propose_register_adjustment($1, $2, $3, 250, $4, 'opening balance from the trustee register extract') AS r",
+    [c.trustee_officer.sessionHash, tok.token, `0x${"a1".repeat(20)}`, "ab".repeat(32)],
+  );
+  if (!adj.rows[0]?.r.ok) throw new Error(`adjustment: ${adj.rows[0]?.r.error ?? "?"}`);
+  ids.set("adjustment", String(adj.rows[0].r.id));
+  ids.set("run", (await w.su.query<{ id: string }>("SELECT max(id)::text AS id FROM recon.runs")).rows[0]?.id ?? "");
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -238,7 +282,11 @@ describe("route coverage", () => {
     const covered = new Set([
       ...PAGES.map((p) =>
         p.path
-          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance)$/, "/audit/[source]")
+          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|trustee)$/, "/audit/[source]")
+          .replace(/^\/trustee\/register\/adjustments\/(\{\w+\}|\d+)$/, "/trustee/register/adjustments/[id]")
+          .replace(/^\/trustee\/cosign\/(signer|offering)\/(\{\w+\}|\d+)$/, "/trustee/cosign/$1/[id]")
+          .replace(/^\/trustee\/distributions\/\{\w+\}\/\{\w+\}$/, "/trustee/distributions/[registry]/[id]")
+          .replace(/^\/trustee\/recon\/(\{\w+\}|\d+)$/, "/trustee/recon/[id]")
           .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
           .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]"),
       ),
@@ -247,7 +295,10 @@ describe("route coverage", () => {
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2"),
+          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/trustee\/register\/adjustments\/\{\w+\}\/decide$/, "/api/trustee/register/adjustments/[id]/decide")
+          .replace(/^\/api\/trustee\/cosign\/(signer|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/trustee/cosign/$1/[id]/decide")
+          .replace(/^\/api\/trustee\/distributions\/\{\w+\}\/\{\w+\}\/decide$/, "/api/trustee/distributions/[registry]/[id]/decide"),
       ),
       ...ANONYMOUS_POSTS,
       "/login",
@@ -335,7 +386,8 @@ describe("CSRF and same-origin on every mutating route", () => {
       expect((await req(path, { method: "POST", who, json, csrf: null })).status).toBe(403);
       expect((await req(path, { method: "POST", who, json, csrf: "x".repeat(43) })).status).toBe(403);
       // The CSRF token of another officer's session does not work either.
-      expect((await req(path, { method: "POST", who, json, csrf: csrfFor(tokens.get("trustee_officer") ?? "") })).status).toBe(403);
+      const other: Who = who === "trustee_officer" ? "auditor" : "trustee_officer";
+      expect((await req(path, { method: "POST", who, json, csrf: csrfFor(tokens.get(other) ?? "") })).status).toBe(403);
     });
   }
 });
@@ -569,6 +621,142 @@ describe("compliance over HTTP (Step 6c)", () => {
     const rec = await w.su.query<{ sha256: Buffer }>("SELECT sha256 FROM compliance.str_exports WHERE case_id = $1", [resolve("{str}")]);
     expect(rec.rows.map((r) => r.sha256.toString("hex"))).toContain(manifest.files[0]?.sha256);
     expect((await w.su.query("SELECT * FROM compliance.verify_audit()")).rows).toEqual([]);
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("trustee over HTTP (Step 6d)", () => {
+  let counter = Date.now() + 2_000_000;
+  // eslint-disable-next-line security/detect-non-literal-regexp -- test ids are fixed literals of this file
+  const testId = (html: string, id: string): string => new RegExp(`data-testid="${id}"[^>]*>([^<]+)<`).exec(html)?.[1] ?? "";
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  async function fresh(a: Actor, stale = false): Promise<void> {
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+  /** Runs fn with another officer's session in place of the matrix's officer of that role. */
+  async function as<T>(role: Role, other: Actor, fn: () => Promise<T>): Promise<T> {
+    tokens.set(role, other.token);
+    try {
+      return await fn();
+    } finally {
+      // eslint-disable-next-line security/detect-object-injection
+      tokens.set(role, c[role].token);
+    }
+  }
+
+  it("a mint needs two checkers AND the trustee: the trustee co-signs the exact call and the signing service approves", async () => {
+    const id = await pendingMint(signer);
+    const approve = async (role: Role) => {
+      const html = await (await req(`/approvals/signer/${id}`, { who: role })).text();
+      return location(
+        await req(`/api/approvals/signer/${id}/decide`, {
+          method: "POST",
+          who: role,
+          form: { decision: "approve", reason: "checked against the subscription", payloadHash: testId(html, "payload-hash"), callHash: testId(html, "call-hash") },
+        }),
+      );
+    };
+    await fresh(c.ops_checker);
+    expect(await approve("ops_checker")).toMatch(/now pending_approval/);
+    await fresh(checker2);
+    expect(await as("ops_checker", checker2, () => approve("ops_checker"))).toMatch(/now pending_approval/);
+    // The platform is complete; the operations page says the trustee co-signs next.
+    const opsHtml = await (await req(`/approvals/signer/${id}`, { who: "ops_checker" })).text();
+    expect(opsHtml).toContain("trustee co-signs next");
+
+    const page = await req(`/trustee/cosign/signer/${id}`, { who: "trustee_officer" });
+    expect(page.status, serverLog.slice(-2000)).toBe(200);
+    const html = await page.text();
+    expect(html).toContain("mint(address, uint256, bytes32)");
+    expect(testId(html, "trustee-approvals")).toContain("trustee 0 of 1");
+    const form = { decision: "approve", reason: "register entry and subscription checked", payloadHash: testId(html, "payload-hash"), callHash: testId(html, "call-hash") };
+    await fresh(c.trustee_officer, true);
+    expect(location(await req(`/api/trustee/cosign/signer/${id}/decide`, { method: "POST", who: "trustee_officer", form }))).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.trustee_officer);
+    expect(location(await req(`/api/trustee/cosign/signer/${id}/decide`, { method: "POST", who: "trustee_officer", form: { ...form, callHash: "ab".repeat(32) } }))).toMatch(
+      /error=Refused by the signing service: the transaction changed since you reviewed it/,
+    );
+    expect(location(await req(`/api/trustee/cosign/signer/${id}/decide`, { method: "POST", who: "trustee_officer", form }))).toMatch(
+      /ok=Trustee decision recorded by the signing service: request is now approved/,
+    );
+    const caps = await w.su.query<{ operator: string; capacity: string }>("SELECT operator, capacity FROM signer.approvals WHERE request_id = $1 ORDER BY at", [id]);
+    expect(caps.rows.map((r) => r.capacity)).toEqual(["platform", "platform", "trustee"]);
+    expect(caps.rows[2]?.operator).toBe(c.trustee_officer.handle);
+    // Listed on the co-signing page only while it waits.
+    expect(await (await req("/trustee/cosign", { who: "trustee_officer" })).text()).not.toContain(`/trustee/cosign/signer/${id}`);
+  });
+
+  it("a distribution rejected in its window is blocked for booking and payout; approval needs the recomputed root", async () => {
+    const path = `/trustee/distributions/${tok.registry}/${resolve("{dist}")}`;
+    const html = await (await req(path, { who: "trustee_officer" })).text();
+    const digest = digestOf(html);
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    const post = (form: Record<string, string>) => req(`/api${path}/decide`, { method: "POST", who: "trustee_officer", form: { digest, reason: "recomputed from the record block and statement", ...form } });
+    expect(location(await post({ decision: "approve" }))).toMatch(/error=To approve, give the Merkle root you recomputed/);
+    await fresh(c.trustee_officer, true);
+    expect(location(await post({ decision: "reject" }))).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.trustee_officer);
+    expect(location(await post({ decision: "reject" }))).toMatch(/ok=Rejected: booking and payout are blocked/);
+    const blocked = await w.su.query<{ r: string | null }>("SELECT trustee.distribution_blocked($1, $2) AS r", [tok.token, resolve("{dist}")]);
+    expect(blocked.rows[0]?.r).toMatch(/trustee rejected/);
+    expect(await (await req(path, { who: "auditor" })).text()).toContain("distribution-blocked");
+  });
+
+  it("a register adjustment is decided by a second trustee officer; the register then matches; the export matches its record", async () => {
+    const path = `/trustee/register/adjustments/${resolve("{adjustment}")}`;
+    // The proposer gets no decision form.
+    expect(digestOf(await (await req(path, { who: "trustee_officer" })).text())).toBe("");
+    const before = await (await req(`/trustee/register?token=${tok.token}`, { who: "trustee_officer" })).text();
+    expect(testId(before, "register-differences")).toBe("1");
+    const decided = await as("trustee_officer", trustee2, async () => {
+      const digest = digestOf(await (await req(path, { who: "trustee_officer" })).text());
+      await fresh(trustee2);
+      return location(await req(`/api${path}/decide`, { method: "POST", who: "trustee_officer", form: { decision: "approve", reason: "checked against the register extract", digest } }));
+    });
+    expect(decided).toMatch(/ok=Decision recorded: approved/);
+    const after = await (await req(`/trustee/register?token=${tok.token}`, { who: "trustee_officer" })).text();
+    expect(testId(after, "register-differences")).toBe("0");
+    expect(testId(after, "register-total")).toBe("250");
+
+    const res = await req("/api/trustee/register/export", { method: "POST", who: "auditor", form: { token: tok.token, decision: "export" } });
+    expect(res.status, serverLog.slice(-2000)).toBe(200);
+    const files = unzipStore(new Uint8Array(await res.arrayBuffer()));
+    const manifest = JSON.parse(new TextDecoder().decode(files.get("manifest.json"))) as {
+      files: { name: string; sha256: string }[];
+      pinnedBlock: { number: number } | null;
+      exportRecord: { trusteeAuditEntry: number; adminAuditEntry: number; adminAuditHash: string };
+      walletDifferences: number;
+    };
+    const data = files.get(manifest.files[0]?.name ?? "") ?? new Uint8Array();
+    expect(sha256Hex(data)).toBe(manifest.files[0]?.sha256);
+    expect(new TextDecoder().decode(data)).toContain(`0x${"a1".repeat(20)},250,250,0,no`);
+    expect(manifest.walletDifferences).toBe(0);
+    const t = await w.su.query<{ action: string; detail: { sha256: string } }>("SELECT action, detail FROM trustee.audit WHERE id = $1", [manifest.exportRecord.trusteeAuditEntry]);
+    expect(t.rows[0]).toMatchObject({ action: "register.exported", detail: { sha256: manifest.files[0]?.sha256 } });
+    const a = await w.su.query<{ hash: Buffer }>("SELECT hash FROM admin.audit WHERE id = $1", [manifest.exportRecord.adminAuditEntry]);
+    expect(a.rows[0]?.hash.toString("hex")).toBe(manifest.exportRecord.adminAuditHash);
+  });
+
+  it("proposing through the portal needs a step-up; trustee pages hold no personal data; the trustee chain stays intact", async () => {
+    const wallet = `0x${"b2".repeat(20)}`;
+    const form = { token: tok.token, wallet, units: "5", evidence: "cd".repeat(32), reason: "correction after the register audit" };
+    await fresh(c.trustee_officer, true);
+    expect(location(await req("/api/trustee/register/adjustments", { method: "POST", who: "trustee_officer", form }))).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.trustee_officer);
+    expect(location(await req("/api/trustee/register/adjustments", { method: "POST", who: "trustee_officer", form }))).toMatch(/\/trustee\/register\/adjustments\/\d+\?ok=Adjustment proposed/);
+    for (const p of ["/trustee", `/trustee/register?token=${tok.token}`, "/trustee/cosign", "/trustee/distributions", "/trustee/recon", `/trustee/recon/${resolve("{run}")}`, "/trustee/recoveries", "/audit/trustee"]) {
+      const res = await req(p, { who: "trustee_officer" });
+      expect(res.status, p).toBe(200);
+      expect(await res.text(), p).not.toMatch(/\d{5}-\d{7}-\d|PK\d{2}[A-Z]{4}|name_enc|cnic_last4/);
+    }
+    expect(testId(await (await req("/audit/trustee", { who: "auditor" })).text(), "chain-state")).toContain("Intact");
+    expect((await w.su.query("SELECT * FROM trustee.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });

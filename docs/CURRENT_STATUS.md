@@ -2,7 +2,13 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, Step 6c merged)
+## Latest update (2026-10-13, Step 6d built on a branch)
+
+- **Step 6d (T-006) on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; merge the reserved 0020-0022 first, the backend runner refuses the gap). Trustee portal: register vs chain read model (pinned block, supply vs cap, differences, two-officer adjustments, SHA-256 export), co-signing (mints above the threshold now need a trustee officer in addition to the platform approvals, decided through the signing service; S-02 trustee votes), distribution review in the 48 h window (a rejection blocks booking and payout in SQL), daily reconciliation report, recovery requests (S-06 hook), trustee audit chain.
+- **Behaviour change on merge:** website mints above 10,000 tokens wait for a trustee officer's co-signature in the portal as well (demo: enrol a trustee officer).
+- Owner to confirm: trustee co-signature threshold (above the platform threshold vs every mint), require a trustee approval before booking a distribution (S-03 Q-7), closing the command-line trustee duty.
+
+## Earlier update (2026-10-13, Step 6c merged)
 
 - **Step 6c (T-005) merged from branch `step-6c-compliance-portal`** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).
 - Owner to confirm: investor wording for `suspended`/PEP (tipping-off), SLA values, PEP provider, goAML format.

@@ -348,3 +348,13 @@ Periodic property report (occupancy, rent roll summary, arrears, expenses agains
 - Q-4 Reserve rule and target (10 % / 6 months proposed); may the reserve smooth distributions?
 - Q-5 Expense approval limits for ops and trustee.
 - Q-6 Accounting basis: the ledger stays a cash mirror of the trustee bank; accrual accounts (receivables, prepaid) live in operations and the audited financial statements (recommended).
+- Q-7 Require the trustee's recorded approval (not only the absence of a rejection) before a distribution may be booked and paid? (Step 6d records it; today only a rejection blocks.)
+
+## 16. Amendment 2026-10-13: trustee review in the database (Step 6d, T-006, migration 0023)
+
+Changed before the behaviour (CLAUDE.md), together with ADR 0011 section 12. D4 (pre-check) and D6 (reject) are complemented by a review recorded in the database:
+
+1. While a distribution is `published` in the read model and inside the 48-hour challenge window (from the publish block's time, the contract's `CHALLENGE_WINDOW`), a trustee officer approves it, giving the Merkle root they recomputed independently (OP-SOD-2; it must equal the published root), or rejects it with a reason (step-up, digest of the distribution as shown). One decision per distribution.
+2. **A rejection blocks finalisation in the database**: no payout batch and no `rent:distribution:<token>:<id>` journal can be written for that distribution afterwards (triggers), whatever the chain says, and `rent.record_payout` therefore cannot happen either. The trustee executes the on-chain `reject(id, reason)` from the Trustee Safe within the window; the portal shows rejections not yet seen on chain.
+3. Silence is not approval: without a decision the existing flow is unchanged (the contract allows `finalize` after the window). Whether a trustee approval must be required before booking (deny by default) is open question Q-7 (section 15).
+

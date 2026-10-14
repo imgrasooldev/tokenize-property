@@ -1,4 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type pg from "pg";
 import type { Address } from "viem";
 import { tokenAbi } from "../src/lib/abis";
 import { latestDeployment, publicClient } from "../src/lib/server/chain";
@@ -70,4 +73,21 @@ export async function asAdmin<T extends object>(sql: string, params: unknown[] =
 export async function signerRequestFor(commandKey: string): Promise<{ id: string; status: string } | null> {
   const rows = await asAdmin<{ id: string; status: string }>("SELECT id, status FROM signer.requests WHERE command_ref = $1", [commandKey]);
   return rows[0] ?? null;
+}
+
+/**
+ * Step 6d (migration 0023): a mint above the approval threshold also needs the trustee's
+ * co-signature. Given as the trustee portal gives it (officer session, one-time ticket), through
+ * the backend's test helper; the officer is created on the TEST database once and reused.
+ */
+export async function trusteeCosign(requestId: string): Promise<string> {
+  const url = pathToFileURL(join(import.meta.dirname, "..", "..", "backend", "packages", "db", "test", "officers.ts")).href;
+  const m = (await import(/* @vite-ignore */ url)) as { trusteeCosign: (db: pg.ClientBase, id: string) => Promise<string> };
+  const c = adminDb();
+  await c.connect();
+  try {
+    return await m.trusteeCosign(c, requestId);
+  } finally {
+    await c.end();
+  }
 }
