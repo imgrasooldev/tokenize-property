@@ -5,8 +5,8 @@ import { cast, createWorld, sha, token, type Cast, type World } from "../support
  * Authorisation inside the database (defence in depth): every function the portal can call, for
  * every role and for no session, against an explicit expected table (not derived from the code).
  */
-type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "trustee_officer" | "auditor" | "admin" | "nobody";
-const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin", "nobody"];
+type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "auditor" | "admin" | "nobody";
+const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin", "nobody"];
 
 const EXPECT: Record<string, Who[]> = {
   ops_overview: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
@@ -18,8 +18,8 @@ const EXPECT: Record<string, Who[]> = {
   "record_export:admin": ["compliance_officer", "auditor"],
   officers_list: ["auditor", "admin"],
   changes_list: ["auditor", "admin"],
-  my_account: ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"],
-  session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"],
+  my_account: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"],
+  session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"],
   request_change: ["admin"],
   // Step 6b (migration 0016)
   approvals_inbox: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
@@ -53,6 +53,17 @@ const EXPECT: Record<string, Who[]> = {
   add_str_note: ["compliance_officer"],
   str_act: ["compliance_officer"],
   record_str_export: ["compliance_officer"],
+  // S-06 (migration 0020): makers are operations makers; deciders are operations checkers, compliance and legal officers.
+  "audit_rows:recovery": ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"],
+  "record_export:recovery": ["compliance_officer", "auditor"],
+  recovery_cases: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"],
+  recovery_case: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"],
+  recovery_open: ["ops_maker"],
+  recovery_add_document: ["ops_maker"],
+  recovery_add_heir: ["ops_maker"],
+  recovery_set_wallet: ["ops_maker"],
+  recovery_sync: ["ops_maker"],
+  recovery_act: ["ops_checker", "compliance_officer", "legal_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -101,6 +112,17 @@ const CALLS: Record<string, string> = {
   add_str_note: "SELECT admin.add_str_note($1, 999999, 'matrix permission probe')",
   str_act: `SELECT admin.str_act($1, 999999, 'start_review', 'matrix permission probe', NULL, '\\x${"a".repeat(64)}')`,
   record_str_export: `SELECT admin.record_str_export($1, 999999, '${"d".repeat(64)}')`,
+  "audit_rows:recovery": "SELECT * FROM admin.audit_rows($1, 'recovery', NULL, NULL, NULL, NULL, NULL, 5)",
+  "record_export:recovery": `SELECT * FROM admin.record_export($1, 'recovery', '{}', 0, 'csv', '${"e".repeat(64)}')`,
+  recovery_cases: "SELECT admin.recovery_cases($1, NULL, NULL)",
+  recovery_case: "SELECT admin.recovery_case($1, 999999)",
+  // Unknown subjects, journals and cases: refusals are audited and returned, so only the permission decides.
+  recovery_open: "SELECT admin.recovery_open($1, 'wallet_recovery', gen_random_uuid(), NULL, NULL, NULL, 'matrix permission probe')",
+  recovery_add_document: `SELECT admin.recovery_add_document($1, 999999, 'other', 'matrix probe', NULL, '${"a".repeat(64)}')`,
+  recovery_add_heir: "SELECT admin.recovery_add_heir($1, 999999, gen_random_uuid(), 1, 2)",
+  recovery_set_wallet: `SELECT admin.recovery_set_wallet($1, 999999, '0x${"9".repeat(40)}')`,
+  recovery_sync: "SELECT admin.recovery_sync($1)",
+  recovery_act: `SELECT admin.recovery_act($1, 999999, 'approve', 'compliance', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
 };
 
 const DECISIONS = new Set([
@@ -113,6 +135,9 @@ const DECISIONS = new Set([
   "decide_freeze",
   "str_act",
   "record_str_export",
+  "recovery_open",
+  "recovery_set_wallet",
+  "recovery_act",
 ]);
 let stepCounter = Date.now();
 let w: World;
@@ -157,9 +182,10 @@ describe("database authorisation matrix", () => {
   it("verify_chains returns only the chains the officer may read", async () => {
     const chains = async (who: Who) =>
       (await w.portal.query<{ source: string }>("SELECT source FROM admin.verify_chains($1, NULL)", [sessionOf(who)])).rows.map((r) => r.source).sort();
-    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
-    expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "ledger", "recon", "signer"]);
-    expect(await chains("ops_maker")).toEqual(["ledger", "recon", "signer"]);
+    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "recovery", "signer"]);
+    expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "ledger", "recon", "recovery", "signer"]);
+    expect(await chains("ops_maker")).toEqual(["ledger", "recon", "recovery", "signer"]);
+    expect(await chains("legal_officer")).toEqual(["recovery"]);
     expect(await chains("admin")).toEqual(["admin"]);
     expect(await chains("trustee_officer")).toEqual([]);
     const code = await w.portal.query("SELECT * FROM admin.verify_chains($1, NULL)", [sessionOf("nobody")]).then(

@@ -13,9 +13,14 @@ import { KycError, type OnboardInput, type OnboardResult } from "./service.ts";
  */
 export interface KycApi {
   onboard(input: OnboardInput): Promise<OnboardResult>;
+  /** S-06 RF-8: re-verification of an existing subject for a wallet recovery. */
+  reverify?(input: Omit<OnboardInput, "wallet">): Promise<OnboardResult>;
 }
 
 export const WEB_KYC_SCOPE = ["/v1/onboard"] as const;
+/** The branch / video-call re-verification client of a wallet recovery (S-06): re-verify only. */
+export const RECOVERY_KYC_SCOPE = ["/v1/reverify"] as const;
+const PATHS = ["/v1/onboard", "/v1/reverify"];
 const MAX_BODY = 4 * 1024;
 
 const onboardBody = z.strictObject({
@@ -23,6 +28,11 @@ const onboardBody = z.strictObject({
   fullName: z.string().min(2).max(140),
   livenessSessionId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
   wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+const reverifyBody = z.strictObject({
+  cnic: z.string().min(13).max(15),
+  fullName: z.string().min(2).max(140),
+  livenessSessionId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
 });
 
 export function createKycServer(api: KycApi, clients: Client[], opts: { now?: () => number } = {}): Server {
@@ -35,7 +45,7 @@ export function createKycServer(api: KycApi, clients: Client[], opts: { now?: ()
           sendJson(res, 200, { ok: true });
           return;
         }
-        if (req.method !== "POST" || path !== "/v1/onboard") {
+        if (req.method !== "POST" || !PATHS.includes(path) || (path === "/v1/reverify" && !api.reverify)) {
           sendJson(res, 404, { error: "not_found" });
           return;
         }
@@ -60,6 +70,16 @@ export function createKycServer(api: KycApi, clients: Client[], opts: { now?: ()
           sendJson(res, 400, { error: "bad_json" });
           return;
         }
+        if (path === "/v1/reverify" && api.reverify) {
+          const re = reverifyBody.safeParse(json);
+          if (!re.success) {
+            sendJson(res, 400, { error: "invalid" });
+            return;
+          }
+          const r = await api.reverify(re.data);
+          sendJson(res, 200, { subjectId: r.subjectId, status: r.status, reason: r.reason, checks: r.checks });
+          return;
+        }
         const parsed = onboardBody.safeParse(json);
         if (!parsed.success) {
           sendJson(res, 400, { error: "invalid" });
@@ -68,7 +88,8 @@ export function createKycServer(api: KycApi, clients: Client[], opts: { now?: ()
         const r = await api.onboard(parsed.data);
         sendJson(res, 200, { subjectId: r.subjectId, status: r.status, reason: r.reason, checks: r.checks });
       } catch (e) {
-        if (e instanceof KycError) sendJson(res, e.code === "DUPLICATE_CNIC" ? 409 : 400, { error: e.code === "DUPLICATE_CNIC" ? "duplicate" : "invalid" });
+        if (e instanceof KycError && e.code === "UNKNOWN_SUBJECT") sendJson(res, 404, { error: "not_found" });
+        else if (e instanceof KycError) sendJson(res, e.code === "DUPLICATE_CNIC" ? 409 : 400, { error: e.code === "DUPLICATE_CNIC" ? "duplicate" : "invalid" });
         else sendJson(res, 500, { error: "internal" });
       }
     })();

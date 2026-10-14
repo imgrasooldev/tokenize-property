@@ -76,6 +76,11 @@ export const CHECKS = {
   "offering.allocation_mismatch": "blocking",
   "offering.cap_headroom": "blocking",
   "offering.payment_anomaly": "blocking",
+  // Recovery, succession and reversals (spec S-06 section 14.7, migration 0020)
+  "recovery.unmatched": "blocking",
+  // A cancelled request moved nothing; still worth a look (the local chain/flow.py scenario has one).
+  "recovery.unmatched_cancelled": "warning",
+  "recovery.reversal_unmatched": "blocking",
 } as const satisfies Record<string, Severity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -213,6 +218,26 @@ export interface OfferingData {
   paymentAnomalies: { subscriptionId: string; raastRef: string; state: string }[];
 }
 
+/** A RecoveryGuard request in the read model (chain.recoveries). */
+export interface ChainRecoveryRequest {
+  id: bigint;
+  kind: "wallet_recovery" | "forced_transfer";
+  status: "pending" | "executed" | "cancelled";
+  from: string;
+  to: string;
+  amount: bigint;
+}
+
+/** S-06 data (migration 0020): absent where the recovery schema does not exist (then no recovery checks run). */
+export interface RecoveryData {
+  /** This deployment's RecoveryGuard requests at the pinned block. */
+  requests: ChainRecoveryRequest[];
+  /** On-chain request ids that are a recovery case's proposals (recovery.recon_requests). */
+  caseRequestIds: bigint[];
+  /** Closed reversal cases: the reversed journal and its correcting journal (recovery.recon_reversals). */
+  reversals: { caseId: bigint; journalId: bigint; reversalJournalId: bigint }[];
+}
+
 export interface ReconData {
   /** Database time of the snapshot; all ages are measured from it. */
   asOf: Date;
@@ -232,6 +257,8 @@ export interface ReconData {
   expectedMints: Map<string, ExpectedMint>;
   /** S-02 offerings of this token; absent where migration 0015 is not applied (then no offering checks run). */
   offerings?: OfferingData;
+  /** S-06 recovery cases and reversals; absent where migration 0020 is not applied. */
+  recovery?: RecoveryData;
   bank: {
     accounts: BankAccount[];
     statements: BankStatement[];

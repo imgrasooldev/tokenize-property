@@ -163,3 +163,16 @@ Step 6c compliance routes (migration 0019; pages for compliance officers and aud
 | `POST /api/compliance/str/[id]/export` | `compliance.export` + step-up | form `decision=export` → ZIP (case JSON, manifest.json, SHA256SUMS), recorded by `admin.record_str_export` before release; otherwise 303 back with the reason |
 
 CLI (KYC service): `npm run kyc:rescreen` executes queued re-screenings (mock providers; refused in production).
+
+S-06 recovery, succession and reversals (migration 0020; every route also checked by the database, decisions bound to the case digest):
+
+| Route | Access | Body / result |
+|---|---|---|
+| `GET /recovery`, `GET /recovery/[id]` | `recovery.read` | case list with filters; case detail with documents, heirs, allocation preview, decisions, on-chain requests and the reasons each action is unavailable |
+| `POST /api/recovery/cases` | `recovery.request` + step-up | `kind=wallet_recovery|succession`, `subject` (KYC subject id), `summary`; or `kind=reversal`, `journal`, `reasonCode`, `evidence` (SHA-256 hex), `summary` → 303 to the case |
+| `POST /api/recovery/cases/[id]/evidence` | `recovery.request` | `what=document`, `docType`, `reference`, `issuer?`, `sha256`; or `what=heir`, `subject`, `num`, `den` → 303 back |
+| `POST /api/recovery/cases/[id]/wallet` | `recovery.request` + step-up | `decision=create`: the signing service creates a custodial wallet (`/v1/custody/wallets`, admin client), the database sets it → 303 back |
+| `POST /api/recovery/cases/[id]/act` | `recovery.decide` + step-up | `decision=approve|reject` + `capacity=operations|compliance|legal`, or `decision=cancel|release`; `reason`, `digest` → 303 back |
+| `POST /api/recovery/sync` | `recovery.request` | `decision=sync` runs `recovery.tick` → 303 back |
+
+Signing service: kinds `recovery.freeze|unfreeze|add_key|propose|execute|cancel` (ADR 0005 amendment); the admin client scope now includes `/v1/custody/wallets`. KYC service: `POST /v1/reverify` (`cnic`, `fullName`, `livenessSessionId`; client `recovery`, secret `KYC_CLIENT_SECRET_RECOVERY`, scope `/v1/reverify` only) → subject, status and check outcomes, 404 when no registered investor matches. CLI: `npm run recovery:tick [-- --loop]`, `npm run recovery:audit`.

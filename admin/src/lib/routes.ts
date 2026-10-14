@@ -46,6 +46,9 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  // S-06 (migration 0020): recovery, succession and reversal cases.
+  { path: "/recovery", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
+  { path: "/recovery/[id]", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
   { path: "/trustee", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -73,6 +76,12 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/compliance/str/[id]/notes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/export", kind: "api", methods: ["POST"], access: "compliance.export", mutating: true },
+  // S-06: makers prepare (operations maker), deciders decide in their capacity; step-up checked by the database.
+  { path: "/api/recovery/cases", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
+  { path: "/api/recovery/cases/[id]/evidence", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
+  { path: "/api/recovery/cases/[id]/wallet", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
+  { path: "/api/recovery/cases/[id]/act", kind: "api", methods: ["POST"], access: "recovery.decide", mutating: true },
+  { path: "/api/recovery/sync", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
@@ -82,6 +91,7 @@ export const AUDIT_SOURCES = {
   ledger: "audit.read.ops",
   admin: "audit.read.admin",
   compliance: "compliance.read",
+  recovery: "recovery.read",
 } as const satisfies Record<string, Permission>;
 export type AuditSource = keyof typeof AUDIT_SOURCES;
 

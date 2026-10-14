@@ -136,9 +136,15 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Outcome: sale proceeds distribution, redemption with `IssuanceGuard.burn(from, amount, refId)` through a new signer kind, token closure, final reconciliation.
 - P high, C L, Dep T-022, T-006. Accept: burn only after payout recorded; supply reaches zero; recon passes. Tests: e2e on Besu, refId single use for burns.
 
-### T-026 Inheritance and succession
+### T-026 Inheritance and succession (S-06: recovery, succession, reversals)
 - Outcome: legal-heir workflow using `RecoveryGuard` forced transfer with evidence hash, trustee execution, KYC of heirs.
 - P medium, C M, Dep T-005, T-006. Tests: evidence required, 48 h delay respected, F-02 order (freeze, move, delete identity).
+- **Built on branch `s-06-recovery` (2026-10-13, not merged):** migration `0020_recovery.sql` (schema `recovery`, RV-1..RV-10), `@pt/recovery` (allocation twin, `recovery:tick`, `recovery:audit`), signer kinds `recovery.freeze|unfreeze|add_key|propose|execute|cancel` gated by `recovery.command_allowed`, KYC `reverify` + `POST /v1/reverify`, recon checks `recovery.*` and void reversal pairs in cash, portal `/recovery` with role `legal_officer`, spec S-06 section 14, runbook `recovery-succession.md`. Unit and DB tested; not run against Besu (48 h delay), no Playwright e2e.
+- Remaining: payable transfer of held distributions to heirs (S-06 §6) and retiring the deceased's payout account (S-03 OP-53); cash-out of remainder units (RC-14); identity deletion after zero balance (RC-16); bank recalls RC-20..RC-24 and `issuance.burn` for reversals; recon checks `compliance.freeze_unmatched`, `kyc.holder_unverified_unfrozen`, `issuance.reversed_not_resolved`; one RecoveryGuard per token (policies are single-token today); trustee-officer step in 6d; T-045.
+
+### T-045 Website follows the KYC wallet binding after a recovery
+- Outcome: the website maps an investor to `kyc.wallets` (or is updated by the recovery) instead of `webdemo.investors.wallet_address`, so a recovered investor sees their new wallet. Branch/video re-verification screen calling `POST /v1/reverify`.
+- P medium, C S, Dep T-026.
 
 ### T-027 Public verification page
 - Outcome: public page: supply vs trustee register, document hashes, anchors, Merkle self-check for anyone.

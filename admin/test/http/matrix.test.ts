@@ -8,6 +8,7 @@ import { ROUTES } from "@/lib/routes";
 import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
 import { caseOf, freezePolicies, investor } from "../support/compliance";
+import { reversalCase, walletCase } from "../support/recovery";
 import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
 
 /**
@@ -19,15 +20,17 @@ import { cast, createWorld, invite, type Actor, type Cast, type World } from "..
 const PORT = 3399;
 const ORIGIN = `http://localhost:${String(PORT)}`;
 const COOKIE = "__Host-pt_admin";
-type Role = "ops_maker" | "ops_checker" | "compliance_officer" | "trustee_officer" | "auditor" | "admin";
+type Role = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "auditor" | "admin";
 type Who = Role | "anonymous" | "investor";
-const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "admin"];
+const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"];
 const EVERYONE: Who[] = [...ROLES, "anonymous", "investor"];
 const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 
 const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor"];
 const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
+// S-06: every role that works on cases reads them (never trustee officers or administrators).
+const RECOVERY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"];
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -36,7 +39,7 @@ const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/", allowed: OPS },
   { path: "/account", allowed: ROLES },
-  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "admin"], okStatus: 307 },
+  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor", "admin"], okStatus: 307 },
   { path: "/audit/signer", allowed: OPS },
   { path: "/audit/recon", allowed: OPS },
   { path: "/audit/ledger", allowed: OPS },
@@ -60,6 +63,11 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
+  // S-06 (migration 0020): recovery, succession and reversal cases.
+  { path: "/recovery", allowed: RECOVERY },
+  { path: "/recovery/{reversalCase}", allowed: RECOVERY },
+  { path: "/recovery/999999", allowed: RECOVERY, okStatus: 404 },
+  { path: "/audit/recovery", allowed: RECOVERY },
   { path: "/trustee", allowed: ["trustee_officer", "auditor"] },
 ];
 
@@ -92,6 +100,14 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
   // Without the export button (and a fresh step-up, checked by the database) no file is made: 303 back.
   { path: "/api/compliance/str/{str}/export", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  // S-06: makers are operations makers, deciders operations checkers, compliance and legal officers; an
+  // incomplete form is answered with a 303 back (nothing changed, the signing service is never called).
+  { path: "/api/audit/recovery/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
+  { path: "/api/recovery/cases", allowed: ["ops_maker"], okStatus: 303, form: { kind: "wallet_recovery", summary: "short" } },
+  { path: "/api/recovery/cases/{reversalCase}/evidence", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/recovery/cases/{reversalCase}/wallet", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/recovery/cases/{reversalCase}/act", allowed: ["ops_checker", "compliance_officer", "legal_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/recovery/sync", allowed: ["ops_maker"], okStatus: 303, form: {} },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
@@ -99,6 +115,7 @@ function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
   if (path.startsWith("/api/compliance/")) return "compliance_officer";
   if (path.includes("export")) return "auditor";
+  if (path.startsWith("/api/recovery/") && path.endsWith("/act")) return "compliance_officer";
   if (path.includes("/approvals/property/")) return "compliance_officer";
   if (path.endsWith("/decide") && path.includes("/approvals/")) return "ops_checker";
   return "ops_maker";
@@ -163,6 +180,15 @@ async function req(
   return fetch(`${ORIGIN}${resolve(path)}`, { method, headers, body, redirect: "manual" });
 }
 
+/**
+ * Hex hashes and addresses (digests, caseIds, wallets) removed before looking for CNIC-like digit runs:
+ * a random 64-digit hex string holds 13 decimal digits in a row often enough to make the check flaky
+ * (seen once on a KYC case digest, 2026-10-13).
+ */
+function withoutHashes(html: string): string {
+  return html.replace(/(0x)?[0-9a-fA-F]{40,}/g, "");
+}
+
 /** Items created in beforeAll, by placeholder name. */
 const ids = new Map<string, string>();
 function resolve(path: string): string {
@@ -196,6 +222,9 @@ beforeAll(async () => {
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
   compliance2 = await invite(w, c.admin, c.admin2, "http.compliance.two", "compliance_officer");
+  // S-06 items: a reversal case of a duplicated booking and a wallet-recovery case (command-line names).
+  ids.set("reversalCase", await reversalCase(w.su));
+  ids.set("walletCase", await walletCase(w.su));
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -238,16 +267,18 @@ describe("route coverage", () => {
     const covered = new Set([
       ...PAGES.map((p) =>
         p.path
-          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance)$/, "/audit/[source]")
+          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|recovery)$/, "/audit/[source]")
           .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
-          .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]"),
+          .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
+          .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]"),
       ),
       ...APIS.map((a) =>
         a.path
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2"),
+          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1"),
       ),
       ...ANONYMOUS_POSTS,
       "/login",
@@ -507,9 +538,9 @@ describe("compliance over HTTP (Step 6c)", () => {
 
   it("pages show masked identifiers only (no CNIC, IBAN or name)", async () => {
     for (const p of ["/compliance", "/compliance/kyc", `/compliance/kyc/${resolve("{kycCase}")}`, "/compliance/screening", `/compliance/freezes/${resolve("{freeze}")}`, `/compliance/str/${resolve("{str}")}`]) {
-      const html = await (await req(p, { who: "compliance_officer" })).text();
-      // A bare 13-digit run counts only outside hex strings: wallet addresses, case refs and digests
-      // on these pages are random hex and sometimes contain 13 decimal digits in a row (flaky on CI).
+      // Hashes are stripped first; a bare 13-digit run still counts only outside hex strings (wallet
+      // addresses, case refs and digests are random hex and sometimes hold 13 digits in a row).
+      const html = withoutHashes(await (await req(p, { who: "compliance_officer" })).text());
       expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|(?<![0-9a-fA-F])\d{13}(?![0-9a-fA-F])|PK\d{2}[A-Z]{4}/);
     }
     expect(await (await req(`/compliance/kyc/${resolve("{kycCase}")}`, { who: "compliance_officer" })).text()).toMatch(/\*{5}-\*{4}\d{3}-\d/);
@@ -571,6 +602,65 @@ describe("compliance over HTTP (Step 6c)", () => {
     const rec = await w.su.query<{ sha256: Buffer }>("SELECT sha256 FROM compliance.str_exports WHERE case_id = $1", [resolve("{str}")]);
     expect(rec.rows.map((r) => r.sha256.toString("hex"))).toContain(manifest.files[0]?.sha256);
     expect((await w.su.query("SELECT * FROM compliance.verify_audit()")).rows).toEqual([]);
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("recovery over HTTP (S-06)", () => {
+  let counter = Date.now() + 2_000_000;
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  async function fresh(a: Actor, stale = false): Promise<void> {
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+
+  it("case pages show masked identifiers only", async () => {
+    for (const p of ["/recovery", `/recovery/${resolve("{walletCase}")}`, `/recovery/${resolve("{reversalCase}")}`]) {
+      const html = withoutHashes(await (await req(p, { who: "compliance_officer" })).text());
+      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}|PK\d{2}[A-Z]{4}/);
+    }
+    expect(await (await req(`/recovery/${resolve("{walletCase}")}`, { who: "auditor" })).text()).toMatch(/\*{5}-\*{4}\d{3}-\d/);
+  });
+
+  it("the maker's new custodial wallet comes from the signing service, only with a fresh step-up", async () => {
+    const path = `/api/recovery/cases/${resolve("{walletCase}")}/wallet`;
+    const before = (await w.su.query<{ n: string }>("SELECT count(*) AS n FROM signer.custodial_wallets")).rows[0]?.n;
+    await fresh(c.ops_maker, true);
+    expect(location(await req(path, { method: "POST", who: "ops_maker", form: { decision: "create" } }))).toMatch(/error=Confirm with your security key first/);
+    expect((await w.su.query<{ n: string }>("SELECT count(*) AS n FROM signer.custodial_wallets")).rows[0]?.n).toBe(before);
+    await fresh(c.ops_maker);
+    const ok = location(await req(path, { method: "POST", who: "ops_maker", form: { decision: "create" } }));
+    expect(ok, signer.log().slice(-2000)).toMatch(/ok=New custodial wallet 0x[0-9a-f]{40} set for the case/);
+    const wallet = /0x[0-9a-f]{40}/.exec(ok)?.[0] ?? "";
+    const row = await w.su.query<{ to_wallet: string }>("SELECT to_wallet FROM recovery.cases WHERE id = $1", [resolve("{walletCase}")]);
+    expect(row.rows[0]?.to_wallet).toBe(wallet);
+    expect((await w.su.query("SELECT 1 FROM signer.custodial_wallets WHERE address = $1", [wallet])).rowCount).toBe(1);
+    // A reversal has no wallet: nothing is created.
+    expect(location(await req(`/api/recovery/cases/${resolve("{reversalCase}")}/wallet`, { method: "POST", who: "ops_maker", form: { decision: "create" } })))
+      .toMatch(/error=Only a wallet-recovery case has a new wallet/);
+  });
+
+  it("an operations checker approves the reversal as shown: the correcting journal is posted; a legal officer cannot", async () => {
+    const path = `/recovery/${resolve("{reversalCase}")}`;
+    const post = async (who: Role, capacity: string) => {
+      const digest = digestOf(await (await req(path, { who })).text());
+      return location(await req(`/api/recovery/cases/${resolve("{reversalCase}")}/act`, {
+        method: "POST", who, form: { decision: "approve", capacity, reason: "duplicate confirmed against the bank statement", digest },
+      }));
+    };
+    await fresh(c.legal_officer);
+    expect(digestOf(await (await req(path, { who: "legal_officer" })).text())).toMatch(/^[0-9a-f]{64}$/);
+    expect(await post("legal_officer", "legal")).toMatch(/error=a reversal case is decided in the capacities operations/);
+    await fresh(c.ops_checker);
+    expect(await post("ops_checker", "operations")).toMatch(/ok=Recorded: the case is now closed/);
+    const j = await w.su.query<{ kind: string }>("SELECT j.kind FROM recovery.cases c JOIN ledger.journal j ON j.id = c.reversal_journal_id WHERE c.id = $1", [resolve("{reversalCase}")]);
+    expect(j.rows[0]?.kind).toBe("reversal");
+    expect((await w.su.query("SELECT * FROM recovery.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });

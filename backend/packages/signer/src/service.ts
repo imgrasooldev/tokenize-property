@@ -1,13 +1,27 @@
 import { createHash } from "node:crypto";
 import type pg from "pg";
 import { createPublicClient, http, keccak256, type Hex } from "viem";
-import { distributionRegistryAbi, idFactoryAbi, identityAbi, identityRegistryAbi, issuanceGuardAbi, tokenAbi } from "@pt/contracts";
+import { distributionRegistryAbi, idFactoryAbi, identityAbi, identityRegistryAbi, issuanceGuardAbi, recoveryGuardAbi, tokenAbi } from "@pt/contracts";
 import { z } from "zod";
 import { custodialRef, type CustodyProvider, type KeyProvider } from "./keystore.ts";
 import { describeCall, PreviewError, type CallPreview } from "./preview.ts";
 import {
+  addKeyPayload,
   claimHash,
   claimId,
+  evaluateAddKey,
+  evaluateCancel,
+  evaluateExecute,
+  evaluatePropose,
+  evaluateRecoveryFreeze,
+  evaluateRecoveryUnfreeze,
+  proposePayload,
+  requestPayload,
+  walletKey,
+  type AddKeyRule,
+  type ChainRequest,
+  type RecoveryFreezeRule,
+  type RecoveryRule,
   evaluateFreeze,
   evaluateIdentityClaim,
   evaluateIdentityCreate,
@@ -70,7 +84,21 @@ export interface ChainReader {
   isRegistered?: (identityRegistry: Hex, wallet: Hex) => Promise<boolean>;
   /** Issuer of the claim with this id on the identity (zero address if none). */
   claimIssuerOf?: (identity: Hex, claimId: Hex) => Promise<string>;
+  /** S-06: IdentityRegistry.identity(wallet) (zero address if none). */
+  registryIdentity?: (identityRegistry: Hex, wallet: Hex) => Promise<string>;
+  /** S-06: IdentityRegistry.isVerified(wallet). */
+  isVerified?: (identityRegistry: Hex, wallet: Hex) => Promise<boolean>;
+  /** S-06: token balanceOf(wallet). */
+  balanceOf?: (token: Hex, wallet: Hex) => Promise<bigint>;
+  /** S-06: Identity.keyHasPurpose(key, purpose). */
+  keyHasPurpose?: (identity: Hex, key: Hex, purpose: bigint) => Promise<boolean>;
+  /** S-06: RecoveryGuard.getRequest(id). */
+  recoveryRequest?: (guard: Hex, id: bigint) => Promise<ChainRequest>;
+  /** S-06: timestamp of the latest block. */
+  chainTime?: () => Promise<bigint>;
 }
+
+const REQUEST_STATUS = ["none", "pending", "executed", "cancelled"] as const;
 
 /** A chain reader without the optional onboarding/transfer facts denies those kinds (fail closed). */
 function need<T>(f: T | undefined, what: string): T {
@@ -127,6 +155,23 @@ export function viemChainReader(rpcUrl: string): ChainReader {
       const d = await c.readContract({ address: rule.registry as Hex, abi: distributionRegistryAbi, functionName: "getDistribution", args: [id] });
       return { status: DISTRIBUTION_STATUS[d.status] ?? "unknown", token: d.token.toLowerCase() };
     },
+    registryIdentity: async (registry, wallet) => (await c.readContract({ address: registry, abi: identityRegistryAbi, functionName: "identity", args: [wallet] })).toLowerCase(),
+    isVerified: (registry, wallet) => c.readContract({ address: registry, abi: identityRegistryAbi, functionName: "isVerified", args: [wallet] }),
+    balanceOf: (token, wallet) => c.readContract({ address: token, abi: tokenAbi, functionName: "balanceOf", args: [wallet] }),
+    keyHasPurpose: (identity, key, purpose) => c.readContract({ address: identity, abi: identityAbi, functionName: "keyHasPurpose", args: [key, purpose] }),
+    recoveryRequest: async (guard, id) => {
+      const r = await c.readContract({ address: guard, abi: recoveryGuardAbi, functionName: "getRequest", args: [id] });
+      return {
+        kind: r.kind === 0 ? "wallet_recovery" : "forced_transfer",
+        status: REQUEST_STATUS[r.status] ?? "none",
+        eta: r.eta,
+        from: r.from.toLowerCase(),
+        to: r.to.toLowerCase(),
+        onchainId: r.onchainId.toLowerCase(),
+        amount: r.amount,
+      };
+    },
+    chainTime: async () => (await c.getBlock({ blockTag: "latest" })).timestamp,
   };
 }
 
@@ -258,6 +303,16 @@ export class SignerService {
       case "identity.add_claim":
       case "identity.register":
         return this.evaluateOnboarding(c, kind, rule, payload, excludeRequest);
+      case "recovery.freeze":
+      case "recovery.unfreeze":
+        return this.evaluateRecoveryFreeze(c, kind, rule as RecoveryFreezeRule, payload, excludeRequest);
+      case "recovery.add_key":
+        return this.evaluateAddKey(c, rule as AddKeyRule, payload, excludeRequest);
+      case "recovery.propose":
+        return this.evaluatePropose(c, rule as RecoveryRule, payload, excludeRequest);
+      case "recovery.execute":
+      case "recovery.cancel":
+        return this.evaluateRequest(c, kind, rule as RecoveryRule, payload, excludeRequest);
       default:
         return { decision: "deny", reason: `no evaluator for ${kind}` };
     }
@@ -372,6 +427,110 @@ export class SignerService {
     };
     const [chainId, frozen, facts] = await Promise.all([this.chain.chainId(), this.chain.isFrozen(rule, account), db()]);
     return evaluateUnfreeze(rule, payload, { chainId, frozen, ...facts });
+  }
+
+  /** S-06 (0020 RV-6): the case enqueued exactly this command and still needs it. */
+  private async recoveryAllowed(c: pg.ClientBase, kind: string, payload: unknown): Promise<boolean> {
+    const { rows } = await c.query<{ ok: boolean }>("SELECT recovery.command_allowed($1, $2::jsonb) AS ok", [kind, JSON.stringify(payload)]);
+    return rows[0]?.ok === true;
+  }
+
+  private async evaluateRecoveryFreeze(c: pg.ClientBase, kind: "recovery.freeze" | "recovery.unfreeze", rule: RecoveryFreezeRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const evaluate = kind === "recovery.freeze" ? evaluateRecoveryFreeze : evaluateRecoveryUnfreeze;
+    const p = freezePayload.safeParse(payload);
+    if (!p.success) return evaluate(rule, payload, { chainId: 0, allowed: false, frozen: kind === "recovery.freeze", ownerVerified: false, signedToday: 0 });
+    const account = p.data.account.toLowerCase() as Hex;
+    const db = async () => {
+      const allowed = await this.recoveryAllowed(c, kind, payload);
+      const verified = await c.query<{ ok: boolean }>("SELECT kyc.is_verified($1) AS ok", [account]);
+      const used = await this.signedToday(c, kind, excludeRequest, false);
+      return { allowed, ownerVerified: verified.rows[0]?.ok === true, signedToday: Number(used) };
+    };
+    const [chainId, frozen, facts] = await Promise.all([this.chain.chainId(), this.chain.isFrozen(rule, account), db()]);
+    return evaluate(rule, payload, { chainId, frozen, ...facts });
+  }
+
+  private async evaluateAddKey(c: pg.ClientBase, rule: AddKeyRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = addKeyPayload.safeParse(payload);
+    const closed = { chainId: 0, allowed: false, custodial: false, registeredIdentity: "0x0000000000000000000000000000000000000000", keyPresent: true, signedToday: 0 };
+    if (!p.success) return evaluateAddKey(rule, payload, closed);
+    const wallet = p.data.wallet.toLowerCase() as Hex;
+    const db = async () => {
+      const allowed = await this.recoveryAllowed(c, "recovery.add_key", payload);
+      const custodial = await this.isCustodial(c, wallet);
+      const used = await this.signedToday(c, "recovery.add_key", excludeRequest, false);
+      return { allowed, custodial, signedToday: Number(used) };
+    };
+    const [chainId, registeredIdentity, keyPresent, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.registryIdentity, "the identity registry")(rule.identityRegistry as Hex, wallet),
+      need(this.chain.keyHasPurpose, "identity keys")(p.data.identity.toLowerCase() as Hex, walletKey(p.data.newWallet.toLowerCase()), 1n),
+      db(),
+    ]);
+    return evaluateAddKey(rule, payload, { chainId, registeredIdentity, keyPresent, ...facts });
+  }
+
+  private async evaluatePropose(c: pg.ClientBase, rule: RecoveryRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = proposePayload.safeParse(payload);
+    const closed = {
+      chainId: 0, allowed: false, fromBalance: 0n, fromIdentity: "0x0000000000000000000000000000000000000000", toRegistered: true, toVerified: false,
+      toBalance: 0n, pendingFrom: { requests: 1, amount: 0n }, signedToday: 0,
+    };
+    if (!p.success) return evaluatePropose(rule, payload, closed);
+    const from = p.data.from.toLowerCase() as Hex;
+    const to = p.data.to.toLowerCase() as Hex;
+    const registry = rule.identityRegistry as Hex;
+    const token = rule.token as Hex;
+    const db = async () => {
+      const allowed = await this.recoveryAllowed(c, "recovery.propose", payload);
+      const pending = await c.query<{ requests: string; amount: string }>("SELECT requests::text, amount::text FROM recovery.pending_from($1, $2)", [rule.recoveryGuard.toLowerCase(), from]);
+      const used = await this.signedToday(c, "recovery.propose", excludeRequest, false);
+      return { allowed, pendingFrom: { requests: Number(pending.rows[0]?.requests ?? "1"), amount: BigInt(pending.rows[0]?.amount ?? "0") }, signedToday: Number(used) };
+    };
+    const [chainId, fromBalance, fromIdentity, toRegistered, toVerified, toBalance, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.balanceOf, "balances")(token, from),
+      need(this.chain.registryIdentity, "the identity registry")(registry, from),
+      need(this.chain.isRegistered, "the identity registry")(registry, to),
+      need(this.chain.isVerified, "the identity registry")(registry, to),
+      need(this.chain.balanceOf, "balances")(token, to),
+      db(),
+    ]);
+    return evaluatePropose(rule, payload, { chainId, fromBalance, fromIdentity, toRegistered, toVerified, toBalance, ...facts });
+  }
+
+  private async evaluateRequest(c: pg.ClientBase, kind: "recovery.execute" | "recovery.cancel", rule: RecoveryRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = requestPayload.safeParse(payload);
+    const none: ChainRequest = { kind: "forced_transfer", status: "none", eta: 0n, from: "", to: "", onchainId: "", amount: 0n };
+    if (!p.success) {
+      return kind === "recovery.cancel"
+        ? evaluateCancel(rule, payload, { chainId: 0, allowed: false, status: "none", signedToday: 0 })
+        : evaluateExecute(rule, payload, { chainId: 0, allowed: false, request: none, chainTime: 0n, fromBalance: 0n, toVerified: false, toBalance: 0n, newKeyPresent: false, signedToday: 0 });
+    }
+    const db = async () => {
+      const allowed = await this.recoveryAllowed(c, kind, payload);
+      const used = await this.signedToday(c, kind, excludeRequest, false);
+      return { allowed, signedToday: Number(used) };
+    };
+    const [chainId, request, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.recoveryRequest, "recovery requests")(rule.recoveryGuard.toLowerCase() as Hex, BigInt(p.data.requestId)),
+      db(),
+    ]);
+    if (kind === "recovery.cancel") return evaluateCancel(rule, payload, { chainId, status: request.status, ...facts });
+    const token = rule.token as Hex;
+    const registry = rule.identityRegistry as Hex;
+    const from = (request.from || "0x0000000000000000000000000000000000000000") as Hex;
+    const to = (request.to || "0x0000000000000000000000000000000000000000") as Hex;
+    const recovery = request.kind === "wallet_recovery" && request.onchainId !== "";
+    const [chainTime, fromBalance, toVerified, toBalance, newKeyPresent] = await Promise.all([
+      need(this.chain.chainTime, "the chain time")(),
+      need(this.chain.balanceOf, "balances")(token, from),
+      need(this.chain.isVerified, "the identity registry")(registry, to),
+      need(this.chain.balanceOf, "balances")(token, to),
+      recovery ? need(this.chain.keyHasPurpose, "identity keys")(request.onchainId as Hex, walletKey(to), 1n) : Promise.resolve(false),
+    ]);
+    return evaluateExecute(rule, payload, { chainId, request, chainTime, fromBalance, toVerified, toBalance, newKeyPresent, ...facts });
   }
 
   private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {
