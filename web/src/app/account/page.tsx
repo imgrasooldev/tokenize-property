@@ -6,15 +6,20 @@ import { investorById } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { onboardingProgress } from "@/lib/server/onboarding";
 import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
-import { currentInvestorId } from "@/lib/server/session";
+import { passkeyAvailability } from "@/lib/server/passkey-config";
+import { currentSession } from "@/lib/server/session";
+import { PasskeyPanel } from "@/components/passkey/PasskeyPanel";
+import { passkeyDict } from "@/lib/i18n-passkey";
+import { listPasskeys } from "@/lib/server/passkeys";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const id = await currentInvestorId();
-  const investor = id ? await investorById(id) : null;
-  if (!investor) redirect("/login");
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
   const { lang, t } = await getDict();
+  const [passkeys, availability] = await Promise.all([listPasskeys(session.hash, lang), passkeyAvailability()]);
 
   // Read model (ADR 0010): as of the indexer cursor, never a chain call per page.
   const onboarding = investor.onboard_step === "identity" || investor.onboard_step === "claims" || investor.onboard_step === "register";
@@ -95,6 +100,7 @@ export default async function AccountPage() {
           </p>
         </section>
         <div className="stack">
+          <PasskeyPanel l={passkeyDict(lang)} availability={availability} passkeys={passkeys} />
           <section className="panel">
             <h2>{t.howVerified}</h2>
             <div className="timeline">
@@ -113,10 +119,6 @@ export default async function AccountPage() {
               <Sample t={t} soon />
             </div>
             <div className="checks">
-              <div className="check">
-                <i className="wait">…</i>
-                {t.passkeyFact1}
-              </div>
               <div className="check">
                 <i className="wait">…</i>
                 {t.bankLink}

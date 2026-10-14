@@ -2,6 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-030 investor passkeys (2026-10-13, branch `t-030-investor-passkeys`, not merged; migration 0024)
+
+- Passkeys on the website (register/list/remove on `/account`, sign-in on `/login`), database-enforced sessions for every sign-in path, passkey step-up for offering reserve (from PKR 100,000) and cancel decided in SQL. ADR 0010 section 8.
+- Merge 0020-0023 first (no-gap rule); then `npm run migrate` before the website starts (pages read sessions from `webauth`).
+- Passkeys are off on the plain-HTTP IP demo (the sign-in page says why). **Owner action:** domain + TLS, then `WEB_ORIGIN`, then `require_passkey` on. Demo personas still sign in without authentication.
+
 ## Latest update (2026-10-13, Step 6c merged)
 
 - **Step 6c (T-005) merged from branch `step-6c-compliance-portal`** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).

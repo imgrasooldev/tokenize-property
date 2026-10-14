@@ -234,15 +234,24 @@ export const webActor = (investorId: string): string => `web:${investorId}`;
 
 export type ReserveResult = { subscriptionId: string; state: string } | { error: ReserveErrorKey };
 
+/** The passkey gate's answer inside webauth.web_reserve / web_cancel (migration 0024 IP-6). */
+function gateError(r: { error?: string } | undefined): "stepup" | "enrolPasskey" | "session" | null {
+  if (!r?.error) return null;
+  return r.error === "step_up" ? "stepup" : r.error === "enrol" ? "enrolPasskey" : "session";
+}
+
 /**
  * Accepts the shown document versions (OF-10) and reserves in ONE transaction (V2/V3): the database
  * checks the versions, KYC, eligibility, limits and free units, and returns the reservation with its
  * payment code, or a waitlist place. A repeated request (same requestId) returns the same subscription.
+ * Since T-030 the reservation goes through webauth.web_reserve: the database takes the investor and
+ * KYC subject from the session and asks for a passkey step-up from PKR 100,000 (migration 0024).
+ * A refusal of the gate still commits the document acceptance and the gate's audit entry.
  */
 export async function reserveUnits(
   investor: Pick<InvestorRow, "id" | "kyc_subject">,
   input: ReserveInput,
-  context: { sessionHash: string; deviceHash: string },
+  context: { session: Buffer; sessionHash: string; deviceHash: string },
 ): Promise<ReserveResult> {
   if (!investor.kyc_subject) return { error: "kyc" };
   const actor = webActor(investor.id);
@@ -264,17 +273,18 @@ export async function reserveUnits(
           actor,
         ]);
       }
-      const { rows } = await c.query<{ r: { subscriptionId: string; state: string } }>("SELECT offering.web_reserve($1, $2, $3, $4, $5, $6, $7) AS r", [
+      const { rows } = await c.query<{ r: { subscriptionId: string; state: string; error?: string } }>("SELECT webauth.web_reserve($1, $2, $3, $4, $5, $6) AS r", [
+        context.session,
         input.offeringId,
         subscriptionId,
         refIdFor(subscriptionId),
-        investor.kyc_subject,
         input.units.toString(),
         idempotencyKey(input.requestId),
-        actor,
       ]);
       const r = rows[0]?.r;
       if (!r) throw new Error("web_reserve returned nothing");
+      const gate = gateError(r);
+      if (gate) return { error: gate };
       return { subscriptionId: r.subscriptionId, state: r.state };
     });
   } catch (e) {
@@ -286,11 +296,16 @@ export async function reserveUnits(
 
 export type CancelResult = { state: string } | { error: CancelErrorKey };
 
-/** V11: cancels the investor's own reservation or queue place before payment (the backend checks ownership and state). */
-export async function cancelSubscription(investor: Pick<InvestorRow, "id" | "kyc_subject">, subscriptionId: string): Promise<CancelResult> {
+/**
+ * V11: cancels the investor's own reservation or queue place before payment (the backend checks
+ * ownership and state), through webauth.web_cancel: always behind a passkey step-up (T-030).
+ */
+export async function cancelSubscription(investor: Pick<InvestorRow, "id" | "kyc_subject">, subscriptionId: string, session: Buffer): Promise<CancelResult> {
   if (!investor.kyc_subject) return { error: "unknown" };
   try {
-    const { rows } = await (await db()).query<{ r: { state: string } }>("SELECT offering.web_cancel($1, $2, $3) AS r", [subscriptionId, investor.kyc_subject, webActor(investor.id)]);
+    const { rows } = await (await db()).query<{ r: { state: string; error?: string } }>("SELECT webauth.web_cancel($1, $2) AS r", [session, subscriptionId]);
+    const gate = gateError(rows[0]?.r);
+    if (gate) return { error: gate };
     return { state: rows[0]?.r.state ?? "unknown" };
   } catch (e) {
     const code = (e as { code?: string }).code;

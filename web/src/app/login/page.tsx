@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { loginAsPersona } from "@/app/actions/auth";
-import { PublicPage, Sample } from "@/components/Shell";
+import { PasskeySignIn } from "@/components/passkey/PasskeySignIn";
+import { PublicPage } from "@/components/Shell";
+import { passkeyDict } from "@/lib/i18n-passkey";
 import { getDict } from "@/lib/server/lang";
+import { passkeyAvailability } from "@/lib/server/passkey-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
-  const { t } = await getDict();
+  const { lang, t } = await getDict();
   const { e } = await searchParams;
   return (
     <PublicPage active="none" minimal>
@@ -47,9 +50,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {t.or}
             <span />
           </div>
-          <span className="btn secondary block" aria-disabled="true">
-            {t.passkeySignIn} <Sample t={t} soon />
-          </span>
+          <PasskeySignIn l={passkeyDict(lang)} availability={await passkeyAvailability()} />
           <div className="checks start">
             <div className="check">
               <i className="wait">…</i>

@@ -26,6 +26,7 @@
 
 | `property` | 0014 (branch `t-021-property-onboarding`, not on `main`) | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
 | `notify` | 0017 (branch, task T-028) | notification recipients, sealed contacts, preferences, templates, notifications, deliveries, attempts, rate limits, audit (ADR 0013) |
+| `webauth` | 0024 (task T-030) | investor passkeys, website sessions, WebAuthn challenges, step-up settings, hash-chained audit |
 | `webdemo` | runtime DDL (web) | prototype investors, subscriptions, top-ups, orders, trades |
 
 `0001` revokes `CREATE` on `public` and all rights on the five first schemas from `PUBLIC`.
@@ -236,6 +237,28 @@ Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); 
 
 Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
 
+### 0024 investor passkeys (IP-1..IP-9; task T-030, ADR 0010 section 8)
+
+Numbered 0024 because 0020-0023 are reserved for parallel branches; until those are merged the backend runner refuses the gap and tests use `contiguousMigrations()`. Schema `webauth`; advisory lock 586586240 (audit).
+
+| Object | Purpose |
+|---|---|
+| `webauth.settings` | one row: `require_passkey` (default off while the demo server is plain HTTP by IP). Changed by the database administrator only; every change audited (`settings.changed`) |
+| `webauth.step_up_actions` | action → `min_amount_paisa` for the passkey step-up: `offering.reserve` 10,000,000 (PKR 100,000), `offering.cancel` 0, `bank.payout_account` 0. An action not listed always needs a step-up (deny by default). Changes audited |
+| `webauth.passkeys` | credential ID (PK, base64url), random `ref` (what the website shows and revokes by), investor, label (`webauth.name_ok`: 1-40 chars, no markup, no 6-digit run), public key, counter (forward only), transports, AAGUID, format, `singleDevice`/`multiDevice`, backed up, created, last used, revoked once (`investor` or `clone_suspected`); never deleted |
+| `webauth.sessions` | SHA-256 of the cookie token, investor, method `passkey`/`persona`/`signup`, credential (passkey method), created, last seen (forward), `expires_at = created + 12 h`, `passkey_at` + credential of the last passkey assertion (forward), ended once (`logout`, `idle`, `absolute`, `superseded`, `passkey_revoked`); never deleted |
+| `webauth.challenges` | ceremony id hash, purpose `register`/`login`/`step_up`, challenge, session (register and step-up), created, expires (≤ 5 min), used, completed (once, ≤ 5 min after use); housekeeping removes rows a day after expiry |
+| `webauth.audit` | hash-chained (`pt-webauth-audit-v1`, UTC); `webauth.verify_audit()` also finds passkeys and sessions without their audit entry |
+| `webauth.web_session`, `web_start_session`, `web_end_session` | session check per request (ends it at 30 min idle / 12 h; touches at most every 15 s), demo starts (`persona` for persona investors, `signup` within 30 min of the investor's creation), logout |
+| `webauth.web_create_challenge`, `web_consume_challenge`, `web_auth_failed` | ceremonies: registration needs re-authentication (IP-5), step-up needs a passkey, 5 open per session, 10,000 open sign-ins; lockout after 10 failures in 15 min (IP-7) |
+| `webauth.web_credential`, `web_session_credentials`, `web_registration_user` | public key for verification; allow/exclude lists; user handle and name |
+| `webauth.web_add_passkey`, `web_login`, `web_step_up` | record a verified result only after a consumed challenge of the same ceremony (once); user verification required; counter forward or both 0, else the passkey is revoked as `clone_suspected`, its sessions end and `pg_notify('webauth_alert')` fires |
+| `webauth.web_passkeys`, `web_revoke_passkey` | list (ref, label, synced, created, last used, used by this session; no credential data); revoke after a passkey within 5 minutes, ending the other sessions that used it |
+| `webauth.web_step_up_status`, `web_require_recent_passkey` | `requireRecentPasskey`: `ok`, `waived`, `step_up`, `enrol`, `session` (status read-only; require audited) |
+| `webauth.web_reserve`, `web_cancel` | the session-bound wrappers of `offering.web_reserve` / `web_cancel` (0018): investor and KYC subject from the session, actor `web:<id>`, audited gate first; return `{"error": "step_up"|"enrol"|"session"}` when refused |
+
+Grants: `pt_web` gets `USAGE` on `webauth` and `EXECUTE` on the 18 `webauth.web_*` functions only (no table, no internal function), and **loses** `EXECUTE` on `offering.web_reserve` and `offering.web_cancel`.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -253,6 +276,7 @@ Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE
 
 | Admin approvals (0016) | signer tickets used once, never deleted; decisions, refusals and views in `admin.audit` | `admin.verify_audit()` (role matrix digest updated in 0016) |
 | Compliance (0019) | reason codes, case events, STR events/notes/exports, audit; cases, requests, holds, rescreens change only along their state machines | `compliance.verify_audit()` (rows without audit entry, status vs last event, holds vs decisions) |
+| Investor passkeys (0024) | audit; passkeys (counter forward, revoked once), sessions (last use and passkey time forward, ended once), settings and step-up actions (no delete, every change audited) | `webauth.verify_audit()` (passkeys and sessions without their audit entry) |
 
 A superuser can still disable triggers; the public anchor exists to detect that (ADR 0008).
 
@@ -274,6 +298,7 @@ All NOLOGIN, created idempotently:
 
 | 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
 | 0018 | no new role: `pt_web` (0012) may execute the six `offering.web_*` functions |
+| 0024 | no new role: `pt_web` may execute the `webauth.web_*` functions; `offering.web_reserve` / `web_cancel` revoked from it |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 

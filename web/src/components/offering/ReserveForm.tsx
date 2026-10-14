@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { reserveAction, type ReserveState } from "@/app/actions/offering";
+import { StepUpPrompt } from "@/components/passkey/StepUpPrompt";
 import type { Lang } from "@/lib/i18n";
 import { fill } from "@/lib/i18n-verify";
 import { label, type OfferingDict } from "@/lib/i18n-offering";
@@ -36,18 +37,26 @@ export function ReserveForm({
   riskSha: string;
 }) {
   const [state, action, pending] = useActionState<ReserveState, FormData>(reserveAction, {});
+  const formRef = useRef<HTMLFormElement>(null);
   const [units, setUnits] = useState(minUnits);
   const [docLang, setDocLang] = useState<Lang>(lang);
+  // Controlled, so they survive React's form reset after the action (a passkey step-up re-submits the form).
+  const [acceptDoc, setAcceptDoc] = useState(false);
+  const [acceptRisk, setAcceptRisk] = useState(false);
   const n = /^[1-9][0-9]{0,12}$/.test(units) ? BigInt(units) : 0n;
   const docSha = docLang === "ur" ? docUrSha : docEnSha;
   const short = (h: string) => `${h.slice(0, 8)}…${h.slice(-6)}`;
 
   return (
-    <form action={action} className="form" noValidate>
-      {state.error && (
-        <div className="alert" role="alert">
-          {label(l, "err_", state.error, l.err_generic)}
-        </div>
+    <form ref={formRef} action={action} className="form" noValidate>
+      {state.error === "stepup" || state.error === "enrolPasskey" ? (
+        <StepUpPrompt need={state.error} form={formRef} />
+      ) : (
+        state.error && (
+          <div className="alert" role="alert">
+            {label(l, "err_", state.error, l.err_generic)}
+          </div>
+        )
       )}
       <input type="hidden" name="offeringId" value={offeringId} />
       <input type="hidden" name="requestId" value={requestId} />
@@ -89,11 +98,11 @@ export function ReserveForm({
         </label>
       </fieldset>
       <label className="check">
-        <input type="checkbox" name="acceptDoc" required />
+        <input type="checkbox" name="acceptDoc" required checked={acceptDoc} onChange={(e) => { setAcceptDoc(e.target.checked); }} />
         <span>{fill(l.acceptDoc, { h: short(docSha) })}</span>
       </label>
       <label className="check">
-        <input type="checkbox" name="acceptRisk" required />
+        <input type="checkbox" name="acceptRisk" required checked={acceptRisk} onChange={(e) => { setAcceptRisk(e.target.checked); }} />
         <span>{fill(l.acceptRisk, { h: short(riskSha) })}</span>
       </label>
       <button type="submit" className="btn" disabled={pending || n === 0n}>

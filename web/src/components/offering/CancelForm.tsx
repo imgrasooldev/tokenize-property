@@ -1,14 +1,19 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import { cancelReservationAction, type CancelState } from "@/app/actions/offering";
+import { StepUpPrompt } from "@/components/passkey/StepUpPrompt";
 import { label, type OfferingDict } from "@/lib/i18n-offering";
 
-/** Cancel a reservation or leave the queue before paying (S-02 V11). The backend checks ownership and state. */
+/**
+ * Cancel a reservation or leave the queue before paying (S-02 V11). The backend checks ownership and
+ * state; the database asks for a passkey step-up first when the investor has a passkey (T-030).
+ */
 export function CancelForm({ l, subscriptionId, queued }: { l: OfferingDict; subscriptionId: string; queued: boolean }) {
   const [state, action, pending] = useActionState<CancelState, FormData>(cancelReservationAction, {});
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={action} className="btn-row">
+    <form ref={formRef} action={action} className="btn-row">
       <input type="hidden" name="subscriptionId" value={subscriptionId} />
       <button type="submit" className="btn secondary small" disabled={pending || state.ok === true}>
         {pending ? l.cancelling : queued ? l.leaveQueue : l.cancelBtn}
@@ -18,10 +23,14 @@ export function CancelForm({ l, subscriptionId, queued }: { l: OfferingDict; sub
           {l.cancelOk}
         </span>
       )}
-      {state.error && (
-        <span className="alert small" role="alert">
-          {label(l, "cerr_", state.error, l.cerr_generic)}
-        </span>
+      {state.error === "stepup" || state.error === "enrolPasskey" ? (
+        <StepUpPrompt need={state.error} form={formRef} />
+      ) : (
+        state.error && (
+          <span className="alert small" role="alert">
+            {label(l, "cerr_", state.error, l.cerr_generic)}
+          </span>
+        )
       )}
     </form>
   );

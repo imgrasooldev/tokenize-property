@@ -9,13 +9,14 @@ import { logError } from "@/lib/server/log";
 import { cancelSubscription, reserveUnits } from "@/lib/server/offerings";
 import { take } from "@/lib/server/rate-limit";
 import { keyedHash } from "@/lib/server/secrets";
-import { currentInvestorId, sessionFingerprint } from "@/lib/server/session";
+import { currentSession, sessionFingerprint } from "@/lib/server/session";
 
-async function signedIn(): Promise<InvestorRow> {
-  const id = await currentInvestorId();
-  const investor = id ? await investorById(id) : null;
-  if (!investor) redirect("/login");
-  return investor;
+/** The signed-in investor and the session hash the database's passkey gate takes (T-030). */
+async function signedIn(): Promise<InvestorRow & { session: Buffer }> {
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
+  return { ...investor, session: session.hash };
 }
 
 export interface ReserveState {
@@ -49,12 +50,15 @@ export async function reserveAction(_prev: ReserveState, formData: FormData): Pr
 
   let result: Awaited<ReturnType<typeof reserveUnits>>;
   try {
-    result = await reserveUnits(investor, parsed.data, { sessionHash: session, deviceHash: device });
+    result = await reserveUnits(investor, parsed.data, { session: investor.session, sessionHash: session, deviceHash: device });
   } catch (e) {
     logError("reserve", e);
     return { error: "generic" };
   }
-  if ("error" in result) return { error: result.error };
+  if ("error" in result) {
+    if (result.error === "session") redirect("/login");
+    return { error: result.error };
+  }
   revalidatePath("/subscriptions");
   redirect(`/subscriptions?sub=${result.subscriptionId}`);
 }
@@ -64,15 +68,18 @@ export interface CancelState {
   error?: CancelErrorKey;
 }
 
-/** Cancel a reservation (or a queue place) before paying (S-02 V11); the payment code is cancelled with it. */
+/**
+ * Cancel a reservation (or a queue place) before paying (S-02 V11); the payment code is cancelled
+ * with it. Needs a passkey step-up when the investor has a passkey (T-030; decided in the database).
+ */
 export async function cancelReservationAction(_prev: CancelState, formData: FormData): Promise<CancelState> {
   const investor = await signedIn();
   if (!take("reserve", investor.id)) return { error: "rate" };
   const parsed = cancelSchema.safeParse({ subscriptionId: formData.get("subscriptionId") });
   if (!parsed.success) return { error: "input" };
   try {
-    const r = await cancelSubscription(investor, parsed.data.subscriptionId);
-    if ("error" in r) return { error: r.error };
+    const r = await cancelSubscription(investor, parsed.data.subscriptionId, investor.session);
+    if ("error" in r) return r.error === "session" ? { error: "generic" } : { error: r.error };
   } catch (e) {
     logError("cancel-reservation", e);
     return { error: "generic" };
