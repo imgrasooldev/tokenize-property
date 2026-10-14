@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PortalShell, Sample } from "@/components/Shell";
+import { AnalystBox } from "@/components/analyst/AnalystBox";
+import { AnswerView } from "@/components/analyst/AnswerView";
+import { PortalShell } from "@/components/Shell";
 import { VerifyRent } from "@/components/VerifyRent";
 import { formatNumber, formatPkr, formatPrice, loc, type Dict } from "@/lib/i18n";
 import { MAX_HOLDING_TOKENS } from "@/lib/invest-rules";
@@ -15,6 +17,7 @@ import { holdingOf, indexStatus, liveToken, usedRefs } from "@/lib/server/readmo
 import { getDict } from "@/lib/server/lang";
 import { balanceOf, chainProblemsCached } from "@/lib/server/ledger";
 import { cashOf, escrowMatches, escrowOf, ordersOf, tradesOf } from "@/lib/server/market";
+import { portfolioSummary } from "@/lib/server/analyst";
 import { distributionsFor } from "@/lib/server/rent";
 import { currentInvestorId } from "@/lib/server/session";
 
@@ -54,7 +57,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const subs = await subscriptionsOf(investor.id);
 
   const holdings = await Promise.all(
-    PROPERTIES.filter((p) => p.status === "live").map(async (p) => {
+    PROPERTIES.map(async (p) => {
       const live = await liveToken(p.symbol);
       const tokens = live ? await holdingOf(investor.wallet_address) : null;
       return { p, live, tokens };
@@ -74,6 +77,8 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     phasesOf(subs).catch(() => new Map<string, Phase>()),
     indexStatus(),
   ]);
+  // Grounded in records only (ADR 0015): never calls an external model on a page load.
+  const summary = await portfolioSummary(investor, lang).catch(() => null);
   // The chain index's view of each subscription's reference (null: index unavailable).
   const onChain = subs.map((s) => (used === null || (s.status !== "done" && s.status !== "refunded") ? null : used.has(s.ref_id)));
   const pendingWork = subs.some((s) => s.status === "paid" || s.status === "minting") || trades.some((tr) => tr.status === "settling");
@@ -249,7 +254,6 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               {t.yourSummary}
               <span className="sp" />
               <span className="chip ai">{t.fromRecords}</span>
-              <Sample t={t} soon />
             </div>
             <p className="ai-text">
               {t.sumTokens.replace("{n}", formatNumber(totalTokens, lang)).replace("{v}", formatPkr(totalValue, lang))}{" "}
@@ -260,7 +264,9 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               )}
               {passed === checks.length ? t.sumChecksOk : t.sumChecksBad}
             </p>
+            {summary && <AnswerView answer={summary} idPrefix="sum" />}
             <p className="fine">{t.summaryNote}</p>
+            <AnalystBox lang={lang} scope="portfolio" compact />
           </div>
 
           <section className="panel">

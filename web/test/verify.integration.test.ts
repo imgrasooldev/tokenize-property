@@ -41,7 +41,10 @@ describe.skipIf(!up)("public verification view (read model vs chain)", () => {
       if (before === undefined) delete process.env.ANCHOR_CONTRACT;
       else process.env.ANCHOR_CONTRACT = before;
     }
-    expect((await latestReconciliation()).state).toBe("no-access");
+    // Migration 0022 (WA-5) gives the website recon.web_status(); a database without it says no-access.
+    const recon = await latestReconciliation();
+    expect(["no-access", "none", "ok"]).toContain(recon.state);
+    expect(Object.keys(recon).sort()).toEqual(recon.state === "ok" ? ["finishedAt", "pinnedBlock", "state", "status"] : ["state"]);
   });
 
   it("supply, cap, pause, holders, documents and distributions equal the contracts at the read model's block", async () => {

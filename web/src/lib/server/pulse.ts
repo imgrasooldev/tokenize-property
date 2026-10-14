@@ -78,7 +78,7 @@ async function readValidators(): Promise<number | null> {
 }
 
 async function readPulse(): Promise<Pulse> {
-  const liveP = PROPERTIES.find((p) => p.status === "live");
+  const liveP = PROPERTIES.at(0);
   const [blocks, validators, snapshot, token, ledger] = await Promise.all([
     readBlocks().catch(() => [] as PulseBlock[]),
     readValidators(),

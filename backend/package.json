@@ -56,6 +56,7 @@
     "bank": "tsx packages/bank/src/cli.ts serve",
     "bank:setup": "tsx packages/bank/src/cli.ts setup",
     "bank:audit": "tsx packages/bank/src/cli.ts audit",
+    "bank:payees": "tsx packages/bank/src/cli.ts serve-payees",
     "bank:bench": "tsx packages/bank/scripts/bench.ts",
     "property:setup": "tsx packages/property/src/cli.ts setup",
     "property:run": "tsx packages/property/src/cli.ts run",
@@ -68,6 +69,7 @@
     "offering:queue": "tsx packages/offering/src/cli.ts queue",
     "offering:tick": "tsx packages/offering/src/cli.ts tick",
     "offering:audit": "tsx packages/offering/src/cli.ts audit",
+    "seed:catalog": "tsx packages/offering/src/seed-cli.ts",
     "notify:setup": "tsx packages/notify/src/cli.ts setup",
     "notify:run": "tsx packages/notify/src/cli.ts run",
     "notify:status": "tsx packages/notify/src/cli.ts status"

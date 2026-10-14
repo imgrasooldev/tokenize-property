@@ -2,6 +2,11 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-045 website functional (2026-10-13, branch `t-045-web-functional`, not merged; migration 0022)
+
+- Website shows records only: catalogue, filters/sort, Pakistan map, price/rent history, documents with SHA-256, trust structure, rule-based property score, payout accounts (bank service `bank:payees`), search and the grounded analyst (Claude optional, owner adds the key). Still labelled: passkey sign-in (T-030), Docs & Tax (S-03), anchoring status in the rail (lead).
+- Merge 0020 and 0021 first (no-gap rule). Demo catalogue (`seed:catalog`) runs only after an administrator enrols the demo officers in PT Control; until then it skips. Not seen in a browser; Playwright not run (see branch report).
+
 ## Latest update (2026-10-13, Step 6c merged)
 
 - **Step 6c (T-005) merged from branch `step-6c-compliance-portal`** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).

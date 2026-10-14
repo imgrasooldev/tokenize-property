@@ -1,0 +1,47 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 624 >>
+stream
+BT
+/F1 11 Tf
+14 TL
+56 780 Td
+/F1 13 Tf
+(DEMO DOCUMENT \226 fictional property for the demo stack \226 not an offer) Tj T*
+/F1 11 Tf
+T*
+(Completion certificate \(completion_certificate\)) Tj T*
+(Property: DHA Phase 6 Retail Unit, Karachi South, Sindh \(fictional\)) Tj T*
+(Sponsor: Demo Realty Holdings \(Private\) Limited \(fictional\)) Tj T*
+(Completion certificate issued by the authority \(fictional\).) Tj T*
+() Tj T*
+(All names, numbers and identifiers in this file are fictional. Its SHA-256 is recorded by the) Tj T*
+(onboarding workflow \(S-01\) of the demo stack, so anyone can check the file on /verify.) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1012
+%%EOF

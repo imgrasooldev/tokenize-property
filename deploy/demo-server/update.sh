@@ -52,6 +52,7 @@ echo "== backend dependencies and migrations"
 echo "== backend setup (idempotent, no secrets printed)"
 (cd backend \
   && npm run --silent kyc:setup >/dev/null \
+  && npm run --silent bank:setup >/dev/null \
   && npm run --silent signer:setup >/dev/null \
   && npm run --silent signer:admin-client >/dev/null \
   && npm run --silent db:web-role >/dev/null \
@@ -68,7 +69,7 @@ for unit in deploy/demo-server/pt-*.service deploy/demo-server/pt-*.timer; do
   fi
 done
 [ "$changed" = 1 ] && sudo systemctl daemon-reload
-BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding"
+BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding"
 sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
 # The signer reloads its keystore (new custodial wallets) and policies only on start.
 sudo systemctl restart $BACKEND_UNITS
@@ -118,9 +119,12 @@ for _ in $(seq 1 60); do
   sleep 5
 done
 (cd backend && npm run --silent seed:local && npm run --silent rent:book) || echo "WARNING: seed:local / rent:book did not complete; reconciliation will report it" >&2
+# Demo catalogue (T-045): two demo properties through the real S-01/S-02 workflows. It acts only under
+# officers already enrolled in PT Control and prints "skipped" (changing nothing) when they are missing.
+(cd backend && npm run --silent seed:catalog) || echo "WARNING: seed:catalog did not complete; the catalogue shows only the live token" >&2
 
 echo "== smoke test"
-for svc in http://127.0.0.1:4900/v1/health http://127.0.0.1:4910/v1/health; do
+for svc in http://127.0.0.1:4900/v1/health http://127.0.0.1:4910/v1/health http://127.0.0.1:4920/v1/health; do
   for _ in $(seq 1 30); do curl -sf -o /dev/null "$svc" && break; sleep 2; done
   curl -sf -o /dev/null "$svc" || { echo "service $svc is not answering" >&2; exit 8; }
 done

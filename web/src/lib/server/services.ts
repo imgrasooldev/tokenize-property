@@ -3,16 +3,16 @@ import type { Address } from "viem";
 import { backendEnv } from "./db";
 
 /**
- * Clients for the two backend services the website calls directly (ADR 0010): the signing
- * service, only to create a custodial wallet for a new investor (its client "web" may do nothing
- * else), and the KYC service for sign-up. Same HMAC request signing as backend/packages/http-auth
- * (method, path, time, one-time nonce, body hash). Secrets come from backend/.env.local; they are
- * never logged or sent anywhere else.
+ * Clients for the backend services the website calls directly (ADR 0010): the signing service,
+ * only to create a custodial wallet for a new investor (its client "web" may do nothing else), the
+ * KYC service for sign-up and the bank service for payout accounts (T-045). Same HMAC request
+ * signing as backend/packages/http-auth (method, path, time, one-time nonce, body hash). Secrets
+ * come from backend/.env.local; they are never logged or sent anywhere else.
  */
 
-function secret(name: "SIGNER_CLIENT_SECRET_WEB" | "KYC_CLIENT_SECRET_WEB"): Buffer {
+function secret(name: "SIGNER_CLIENT_SECRET_WEB" | "KYC_CLIENT_SECRET_WEB" | "BANK_CLIENT_SECRET_WEB"): Buffer {
   const v = backendEnv().get(name);
-  if (!v || !/^[A-Za-z0-9_-]{43,}$/.test(v)) throw new Error(`${name} is not set up (backend: npm run signer:setup / npm run kyc:setup).`);
+  if (!v || !/^[A-Za-z0-9_-]{43,}$/.test(v)) throw new Error(`${name} is not set up (backend: npm run signer:setup / kyc:setup / bank:setup).`);
   return Buffer.from(v, "base64url");
 }
 
@@ -60,4 +60,33 @@ export async function kycOnboard(input: { cnic: string; fullName: string; livene
   const j = r.json as { subjectId?: unknown; status?: unknown; reason?: unknown; checks?: unknown } | null;
   if (r.status !== 200 || typeof j?.subjectId !== "string" || typeof j.status !== "string" || !Array.isArray(j.checks)) return { ok: false, error: "unavailable" };
   return { ok: true, subjectId: j.subjectId, status: j.status, reason: typeof j.reason === "string" ? j.reason : "", checks: j.checks as KycCheck[] };
+}
+
+const bankPayeesUrl = (): string => process.env.BANK_PAYEES_URL ?? "http://127.0.0.1:4920";
+
+export type PayoutAccountError = "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "unavailable";
+const PAYOUT_ERRORS: readonly string[] = ["invalid_iban", "title_not_found", "title_mismatch", "not_verified", "in_use"];
+
+/**
+ * Registers or changes the signed-in investor's payout account through the bank service (T-045).
+ * The website holds no KYC pepper and no BANK_DATA_KEY: the bank service hashes and seals the IBAN,
+ * and the database checks the account title against the KYC-verified name and starts the 72-hour
+ * cooling-off. `subjectId` must be the signed-in investor's own KYC subject.
+ */
+export async function registerPayoutAccount(input: {
+  subjectId: string;
+  iban: string;
+  title: string;
+}): Promise<{ ok: true; payeeId: string } | { ok: false; error: PayoutAccountError }> {
+  let r: { status: number; json: unknown };
+  try {
+    r = await post(bankPayeesUrl(), "/v1/payees", secret("BANK_CLIENT_SECRET_WEB"), { subjectId: input.subjectId, iban: input.iban, title: input.title });
+  } catch {
+    return { ok: false, error: "unavailable" };
+  }
+  const j = r.json as { payeeId?: unknown; error?: unknown } | null;
+  if (r.status === 200 && typeof j?.payeeId === "string" && /^[1-9][0-9]*$/.test(j.payeeId)) return { ok: true, payeeId: j.payeeId };
+  // Known refusals pass through; a malformed request (400 "invalid") or any other answer is "unavailable".
+  if (typeof j?.error === "string" && PAYOUT_ERRORS.includes(j.error)) return { ok: false, error: j.error as PayoutAccountError };
+  return { ok: false, error: "unavailable" };
 }

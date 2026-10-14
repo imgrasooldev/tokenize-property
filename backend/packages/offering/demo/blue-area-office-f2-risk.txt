@@ -1,0 +1,15 @@
+DEMO DOCUMENT – fictional property for the demo stack – not an offer
+
+Risk disclosure
+Property: Blue Area Office, Floor 2, Islamabad, ICT (fictional)
+
+This is a demo file. It shows the kind of risks a real disclosure would explain:
+- Capital at risk: the value of units can fall as well as rise.
+- Liquidity: units may be hard to sell; there is no guaranteed exit.
+- Rental income: part of the floor is vacant and tenants may leave; income can fall.
+- Valuation: valuations are opinions and may not match a future sale price.
+- Concentration: one property in one city.
+- Regulation and tax: rules for tokenized real estate can change.
+- Technology: smart contracts, keys and platforms can fail.
+
+Verify this file: compute its SHA-256 and compare it on /verify.

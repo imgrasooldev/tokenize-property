@@ -34,6 +34,13 @@ export async function currentInvestorId(): Promise<string | null> {
   return id;
 }
 
+/** When the current (valid) session ends, as an ISO time; null without a valid session. */
+export async function sessionExpiresAt(): Promise<string | null> {
+  if (!(await currentInvestorId())) return null;
+  const exp = (await cookies()).get(COOKIE)?.value.split(".")[1];
+  return exp && /^\d+$/.test(exp) ? new Date(Number(exp) * 1000).toISOString() : null;
+}
+
 /** Keyed hash of the current session cookie (never the cookie itself), or null without a valid session. */
 export async function sessionFingerprint(): Promise<string | null> {
   if (!(await currentInvestorId())) return null;
