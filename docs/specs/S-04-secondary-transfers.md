@@ -1,6 +1,6 @@
 # S-04: Permitted secondary transfers
 
-- Status: Draft for owner review (functional specification; no code yet)
+- Status: Phase 0 built (2026-10-22, migration 0028, section 16); phase 1 not started
 - Date: 2026-10-13
 - Lifecycle stage: 14 (permitted secondary transfers)
 - Exceptions covered: failed, cancelled and disputed transfers; sanctioned or frozen counterparty
@@ -171,3 +171,94 @@ Both parties: received, approved/rejected, payment due, proposed on chain (with 
 - Q-2 Lock-up length (6 months proposed) and price band (±20 % of NAV for AML review).
 - Q-3 Platform fee on transfers.
 - Q-4 Should gifts and family transfers be allowed in the pilot at all?
+
+## 16. Phase 0 build refinements (2026-10-22, migration 0028, ADR 0005 / 0007 / 0009 / 0010 / 0011 amendments)
+
+The spec is silent or ambiguous on the points below; this section decides them for the phase 0 build. It refines sections 2 to 11 and wins where they differ. Phase 1 (TR-30, licensed intermediary) is **not** built. The W4 demo market stays as it is (section 9): demo network, unpaused demo token, never a phase 0 path.
+
+### 16.1 Control model (Q-1 answered for the build: option A)
+
+- **TR-B1** Phase 0 uses option A: the token stays paused (`transfer-closed`) and an approved transfer moves as `RecoveryGuard.propose(ForcedTransfer, from, to, 0x0, units, evidenceHash)` → 48 h → `execute`, signed with the Trustee key through the signing service. No contract change. The signing kind `token.transfer` is **not** used for phase 0: it is refused on a paused token and its policy requires a demo-market escrow.
+- **TR-B2** Three new signing kinds, separate from the S-06 kinds so neither gate can approve the other's commands: `transfer.propose`, `transfer.execute`, `transfer.cancel` (rule shape of `recovery.propose|execute|cancel`). Each is denied unless `transfer.command_allowed(kind, payload)` confirms that an approved case enqueued exactly this payload and needs it now. Chain facts on top: ForcedTransfer only (`onchainId` zero, amount > 0); recipient `isVerified`; sender not address-frozen and its free balance (balance − frozen tokens) covers the amount plus every pending RecoveryGuard request from it; recipient stays ≤ `maxBalance`; for execute the request is pending, ForcedTransfer, with the case's from/to/amount, `eta` passed.
+
+### 16.2 Case life cycle as built (refines section 4)
+
+States: `requested` → `checks` → (`rejected` | `awaiting_cash` | `proposed`); `awaiting_cash` → (`proposed` | `cancelled` | `refunding`); `proposed` → (`executed` | `cancelling` | `failed`); `cancelling` / `failed` → (`refunding` | `cancelled`) once the read model shows the request cancelled (or it never reached the chain); `refunding` → `cancelled` (refund booked); `executed` → (`settled` | `disputed`); `settled` → `disputed`. Withdrawal (T2) from `requested`, `checks` and `awaiting_cash` while no payment is booked. `Approved` (T4) is not a resting state: the final approval moves the case to `awaiting_cash` (priced) or `proposed` (no consideration) in the same transaction. `Cancelled_On_Chain` is called `cancelling`. A trigger enforces the transitions; `transfer.events` records each one; parties, units, price and agreement hash never change after opening.
+
+- **TR-B3** Opening (T1 in two steps): a case is opened by the **transfer desk** (operations maker in PT Control, any consideration) or by the **seller on the website** (sale, gift or family; court orders only through the desk). The seller names the buyer with the buyer's **receive code** (`TR-XXXX-XXXX`, made by the buyer on the website, valid 7 days, single use), so no investor sees another investor's identity. A website request waits for the **buyer's acceptance**, in which the buyer re-enters the SHA-256 of the signed agreement (it must equal the seller's). The desk then **completes** the request (T1: signed agreement checked against the hash, checks run and recorded, surveillance evaluated) → `checks`. The seller's contacts of record are notified when a case is opened (section 11).
+- **TR-B4** Decisions (T3/T4, TR-SOD-1/2): one **compliance officer** and one **trustee officer**, different people, neither the opener nor the completer, neither with a declared conflict with a party (`transfer.conflicts`). Each decision needs a fresh step-up and the digest of the case reviewed, and is accepted only inside PT Control (officer binding as 0016 A-3). One rejection ends the case; the investor sees "not approved" only (tipping-off).
+- **TR-B5** Cancellation (T9) by a compliance or trustee officer with a reason, in any state before `executed`; a proposed request is cancelled on chain first.
+
+### 16.3 Checks (TR-10 to TR-13 as built)
+
+`transfer.check_results(case, stage)` returns every check; approval, the payment step and the execution gate refuse while any fails; each run is stored in `transfer.checks`.
+
+| Code | Rule |
+|---|---|
+| `seller_kyc`, `buyer_kyc` | `kyc.subject_status() = 'verified'` (a compliance hold reads `suspended`) |
+| `seller_screened`, `buyer_screened` | a sanctions screening that passed within `screening_max_age_hours` (24); otherwise the desk requests a re-screen (6c) |
+| `seller_case`, `buyer_case` | no open 6c KYC review case and no live S-06 case for the party |
+| `wallets` | the bound wallets are unchanged since opening and registered with an identity in the read model |
+| `country` | both registry countries in `allowed_countries` (586) |
+| `seller_frozen` | seller wallet not address-frozen |
+| `seller_balance` | free balance covers these units + other live outbound cases + pending RecoveryGuard requests |
+| `register` | the seller's trustee register balance (6d) covers these units + other live outbound cases |
+| `buyer_headroom` | units of every wallet of the buyer's identity + these + other live inbound cases ≤ cap (policy `maxBalance`, or the offering's `max_holding_units` if lower) |
+| `lockup` | now ≥ offering `completed_at` + `lockup_months` (6); court orders exempt; no completed offering = refused |
+| `exit` | no open block for the token (`transfer.blocks`, S-05 hook) |
+| `paused` | token paused in the read model (TR-1) |
+| `price_band` | sale price within ±`price_band_ppm` (20 %) of the reference price, or an explanation recorded at opening |
+| `min_holding` | seller keeps 0 or ≥ offering `min_units`, or a reason recorded at opening |
+| `policy` | active `transfer.*` policies for this token and RecoveryGuard |
+
+Reference price: the latest `transfer.reference_prices` row (operations checker, with the valuation's SHA-256), else the offering price. TR-11: the checks run again when the payment is booked and before each `transfer.execute`; a failure cancels instead of executing.
+
+### 16.4 Cash leg and settlement (TR-20, TR-22, section 7)
+
+- **TR-B6** A priced case gets a payment code of the new bank purpose **`transfer`**: buyer's subject, exact `units × price`, ledger key `xfer:<caseUuid>:paid`, credit account `transfer:<caseUuid>:escrow` (liability), lifetime `payment_hours` (72 calendar hours). Existing bank rules apply unchanged (exact amount, registered account of the buyer, verified buyer; otherwise suspense).
+- **TR-B7** Deadline missed (T8): `bank.cancel_intent` and the case is `cancelled`; a credit that won the race is booked and the case goes on.
+- **TR-B8** Seller settlement (T12): an operations maker prepares it (gross, fee `fee_ppm`, withholding at the active rate of income type `unit_disposal` for the seller's ATL status, net to the seller's active payout account); an operations checker who is neither the preparer nor the case's opener or completer (TR-SOD-3) approves it. Placeholder rates are refused unless `ops.settings.allow_placeholder_rates`. Approval needs `bank.require_gate()`, posts `xfer:<id>:fee`, `xfer:<id>:tax`, `xfer:<id>:settled` (external reference `PTXFER-…`) and records the SHA-256 of the bank instruction before anything is sent. Only an `executed` case is settled; the escrow ends at zero.
+- **TR-B9** Refund (T13/T14), maker-checker the same way, only when no execution happened and none can happen: `xfer:<id>:refunded` returns the credit under the buyer's original Raast reference.
+- **TR-B10** Fees go to `fees:payable:platform`, withholding to `tax:cgt-payable:<token>`. Gift, family and court-ordered cases have no cash leg, fee or tax in phase 0 (LEGAL TO CONFIRM).
+
+### 16.5 Token leg, execution and register
+
+- **TR-B11** `transfer.tick` (`npm run transfer:tick`, or "Refresh from chain" in PT Control) links the proposal to `RecoveryProposed`, after `eta` re-runs the checks and enqueues `transfer.execute` (up to 3 attempts) or `transfer.cancel`, and marks the case `executed` only when the read model shows the request executed **and** a `Transfer` of the token in the same transaction moving exactly the case's units from seller to buyer.
+- **TR-B12** A failed `transfer.execute` leaves the request pending on chain: the case becomes `failed`, `transfer.cancel` is enqueued, and nothing is refunded before the read model shows the request cancelled.
+- **TR-B13** Register (6d): `executed` writes two trustee register entries (`source = 'transfer'`, −units seller, +units buyer) in the same transaction.
+
+### 16.6 Surveillance (TR-23)
+
+On completion the database evaluates `price_outside_band`, `round_trip` (opposite case between the same two investors within 30 days), `frequent` (a party in more than 3 cases in 30 days) and `linked_parties` (a sale between investors with a declared link in `transfer.party_links`). Each alert is stored in `transfer.alerts` and opens a 6c STR case under `system:transfer-surveillance`. Alerts never block, are visible to compliance officers and auditors only and never to investors.
+
+### 16.7 Hooks
+
+- **S-05 exit** (built in parallel, 0027): `transfer.blocks` with `transfer.open_block` / `transfer.close_block`; the `exit` check refuses approval, payment and execution while a block of the token is open. S-05 opens one when an exit record date is set.
+- **S-06 disputes**: T15 marks an `executed` or `settled` case `disputed` (compliance officer); remedy through an S-06 case; never settled automatically.
+
+### 16.8 Reconciliation (rules in `transfer.reconcile(token)`)
+
+| Check | Severity | Rule |
+|---|---|---|
+| `transfer.unapproved` | blocking | a holder-to-holder `Transfer` neither in the transaction of an executed RecoveryGuard request linked to a transfer or recovery case nor in that of a confirmed `token.transfer` command (demo market) |
+| `transfer.settlement_mismatch` | blocking | executed/settled case without its movement, `:settled` journal without an executed case, or settled ≠ gross − fee − tax |
+| `transfer.register_mismatch` | blocking | executed case without exactly its two register entries |
+| `transfer.escrow_residual` | blocking | final case with escrow ≠ 0, or executed case still holding escrow after `escrow_residual_hours` (72) |
+| `transfer.paid_not_executed` | warning | paid case neither executed nor refunded |
+| `transfer.paid_not_executed_overdue` | blocking | the same after `paid_not_executed_hours` (120) |
+
+`recovery.unmatched` no longer reports requests that belong to a transfer case.
+
+### 16.9 Website and portal
+
+- Website `/transfers` (EN + Urdu, 375 px): my cases as seller or buyer, payment instructions with countdown for the buyer, receive code, request (seller), accept (buyer), withdraw; through session-bound `webauth.web_transfer_*` wrappers with step-up actions `transfer.request`, `transfer.accept`, `transfer.withdraw` (from PKR 0). Section 11 disclosures on the page.
+- PT Control `/transfers`: queue, case detail (checks, decisions, commands, settlement, refund, digest), reference prices, conflict declarations, party links. Permissions `transfer.read`, `transfer.request`, `transfer.decide`, `transfer.cash`, `transfer.price`.
+
+### 16.10 Owner questions raised by the build
+
+- **TQ-1** 24 h screening freshness, or should approval trigger a screening automatically?
+- **TQ-2** Payment deadline in calendar hours (72) until a business-day calendar exists?
+- **TQ-3** Withholding on disposal: basis (gross vs gain), rates, gifts (placeholders seeded).
+- **TQ-4** Lock-up for tokens without an offering record (refused) and court orders (exempt).
+- **TQ-5** Trustee co-signature in the inbox for every `transfer.propose` as well?
+- **TQ-6** Who records the reference price: operations checker (today) or the trustee?
