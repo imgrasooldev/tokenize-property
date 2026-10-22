@@ -48,6 +48,7 @@ const settingsSchema = z.object({
   ANCHOR_BESU_CONFIRMATIONS: z.coerce.bigint().nonnegative().default(0n),
   ANCHOR_GAS_LIMIT: z.coerce.bigint().min(50_000n).max(1_000_000n).default(150_000n),
   ANCHOR_MAX_GAS_PRICE_WEI: z.coerce.bigint().positive().default(50_000_000_000n),
+  ANCHOR_MAX_PRIORITY_FEE_WEI: z.coerce.bigint().nonnegative().default(2_000_000_000n),
   ANCHOR_LOG_WINDOW: z.coerce.bigint().min(1n).max(5_000n).default(2_000n),
   ANCHOR_KEYSTORE_DIR: z.string().min(1).default(`${BACKEND}data/keystore-anchor`),
   ANCHOR_KEYSTORE_PASSPHRASE: z.string().min(32).optional(),
@@ -131,6 +132,7 @@ async function anchorer(s: Settings, db: pg.Pool): Promise<Anchorer> {
     confirmations: s.ANCHOR_CONFIRMATIONS ?? 0n,
     gasLimit: s.ANCHOR_GAS_LIMIT,
     maxGasPriceWei: s.ANCHOR_MAX_GAS_PRICE_WEI,
+    maxPriorityFeeWei: s.ANCHOR_MAX_PRIORITY_FEE_WEI,
   });
 }
 

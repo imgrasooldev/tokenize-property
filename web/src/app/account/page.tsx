@@ -1,12 +1,17 @@
 import { redirect } from "next/navigation";
 import { PortalShell, Sample } from "@/components/Shell";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { PayoutForm } from "@/components/account/PayoutForm";
+import { Countdown } from "@/components/offering/Countdown";
 import { formatNumber } from "@/lib/i18n";
+import { catalogDict, pktTime } from "@/lib/i18n-catalog";
+import { fill } from "@/lib/i18n-verify";
 import { investorById } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { onboardingProgress } from "@/lib/server/onboarding";
+import { maskedIban, payeeState, payoutAccounts } from "@/lib/server/payees";
 import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
-import { currentInvestorId } from "@/lib/server/session";
+import { currentInvestorId, sessionExpiresAt } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +23,16 @@ export default async function AccountPage() {
 
   // Read model (ADR 0010): as of the indexer cursor, never a chain call per page.
   const onboarding = investor.onboard_step === "identity" || investor.onboard_step === "claims" || investor.onboard_step === "register";
-  const [verified, balance, index, progress] = await Promise.all([
+  const l = catalogDict(lang);
+  const [verified, balance, index, progress, payees, expires] = await Promise.all([
     registeredOnChain(investor.wallet_address),
     holdingOf(investor.wallet_address),
     indexStatus(),
     onboarding ? onboardingProgress(investor.id) : Promise.resolve(null),
+    payoutAccounts(investor.kyc_subject),
+    sessionExpiresAt(),
   ]);
+  const now = Date.now();
   const status = investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
   const chainSteps = [t.stepIdentity, t.stepClaims, t.stepRegistered];
   const steps = investor.persona ? chainSteps : [t.stepNadra, t.stepLiveness, ...chainSteps];
@@ -107,25 +116,55 @@ export default async function AccountPage() {
             </div>
             <p className="fine">{index ? t.asOfBlock.replace("{b}", index.block.toString()) : t.readModelDown}</p>
           </section>
-          <section className="panel">
-            <div className="row-between">
-              <h2>{t.bankSecurity}</h2>
-              <Sample t={t} soon />
-            </div>
+          <section className="panel" aria-labelledby="payout-h">
+            <h2 id="payout-h">{t.bankSecurity}</h2>
+            <h3 className="small">{l.payoutTitle}</h3>
+            <p className="fine">{l.payoutIntro}</p>
+            {payees === null ? (
+              <p className="note">{l.err_unavailable}</p>
+            ) : payees.length === 0 ? (
+              <p className="note">{investor.kyc_subject ? l.payoutNone : l.noKycRecord}</p>
+            ) : (
+              <ul className="payees" aria-label={l.payoutTitle}>
+                {payees.map((p) => {
+                  const state = payeeState(p, now);
+                  return (
+                    <li className="payee" key={p.payeeId}>
+                      <span className={`chip ${state === "active" ? "green" : state === "cooling" ? "amber" : "gray"}`}>
+                        {state === "active" ? l.accActive : state === "cooling" ? l.accCooling : l.accReplaced}
+                      </span>
+                      <span>
+                        {l.accBank} <b className="mono">{p.bankCode}</b>
+                      </span>
+                      <span className="mono" dir="ltr" aria-label={`${l.accNumber} …${p.last4}`}>
+                        {maskedIban(p.last4)}
+                      </span>
+                      <span className="fine">
+                        {l.accRegistered} <span dir="ltr">{pktTime(p.registeredAt)}</span>
+                      </span>
+                      {state === "cooling" && (
+                        <span className="fine">
+                          {l.accUsableIn} <Countdown expiresAt={p.activeFrom} serverNow={now} upText={l.accReady} /> ({l.accUsableFrom}{" "}
+                          <span dir="ltr">{pktTime(p.activeFrom)}</span> {l.pktSuffix})
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {investor.kyc_subject && investor.kyc_status === "verified" && <PayoutForm l={l} hasAccount={(payees ?? []).some((p) => p.supersededAt === null)} />}
+            <h3 className="small" style={{ marginBlockStart: 18 }}>
+              {l.sessionTitle}
+            </h3>
+            <p className="note">{expires ? fill(l.sessionBody, { t: pktTime(expires) }) : "—"}</p>
             <div className="checks">
               <div className="check">
                 <i className="wait">…</i>
-                {t.passkeyFact1}
-              </div>
-              <div className="check">
-                <i className="wait">…</i>
-                {t.bankLink}
-              </div>
-              <div className="check">
-                <i className="wait">…</i>
-                {t.passkeyFact2}
+                {t.passkeyFact1} <Sample t={t} soon />
               </div>
             </div>
+            <p className="fine">{l.sessionsSoon}</p>
           </section>
         </div>
       </div>

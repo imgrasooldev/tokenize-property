@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { readEnvFile } from "@pt/config";
-import { secretFromEnv } from "@pt/http-auth";
+import { secretFromEnv, type Client } from "@pt/http-auth";
 import pg from "pg";
 import { keyFromEnv, Peppers } from "./crypto.ts";
-import { createKycServer, WEB_KYC_SCOPE } from "./http.ts";
+import { createKycServer, RECOVERY_KYC_SCOPE, WEB_KYC_SCOPE } from "./http.ts";
 import { OffboardingWorker } from "./offboarding.ts";
 import { mockProviders } from "./providers.ts";
 import { RescreenWorker } from "./rescreen.ts";
@@ -96,7 +96,10 @@ function serve(): Promise<void> {
   });
   const service = new KycService(db, mockProviders(), peppers, dataKey, "kyc-service");
   const port = Number(e.KYC_PORT ?? 4910);
-  const server = createKycServer(service, [{ id: "web", secret: secretFromEnv(e, "KYC_CLIENT_SECRET_WEB"), scope: WEB_KYC_SCOPE }]);
+  const clients: Client[] = [{ id: "web", secret: secretFromEnv(e, "KYC_CLIENT_SECRET_WEB"), scope: WEB_KYC_SCOPE }];
+  // S-06 RF-8: the branch / video-call re-verification client of wallet recoveries (re-verify only), when configured.
+  if (e.KYC_CLIENT_SECRET_RECOVERY) clients.push({ id: "recovery", secret: secretFromEnv(e, "KYC_CLIENT_SECRET_RECOVERY"), scope: RECOVERY_KYC_SCOPE });
+  const server = createKycServer(service, clients);
   server.listen(port, "127.0.0.1", () => {
     console.log(`KYC service listening on 127.0.0.1:${String(port)} (mock NADRA, liveness and sanctions providers)`);
   });

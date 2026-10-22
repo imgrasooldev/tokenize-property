@@ -78,7 +78,7 @@ echo "== systemd units"
 cp "$APP"/deploy/demo-server/pt-*.service "$APP"/deploy/demo-server/pt-*.timer /etc/systemd/system/
 mkdir -p /etc/pt   # flags; e.g. touch /etc/pt/demo-market.enabled turns on the demo-market timer
 systemctl daemon-reload
-systemctl enable pt-stack pt-web pt-console pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-admin >/dev/null
+systemctl enable pt-stack pt-web pt-console pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-admin >/dev/null
 
 echo "== CI deploy key: forced command, can only run update.sh for a commit on main"
 install -o $APP_USER -g $APP_USER -m 0755 "$APP/deploy/demo-server/ci-entry.sh" /home/$APP_USER/pt-ci-entry.sh

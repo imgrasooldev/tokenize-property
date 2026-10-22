@@ -38,6 +38,8 @@ export interface AnchorChain {
   anchorOf(contract: Address, besuBlock: bigint): Promise<Hex>;
   nonce(address: Address, tag: "latest" | "pending"): Promise<bigint>;
   gasPrice(): Promise<bigint>;
+  /** EIP-1559 fee facts: the latest block's base fee (null before London) and the node's tip suggestion. */
+  fees(): Promise<{ baseFee: bigint | null; priorityFee: bigint }>;
   simulateAnchor(contract: Address, from: Address, besuBlock: bigint, commitment: Hex): Promise<Simulation>;
   sendRaw(raw: Hex): Promise<void>;
   receipt(hash: Hex): Promise<Receipt | null>;
@@ -83,6 +85,11 @@ export function rpcAnchorChain(url: string, timeoutMs = 15_000): AnchorChain & {
       return BigInt(await client.getTransactionCount({ address, blockTag: tag }));
     },
     gasPrice: () => client.getGasPrice(),
+    async fees() {
+      const block = await client.getBlock({ blockTag: "latest" });
+      const priorityFee = await client.estimateMaxPriorityFeePerGas().catch(() => 0n);
+      return { baseFee: block.baseFeePerGas ?? null, priorityFee };
+    },
     async simulateAnchor(contract, from, besuBlock, commitment) {
       try {
         await client.simulateContract({ address: contract, abi: stateAnchorAbi, functionName: "anchor", args: [besuBlock, commitment], account: from });

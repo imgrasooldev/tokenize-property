@@ -1,11 +1,18 @@
 import type { Property } from "@/lib/properties";
 
+/** What the illustration needs: a stable id, a style and a name for the accessible label. */
+export interface ArtSubject {
+  key: string;
+  art: Property["art"];
+  name: { en: string };
+}
+
 /**
- * Generated neon illustration of the building (no external images). Gradient ids are prefixed
- * with `uid` so several illustrations can share a page.
+ * Generated neon illustration of the building (no external images; decorative, not a photo of the
+ * property). Gradient ids are prefixed with `uid` so several illustrations can share a page.
  */
-export function BuildingArt({ property, height = 220, uid = "a" }: { property: Property; height?: number; uid?: string }) {
-  const id = `${property.symbol}-${uid}`;
+export function BuildingArt({ property, height = 220, uid = "a" }: { property: ArtSubject; height?: number; uid?: string }) {
+  const id = `${property.key.replace(/[^A-Za-z0-9]/g, "").slice(0, 16)}-${uid}`;
   return (
     <svg className="art-svg" viewBox="0 0 400 220" width="100%" height={height} role="img" aria-label={property.name.en} preserveAspectRatio="xMidYMid slice">
       {property.art === "tower" && (

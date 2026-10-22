@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Event catalogue (ADR 0013, rule N-2). Mirrors `notify.event_kinds` in migration 0017; a test
+ * Event catalogue (ADR 0013, rule N-2). Mirrors `notify.event_kinds` in migrations 0017 and 0020; a test
  * keeps the two identical. Every value a message can carry is one of these typed placeholders, so
  * no personal data (names, phone numbers, CNICs, IBANs, e-mail addresses) can reach a template.
  */
@@ -57,6 +57,11 @@ export const EVENT_KINDS = {
   "security.large_transaction_pending": {
     category: "security",
     placeholders: { amount_paisa: { type: "paisa" }, reference: { type: "code" } },
+  },
+  // S-06 RC-2 (migration 0020): sent to the contacts of record when a wallet recovery is opened.
+  "security.wallet_recovery_requested": {
+    category: "security",
+    placeholders: { at: { type: "utc" }, objection_until: { type: "utc" } },
   },
   "offering.reservation_expiring": {
     category: "transactional",

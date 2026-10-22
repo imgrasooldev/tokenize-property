@@ -139,3 +139,13 @@ Found while measuring: building the 20,000 bench journals took 287 s (about 14 m
 | `offering.payment_anomaly` | blocking | a matched credit reached a subscription that was no longer waiting for it (should be impossible; see the ADR 0009 amendment) |
 
 Deviation from S-02 §8 ("blocking after the SLA"): `offering.refund_overdue` is a **warning**. Refunds need the payout gate (ADR 0009 B-9), a blocking finding freezes the gate, and the gate only reopens after a passing run, so a blocking overdue refund could never be cured (found in `offering/test/recon.test.ts`). The overdue refund is alerted every run instead. The S-02 checks `supply.register_mismatch` (needs the trustee's register attestation feed, S-07) and burn checks are not built yet.
+
+## Amendment 2026-10-13: recovery and reversals (spec S-06 section 14.7, migration 0020, T-026)
+
+| Check | Severity | Meaning |
+|---|---|---|
+| `recovery.unmatched` | blocking | a pending or executed RecoveryGuard request of this deployment that is not a recovery case's proposal (`recovery.recon_requests`) |
+| `recovery.unmatched_cancelled` | warning | a cancelled request without a case (moved nothing; the local `chain/flow.py` scenario proposes and cancels one, so the demo server shows this warning, not a freeze) |
+| `recovery.reversal_unmatched` | blocking | a ledger journal of kind `reversal` without its closed reversal case, or a closed case whose correcting journal is missing or of another kind |
+
+Cash matching treats a journal reversed by a closed reversal case and its correcting journal as void (both, from the start: `voidedJournals`). Loaded only where the recovery schema exists. Not built yet: `compliance.freeze_unmatched`, `kyc.holder_unverified_unfrozen`, `issuance.reversed_not_resolved`.

@@ -1,6 +1,6 @@
 import { encodeAbiParameters, encodeFunctionData, keccak256, type Hex } from "viem";
 import { z } from "zod";
-import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
+import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, recoveryGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
 import { custodialRef } from "./keystore.ts";
 
 /**
@@ -75,6 +75,12 @@ export const KINDS = [
   "identity.create",
   "identity.add_claim",
   "identity.register",
+  "recovery.freeze",
+  "recovery.unfreeze",
+  "recovery.add_key",
+  "recovery.propose",
+  "recovery.execute",
+  "recovery.cancel",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -456,7 +462,306 @@ export function evaluateIdentityRegister(
   };
 }
 
-export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule;
+// ------------------------------------------------------------------ recovery (S-06, migration 0020)
+
+/**
+ * S-06 kinds (spec S-06 section 14.6). Every one is denied unless recovery.command_allowed(kind,
+ * payload) confirms that a case enqueued exactly this payload and is in the state the kind needs at
+ * signing time (opened/approved for a freeze, approved for add_key/propose/execute, cancelled for a
+ * cancel, released by two compliance officers for an unfreeze). Chain facts are checked on top.
+ */
+export const recoveryFreezeRule = freezeRule;
+export type RecoveryFreezeRule = FreezeRule;
+
+export interface RecoveryFreezeFacts {
+  chainId: number;
+  /** recovery.command_allowed: the case enqueued exactly this command and still needs it. */
+  allowed: boolean;
+  frozen: boolean;
+  /** kyc.is_verified(account); used by the unfreeze only. */
+  ownerVerified: boolean;
+  signedToday: number;
+}
+
+function freezeGuardDenial(rule: FreezeRule, p: { freezeGuard: string; caseId: string }, facts: { chainId: number; allowed: boolean; signedToday: number }, what: string): string | null {
+  if (facts.chainId !== rule.chainId) return `wrong chain ${String(facts.chainId)}`;
+  if (p.freezeGuard.toLowerCase() !== rule.freezeGuard.toLowerCase()) return "target is not the approved FreezeGuard";
+  if (BigInt(p.caseId) === 0n) return "zero caseId";
+  if (!facts.allowed) return `no recovery case enqueued this ${what} (recovery.command_allowed)`;
+  if (facts.signedToday + 1 > rule.maxPerDay) return `daily limit of ${String(rule.maxPerDay)} ${what}s would be exceeded`;
+  return null;
+}
+
+/** C1: protective freeze of a case's wallet (also of a KYC-verified holder, unlike compliance.freeze). */
+export function evaluateRecoveryFreeze(rule: RecoveryFreezeRule, payload: unknown, facts: RecoveryFreezeFacts): Decision {
+  const p = freezePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = freezeGuardDenial(rule, p.data, facts, "freeze");
+  if (denial) return { decision: "deny", reason: denial };
+  if (facts.frozen) return { decision: "deny", reason: "wallet is already frozen" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.freezeGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "freezeAddress", args: [p.data.account as Hex, p.data.caseId as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+/** C9: release of a case's freeze after two compliance officers decided it. */
+export function evaluateRecoveryUnfreeze(rule: RecoveryFreezeRule, payload: unknown, facts: RecoveryFreezeFacts): Decision {
+  const p = freezePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = freezeGuardDenial(rule, p.data, facts, "unfreeze");
+  if (denial) return { decision: "deny", reason: denial };
+  if (!facts.ownerVerified) return { decision: "deny", reason: "the wallet's owner is not KYC-verified: it stays frozen" };
+  if (!facts.frozen) return { decision: "deny", reason: "wallet is not frozen" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.freezeGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "unfreezeAddress", args: [p.data.account as Hex, p.data.caseId as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+/** RC-4: the new wallet becomes a MANAGEMENT key (purpose 1, ECDSA type 1) of the investor's ONCHAINID. */
+export const addKeyRule = z.object({
+  chainId: z.number().int().positive(),
+  identityRegistry: address,
+  maxPerDay: z.number().int().min(1).max(1_000),
+  approvals: z.number().int().min(0).max(5).default(0),
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("500000"),
+});
+export type AddKeyRule = z.infer<typeof addKeyRule>;
+export const addKeyPayload = z.strictObject({ identity: address, wallet: address, newWallet: address, caseId: bytes32 });
+
+export interface AddKeyFacts {
+  chainId: number;
+  allowed: boolean;
+  /** The old wallet is a custodial wallet of this signing service (it signs). */
+  custodial: boolean;
+  /** IdentityRegistry.identity(wallet) (zero address if none). */
+  registeredIdentity: string;
+  /** Identity.keyHasPurpose(keccak256(abi.encode(newWallet)), 1). */
+  keyPresent: boolean;
+  signedToday: number;
+}
+
+/** keccak256(abi.encode(address)): the ONCHAINID key of a wallet. */
+export function walletKey(wallet: string): Hex {
+  return keccak256(encodeAbiParameters([{ type: "address" }], [wallet as Hex]));
+}
+
+export function evaluateAddKey(rule: AddKeyRule, payload: unknown, facts: AddKeyFacts): Decision {
+  const p = addKeyPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { identity, wallet, newWallet, caseId } = p.data;
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (BigInt(caseId) === 0n) return { decision: "deny", reason: "zero caseId" };
+  if (wallet.toLowerCase() === newWallet.toLowerCase()) return { decision: "deny", reason: "the new wallet is the old wallet" };
+  if (!facts.allowed) return { decision: "deny", reason: "no approved wallet-recovery case enqueued this key (recovery.command_allowed)" };
+  if (!facts.custodial) return { decision: "deny", reason: `wallet ${wallet.toLowerCase()} is not a custodial wallet of this signing service` };
+  if (identity.toLowerCase() === ZERO_ADDRESS || facts.registeredIdentity.toLowerCase() !== identity.toLowerCase()) {
+    return { decision: "deny", reason: "identity is not the old wallet's identity in the identity registry" };
+  }
+  if (facts.keyPresent) return { decision: "deny", reason: "the new wallet is already a management key of the identity" };
+  if (facts.signedToday + 1 > rule.maxPerDay) return { decision: "deny", reason: `daily limit of ${String(rule.maxPerDay)} would be exceeded` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: custodialRef(wallet),
+    to: identity.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: identityAbi, functionName: "addKey", args: [walletKey(newWallet), 1n, 1n] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+/** RecoveryGuard calls (propose, execute, cancel), signed by the Trustee Safe key. */
+export const recoveryRule = z.object({
+  chainId: z.number().int().positive(),
+  keyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  recoveryGuard: address,
+  token: address,
+  identityRegistry: address,
+  /** The compliance module's per-investor cap (MaxBalanceModule): an heir never ends above it. */
+  maxBalance: uint,
+  maxPerDay: z.number().int().min(1).max(10_000),
+  /** The Trustee Safe's own approval is its signature; a policy may add approvals in the inbox. */
+  approvals: z.number().int().min(0).max(5).default(0),
+  // recoveryAddress registers the new wallet, moves the balance and deletes the old entry: generous fixed limit.
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("2000000"),
+});
+export type RecoveryRule = z.infer<typeof recoveryRule>;
+
+const amount78 = z.string().regex(/^(0|[1-9][0-9]{0,30})$/);
+export const proposePayload = z.strictObject({
+  recoveryGuard: address,
+  kind: z.enum(["wallet_recovery", "forced_transfer"]),
+  from: address,
+  to: address,
+  onchainId: address,
+  amount: amount78,
+  evidenceHash: bytes32,
+  caseId: bytes32,
+});
+export const requestPayload = z.strictObject({ recoveryGuard: address, requestId: z.string().regex(/^[1-9][0-9]{0,30}$/), caseId: bytes32 });
+
+export interface ProposeFacts {
+  chainId: number;
+  allowed: boolean;
+  fromBalance: bigint;
+  /** IdentityRegistry.identity(from). */
+  fromIdentity: string;
+  /** IdentityRegistry.contains(to). */
+  toRegistered: boolean;
+  /** IdentityRegistry.isVerified(to). */
+  toVerified: boolean;
+  toBalance: bigint;
+  /** Pending RecoveryGuard requests from this wallet (read model): count and units. */
+  pendingFrom: { requests: number; amount: bigint };
+  signedToday: number;
+}
+
+const KIND_INDEX = { wallet_recovery: 0, forced_transfer: 1 } as const;
+
+function guardDenial(rule: RecoveryRule, guard: string, caseId: string, facts: { chainId: number; allowed: boolean; signedToday: number }): string | null {
+  if (facts.chainId !== rule.chainId) return `wrong chain ${String(facts.chainId)}`;
+  if (guard.toLowerCase() !== rule.recoveryGuard.toLowerCase()) return "target is not the approved RecoveryGuard";
+  if (BigInt(caseId) === 0n) return "zero caseId";
+  if (!facts.allowed) return "no approved recovery case enqueued this request (recovery.command_allowed)";
+  if (facts.signedToday + 1 > rule.maxPerDay) return `daily limit of ${String(rule.maxPerDay)} would be exceeded`;
+  return null;
+}
+
+export function evaluatePropose(rule: RecoveryRule, payload: unknown, facts: ProposeFacts): Decision {
+  const p = proposePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { recoveryGuard, kind, from, to, onchainId, evidenceHash, caseId } = p.data;
+  const amount = BigInt(p.data.amount);
+  const denial = guardDenial(rule, recoveryGuard, caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (from.toLowerCase() === to.toLowerCase()) return { decision: "deny", reason: "from and to are the same wallet" };
+  if (BigInt(evidenceHash) === 0n) return { decision: "deny", reason: "zero evidence hash" };
+  if (facts.fromBalance <= 0n) return { decision: "deny", reason: "the wallet holds no units" };
+  if (kind === "wallet_recovery") {
+    if (amount !== 0n) return { decision: "deny", reason: "a wallet recovery always moves the full balance (amount 0)" };
+    if (onchainId.toLowerCase() === ZERO_ADDRESS || facts.fromIdentity.toLowerCase() !== onchainId.toLowerCase()) {
+      return { decision: "deny", reason: "onchainId is not the old wallet's identity in the identity registry" };
+    }
+    if (facts.toRegistered) return { decision: "deny", reason: "the new wallet is already registered (the token registers it at execution)" };
+    if (facts.pendingFrom.requests > 0) return { decision: "deny", reason: "a request from this wallet is already pending" };
+  } else {
+    if (onchainId.toLowerCase() !== ZERO_ADDRESS) return { decision: "deny", reason: "a forced transfer carries no onchainId" };
+    if (amount <= 0n) return { decision: "deny", reason: "a forced transfer moves a positive amount" };
+    if (!facts.toVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
+    if (facts.pendingFrom.amount + amount > facts.fromBalance) {
+      return { decision: "deny", reason: "the wallet's balance does not cover this request and the requests already pending" };
+    }
+    if (facts.toBalance + amount > BigInt(rule.maxBalance)) {
+      return { decision: "deny", reason: `the recipient would hold more than the per-investor cap of ${rule.maxBalance}` };
+    }
+  }
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({
+      abi: recoveryGuardAbi,
+      functionName: "propose",
+      // eslint-disable-next-line security/detect-object-injection -- kind is one of the two enum values
+      args: [KIND_INDEX[kind], from as Hex, to as Hex, onchainId as Hex, amount, evidenceHash as Hex],
+    }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+/** A RecoveryGuard request as RecoveryGuard.getRequest returns it. */
+export interface ChainRequest {
+  kind: "wallet_recovery" | "forced_transfer";
+  status: "none" | "pending" | "executed" | "cancelled";
+  eta: bigint;
+  from: string;
+  to: string;
+  onchainId: string;
+  amount: bigint;
+}
+
+export interface ExecuteFacts {
+  chainId: number;
+  allowed: boolean;
+  request: ChainRequest;
+  /** Timestamp of the latest block. */
+  chainTime: bigint;
+  fromBalance: bigint;
+  toVerified: boolean;
+  toBalance: bigint;
+  /** For a wallet recovery: the new wallet is a management key of the identity. */
+  newKeyPresent: boolean;
+  signedToday: number;
+}
+
+export function evaluateExecute(rule: RecoveryRule, payload: unknown, facts: ExecuteFacts): Decision {
+  const p = requestPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = guardDenial(rule, p.data.recoveryGuard, p.data.caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  const r = facts.request;
+  if (r.status !== "pending") return { decision: "deny", reason: `request ${p.data.requestId} is ${r.status}, not pending` };
+  if (facts.chainTime < r.eta) return { decision: "deny", reason: `the recovery delay runs until ${r.eta.toString()} (chain time ${facts.chainTime.toString()})` };
+  if (r.kind === "wallet_recovery") {
+    if (facts.fromBalance <= 0n) return { decision: "deny", reason: "the old wallet holds no units" };
+    if (!facts.newKeyPresent) return { decision: "deny", reason: "the new wallet is not a management key of the identity yet (recovery.add_key)" };
+  } else {
+    if (!facts.toVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
+    if (facts.fromBalance < r.amount) return { decision: "deny", reason: "the wallet no longer holds the amount" };
+    if (facts.toBalance + r.amount > BigInt(rule.maxBalance)) {
+      return { decision: "deny", reason: `the recipient would hold more than the per-investor cap of ${rule.maxBalance}` };
+    }
+  }
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: "execute", args: [BigInt(p.data.requestId)] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export interface CancelFacts {
+  chainId: number;
+  allowed: boolean;
+  status: ChainRequest["status"];
+  signedToday: number;
+}
+
+export function evaluateCancel(rule: RecoveryRule, payload: unknown, facts: CancelFacts): Decision {
+  const p = requestPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = guardDenial(rule, p.data.recoveryGuard, p.data.caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (facts.status !== "pending") return { decision: "deny", reason: `request ${p.data.requestId} is ${facts.status}, not pending` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: "cancel", args: [BigInt(p.data.requestId)] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule | AddKeyRule | RecoveryRule;
 
 /** The key a request of this kind would be signed with (for the audit of a denial); null if unknown. */
 export function requestKeyRef(kind: string, rule: AnyRule, payload: unknown): string | null {
@@ -488,6 +793,9 @@ export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "identity.create") return identityCreateRule.parse(rule);
   if (kind === "identity.add_claim") return identityClaimRule.parse(rule);
   if (kind === "identity.register") return identityRegisterRule.parse(rule);
+  if (kind === "recovery.freeze" || kind === "recovery.unfreeze") return recoveryFreezeRule.parse(rule);
+  if (kind === "recovery.add_key") return addKeyRule.parse(rule);
+  if (kind === "recovery.propose" || kind === "recovery.execute" || kind === "recovery.cancel") return recoveryRule.parse(rule);
   throw new Error(`no policy schema for kind ${kind}`);
 }
 

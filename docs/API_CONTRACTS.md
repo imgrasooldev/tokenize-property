@@ -8,8 +8,9 @@
 | Route | Auth | Notes |
 |---|---|---|
 | `/` | public | home; live data from the pulse |
-| `/properties` | public | catalogue from `web/src/lib/properties.ts` (GPF3 live; DHA6, BAO2 coming soon) |
-| `/properties/[symbol]` | public; invest form needs a session | unknown symbol -> 404 |
+| `/properties` | public | catalogue (`web/src/lib/server/catalog.ts`): listed tokens + visible offerings (0018/0022). Query: `f` all/live/soon, `use`, `place` (province code or district), `occ`, `minYield` (percent, 2 decimals), `sort` score/yield/price/name; unknown values ignored. Inline SVG map |
+| `/properties/[key]` | public; invest form needs a session | key = listed symbol or visible offering uuid, else 404. Price history (settled trades, PKT days), rent per month, documents (DocumentRegistry + `property.web_documents`), trust structure (`property.web_catalog`), rule-based score, analyst box; offering-only properties link to `/offerings/[id]` |
+| `/search` | public | `?q=` (max 80 chars) ranked catalogue and page results; question-like queries also get a grounded analyst answer (ADR 0015) |
 | `/login` | public | `?e=rate` shows the rate-limit message |
 | `/signup` | public | sign-up form (`signUp` action) |
 | `/portfolio` | session, else redirect `/login` | `?sub=<subscriptionId>` highlights a subscription; rent at `#rent` |
@@ -55,6 +56,13 @@ All are POSTs through Next.js server actions (built-in origin check). Errors are
 
 | `reserveAction` | `offering.ts` | session, else redirect `/login`; rate `reserve` (10, 10/min) per investor; `kyc_status = verified` and a KYC subject, and the database gate (0018 WO-2) | `offeringId` uuid, `units` (1-13 digits), `requestId` uuid v4, `language` en/ur, `docSha`, `riskSha` (64 hex, the versions shown), `acceptDoc`=`on`, `acceptRisk`=`on` | redirect `/subscriptions?sub=<id>`, or `{error}`: `input`, `rate`, `kyc`, `notOpen`, `units`, `docs`, `already`, `paused`, `unknown`, `generic`. Acceptances and reservation in one transaction; actor `web:<investorId>`; idempotency key `web-<requestId>`; session and device stored only as keyed SHA-256 |
 | `cancelReservationAction` | `offering.ts` | session; rate `reserve` | `subscriptionId` uuid | `{ok: true}` or `{error}`: `input`, `rate`, `state` (already paid or ended), `unknown` (not the investor's), `generic` |
+
+| `registerPayeeAction` | `account.ts` | session, else redirect `/login`; rate `payee` (5, 2/min) per investor; KYC subject required | `iban` (PK IBAN, spaces allowed), `title` (letters, 2-140) | `{ok: true}` or `{error}`: `input`, `rate`, `noKyc`, `invalid_iban`, `title_not_found`, `title_mismatch`, `not_verified`, `in_use`, `unavailable`. Calls the bank service `POST /v1/payees`; nothing of the IBAN is stored by the website |
+| `askAction` | `analyst.ts` | none for site/property scope, session for portfolio; rate `ask` (10, 6/min) per investor or client | `question` (2-300), `scope` site/property/portfolio, optional `propertyKey` | `{answer}` (intent, cited facts, sources, data-as-of, provider, disclaimer; `refused` advice/prediction/personal/unknown/rate) or `{error: input, signin, failed}` |
+
+### Bank service website API (`npm run bank:payees`, 127.0.0.1:4920)
+
+- `GET /v1/health`; `POST /v1/payees` (client `web`, scope `/v1/payees`, same HMAC scheme as the KYC API), JSON `{subjectId, iban, title}`, max 2 KiB. 200 `{payeeId}`; 400 `invalid_iban`/`invalid`; 403 `not_verified`; 409 `in_use`; 422 `title_not_found`/`title_mismatch`; 500 `internal`. The title inquiry is a demo stand-in (`DemoTitleFetch`, refuses production); the database compares the keyed title hash with the KYC name and starts the 72 h cooling-off.
 
 Idempotency: `requestId` is unique per subscription, top-up and order (`webdemo` unique constraints), so a repeated submit returns the first result.
 
@@ -120,6 +128,10 @@ Property onboarding (spec S-01, branch `t-021-property-onboarding`): `property:r
 
 Offering lifecycle (spec S-02, task T-020): `offering:run -- <action> '<json>'` (or `@file.json`; `offering:run -- actions` lists them; `ACTIONS` in `backend/packages/offering/src/service.ts`) with the same output and exit codes as `property:run` (`OfferingError` codes `INVALID_INPUT|FORBIDDEN|GUARD|DUPLICATE|NOT_FOUND`, exit 4). Officer actions name the officer (`actor` or `officer`); investor actions (`acceptDocument`, `reserve`, `cancel`, `withdraw`) name the KYC subject and the portal's actor; `reserve` returns `{subscriptionId, refId, state, units, amountPaisa, paymentCode, expiresAt, reason}` (payment code `PT-XXXX-XXXX` for the Raast narration; `reason` is investor-safe). Also `offering:show -- <offeringId>`, `offering:queue`, `offering:tick [-- <offeringId>]` (the scheduled clock: opens, expires, promotes, closes, proposes outcomes, settles), `offering:audit` (exit 3 on a problem). Refunds are sent by library function `executeApprovedRefunds(pool, bankGateway, offeringId, actor)` (records first, then instructs the bank); no CLI command, because the CLI has no bank connection.
 
+Operations and tax (spec S-03, migration 0021, ADR 0014): `ops:statement -- <token> <YYYY-MM>` (operating statement JSON), `ops:run -- <action> '<json>'` (`ops:run -- actions` lists them: `collect`, `decide-collection`, `charge`, `decide-charge`, `calculate`, `attach` (builds statement v2 + tax schedule + Merkle root and attaches them), `verify` (independent recomputation, exit 3 on a problem), `decide-distribution`, `book`, `statement-file` (writes the website's statement file with NET amounts and proofs to `chain/data/rent/`), `remit`, `decide-remit`, `certificate`). Actors are operator names; officer handles are refused. `tax:setup` (local dev: `TAX_CNIC_KEY_V1`, `TAX_CNIC_KEY_CURRENT`, `TAX_CLIENT_SECRET_ADMIN`, also into `admin/.env.local`; never printed), `tax:serve` (127.0.0.1:4940), `tax:atl -- <YYYY-MM-DD>` (mock ATL provider; refused in production), `tax:enrol-cnic -- <subject>` (CNIC from stdin only, never argv), `tax:audit`, `tax:reconcile -- <token>` (exit 3 on findings).
+
+**Tax service HTTP API** (`@pt/tax`, HMAC as the signing service; client `admin-portal`, scope one path): `POST /v1/filing-exports/generate` body `{exportId: "<id>", ticket: "<43 base64url chars>"}` → `200 {fileName, csv (base64), sha256, rows, record: {audit, auditHash, at, officer}}`; `409 {error}` for a refusal written for officers (invalid/used/expired ticket, export not approved, a line without a sealed CNIC); `401/403` authentication or scope; `500 {error: "internal"}` (nothing echoed). `GET /v1/health`.
+
 Step 6b (migration 0016): command-line operator names that are the handle of an admin-portal officer are refused for signer approvals, unfreeze requests and decisions, and payout batches created, decided or submitted (officers decide in the portal); an S-01 duty (`requestDuty`) needs an officer of the portal with a matching role (see ADR 0011 section 10).
 
 ## 8. Internal portal (`admin/`, Steps 6a-6d)
@@ -164,6 +176,35 @@ Step 6c compliance routes (migration 0019; pages for compliance officers and aud
 
 CLI (KYC service): `npm run kyc:rescreen` executes queued re-screenings (mock providers; refused in production).
 
+S-06 recovery, succession and reversals (migration 0020; every route also checked by the database, decisions bound to the case digest):
+
+| Route | Access | Body / result |
+|---|---|---|
+| `GET /recovery`, `GET /recovery/[id]` | `recovery.read` | case list with filters; case detail with documents, heirs, allocation preview, decisions, on-chain requests and the reasons each action is unavailable |
+| `POST /api/recovery/cases` | `recovery.request` + step-up | `kind=wallet_recovery|succession`, `subject` (KYC subject id), `summary`; or `kind=reversal`, `journal`, `reasonCode`, `evidence` (SHA-256 hex), `summary` → 303 to the case |
+| `POST /api/recovery/cases/[id]/evidence` | `recovery.request` | `what=document`, `docType`, `reference`, `issuer?`, `sha256`; or `what=heir`, `subject`, `num`, `den` → 303 back |
+| `POST /api/recovery/cases/[id]/wallet` | `recovery.request` + step-up | `decision=create`: the signing service creates a custodial wallet (`/v1/custody/wallets`, admin client), the database sets it → 303 back |
+| `POST /api/recovery/cases/[id]/act` | `recovery.decide` + step-up | `decision=approve|reject` + `capacity=operations|compliance|legal`, or `decision=cancel|release`; `reason`, `digest` → 303 back |
+| `POST /api/recovery/sync` | `recovery.request` | `decision=sync` runs `recovery.tick` → 303 back |
+
+Signing service: kinds `recovery.freeze|unfreeze|add_key|propose|execute|cancel` (ADR 0005 amendment); the admin client scope now includes `/v1/custody/wallets`. KYC service: `POST /v1/reverify` (`cnic`, `fullName`, `livenessSessionId`; client `recovery`, secret `KYC_CLIENT_SECRET_RECOVERY`, scope `/v1/reverify` only) → subject, status and check outcomes, 404 when no registered investor matches. CLI: `npm run recovery:tick [-- --loop]`, `npm run recovery:audit`.
+
+S-03 operations and tax routes (migration 0021; operations pages for ops makers/checkers, trustee officers, tax officers and auditors; tax pages for tax officers and auditors):
+
+| Route | Access | Contract |
+|---|---|---|
+| `GET /operations[?token=&period=]` | `operations.read` | periods with collected and distributable amounts and calculation state; one period's operating statement, charges, collections and calculations; propose form for makers |
+| `GET /operations/charges/[id]` | `operations.read` | charge with evidence SHA-256, maker, decision, journal, blockers, digest |
+| `GET /operations/distributions/[id]` | `operations.read` | calculation: statement snapshot, record date/block, sums, root and hashes, every line (subject reference, units, gross, filer status as of a date, flag, rate, WHT, net), blockers, digest |
+| `GET /tax`, `GET /tax/exports`, `GET /tax/exports/[id]` | `tax.read` | rates (versions, placeholders, in force), proposals with decision forms, ATL summary, withheld vs remitted; exports; one export with lines in scope and missing sealed CNICs, blockers |
+| `POST /api/operations/charges` | `operations.request` | multipart form `token`, `period`, `kind`, `feeType`, `payee`, `description`, `amount` (rupees, <= 2 decimals), `evidenceFile` (hashed, not kept) or `evidence` (hex) → `admin.propose_charge`; 303 to the charge |
+| `POST /api/operations/charges/[id]/decide`, `POST /api/operations/distributions/[id]/decide` | `operations.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_charge` / `admin.decide_distribution` |
+| `POST /api/tax/rates` | `tax.decide` + step-up | form `incomeType`, `status`, `rate` (percent, <= 4 decimals), `effectiveFrom`, `basis` → `admin.propose_tax_rate` |
+| `POST /api/tax/rates/[id]/decide` | `tax.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_tax_rate` |
+| `POST /api/tax/exports` | `tax.export` + step-up | form `token` (optional), `from`, `to`, `reason` → `admin.request_tax_export`; 303 to the export |
+| `POST /api/tax/exports/[id]/decide` | `tax.export` + step-up | form `decision`, `reason`, `digest` → `admin.decide_tax_export` |
+| `POST /api/tax/exports/[id]/generate` | `tax.export` + step-up | form `decision=generate` → `admin.issue_tax_export_ticket`, then the tax service; `200 application/zip` (CSV + manifest.json + SHA256SUMS, `no-store`) or 303 back with the reason |
+
 Step 6d trustee routes (migration 0023; pages for trustee officers and auditors, decisions for trustee officers only; "step-up" = checked by the database):
 
 | Route | Access | Contract |
@@ -183,4 +224,7 @@ Step 6d trustee routes (migration 0023; pages for trustee officers and auditors,
 | `POST /api/trustee/distributions/[registry]/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest`, `root` (required to approve) → `admin.review_distribution` |
 | `POST /api/trustee/register/adjustments` | `trustee.decide` + step-up | form `token`, `wallet`, `units` (signed), `evidence` (SHA-256), `reason` → `admin.propose_register_adjustment`; 303 to the adjustment |
 | `POST /api/trustee/register/adjustments/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_register_adjustment` (a different trustee officer) |
+| `GET /trustee/cosign/charge/[id]`, `GET /trustee/cosign/calculation/[id]` | `trustee.read` | S-03: a charge above the operations limit with the trustee's decision; a calculation with totals, lines, attached root and statement hash, blockers, digest |
+| `POST /api/trustee/cosign/charge/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_trustee_charge` (OP-21; the operations checker approves afterwards) |
+| `POST /api/trustee/cosign/calculation/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest`, `root` (required to approve) → `admin.precheck_distribution` (D4) |
 | `POST /api/trustee/register/export` | `trustee.export` | form `token`, `decision=export` → ZIP (CSV, manifest.json with pinned block and audit entries, SHA256SUMS), recorded by `admin.record_register_export` before release; otherwise 303 back with the reason |

@@ -41,6 +41,17 @@ window, SEV1 for a register difference that shows units moved without the truste
 - On L14 approval the trustee's register in the database receives the units of every subscription
   (V18) in the same transaction; check `/trustee/register` afterwards (differences must be 0).
 
+## S-03: charges above the limit and the distribution pre-check
+
+- **Charges (OP-21):** `/trustee/cosign` lists expenses and fees above the operations limit
+  (`ops.settings.expense_ops_limit_paisa`, placeholder Rs 1,000,000). Check the invoice against the
+  evidence SHA-256 and the budget, then approve or reject. The operations checker can approve only
+  after the trustee approved; after a trustee rejection only "reject" remains.
+- **Pre-check (D4):** once operations attached the statement of a calculation, recompute the Merkle
+  root independently from the record block and the statement (net paisa per wallet is the leaf) and
+  approve with that root, or reject (operations returns and recalculates). The operations checker
+  can approve the calculation only after the pre-check; publishing on chain follows.
+
 ## Reviewing a rent distribution (48-hour window)
 
 1. Open `/trustee/distributions`; items with "review due" are published and inside their window
@@ -49,7 +60,7 @@ window, SEV1 for a register difference that shows units moved without the truste
    (OP-SOD-2), never from the operations spreadsheet.
 3. If it matches: approve and enter the recomputed root (refused if it differs).
 4. If it does not match or the statement is wrong: **reject with a reason**. The database then
-   refuses any payout batch and the `rent:distribution:<token>:<id>` booking for it. Then, **before
+   refuses any payout batch and the `rent:wht` / `rent:distribution:<token>:<id>` booking for it. Then, **before
    the window closes**, execute `DistributionRegistry.reject(id, reason)` from the Trustee Safe; the
    overview shows "rejected, not yet on chain" until the indexer sees it.
 5. If the window closed without the on-chain reject and operations finalised it on chain: payouts
@@ -76,7 +87,8 @@ window, SEV1 for a register difference that shows units moved without the truste
 - `/trustee/recon`: runs per day (PKT), findings and the run digest. A freeze is lifted by two
   platform officers after a passed run ([reconciliation-freeze.md](reconciliation-freeze.md)); the
   trustee reads the evidence.
-- `/trustee/recoveries`: RecoveryGuard requests on chain (48 h delay). Case files arrive with S-06.
+- `/trustee/recoveries`: S-06 wallet-recovery and succession cases (read-only) and the RecoveryGuard
+  requests on chain (48 h delay). Proposing and executing on chain stay Trustee Safe transactions.
 
 ## Checks after any trustee action
 

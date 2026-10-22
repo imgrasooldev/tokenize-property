@@ -26,7 +26,8 @@ function palette() {
   };
 }
 
-export function MarketLive({ symbol, nav, yieldPct, initial, t, lang }: { symbol: string; nav: number; yieldPct: number; initial: MarketView; t: Dict; lang: Lang }) {
+/** `yieldBp`: rent yield of the last 12 months on the issue price (distributions on chain), or null. */
+export function MarketLive({ symbol, nav, yieldBp, initial, t, lang }: { symbol: string; nav: number; yieldBp: number | null; initial: MarketView; t: Dict; lang: Lang }) {
   const [view, setView] = useState(initial);
   const [live, setLive] = useState<"connecting" | "live" | "retrying">("connecting");
   const box = useRef<HTMLDivElement>(null);
@@ -134,7 +135,7 @@ export function MarketLive({ symbol, nav, yieldPct, initial, t, lang }: { symbol
               : t.marketNoteText
                   .replace("{d}", `${vsNav >= 0 ? "+" : ""}${vsNav.toFixed(2)}%`)
                   .replace("{n}", String(Math.min(view.trades.length, 15)))
-                  .replace("{y}", ((nav * yieldPct) / view.last).toFixed(2))}{" "}
+                  .replace("{y}", yieldBp === null ? "" : t.marketYieldText.replace("{y}", ((nav * yieldBp) / 100 / view.last).toFixed(2)))}{" "}
             <span className="cite">trades</span> <span className="cite">NAV</span>
           </span>
         </div>

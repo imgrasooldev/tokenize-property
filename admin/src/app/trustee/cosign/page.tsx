@@ -3,7 +3,7 @@ import { Flash } from "@/components/Decision";
 import { Shell } from "@/components/Shell";
 import { TrusteeTabs } from "@/components/TrusteeTabs";
 import { pkt, short } from "@/lib/format";
-import { kindLabel } from "@/lib/server/approvals";
+import { kindLabel, rupees } from "@/lib/server/approvals";
 import { requirePage } from "@/lib/server/session";
 import { codeLabel, cosignQueue } from "@/lib/server/trustee";
 
@@ -91,10 +91,10 @@ export default async function CosignPage({ searchParams }: { searchParams: Promi
                       <b>{codeLabel(r.code)}</b> <span className="mono small mu">{r.code}</span>
                     </td>
                     <td className="mono small">
-                      {short(r.offering, 4)} · {r.offeringState} {r.token ? `· ${short(r.token)}` : ""}
+                      {short(r.offering, 4)} Â· {r.offeringState} {r.token ? `Â· ${short(r.token)}` : ""}
                     </td>
                     <td className="small">
-                      <span className="mono">{r.requestedBy}</span> · {pkt(r.requestedAt)}
+                      <span className="mono">{r.requestedBy}</span> Â· {pkt(r.requestedAt)}
                     </td>
                     <td className="small">{pkt(r.expiresAt)}</td>
                   </tr>
@@ -104,6 +104,44 @@ export default async function CosignPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
+      <div className="g2">
+        <section className="card" aria-labelledby="charges">
+          <h2 id="charges">Charges above the operations limit (S-03 OP-21)</h2>
+          {c.charges.length === 0 ? (
+            <p className="empty">No charge waits for the trustee.</p>
+          ) : (
+            <ul className="checks" data-testid="cosign-charges">
+              {c.charges.map((x) => (
+                <li key={x.id}>
+                  <i aria-hidden="true">â‚¨</i>
+                  <span className="small">
+                    <a href={`/trustee/cosign/charge/${String(x.id)}`}>#{x.id}</a> {x.kind} {x.payee ?? ""} Â· {rupees(x.amount)} Â· {x.period} Â·{" "}
+                    <span className="mono">{short(x.token)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="card" aria-labelledby="calcs">
+          <h2 id="calcs">Distribution calculations to pre-check (S-03 D4)</h2>
+          {c.calculations.length === 0 ? (
+            <p className="empty">No calculation waits for the trustee&apos;s pre-check.</p>
+          ) : (
+            <ul className="checks" data-testid="cosign-calculations">
+              {c.calculations.map((x) => (
+                <li key={x.id}>
+                  <i aria-hidden="true">â§—</i>
+                  <span className="small">
+                    <a href={`/trustee/cosign/calculation/${String(x.id)}`}>#{x.id}</a> {x.period} Â· net {rupees(x.net)} Â· {x.holders} holders Â·{" "}
+                    <span className="mono">{short(x.token)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
       <section className="card" aria-labelledby="recent">
         <h2 id="recent">Recent trustee decisions</h2>
         {c.recent.length === 0 ? (
@@ -112,10 +150,10 @@ export default async function CosignPage({ searchParams }: { searchParams: Promi
           <ul className="checks">
             {c.recent.map((x) => (
               <li key={x.id}>
-                <i aria-hidden="true">{x.decision === "reject" ? "✕" : "✓"}</i>
+                <i aria-hidden="true">{x.decision === "reject" ? "âœ•" : "âœ“"}</i>
                 <span className="small">
-                  <span className="mono">{x.actor}</span> {x.decision} {x.action === "cosign.signer" ? "signing request" : "offering request"}{" "}
-                  <span className="mono">{short(x.ref, 4)}</span> → {x.result} · {pkt(x.at)}
+                  <span className="mono">{x.actor}</span> {x.decision} {x.action === "cosign.signer" ? "signing request" : x.action === "cosign.offering" ? "offering request" : x.action === "charge.decided" ? "charge" : "calculation"}{" "}
+                  <span className="mono">{short(x.ref, 4)}</span> â†’ {x.result} Â· {pkt(x.at)}
                 </span>
               </li>
             ))}

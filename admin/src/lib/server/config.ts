@@ -55,6 +55,15 @@ export const config = {
     clientId: "admin-portal",
     secret: setting("SIGNER_CLIENT_SECRET_ADMIN", "") ?? "",
   },
+  /**
+   * The tax service (ADR 0014) and the portal's client (scope: generate an approved FBR filing
+   * export with a one-time ticket, nothing else). Without a secret no export can be generated.
+   */
+  taxService: {
+    url: setting("TAX_SERVICE_URL", "http://127.0.0.1:4940") ?? "http://127.0.0.1:4940",
+    clientId: "admin-portal",
+    secret: setting("TAX_CLIENT_SECRET_ADMIN", "") ?? "",
+  },
   db: {
     host: setting("ADMIN_PG_HOST", "127.0.0.1") ?? "127.0.0.1",
     port: Number(setting("ADMIN_PG_PORT", "5433")),

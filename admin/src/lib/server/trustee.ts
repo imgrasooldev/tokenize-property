@@ -33,6 +33,9 @@ export interface TrusteeDashboard {
   tokens: TokenSummary[];
   cosignSigner: number;
   cosignOffering: number;
+  /** S-03 (0021): charges above the operations limit and calculations waiting for the trustee. */
+  cosignCharges: number;
+  prechecks: number;
   distributionsInWindow: number;
   rejectedNotOnChain: number;
   openAdjustments: number;
@@ -127,6 +130,8 @@ export interface CosignQueue {
     mine: boolean;
   }[];
   offering: { id: number; code: string; offering: string; offeringState: string; requestedBy: string; requestedAt: string; expiresAt: string | null; note: string; token: string | null }[];
+  charges: { id: number; token: string; period: string; kind: string; payee: string | null; amount: string; proposedBy: string; proposedAt: string }[];
+  calculations: { id: number; token: string; period: string; net: string; holders: number; calculatedBy: string; attachedAt: string | null }[];
   recent: { id: number; action: string; actor: string; at: string; ref: string | null; decision: string | null; result: string | null }[];
 }
 
@@ -207,6 +212,71 @@ export interface OfferingRequest {
 
 export async function offeringRequest(sessionHash: Buffer, id: string): Promise<OfferingRequest | null> {
   return one<OfferingRequest>("SELECT admin.trustee_offering_request($1, $2) AS v", [sessionHash, id]);
+}
+
+export interface TrusteeDecisionView {
+  decision: "approve" | "reject";
+  by: string;
+  at: string;
+  reason: string;
+  recomputedRoot?: string | null;
+}
+
+export interface TrusteeCharge {
+  id: number;
+  token: string;
+  period: string;
+  kind: string;
+  feeType: string | null;
+  payee: string | null;
+  description: string;
+  amount: string;
+  limit: string;
+  evidence: string;
+  status: string;
+  proposedBy: string;
+  proposedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  trustee: TrusteeDecisionView | null;
+  digest: string;
+  blockers: string[];
+}
+
+export async function trusteeCharge(sessionHash: Buffer, id: string): Promise<TrusteeCharge | null> {
+  return one<TrusteeCharge>("SELECT admin.trustee_charge($1, $2) AS v", [sessionHash, id]);
+}
+
+export interface TrusteeCalculation {
+  id: number;
+  token: string;
+  period: string;
+  recordDate: string;
+  recordBlock: number;
+  incomeType: string;
+  collected: string;
+  expenses: string;
+  fees: string;
+  gross: string;
+  wht: string;
+  net: string;
+  holders: number;
+  units: string;
+  status: string;
+  root: string | null;
+  statementHash: string | null;
+  taxScheduleHash: string | null;
+  calculatedBy: string;
+  attachedBy: string | null;
+  decidedBy: string | null;
+  trustee: TrusteeDecisionView | null;
+  lines: { wallet: string; units: string; gross: string; wht: string; net: string }[];
+  digest: string;
+  blockers: string[];
+}
+
+export async function trusteeCalculation(sessionHash: Buffer, id: string): Promise<TrusteeCalculation | null> {
+  return one<TrusteeCalculation>("SELECT admin.trustee_calculation($1, $2) AS v", [sessionHash, id]);
 }
 
 export interface DistributionRow {

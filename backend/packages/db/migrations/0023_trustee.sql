@@ -1,8 +1,8 @@
 -- Internal portals, Step 6d (task T-006, ADR 0011 section 12): the trustee portal.
 --
--- Numbered 0023: 0020, 0021 and 0022 are reserved for work built in parallel. Nothing here depends
--- on them. Until they are merged the backend runner refuses the gap (tests use
--- contiguousMigrations(); the admin portal's runner does not check gaps).
+-- Applies on top of 0020 (S-06 recovery: role legal_officer, audit source recovery), 0021 (S-03
+-- operations and tax: role tax_officer, schemas ops and tax, the rent booking path) and 0022
+-- (T-045 website account). The role-matrix digest is fixed again after all of them.
 --
 -- The trustee (e.g. CDC) is an independent regulated organisation. Its officers hold no platform
 -- role (0013 role conflicts). Safety properties enforced by the database itself:
@@ -22,8 +22,10 @@
 --        incl. the completion payment batch, L3, L7, L8, L10..L16, SD) are voted through
 --        admin.decide_offering_request under the officer's handle. For a portal officer the S-02
 --        trustee duty IS the trustee_officer role (active), and a trustee officer holds no other
---        offering duty (OF-SOD-4). Every decision needs a step-up younger than five minutes and the
---        digest of what was shown.
+--        offering duty (OF-SOD-4). Every portal decision needs a step-up younger than five minutes
+--        and the digest of what was shown. Offering votes under an officer's handle from the
+--        command line stay possible (break-glass, as the S-01 property path; the demo catalogue
+--        seed of T-045 relies on it): binding them to sessions is an open item.
 --   T-3  Rent distributions (spec S-03 D4/D6): a trustee officer approves (stating the Merkle root
 --        they recomputed, which must equal the published root) or rejects with a reason while the
 --        distribution is published on chain and inside the 48-hour challenge window counted from
@@ -44,6 +46,15 @@
 --   T-7  Permissions: trustee.decide (trustee officers), trustee.export (trustee officers and
 --        auditors), trustee.read (both, from 0013), audit.export for trustee officers (only the
 --        trustee chain is readable to them). The role matrix digest is fixed again.
+--   T-8  S-03 trustee duties on the operations path of 0021: an expense or fee above the operations
+--        limit needs the trustee's approval before the operations checker may approve it (OP-21,
+--        E1; a trustee rejection refuses it), and a distribution calculation needs the trustee's
+--        pre-check (independent recomputation of the Merkle root equal to the attached root, D4,
+--        OP-SOD-2) before the operations checker may approve it. A trustee rejection of the
+--        on-chain distribution (T-3) also refuses the rent:wht journal of S-03's booking.
+--   T-9  Recovery and succession cases (0020) are shown to the trustee read-only through
+--        trustee.recovery_cases_json(); the trustee's own approval of a recovery (S-06 C4) is not a
+--        capacity of 0020 yet (open item).
 
 CREATE SCHEMA IF NOT EXISTS trustee;
 REVOKE ALL ON SCHEMA trustee FROM PUBLIC;
@@ -455,14 +466,6 @@ BEGIN
 END $$;
 CREATE TRIGGER duties_officer_check BEFORE INSERT ON offering.duties FOR EACH ROW EXECUTE FUNCTION admin.check_offering_duty();
 
-/** Officer handles on offering votes are bound to officer sessions (as 0016 A-3). */
-CREATE FUNCTION admin.bind_offering_vote() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
-BEGIN
-  PERFORM admin.guard_officer_name(NEW.officer, 'offering vote by');
-  RETURN NEW;
-END $$;
-CREATE TRIGGER request_votes_officer_binding BEFORE INSERT ON offering.request_votes FOR EACH ROW EXECUTE FUNCTION admin.bind_offering_vote();
 
 /** Digest of an S-02 request as the trustee officer reviewed it. */
 CREATE FUNCTION admin.offering_request_digest(p_request bigint) RETURNS bytea
@@ -674,7 +677,7 @@ BEGIN
 END $$;
 CREATE TRIGGER payout_batches_trustee_review BEFORE INSERT ON bank.payout_batches FOR EACH ROW EXECUTE FUNCTION trustee.guard_payout_batch();
 
-/** T-3: a rejected distribution is never booked (rent:distribution:<token>:<id>). */
+/** T-3: a rejected distribution is never booked (rent:distribution:<token>:<id>, and S-03's rent:wht:<token>:<id>). */
 CREATE FUNCTION trustee.guard_distribution_journal() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
 DECLARE
@@ -689,7 +692,7 @@ BEGIN
   RETURN NEW;
 END $$;
 CREATE TRIGGER journal_trustee_review BEFORE INSERT ON ledger.journal FOR EACH ROW
-  WHEN (NEW.idempotency_key LIKE 'rent:distribution:%') EXECUTE FUNCTION trustee.guard_distribution_journal();
+  WHEN (NEW.idempotency_key LIKE 'rent:distribution:%' OR NEW.idempotency_key LIKE 'rent:wht:%') EXECUTE FUNCTION trustee.guard_distribution_journal();
 
 -- ================================================================== T-4 the trustee's register
 CREATE TABLE trustee.register_entries (
@@ -941,6 +944,12 @@ BEGIN
       SELECT 1 FROM trustee.audit x WHERE x.action = 'adjustment.decided' AND (x.detail->>'adjustment')::bigint = j.id
         AND x.detail->>'decision' = CASE j.status WHEN 'approved' THEN 'approve' ELSE 'reject' END))
     UNION ALL
+    SELECT format('trustee charge decision %s', d.id) FROM trustee.charge_decisions d WHERE NOT EXISTS (
+      SELECT 1 FROM trustee.audit x WHERE x.action = 'charge.decided' AND (x.detail->>'decision_id')::bigint = d.id AND x.detail->>'decision' = d.decision)
+    UNION ALL
+    SELECT format('trustee pre-check %s', d.id) FROM trustee.calculation_checks d WHERE NOT EXISTS (
+      SELECT 1 FROM trustee.audit x WHERE x.action = 'calculation.checked' AND (x.detail->>'check')::bigint = d.id AND x.detail->>'decision' = d.decision)
+    UNION ALL
     SELECT format('trustee co-signature on signing request %s by %s', p.request_id, p.operator) FROM signer.approvals p
       WHERE p.capacity = 'trustee' AND NOT EXISTS (
         SELECT 1 FROM trustee.audit x WHERE x.action = 'cosign.signer' AND x.detail->>'request' = p.request_id::text AND x.actor = p.operator
@@ -950,17 +959,27 @@ BEGIN
   END LOOP;
 END $$;
 
--- ================================================================== hook for S-06 (recovery and inheritance cases)
+-- ================================================================== T-9 recovery and succession cases (0020), read-only for the trustee
 /**
- * S-06 is built in parallel. Until it is merged this returns NULL and the portal shows only the
- * on-chain RecoveryGuard requests from the read model. S-06 replaces this function (CREATE OR
- * REPLACE in its own migration) to return its case list as a jsonb array of objects with at least
- * {id, type, state, wallet, units, trusteeDecision, onchainRequest, updatedAt}; the trustee page
- * renders whatever the array holds, so no portal change is needed to show the cases.
+ * The S-06 cases the trustee needs to see (the RecoveryGuard requests they lead to are Trustee Safe
+ * transactions): kind, state, wallets, units, objection window, approvals by capacity and the
+ * on-chain request; no subject identifiers beyond a short reference, no documents (hashes only).
  */
 CREATE FUNCTION trustee.recovery_cases_json() RETURNS jsonb
-LANGUAGE sql STABLE SET search_path = pg_catalog AS $$
-  SELECT NULL::jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+      'id', c.id, 'kind', c.kind, 'state', c.status,
+      'subject', CASE WHEN c.subject_id IS NOT NULL THEN left(replace(c.subject_id::text, '-', ''), 8) END,
+      'wallet', c.from_wallet, 'newWallet', c.to_wallet, 'token', c.token,
+      'units', c.units_total::text, 'residualUnits', c.units_residual::text,
+      'objectionUntil', recovery.utc(c.objection_until),
+      'evidenceHash', CASE WHEN c.evidence_hash IS NOT NULL THEN '0x' || encode(c.evidence_hash, 'hex') END,
+      'approvals', (SELECT coalesce(jsonb_agg(a.capacity || ':' || a.decision ORDER BY a.capacity), '[]'::jsonb) FROM recovery.approvals a WHERE a.case_id = c.id),
+      'onchainRequest', (SELECT r.id::text || ' ' || r.status FROM chain.recoveries r
+                         WHERE c.kind <> 'reversal' AND r.guard = c.recovery_guard AND r.from_addr = c.from_wallet
+                         ORDER BY r.proposed_block DESC LIMIT 1),
+      'updatedAt', recovery.utc(c.updated_at)) ORDER BY c.id DESC), '[]'::jsonb)
+  FROM (SELECT * FROM recovery.cases WHERE kind <> 'reversal' ORDER BY id DESC LIMIT 200) c
 $$;
 
 -- ================================================================== portal reads (trustee.read)
@@ -993,6 +1012,10 @@ BEGIN
     'cosignSigner', (SELECT count(*) FROM signer.requests r WHERE r.status = 'pending_approval' AND r.trustee_approvals_needed > 0
                        AND r.expires_at > now() AND (SELECT trustee FROM signer.approval_counts(r.id)) < r.trustee_approvals_needed),
     'cosignOffering', (SELECT count(*) FROM offering.requests q WHERE admin.offering_needs_trustee(q)),
+    'cosignCharges', (SELECT count(*) FROM ops.charges c WHERE c.status = 'proposed' AND trustee.charge_above_limit(c)
+                        AND NOT EXISTS (SELECT 1 FROM trustee.charge_decisions x WHERE x.charge_id = c.id)),
+    'prechecks', (SELECT count(*) FROM ops.distributions d WHERE d.status = 'attached'
+                    AND NOT EXISTS (SELECT 1 FROM trustee.calculation_checks x WHERE x.distribution_id = d.id)),
     'distributionsInWindow', (SELECT count(*) FROM chain.distributions d WHERE d.status = 'published'
                                 AND trustee.window_closes(d.registry, d.id) > clock_timestamp()
                                 AND NOT EXISTS (SELECT 1 FROM trustee.distribution_reviews x WHERE x.registry = d.registry AND x.distribution_id = d.id)),
@@ -1084,10 +1107,18 @@ BEGIN
         'note', (SELECT rr.note FROM offering.request_rules rr WHERE rr.code = q.code),
         'token', (SELECT o.token FROM offering.offerings o WHERE o.id = q.offering_id)) ORDER BY q.id)
       FROM offering.requests q WHERE admin.offering_needs_trustee(q)), '[]'::jsonb),
+    'charges', coalesce((SELECT jsonb_agg(jsonb_build_object('id', c.id, 'token', c.token, 'period', c.period, 'kind', c.kind, 'payee', c.payee,
+        'amount', c.amount_paisa::text, 'proposedBy', c.proposed_by, 'proposedAt', admin.utc(c.proposed_at)) ORDER BY c.id)
+      FROM ops.charges c WHERE c.status = 'proposed' AND trustee.charge_above_limit(c)
+        AND NOT EXISTS (SELECT 1 FROM trustee.charge_decisions x WHERE x.charge_id = c.id)), '[]'::jsonb),
+    'calculations', coalesce((SELECT jsonb_agg(jsonb_build_object('id', d.id, 'token', d.token, 'period', d.period, 'net', d.sum_net::text,
+        'holders', d.holders, 'calculatedBy', d.calculated_by, 'attachedAt', admin.utc(d.attached_at)) ORDER BY d.id)
+      FROM ops.distributions d WHERE d.status = 'attached'
+        AND NOT EXISTS (SELECT 1 FROM trustee.calculation_checks x WHERE x.distribution_id = d.id)), '[]'::jsonb),
     'recent', coalesce((SELECT jsonb_agg(jsonb_build_object('id', x.id, 'action', x.action, 'actor', x.actor, 'at', admin.utc(x.at),
-                                                            'ref', coalesce(x.detail->>'request', x.detail->>'review'), 'decision', x.detail->>'decision',
+                                                            'ref', coalesce(x.detail->>'request', x.detail->>'review', x.detail->>'charge', x.detail->>'distribution'), 'decision', x.detail->>'decision',
                                                             'result', x.detail->>'result') ORDER BY x.id DESC)
-                        FROM (SELECT * FROM trustee.audit WHERE action IN ('cosign.signer', 'cosign.offering') ORDER BY id DESC LIMIT 15) x), '[]'::jsonb));
+                        FROM (SELECT * FROM trustee.audit WHERE action IN ('cosign.signer', 'cosign.offering', 'charge.decided', 'calculation.checked') ORDER BY id DESC LIMIT 15) x), '[]'::jsonb));
 END $$;
 
 CREATE FUNCTION admin.trustee_signer_request(p_session bytea, p_id uuid) RETURNS jsonb
@@ -1343,6 +1374,14 @@ BEGIN
         AND (p_actor IS NULL OR strpos(a.actor, p_actor) > 0) AND (p_action IS NULL OR starts_with(a.action, p_action))
         AND (p_before IS NULL OR a.id < p_before)
       ORDER BY a.id DESC LIMIT v_limit;
+  ELSIF p_source = 'recovery' THEN
+    PERFORM admin.require(p_session, 'recovery.read');
+    RETURN QUERY SELECT a.id, a.at, a.actor, a.action, a.detail->>'case', a.detail, encode(a.prev_hash, 'hex'), encode(a.hash, 'hex')
+      FROM recovery.audit a
+      WHERE (p_from IS NULL OR a.at >= p_from) AND (p_to IS NULL OR a.at < p_to)
+        AND (p_actor IS NULL OR strpos(a.actor, p_actor) > 0) AND (p_action IS NULL OR starts_with(a.action, p_action))
+        AND (p_before IS NULL OR a.id < p_before)
+      ORDER BY a.id DESC LIMIT v_limit;
   ELSIF p_source = 'trustee' THEN
     PERFORM admin.require(p_session, 'trustee.read');
     RETURN QUERY SELECT a.id, a.at, a.actor, a.action,
@@ -1366,12 +1405,14 @@ DECLARE
   v_ops boolean;
   v_admin boolean;
   v_comp boolean;
+  v_rec boolean;
   v_trustee boolean;
 BEGIN
   PERFORM admin.require(p_session, NULL);
   v_ops := admin.has_permission(p_session, 'audit.read.ops');
   v_admin := admin.has_permission(p_session, 'audit.read.admin');
   v_comp := admin.has_permission(p_session, 'compliance.read');
+  v_rec := admin.has_permission(p_session, 'recovery.read');
   v_trustee := admin.has_permission(p_session, 'trustee.read');
   IF v_ops AND coalesce(p_source, 'signer') = 'signer' THEN
     RETURN QUERY SELECT 'signer'::text, (SELECT count(*) FROM signer.audit), count(*), min(v.problem), clock_timestamp() FROM signer.verify_audit() v;
@@ -1389,6 +1430,10 @@ BEGIN
     RETURN QUERY SELECT 'compliance'::text, (SELECT count(*) FROM compliance.audit), count(*), min(v.problem), clock_timestamp()
       FROM compliance.verify_audit() v;
   END IF;
+  IF v_rec AND coalesce(p_source, 'recovery') = 'recovery' THEN
+    RETURN QUERY SELECT 'recovery'::text, (SELECT count(*) FROM recovery.audit), count(*), min(v.problem), clock_timestamp()
+      FROM recovery.verify_audit() v;
+  END IF;
   IF v_trustee AND coalesce(p_source, 'trustee') = 'trustee' THEN
     RETURN QUERY SELECT 'trustee'::text, (SELECT count(*) FROM trustee.audit), count(*), min(v.problem), clock_timestamp()
       FROM trustee.verify_audit() v;
@@ -1403,15 +1448,388 @@ DECLARE
   v_me uuid := admin.require(p_session, 'audit.export');
   v_id bigint;
 BEGIN
-  IF p_source NOT IN ('admin', 'signer', 'recon', 'ledger', 'compliance', 'trustee') OR p_format NOT IN ('csv', 'json') OR p_sha256 !~ '^[0-9a-f]{64}$' THEN
+  IF p_source NOT IN ('admin', 'signer', 'recon', 'ledger', 'compliance', 'recovery', 'trustee') OR p_format NOT IN ('csv', 'json') OR p_sha256 !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION 'invalid export description' USING ERRCODE = 'check_violation';
   END IF;
   PERFORM admin.require(p_session, CASE p_source WHEN 'admin' THEN 'audit.read.admin' WHEN 'compliance' THEN 'compliance.read'
-                                                 WHEN 'trustee' THEN 'trustee.read' ELSE 'audit.read.ops' END);
+                                                 WHEN 'recovery' THEN 'recovery.read' WHEN 'trustee' THEN 'trustee.read' ELSE 'audit.read.ops' END);
   v_id := admin.audit_append(v_me::text, 'audit.exported', jsonb_build_object('source', p_source, 'format', p_format, 'rows', p_rows,
                                                                              'filters', coalesce(p_filters, '{}'::jsonb), 'sha256', p_sha256));
   RETURN QUERY SELECT a.id, encode(a.hash, 'hex'), a.at FROM admin.audit a WHERE a.id = v_id;
 END $$;
+
+-- ================================================================== T-8 S-03 trustee duties on the operations path (0021)
+-- OP-21 / E1: an expense or fee above the operations limit is approved by the operations checker AND
+-- the trustee. The trustee decides first (or at any time before the checker); a trustee rejection is
+-- final for the charge (the checker can then only reject it).
+CREATE TABLE trustee.charge_decisions (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  charge_id  bigint NOT NULL UNIQUE REFERENCES ops.charges (id),
+  decision   text NOT NULL CHECK (decision IN ('approve', 'reject')),
+  reason     text NOT NULL CHECK (length(reason) BETWEEN 10 AND 500),
+  digest     bytea NOT NULL CHECK (length(digest) = 32),
+  decided_by text NOT NULL CHECK (length(decided_by) BETWEEN 2 AND 100),
+  decided_at timestamptz NOT NULL DEFAULT date_trunc('microseconds', clock_timestamp())
+);
+
+-- D4: the trustee's pre-check of a distribution calculation: an independent recomputation of the
+-- Merkle root from the record block and the statement, equal to the attached root.
+CREATE TABLE trustee.calculation_checks (
+  id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  distribution_id bigint NOT NULL UNIQUE REFERENCES ops.distributions (id),
+  decision        text NOT NULL CHECK (decision IN ('approve', 'reject')),
+  reason          text NOT NULL CHECK (length(reason) BETWEEN 10 AND 500),
+  recomputed_root text CHECK (length(recomputed_root) = 66 AND recomputed_root ~ '^0x[0-9a-f]+$'),
+  statement_hash  text NOT NULL CHECK (length(statement_hash) = 66 AND statement_hash ~ '^0x[0-9a-f]+$'),
+  digest          bytea NOT NULL CHECK (length(digest) = 32),
+  decided_by      text NOT NULL CHECK (length(decided_by) BETWEEN 2 AND 100),
+  decided_at      timestamptz NOT NULL DEFAULT date_trunc('microseconds', clock_timestamp()),
+  CHECK ((decision = 'approve') = (recomputed_root IS NOT NULL))
+);
+
+CREATE FUNCTION trustee.charge_above_limit(c ops.charges) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+  SELECT c.kind IN ('expense', 'fee') AND c.amount_paisa > (ops.setting('expense_ops_limit_paisa'))::text::bigint
+$$;
+
+/** Why the operations checker may not approve this charge for want of the trustee (NULL = no trustee needed or approved). */
+CREATE FUNCTION trustee.charge_problem(p_charge bigint) RETURNS text
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  c ops.charges;
+  x trustee.charge_decisions;
+BEGIN
+  SELECT * INTO c FROM ops.charges WHERE id = p_charge;
+  IF NOT FOUND OR NOT trustee.charge_above_limit(c) THEN RETURN NULL; END IF;
+  SELECT * INTO x FROM trustee.charge_decisions WHERE charge_id = p_charge;
+  IF NOT FOUND THEN RETURN format('above the operations limit (%s paisa): the trustee approves it first (trustee portal, OP-21)', (ops.setting('expense_ops_limit_paisa'))::text); END IF;
+  IF x.decision = 'reject' THEN RETURN format('the trustee rejected it (%s): it can only be rejected', x.decided_by); END IF;
+  RETURN NULL;
+END $$;
+
+/** Why the operations checker may not approve this calculation for want of the trustee's pre-check (NULL = pre-checked). */
+CREATE FUNCTION trustee.calculation_problem(p_distribution bigint) RETURNS text
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  d ops.distributions;
+  x trustee.calculation_checks;
+BEGIN
+  SELECT * INTO d FROM ops.distributions WHERE id = p_distribution;
+  IF NOT FOUND THEN RETURN 'unknown distribution calculation'; END IF;
+  SELECT * INTO x FROM trustee.calculation_checks WHERE distribution_id = p_distribution;
+  IF NOT FOUND THEN RETURN 'the trustee has not pre-checked it yet (D4: independent recomputation in the trustee portal)'; END IF;
+  IF x.decision = 'reject' THEN RETURN format('the trustee''s pre-check rejected it (%s): return it and recalculate', x.decided_by); END IF;
+  IF x.recomputed_root IS DISTINCT FROM d.merkle_root OR x.statement_hash IS DISTINCT FROM d.statement_hash THEN
+    RETURN 'the statement changed since the trustee''s pre-check';
+  END IF;
+  RETURN NULL;
+END $$;
+
+CREATE FUNCTION trustee.decide_charge(p_charge bigint, p_actor text, p_decision text, p_reason text, p_digest bytea) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  c ops.charges;
+  v_id bigint;
+BEGIN
+  PERFORM trustee.need_trustee(p_actor, 'approve a charge above the operations limit');
+  PERFORM trustee.check_reason(p_reason);
+  IF p_decision IS NULL OR p_decision NOT IN ('approve', 'reject') THEN PERFORM trustee.fail('22023', 'decision must be approve or reject'); END IF;
+  SELECT * INTO c FROM ops.charges WHERE id = p_charge FOR UPDATE;
+  IF NOT FOUND THEN PERFORM trustee.fail('P0002', 'unknown charge'); END IF;
+  IF ops.charge_digest(c.id) IS DISTINCT FROM p_digest THEN PERFORM trustee.fail('23514', 'the charge differs from what you reviewed: reload and check again'); END IF;
+  IF c.status <> 'proposed' THEN PERFORM trustee.fail('23514', format('the charge is already %s', c.status)); END IF;
+  IF NOT trustee.charge_above_limit(c) THEN PERFORM trustee.fail('23514', 'this charge is within the operations limit: it needs no trustee approval'); END IF;
+  IF EXISTS (SELECT 1 FROM trustee.charge_decisions WHERE charge_id = c.id) THEN PERFORM trustee.fail('23505', 'the trustee already decided this charge'); END IF;
+  INSERT INTO trustee.charge_decisions (charge_id, decision, reason, digest, decided_by) VALUES (c.id, p_decision, btrim(p_reason), p_digest, p_actor)
+  RETURNING id INTO v_id;
+  PERFORM trustee.audit_append(p_actor, 'charge.decided', jsonb_build_object('decision_id', v_id, 'charge', c.id, 'decision', p_decision,
+    'amount', c.amount_paisa::text, 'reason', btrim(p_reason), 'digest', encode(p_digest, 'hex')));
+  RETURN CASE p_decision WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
+END $$;
+
+CREATE FUNCTION trustee.precheck_distribution(p_distribution bigint, p_actor text, p_decision text, p_reason text, p_digest bytea, p_root text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  d ops.distributions;
+  v_id bigint;
+BEGIN
+  PERFORM trustee.need_trustee(p_actor, 'pre-check a distribution');
+  PERFORM trustee.check_reason(p_reason);
+  IF p_decision IS NULL OR p_decision NOT IN ('approve', 'reject') THEN PERFORM trustee.fail('22023', 'decision must be approve or reject'); END IF;
+  SELECT * INTO d FROM ops.distributions WHERE id = p_distribution FOR UPDATE;
+  IF NOT FOUND THEN PERFORM trustee.fail('P0002', 'unknown distribution calculation'); END IF;
+  IF ops.distribution_digest(d.id) IS DISTINCT FROM p_digest THEN PERFORM trustee.fail('23514', 'the calculation differs from what you reviewed: reload and check again'); END IF;
+  IF d.status <> 'attached' THEN PERFORM trustee.fail('23514', format('the calculation is %s: the trustee pre-checks an attached statement before approval', d.status)); END IF;
+  IF EXISTS (SELECT 1 FROM trustee.calculation_checks WHERE distribution_id = d.id) THEN PERFORM trustee.fail('23505', 'the trustee already pre-checked this calculation'); END IF;
+  IF p_decision = 'approve' AND (p_root IS NULL OR lower(p_root) IS DISTINCT FROM d.merkle_root) THEN
+    PERFORM trustee.fail('23514', 'your recomputed Merkle root differs from the attached root: reject the calculation instead');
+  END IF;
+  INSERT INTO trustee.calculation_checks (distribution_id, decision, reason, recomputed_root, statement_hash, digest, decided_by)
+  VALUES (d.id, p_decision, btrim(p_reason), CASE WHEN p_decision = 'approve' THEN lower(p_root) END, d.statement_hash, p_digest, p_actor)
+  RETURNING id INTO v_id;
+  PERFORM trustee.audit_append(p_actor, 'calculation.checked', jsonb_build_object('check', v_id, 'distribution', d.id, 'decision', p_decision,
+    'merkleRoot', d.merkle_root, 'statementHash', d.statement_hash, 'reason', btrim(p_reason), 'digest', encode(p_digest, 'hex')));
+  RETURN CASE p_decision WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
+END $$;
+
+/** T-8: the approved state of a charge above the limit, and of a calculation, needs the trustee (also against a direct UPDATE). */
+CREATE FUNCTION trustee.guard_charge() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  v text;
+BEGIN
+  IF OLD.status = 'proposed' AND NEW.status = 'approved' THEN
+    v := trustee.charge_problem(NEW.id);
+    IF v IS NOT NULL THEN RAISE EXCEPTION '%', v USING ERRCODE = 'check_violation'; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER charges_trustee BEFORE UPDATE ON ops.charges FOR EACH ROW EXECUTE FUNCTION trustee.guard_charge();
+
+CREATE FUNCTION trustee.guard_calculation() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, trustee AS $$
+DECLARE
+  v text;
+BEGIN
+  IF OLD.status = 'attached' AND NEW.status = 'approved' THEN
+    v := trustee.calculation_problem(NEW.id);
+    IF v IS NOT NULL THEN RAISE EXCEPTION 'approval refused: %', v USING ERRCODE = 'check_violation'; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER distributions_trustee_precheck BEFORE UPDATE ON ops.distributions FOR EACH ROW EXECUTE FUNCTION trustee.guard_calculation();
+
+/** 0021 OT-2 with OP-21 routed to the trustee: above the limit the trustee's approval is needed instead of a refusal. */
+CREATE OR REPLACE FUNCTION ops.decide_charge(p_id bigint, p_actor text, p_decision text, p_reason text)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, ops AS $$
+DECLARE
+  r ops.charges;
+  v_pool text;
+  v_other text;
+  v_key text;
+  v_kind text;
+  v_amount bigint;
+  v_journal bigint;
+  v_to text;
+  v_trustee text;
+BEGIN
+  PERFORM ops.check_actor(p_actor);
+  PERFORM ops.check_reason(p_reason, 10, 500);
+  IF p_decision IS NULL OR p_decision NOT IN ('approve', 'reject') THEN RAISE EXCEPTION 'decision must be approve or reject' USING ERRCODE = 'check_violation'; END IF;
+  SELECT * INTO r FROM ops.charges WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'unknown charge' USING ERRCODE = 'no_data_found'; END IF;
+  IF r.status <> 'proposed' THEN RAISE EXCEPTION 'the charge is already %', r.status USING ERRCODE = 'check_violation'; END IF;
+  IF r.proposed_by = p_actor THEN RAISE EXCEPTION 'maker-checker: the person who proposed a charge cannot decide it' USING ERRCODE = 'check_violation'; END IF;
+  IF p_decision = 'approve' THEN
+    PERFORM ops.require_open_period(r.token, r.period);
+    v_trustee := trustee.charge_problem(r.id);
+    IF v_trustee IS NOT NULL THEN RAISE EXCEPTION '%', v_trustee USING ERRCODE = 'check_violation'; END IF;
+    v_pool := 'rent:pool:' || r.token;
+    PERFORM ledger.open_account(v_pool, 'liability', 'PKR');
+    v_amount := r.amount_paisa;
+    IF r.kind = 'expense' THEN
+      v_other := 'vendor:payable:' || r.payee;
+      v_key := format('expense:%s:%s:approved', r.token, r.id);
+      v_kind := 'expense_approved';
+    ELSIF r.kind = 'fee' THEN
+      v_other := 'fees:payable:' || r.payee;
+      v_key := format('fee:%s:%s:%s', r.token, r.period, replace(r.fee_type, '_', '-'));
+      v_kind := 'fee_accrued';
+    ELSIF r.kind = 'reserve_contribution' THEN
+      v_other := 'reserve:' || r.token;
+      v_key := format('reserve:%s:%s', r.token, r.period);
+      v_kind := 'reserve_contribution';
+    ELSE
+      v_other := 'reserve:' || r.token;
+      v_key := format('reserve:%s:release:%s', r.token, r.id);
+      v_kind := 'reserve_release';
+      v_amount := -r.amount_paisa;  -- reserve -> pool
+    END IF;
+    PERFORM ledger.open_account(v_other, 'liability', 'PKR');
+    v_journal := ledger.post_journal(v_key, v_kind, left(r.description, 200), encode(r.evidence_sha256, 'hex'), p_actor,
+      jsonb_build_array(jsonb_build_object('account', v_pool, 'amount', v_amount::text),
+                        jsonb_build_object('account', v_other, 'amount', (-v_amount)::text)));
+    v_to := 'approved';
+  ELSE
+    v_to := 'rejected';
+  END IF;
+  UPDATE ops.charges SET status = v_to, decided_by = p_actor, decision_reason = btrim(p_reason), decided_at = clock_timestamp(), journal_id = v_journal
+  WHERE id = p_id;
+  PERFORM ops.audit_append(p_actor, 'charge.decided', jsonb_build_object('charge', p_id, 'decision', p_decision, 'status', v_to, 'journal', v_journal));
+  RETURN v_to;
+END $$;
+
+/** 0021 read of one charge for the operations checker, with the trustee's part (OP-21). */
+CREATE OR REPLACE FUNCTION admin.operations_charge(p_session bytea, p_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'operations.read');
+  v_handle text := admin.handle_of(v_me);
+  c ops.charges;
+  v_base text[] := '{}';
+  v_limit bigint := (ops.setting('expense_ops_limit_paisa'))::text::bigint;
+  v_trustee text;
+BEGIN
+  SELECT * INTO c FROM ops.charges WHERE id = p_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF NOT admin.has_permission(p_session, 'operations.decide') THEN v_base := v_base || 'Only an operations checker decides charges.'::text; END IF;
+  IF c.status <> 'proposed' THEN v_base := v_base || format('The charge is %s.', c.status); END IF;
+  IF c.proposed_by = v_handle THEN v_base := v_base || 'You proposed it: a different officer decides (maker-checker).'::text; END IF;
+  IF EXISTS (SELECT 1 FROM ops.distributions d WHERE d.token = c.token AND d.period = c.period AND d.status <> 'returned') THEN
+    v_base := v_base || 'The period is locked by a distribution calculation.'::text;
+  END IF;
+  v_trustee := trustee.charge_problem(c.id);
+  RETURN jsonb_build_object('id', c.id, 'token', c.token, 'period', c.period, 'kind', c.kind, 'feeType', c.fee_type, 'payee', c.payee,
+    'description', c.description, 'amount', c.amount_paisa::text, 'evidence', encode(c.evidence_sha256, 'hex'), 'status', c.status,
+    'proposedBy', c.proposed_by, 'proposedAt', admin.utc(c.proposed_at), 'decidedBy', c.decided_by, 'decisionReason', c.decision_reason,
+    'decidedAt', admin.utc(c.decided_at), 'journal', c.journal_id, 'digest', encode(ops.charge_digest(c.id), 'hex'),
+    'aboveLimit', c.kind IN ('expense', 'fee') AND c.amount_paisa > v_limit, 'limit', v_limit::text,
+    'trustee', (SELECT jsonb_build_object('decision', x.decision, 'by', x.decided_by, 'at', admin.utc(x.decided_at), 'reason', x.reason)
+                FROM trustee.charge_decisions x WHERE x.charge_id = c.id),
+    'blockers', jsonb_build_object('approve', to_jsonb(v_base || CASE WHEN v_trustee IS NOT NULL THEN ARRAY[upper(left(v_trustee, 1)) || substr(v_trustee, 2) || '.'] ELSE '{}'::text[] END),
+                                   'reject', to_jsonb(v_base)));
+END $$;
+
+/** 0021 read of one calculation for the operations checker, with the trustee's pre-check (D4). */
+CREATE OR REPLACE FUNCTION admin.operations_distribution(p_session bytea, p_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'operations.read');
+  v_handle text := admin.handle_of(v_me);
+  d ops.distributions;
+  v_base text[] := '{}';
+  v_approve text[] := '{}';
+  v_trustee text;
+BEGIN
+  SELECT * INTO d FROM ops.distributions WHERE id = p_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF NOT admin.has_permission(p_session, 'operations.decide') THEN v_base := v_base || 'Only an operations checker decides distributions.'::text; END IF;
+  IF d.status NOT IN ('calculated', 'attached') THEN v_base := v_base || format('The distribution is %s.', d.status); END IF;
+  IF d.calculated_by = v_handle OR d.attached_by IS NOT DISTINCT FROM v_handle THEN
+    v_base := v_base || 'You prepared it: a different officer decides (maker-checker).'::text;
+  END IF;
+  IF d.status = 'calculated' THEN v_approve := v_approve || 'The statement is not attached yet (operations service).'::text; END IF;
+  IF d.placeholder_lines > 0 AND (ops.setting('allow_placeholder_rates'))::text <> 'true' THEN
+    v_approve := v_approve || 'Uses PLACEHOLDER tax rates (LEGAL/TAX TO CONFIRM): a tax officer must set confirmed rates.'::text;
+  END IF;
+  IF d.status = 'attached' THEN
+    v_trustee := trustee.calculation_problem(d.id);
+    IF v_trustee IS NOT NULL THEN v_approve := v_approve || (upper(left(v_trustee, 1)) || substr(v_trustee, 2) || '.'); END IF;
+  END IF;
+  RETURN jsonb_build_object('id', d.id, 'token', d.token, 'period', d.period, 'recordDate', d.record_date, 'recordBlock', d.record_block,
+    'incomeType', d.income_type, 'collected', d.collected::text, 'expenses', d.expenses::text, 'fees', d.fees::text,
+    'reserveContribution', d.reserve_contribution::text, 'reserveRelease', d.reserve_release::text,
+    'gross', d.sum_gross::text, 'wht', d.sum_wht::text, 'net', d.sum_net::text, 'holders', d.holders, 'units', d.total_units::text,
+    'flagged', d.flagged_lines, 'placeholder', d.placeholder_lines, 'status', d.status, 'root', d.merkle_root, 'statementHash', d.statement_hash,
+    'taxScheduleHash', d.tax_schedule_hash, 'calculatedBy', d.calculated_by, 'calculatedAt', admin.utc(d.calculated_at), 'attachedBy', d.attached_by,
+    'decidedBy', d.decided_by, 'decisionReason', d.decision_reason, 'decidedAt', admin.utc(d.decided_at), 'onchainId', d.onchain_id::text,
+    'bookedAt', admin.utc(d.booked_at), 'digest', encode(ops.distribution_digest(d.id), 'hex'),
+    'trustee', (SELECT jsonb_build_object('decision', x.decision, 'by', x.decided_by, 'at', admin.utc(x.decided_at), 'reason', x.reason,
+                                          'recomputedRoot', x.recomputed_root) FROM trustee.calculation_checks x WHERE x.distribution_id = d.id),
+    'blockers', jsonb_build_object('approve', to_jsonb(v_base || v_approve), 'reject', to_jsonb(v_base)),
+    'lines', coalesce((SELECT jsonb_agg(jsonb_build_object('wallet', l.wallet,
+                 'subject', CASE WHEN l.subject_id IS NULL THEN NULL ELSE left(replace(l.subject_id::text, '-', ''), 8) END,
+                 'units', l.units::text, 'gross', l.gross::text, 'status', l.filer_status, 'asOf', l.filer_as_of, 'flag', l.flag_reason,
+                 'ratePpm', l.rate_ppm, 'placeholder', l.placeholder_rate, 'wht', l.wht::text, 'net', l.net::text) ORDER BY l.wallet)
+               FROM (SELECT * FROM ops.distribution_lines WHERE distribution_id = d.id ORDER BY wallet LIMIT 2000) l), '[]'::jsonb));
+END $$;
+
+-- ------------------------------------------------------------------ portal (trustee.read / trustee.decide)
+CREATE FUNCTION admin.trustee_charge(p_session bytea, p_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'trustee.read');
+  c ops.charges;
+  v text[] := '{}';
+BEGIN
+  SELECT * INTO c FROM ops.charges WHERE id = p_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF NOT admin.has_permission(p_session, 'trustee.decide') THEN v := v || 'Only a trustee officer decides for the trustee; your role reads.'::text; END IF;
+  IF c.status <> 'proposed' THEN v := v || format('The charge is %s.', c.status); END IF;
+  IF NOT trustee.charge_above_limit(c) THEN v := v || 'Within the operations limit: no trustee approval is needed.'::text; END IF;
+  IF EXISTS (SELECT 1 FROM trustee.charge_decisions WHERE charge_id = c.id) THEN v := v || 'The trustee already decided this charge.'::text; END IF;
+  RETURN jsonb_build_object('id', c.id, 'token', c.token, 'period', c.period, 'kind', c.kind, 'feeType', c.fee_type, 'payee', c.payee,
+    'description', c.description, 'amount', c.amount_paisa::text, 'limit', (ops.setting('expense_ops_limit_paisa'))::text,
+    'evidence', encode(c.evidence_sha256, 'hex'), 'status', c.status, 'proposedBy', c.proposed_by, 'proposedAt', admin.utc(c.proposed_at),
+    'decidedBy', c.decided_by, 'decidedAt', admin.utc(c.decided_at),
+    'trustee', (SELECT jsonb_build_object('decision', x.decision, 'by', x.decided_by, 'at', admin.utc(x.decided_at), 'reason', x.reason)
+                FROM trustee.charge_decisions x WHERE x.charge_id = c.id),
+    'digest', encode(ops.charge_digest(c.id), 'hex'), 'blockers', to_jsonb(v));
+END $$;
+
+CREATE FUNCTION admin.trustee_calculation(p_session bytea, p_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'trustee.read');
+  d ops.distributions;
+  v text[] := '{}';
+BEGIN
+  SELECT * INTO d FROM ops.distributions WHERE id = p_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF NOT admin.has_permission(p_session, 'trustee.decide') THEN v := v || 'Only a trustee officer pre-checks for the trustee; your role reads.'::text; END IF;
+  IF d.status <> 'attached' THEN v := v || format('The calculation is %s: the pre-check is for an attached statement before approval.', d.status); END IF;
+  IF EXISTS (SELECT 1 FROM trustee.calculation_checks WHERE distribution_id = d.id) THEN v := v || 'The trustee already pre-checked this calculation.'::text; END IF;
+  RETURN jsonb_build_object('id', d.id, 'token', d.token, 'period', d.period, 'recordDate', d.record_date, 'recordBlock', d.record_block,
+    'incomeType', d.income_type, 'collected', d.collected::text, 'expenses', d.expenses::text, 'fees', d.fees::text,
+    'gross', d.sum_gross::text, 'wht', d.sum_wht::text, 'net', d.sum_net::text, 'holders', d.holders, 'units', d.total_units::text,
+    'status', d.status, 'root', d.merkle_root, 'statementHash', d.statement_hash, 'taxScheduleHash', d.tax_schedule_hash,
+    'calculatedBy', d.calculated_by, 'attachedBy', d.attached_by, 'decidedBy', d.decided_by,
+    'trustee', (SELECT jsonb_build_object('decision', x.decision, 'by', x.decided_by, 'at', admin.utc(x.decided_at), 'reason', x.reason,
+                                          'recomputedRoot', x.recomputed_root) FROM trustee.calculation_checks x WHERE x.distribution_id = d.id),
+    'lines', coalesce((SELECT jsonb_agg(jsonb_build_object('wallet', l.wallet, 'units', l.units::text, 'gross', l.gross::text, 'wht', l.wht::text,
+                                                           'net', l.net::text) ORDER BY l.wallet)
+                       FROM (SELECT * FROM ops.distribution_lines WHERE distribution_id = d.id ORDER BY wallet LIMIT 2000) l), '[]'::jsonb),
+    'digest', encode(ops.distribution_digest(d.id), 'hex'), 'blockers', to_jsonb(v));
+END $$;
+
+CREATE FUNCTION admin.decide_trustee_charge(p_session bytea, p_id bigint, p_decision text, p_reason text, p_digest bytea) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'trustee.decide');
+  v_handle text := admin.handle_of(v_me);
+  v_status text;
+BEGIN
+  PERFORM admin.require_step_up(p_session);
+  PERFORM admin.check_decision(p_decision, p_reason);
+  BEGIN
+    PERFORM admin.bind_officer(v_handle);
+    v_status := trustee.decide_charge(p_id, v_handle, p_decision, btrim(p_reason), p_digest);
+    PERFORM admin.unbind_officer(v_handle);
+  EXCEPTION WHEN SQLSTATE '23514' OR SQLSTATE '23505' OR SQLSTATE '42501' OR SQLSTATE '22023' OR SQLSTATE 'P0002' THEN
+    RETURN admin.refuse(v_me, 'trustee.charge', coalesce(p_id::text, '?'), p_decision, SQLERRM);
+  END;
+  PERFORM admin.audit_append(v_me::text, 'approval.decided', jsonb_build_object('kind', 'trustee.charge', 'ref', p_id, 'decision', p_decision,
+    'result', v_status, 'digest', encode(p_digest, 'hex')));
+  RETURN jsonb_build_object('ok', true, 'status', v_status);
+END $$;
+
+CREATE FUNCTION admin.precheck_distribution(p_session bytea, p_id bigint, p_decision text, p_reason text, p_digest bytea, p_root text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+DECLARE
+  v_me uuid := admin.require(p_session, 'trustee.decide');
+  v_handle text := admin.handle_of(v_me);
+  v_status text;
+BEGIN
+  PERFORM admin.require_step_up(p_session);
+  PERFORM admin.check_decision(p_decision, p_reason);
+  BEGIN
+    PERFORM admin.bind_officer(v_handle);
+    v_status := trustee.precheck_distribution(p_id, v_handle, p_decision, btrim(p_reason), p_digest, p_root);
+    PERFORM admin.unbind_officer(v_handle);
+  EXCEPTION WHEN SQLSTATE '23514' OR SQLSTATE '23505' OR SQLSTATE '42501' OR SQLSTATE '22023' OR SQLSTATE 'P0002' THEN
+    RETURN admin.refuse(v_me, 'trustee.calculation', coalesce(p_id::text, '?'), p_decision, SQLERRM);
+  END;
+  PERFORM admin.audit_append(v_me::text, 'approval.decided', jsonb_build_object('kind', 'trustee.calculation', 'ref', p_id, 'decision', p_decision,
+    'result', v_status, 'digest', encode(p_digest, 'hex')));
+  RETURN jsonb_build_object('ok', true, 'status', v_status);
+END $$;
+
+CREATE TRIGGER charge_decisions_officer_binding BEFORE INSERT ON trustee.charge_decisions FOR EACH ROW EXECUTE FUNCTION trustee.bind_actor('decided_by');
+CREATE TRIGGER calculation_checks_officer_binding BEFORE INSERT ON trustee.calculation_checks FOR EACH ROW EXECUTE FUNCTION trustee.bind_actor('decided_by');
+CREATE TRIGGER charge_decisions_append_only BEFORE UPDATE OR DELETE ON trustee.charge_decisions FOR EACH ROW EXECUTE FUNCTION trustee.forbid_change();
+CREATE TRIGGER calculation_checks_append_only BEFORE UPDATE OR DELETE ON trustee.calculation_checks FOR EACH ROW EXECUTE FUNCTION trustee.forbid_change();
+CREATE TRIGGER charge_decisions_no_truncate BEFORE TRUNCATE ON trustee.charge_decisions FOR EACH STATEMENT EXECUTE FUNCTION trustee.forbid_change();
+CREATE TRIGGER calculation_checks_no_truncate BEFORE TRUNCATE ON trustee.calculation_checks FOR EACH STATEMENT EXECUTE FUNCTION trustee.forbid_change();
 
 -- ================================================================== privileges
 REVOKE ALL ON ALL TABLES IN SCHEMA trustee FROM PUBLIC;
@@ -1439,7 +1857,11 @@ GRANT EXECUTE ON FUNCTION
   admin.review_distribution(bytea, text, numeric, text, text, bytea, text),
   admin.propose_register_adjustment(bytea, text, text, bigint, text, text),
   admin.decide_register_adjustment(bytea, bigint, text, text, bytea),
-  admin.record_register_export(bytea, text, bigint, integer, text)
+  admin.record_register_export(bytea, text, bigint, integer, text),
+  admin.trustee_charge(bytea, bigint),
+  admin.trustee_calculation(bytea, bigint),
+  admin.decide_trustee_charge(bytea, bigint, text, text, bytea),
+  admin.precheck_distribution(bytea, bigint, text, text, bytea, text)
 TO pt_admin_portal;
 
 GRANT USAGE ON SCHEMA trustee TO pt_admin_auditor;

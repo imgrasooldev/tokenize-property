@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { CountUp, NetCanvas, ReturnsCalc } from "@/components/live/Motion";
 import { BlockAge, BlockHeight, BlockRow, TickerStrip, type TickerItem } from "@/components/live/Live";
+import { AnalystBox } from "@/components/analyst/AnalystBox";
+import { ScorePanel } from "@/components/catalog/ScorePanel";
 import { PropertyCard } from "@/components/PropertyCard";
-import { PublicPage, Sample, Spark } from "@/components/Shell";
+import { PublicPage, Spark } from "@/components/Shell";
 import { formatNumber, formatPkr, formatPrice, loc } from "@/lib/i18n";
+import { catalogDict } from "@/lib/i18n-catalog";
+import { offeringDict } from "@/lib/i18n-offering";
 import { MIN_TOKENS } from "@/lib/invest-rules";
-import { PROPERTIES } from "@/lib/properties";
+import { bpText } from "@/lib/offering-rules";
 import { shortHash } from "@/lib/pulse-view";
-import { sampleScore } from "@/lib/sample-ai";
-import { liveToken } from "@/lib/server/readmodel";
+import { catalog } from "@/lib/server/catalog";
 import { getDict } from "@/lib/server/lang";
 import { marketSnapshot } from "@/lib/server/market";
 import { chainPulse } from "@/lib/server/pulse";
@@ -24,10 +27,15 @@ const Check = () => (
 
 export default async function Home() {
   const { lang, t } = await getDict();
-  const live = await Promise.all(PROPERTIES.map((p) => (p.status === "live" ? liveToken(p.symbol) : Promise.resolve(null))));
-  const liveP = PROPERTIES.find((p) => p.status === "live");
-  const liveIdx = liveP ? PROPERTIES.indexOf(liveP) : -1;
-  const liveT = liveIdx >= 0 ? (live.at(liveIdx) ?? null) : null;
+  const l = catalogDict(lang);
+  const lo = offeringDict(lang);
+  const cat = await catalog();
+  // The listed token the chain index shows (the site's live property), from records only.
+  const liveE = cat.entries.find((e) => e.listed && e.token) ?? cat.entries.find((e) => e.listed);
+  const liveP = liveE?.listed ?? undefined;
+  const liveT = liveE?.token ?? null;
+  const score = liveE?.score.score ?? null;
+  const yieldBp = liveE?.yield?.yieldBp ?? null;
   const [market, stats, pulse] = await Promise.all([
     liveP ? marketSnapshot(liveP.symbol).catch(() => null) : Promise.resolve(null),
     siteStats(),
@@ -38,7 +46,6 @@ export default async function Home() {
   const price = last ?? nav;
   const vsNav = liveP && last !== null ? ((last - nav) / nav) * 100 : null;
   const minPkr = nav * Number(MIN_TOKENS);
-  const ai = liveP ? sampleScore(liveP.symbol) : undefined;
   const dist = stats.distributions?.find((d) => d.status !== "rejected") ?? null;
   const rentTotal = stats.distributions?.filter((d) => d.status !== "rejected").reduce((a, d) => a + Number(d.totalPaisa) / 100, 0) ?? null;
   const valueTokenised = liveT && liveP ? Number(liveT.supply) * liveP.navPkr : null;
@@ -68,9 +75,7 @@ export default async function Home() {
   if (stats.lastMint)
     ticker.push({ key: "mint", label: t.minted, value: `${formatNumber(stats.lastMint.tokens, lang)} ${stats.lastMint.symbol}`, sub: shortHash(stats.lastMint.tx), tone: "up" });
   if (pulse.ledgerOk !== null) ticker.push({ key: "ledger", label: t.ledgerChain, value: pulse.ledgerOk ? t.intact : t.broken, tone: pulse.ledgerOk ? "up" : "dn" });
-  if (ai) ticker.push({ key: "ai", label: `✦ ${t.aiRiskScore}`, value: `${String(ai.score)} / 100`, sample: true });
-
-  const factorLabel = { tenant: t.fTenant, lease: t.fLease, location: t.fLocation, liquidity: t.fLiquidity, title: t.fTitle } as const;
+  if (score !== null && liveP) ticker.push({ key: "score", label: `${l.scoreTitle} · ${liveP.symbol}`, value: `${String(score)} / 100`, sub: l.scoreRuleBased, tone: "cy" });
 
   return (
     <PublicPage active="explore">
@@ -132,14 +137,14 @@ export default async function Home() {
                 </small>
               </div>
             )}
-            {ai && (
+            {score !== null && (
               <div className="orbit glass o1">
                 <h5>
-                  <Spark /> {t.aiRiskScore} <Sample t={t} />
+                  {l.scoreTitle} · {l.scoreRuleBased}
                 </h5>
-                <b>{ai.score} / 100</b> <span className="mu">{t.lowRisk}</span>
+                <b>{score} / 100</b>
                 <div className="bar">
-                  <i style={{ inlineSize: `${String(ai.score)}%` }} />
+                  <i style={{ inlineSize: `${String(score)}%` }} />
                 </div>
               </div>
             )}
@@ -207,10 +212,8 @@ export default async function Home() {
               <b>{rentTotal === null ? "—" : <CountUp value={rentTotal} lang={lang} kind="pkr" />}</b>
             </div>
             <div>
-              <small>
-                {t.avgYield} <span className="chip sample">{t.sample}</span>
-              </small>
-              <b className="up">{liveP ? `${formatNumber(liveP.yieldPct, lang)}%` : "—"}</b>
+              <small>{l.trailingYield}</small>
+              <b className="up">{yieldBp ? `${bpText(yieldBp)}%` : "—"}</b>
             </div>
             <div>
               <small>{t.tradesOnChain}</small>
@@ -242,90 +245,17 @@ export default async function Home() {
                     <b className="display">{t.analystName}</b>
                     <div className="mu small">{t.analystSub}</div>
                   </div>
-                  <span className="sp" />
-                  <Sample t={t} />
                 </div>
-                <div className="msg me">
-                  {t.aiQ}
-                </div>
-                <div className="msg bot">
-                  {t.aiA0}
-                  <ul>
-                    <li>
-                      {t.aiA1} <span className="cite">lease §4.2</span>
-                    </li>
-                    <li>
-                      {t.aiA2} <span className="cite">lease §5.1</span>
-                    </li>
-                    <li>
-                      {t.aiA3} <span className="cite">trust deed §9</span> <span className="cite">valuation p.12</span>
-                    </li>
-                  </ul>
-                  <div style={{ marginBlockStart: 8 }}>
-                    {t.aiA4} <span className="cite">dist #2</span>
-                    <span className="typing" aria-hidden="true" />
-                  </div>
-                </div>
-                <div className="askbox" aria-disabled="true">
-                  <span>{t.askPlaceholder}</span>
-                  <span className="btn small" aria-disabled="true">
-                    {t.ask}
-                  </span>
-                  <Sample t={t} soon />
-                </div>
-                <div className="sugg" aria-hidden="true">
-                  <span>{t.sugg1}</span>
-                  <span>{t.sugg2}</span>
-                  <span lang="ur">اردو میں سمجھائیں</span>
-                </div>
+                <AnalystBox lang={lang} scope="site" />
                 <p className="disc">{t.aiDisclaimer}</p>
               </div>
 
-              {ai && liveP && (
+              {liveE && (
                 <div className="score glass">
-                  <div className="row-between">
-                    <b className="display">
-                      {t.aiRiskScore} · {liveP.symbol}
-                    </b>
-                    <Sample t={t} />
-                  </div>
-                  <div className="gauge">
-                    <svg viewBox="0 0 220 120" width="220" height="120" aria-hidden="true">
-                      <defs>
-                        <linearGradient id="gauge-g" x1="0" x2="1">
-                          <stop stopColor="#FF6B81" />
-                          <stop offset=".5" stopColor="#F5C46B" />
-                          <stop offset="1" stopColor="#2EF2B5" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M20 110 A90 90 0 0 1 200 110" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="14" strokeLinecap="round" />
-                      <path
-                        d="M20 110 A90 90 0 0 1 200 110"
-                        fill="none"
-                        stroke="url(#gauge-g)"
-                        strokeWidth="14"
-                        strokeLinecap="round"
-                        strokeDasharray="283"
-                        strokeDashoffset={Math.round(283 * (1 - ai.score / 100))}
-                      />
-                    </svg>
-                    <b>{ai.score}</b>
-                    <small>
-                      {t.lowRisk} · {ai.factors.length} {t.factors}
-                    </small>
-                  </div>
-                  <div className="factors">
-                    {ai.factors.map((f) => (
-                      <div className="factor" key={f.key}>
-                        <span>{factorLabel[f.key]}</span>
-                        <div className="t">
-                          <i style={{ inlineSize: `${String(f.value)}%` }} />
-                        </div>
-                        <span>{f.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="disc">{t.scoreDisclaimer}</p>
+                  <ScorePanel score={liveE.score} lang={lang} l={l} />
+                  <Link href={`${liveE.href}#score-h`} className="btn secondary small">
+                    {loc(liveE.name, lang)}
+                  </Link>
                 </div>
               )}
             </div>
@@ -347,8 +277,8 @@ export default async function Home() {
               </Link>
             </div>
             <div className="cards">
-              {PROPERTIES.map((p, i) => (
-                <PropertyCard key={p.symbol} p={p} live={live.at(i) ?? null} lang={lang} t={t} />
+              {cat.entries.map((e) => (
+                <PropertyCard key={e.key} e={e} lang={lang} t={t} l={l} lo={lo} />
               ))}
             </div>
 
@@ -542,13 +472,13 @@ export default async function Home() {
                 {t.verifyMyRent} ✓
               </Link>
             </div>
-            {liveP && (
+            {liveP && yieldBp !== null && (
               <div className="glass calc-card">
                 <div className="kicker">{"// "}{t.kReturns}</div>
                 <ReturnsCalc
                   lang={lang}
                   nav={nav}
-                  yieldPct={liveP.yieldPct}
+                  yieldPct={yieldBp / 100}
                   min={minPkr}
                   l={{
                     invest: t.youInvest,
@@ -557,7 +487,7 @@ export default async function Home() {
                     yearly: t.yearlyRent,
                     tokens: t.tokens,
                     fiveYear: t.fiveYearRent,
-                    note: t.calcNote.replace("{s}", liveP.symbol).replace("{y}", formatNumber(liveP.yieldPct, lang)).replace("{p}", formatPkr(nav, lang)),
+                    note: t.calcNote.replace("{s}", liveP.symbol).replace("{y}", bpText(yieldBp)).replace("{p}", formatPkr(nav, lang)),
                   }}
                 />
               </div>
@@ -611,11 +541,9 @@ export default async function Home() {
                 <div className="ic" aria-hidden="true">
                   <Spark />
                 </div>
-                <h4>
-                  {t.hAi} <Sample t={t} soon />
-                </h4>
+                <h4>{t.hAi}</h4>
                 <p>{t.hAiB}</p>
-                <div className="tech">RAG · cited sources</div>
+                <div className="tech">records · cited sources</div>
               </div>
               <div className="hstep glass">
                 <div className="ic" aria-hidden="true">

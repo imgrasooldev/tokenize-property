@@ -1,0 +1,25 @@
+DEMO DOCUMENT – fictional property for the demo stack – not an offer
+
+Offering document (English)
+Property: DHA Phase 6 Retail Unit, Karachi South, Sindh (fictional)
+Sponsor: Demo Realty Holdings (Private) Limited (fictional)
+
+This file exists so that the demo stack can show an offering whose documents are
+real files with a recorded SHA-256. Nothing in it is an offer of securities, units
+or any other investment, and no money may be paid on the basis of it.
+
+Property facts (fictional)
+- Use: commercial retail, built, covered area 9,200 sq ft
+- Occupancy: tenanted, 1 lease, monthly rent PKR 65,000
+- Valuations: two independent valuations, the lower one PKR 10,800,000
+
+Demo terms
+- Price per unit: PKR 500 (50,000 paisa)
+- Units offered: 20,000 (all-or-nothing: minimum raise = target = hard cap)
+- Amount at the hard cap: PKR 10,000,000
+- Minimum per subscription: 10 units; maximum per investor: 1,000 units
+- Use of proceeds: purchase price PKR 9,500,000; stamp duty and registration
+  PKR 300,000; legal, valuation and platform costs PKR 200,000
+- Opening and closing dates: as shown by the platform
+
+Verify this file: compute its SHA-256 and compare it on /verify.

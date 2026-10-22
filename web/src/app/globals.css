@@ -837,3 +837,79 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
   .strip-row[aria-hidden="true"] { display: none; }
   .pcard:hover, .pcard:focus-within { transform: none; }
 }
+
+/* ---------------------------------------------------------------- T-045 catalogue, map, score, payout accounts */
+.map.pkmap { block-size: auto; padding: 14px 16px; margin: 0; }
+.pkmap-h { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; justify-content: space-between; }
+.pkmap-svg { max-block-size: 300px; }
+.map-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--text2); }
+.map-list .dot { display: inline-block; inline-size: 8px; block-size: 8px; border-radius: 50%; margin-inline-end: 6px; }
+.filter-form { align-items: end; }
+.filter-form label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); min-inline-size: 0; }
+.filter-form select, .filter-form input { min-inline-size: 0; max-inline-size: 180px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--stroke); background: rgba(255, 255, 255, 0.04); color: var(--text); font: inherit; font-size: 13px; }
+.score-how summary { cursor: pointer; color: var(--cyan); font-size: 13px; margin-block-start: 10px; }
+.score-how table td .fine { margin: 2px 0 0; }
+.doc .hashline { font-family: var(--monof); font-size: 11.5px; overflow-wrap: anywhere; color: var(--muted); }
+.doc > div { min-inline-size: 0; }
+.payees { display: grid; gap: 8px; margin-block: 10px; }
+.payee { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 10px 12px; border: 1px solid var(--stroke); border-radius: 12px; font-size: 13px; }
+.payee .mono { overflow-wrap: anywhere; }
+.no-market { display: grid; gap: 8px; }
+@media (max-width: 640px) {
+  .filter-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-form select, .filter-form input { max-inline-size: none; inline-size: 100%; }
+  .pkmap-svg { block-size: 220px; }
+}
+/* ---------------------------------------------------------------- end T-045 catalogue */
+/* ================================================================ analyst + search (ADR 0015, BEGIN) */
+.cmdk { cursor: text; }
+.cmdk:focus-within { border-color: var(--cyan); }
+.cmdk-input { flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; padding: 0; }
+.cmdk-input::placeholder { color: var(--dim); }
+.cmdk-input::-webkit-search-cancel-button { display: none; }
+.cmdk-kbd { font-family: var(--monof); font-size: 11px; line-height: 1; padding: 3px 6px; border: 1px solid var(--stroke2); border-radius: 6px; color: var(--muted); flex: 0 0 auto; }
+.an-box { display: grid; gap: 10px; min-inline-size: 0; }
+.an-title { font-size: 18px; }
+.an-intro { color: var(--muted); font-size: 13.5px; margin: 0; }
+.an-form { display: flex; gap: 8px; align-items: flex-end; min-inline-size: 0; }
+.an-form textarea { flex: 1 1 auto; min-inline-size: 0; resize: vertical; font: inherit; color: var(--text); background: var(--glass); border: 1px solid var(--stroke2); border-radius: 12px; padding: 9px 12px; }
+.an-form textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.an-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.an-chip { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--stroke2); border-radius: 999px; padding: 4px 10px; cursor: pointer; text-align: start; max-inline-size: 100%; }
+.an-chip:hover:not(:disabled), .an-chip:focus-visible { color: var(--text); border-color: var(--cyan); }
+.an-chip:disabled { opacity: 0.6; cursor: progress; }
+.an-status { color: var(--muted); font-size: 13px; margin: 0; }
+.an-answer { display: grid; gap: 8px; min-inline-size: 0; overflow-wrap: anywhere; }
+.an-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--dim); }
+.an-badge.claude { border-color: var(--violet, #8b5cf6); }
+.an-q { margin: 0; font-weight: 600; }
+.an-text p { margin: 0 0 6px; }
+.an-cite { font-family: var(--monof); font-size: 0.8em; vertical-align: super; color: var(--cyan); text-decoration: none; margin-inline-start: 2px; }
+.an-cite:hover, .an-cite:focus-visible { text-decoration: underline; }
+.an-sources h4 { font-size: 13px; color: var(--muted); margin-block-end: 4px; }
+.an-sources ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
+.an-sources li { display: grid; gap: 2px; min-inline-size: 0; }
+.an-sources li:target { outline: 1px solid var(--cyan); border-radius: 6px; }
+.an-n { font-family: var(--monof); color: var(--cyan); }
+.an-src { color: var(--dim); }
+.an-src code { overflow-wrap: anywhere; }
+.an-disclaimer { margin: 0; font-size: 12px; color: var(--amber, #f5b942); }
+.srch-form { display: grid; gap: 6px; margin-block: 12px 18px; max-inline-size: 720px; }
+.srch-label { font-size: 13.5px; color: var(--muted); }
+.srch-row { display: flex; gap: 8px; min-inline-size: 0; }
+.srch-row input { flex: 1 1 auto; min-inline-size: 0; font: inherit; color: var(--text); background: var(--glass); border: 1px solid var(--stroke2); border-radius: 12px; padding: 9px 12px; }
+.srch-row input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.srch-h2 { font-size: 18px; margin-block-end: 8px; }
+.srch-answer { margin-block-end: 18px; min-inline-size: 0; }
+.srch-results { min-inline-size: 0; }
+.srch-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.srch-item { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border: 1px solid var(--stroke); border-radius: 14px; background: var(--glass); color: var(--text); min-inline-size: 0; }
+.srch-item:hover, .srch-item:focus-visible { border-color: var(--cyan); }
+.srch-main { display: grid; gap: 2px; flex: 1 1 auto; min-inline-size: 0; }
+.srch-sub, .srch-why { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .an-form, .srch-row { flex-wrap: wrap; }
+  .an-form .btn, .srch-row .btn { inline-size: 100%; }
+  .srch-item { flex-wrap: wrap; }
+}
+/* ================================================================ analyst + search (ADR 0015, END) */

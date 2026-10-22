@@ -7,6 +7,19 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 - **Step 6d (T-006) on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; merge the reserved 0020-0022 first, the backend runner refuses the gap). Trustee portal: register vs chain read model (pinned block, supply vs cap, differences, two-officer adjustments, SHA-256 export), co-signing (mints above the threshold now need a trustee officer in addition to the platform approvals, decided through the signing service; S-02 trustee votes), distribution review in the 48 h window (a rejection blocks booking and payout in SQL), daily reconciliation report, recovery requests (S-06 hook), trustee audit chain.
 - **Behaviour change on merge:** website mints above 10,000 tokens wait for a trustee officer's co-signature in the portal as well (demo: enrol a trustee officer).
 - Owner to confirm: trustee co-signature threshold (above the platform threshold vs every mint), require a trustee approval before booking a distribution (S-03 Q-7), closing the command-line trustee duty.
+## T-045 website functional (2026-10-22, branch `t-045-web-functional` merged up to main c55351d, not merged into main; migration 0022)
+
+- Website shows records only: catalogue, filters/sort, Pakistan map, price/rent history, documents with SHA-256, trust structure, rule-based property score, payout accounts (bank service `bank:payees`), search and the grounded analyst (Claude optional, owner adds the key). Still labelled: passkey sign-in (T-030), Docs & Tax (S-03), anchoring status in the rail (lead).
+- 0022 applies on top of S-06 (0020) and S-03 (0021). Demo catalogue (`seed:catalog`) runs only after an administrator enrols the demo officers in PT Control; until then it skips. Not seen in a browser; Playwright not run (see branch report).
+
+
+## Latest update (2026-10-22, S-03 on a branch, brought up to date with main)
+
+- **S-03 operations + FBR withholding (T-023/T-024) built on branch `s-03-operations-tax`, not merged** (migration `0021_operations_tax.sql`, applies on top of S-06's 0020; ADR 0014 Proposed: sealed CNIC for tax). Partial: see TASKS T-023/T-024 for what is not built. Tax rates are PLACEHOLDERS (LEGAL/TAX TO CONFIRM); approval of a distribution with them is refused unless `ops.settings.allow_placeholder_rates` (local dev only).
+
+## Earlier update (2026-10-13, S-06 on branch `s-06-recovery`, not merged)
+
+- **S-06 recovery / succession / reversals (T-026)** built on a branch: migration `0020_recovery.sql` (0021 is reserved for parallel work), signer kinds `recovery.*`, `@pt/recovery`, KYC re-verification, recon checks, portal `/recovery` with the new `legal_officer` role. Spec S-06 section 14 lists what is built and owner questions OQ-1..OQ-7 (notably: a lost custodial key cannot be recovered on chain with today's identities). Not run on Besu (48 h delay), no Playwright e2e; the website still shows the old wallet after a recovery (T-045).
 
 ## Earlier update (2026-10-13, Step 6c merged)
 

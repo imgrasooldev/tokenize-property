@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import { decodeFunctionData, encodeFunctionData, type Abi, type Hex } from "viem";
-import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
+import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, recoveryGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
 import {
+  addKeyPayload,
+  proposePayload,
+  requestPayload,
+  walletKey,
+  type AddKeyRule,
+  type RecoveryRule,
   claimData,
   freezePayload,
   identityClaimPayload,
@@ -249,6 +255,91 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
         gas: r.gasLimit,
         rules: [`topic in ${r.topics.join(", ")}`, "the identity is the custodial wallet's own; owner KYC-verified", `at most ${String(r.maxPerDay)} per day`],
         note: "The claim key signs the claim at signing time; the calldata exists only then.",
+      };
+    }
+    case "recovery.freeze":
+    case "recovery.unfreeze": {
+      const r = rule as FreezeRule;
+      const p = freezePayload.safeParse(payload);
+      if (!p.success) bad(kind === "recovery.freeze" ? "case freeze" : "case unfreeze");
+      const freeze = kind === "recovery.freeze";
+      return {
+        to: r.freezeGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: freezeGuardAbi, functionName: freeze ? "freezeAddress" : "unfreezeAddress", args: [p.data.account as Hex, p.data.caseId as Hex] }),
+        abi: freezeGuardAbi,
+        contract: "FreezeGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved FreezeGuard ${r.freezeGuard.toLowerCase()}`,
+          freeze
+            ? "only the protective freeze a recovery or succession case enqueued (recovery.command_allowed); not already frozen"
+            : "only after two different compliance officers released the case (recovery.command_allowed); wallet frozen; owner KYC-verified",
+          `at most ${String(r.maxPerDay)} per day`,
+        ],
+      };
+    }
+    case "recovery.add_key": {
+      const r = rule as AddKeyRule;
+      const p = addKeyPayload.safeParse(payload);
+      if (!p.success) bad("management key addition");
+      return {
+        to: p.data.identity.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: identityAbi, functionName: "addKey", args: [walletKey(p.data.newWallet.toLowerCase()), 1n, 1n] }),
+        abi: identityAbi,
+        contract: "Identity (ONCHAINID)",
+        from: p.data.wallet.toLowerCase() as Hex,
+        gas: r.gasLimit,
+        rules: [
+          `adds the new wallet ${p.data.newWallet.toLowerCase()} as a MANAGEMENT key (purpose 1), signed by the old custodial wallet`,
+          "only for an approved wallet-recovery case (recovery.command_allowed); identity = the old wallet's identity in the registry",
+          `at most ${String(r.maxPerDay)} per day`,
+        ],
+      };
+    }
+    case "recovery.propose": {
+      const r = rule as RecoveryRule;
+      const p = proposePayload.safeParse(payload);
+      if (!p.success) bad("recovery request");
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({
+          abi: recoveryGuardAbi,
+          functionName: "propose",
+          args: [p.data.kind === "wallet_recovery" ? 0 : 1, p.data.from as Hex, p.data.to as Hex, p.data.onchainId as Hex, BigInt(p.data.amount), p.data.evidenceHash as Hex],
+        }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved RecoveryGuard ${r.recoveryGuard.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the request an approved case enqueued (recovery.command_allowed); executable after the 48-hour delay",
+          p.data.kind === "wallet_recovery"
+            ? "wallet recovery: identity = the old wallet's identity; new wallet unregistered; nothing else pending from the wallet"
+            : `forced transfer: recipient verified; balance covers it with pending requests; recipient stays within ${n(r.maxBalance)} units`,
+        ],
+      };
+    }
+    case "recovery.execute":
+    case "recovery.cancel": {
+      const r = rule as RecoveryRule;
+      const p = requestPayload.safeParse(payload);
+      if (!p.success) bad(kind === "recovery.execute" ? "recovery execution" : "recovery cancellation");
+      const execute = kind === "recovery.execute";
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: execute ? "execute" : "cancel", args: [BigInt(p.data.requestId)] }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: execute
+          ? [
+              "only a pending request of an approved case, after its delay (recovery.command_allowed and the chain time)",
+              `checks again: recipient verified and within ${n(r.maxBalance)} units, balance, management key for a recovery`,
+            ]
+          : ["only a pending request of a cancelled case (objection or error)"],
       };
     }
     default:

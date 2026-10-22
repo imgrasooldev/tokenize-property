@@ -1,6 +1,6 @@
 # S-03: Property operations, income and distributions
 
-- Status: Draft for owner review (functional specification; no code yet)
+- Status: Draft for owner review; partly implemented on branch `s-03-operations-tax` (section 16)
 - Date: 2026-10-13
 - Lifecycle stages: 12 (property operations and rent), 13 (income calculation and distribution)
 - Exceptions covered: rent shortfall, tenant dispute, distribution rejected by the trustee, payout returned, investor without a payout account
@@ -350,11 +350,33 @@ Periodic property report (occupancy, rent roll summary, arrears, expenses agains
 - Q-6 Accounting basis: the ledger stays a cash mirror of the trustee bank; accrual accounts (receivables, prepaid) live in operations and the audited financial statements (recommended).
 - Q-7 Require the trustee's recorded approval (not only the absence of a rejection) before a distribution may be booked and paid? (Step 6d records it; today only a rejection blocks.)
 
-## 16. Amendment 2026-10-13: trustee review in the database (Step 6d, T-006, migration 0023)
 
-Changed before the behaviour (CLAUDE.md), together with ADR 0011 section 12. D4 (pre-check) and D6 (reject) are complemented by a review recorded in the database:
 
-1. While a distribution is `published` in the read model and inside the 48-hour challenge window (from the publish block's time, the contract's `CHALLENGE_WINDOW`), a trustee officer approves it, giving the Merkle root they recomputed independently (OP-SOD-2; it must equal the published root), or rejects it with a reason (step-up, digest of the distribution as shown). One decision per distribution.
-2. **A rejection blocks finalisation in the database**: no payout batch and no `rent:distribution:<token>:<id>` journal can be written for that distribution afterwards (triggers), whatever the chain says, and `rent.record_payout` therefore cannot happen either. The trustee executes the on-chain `reject(id, reason)` from the Trustee Safe within the window; the portal shows rejections not yet seen on chain.
-3. Silence is not approval: without a decision the existing flow is unchanged (the contract allows `finalize` after the window). Whether a trustee approval must be required before booking (deny by default) is open question Q-7 (section 15).
+## 16. Implementation status (2026-10-14, branch `s-03-operations-tax`, migration 0021)
 
+Built (Partial; details in docs/TASKS.md T-023/T-024 and docs/DATABASE_DESIGN.md 0021):
+
+- **OP-37 (Q-1 adopted default): Merkle leaf = (wallet, NET paisa)**, leaf format v1 unchanged (`keccak256(bytes.concat(keccak256(abi.encode(wallet, netPaisa))))`, sorted pairs, tree shape as `chain/rent.py`). `/verify`, `web/src/lib/merkle.ts` and the contract need no change; the statement names the leaf format in its `leaf` field. Lines with a net of 0 (possible only for a 1-paisa gross at a rate >= 50 %) have no leaf.
+- **OP-36 rounding rule as built:** WHT = floor((gross x rate_ppm + 500,000) / 1,000,000): the exact amount rounded half up to the paisa; rates are integers in parts per million (150,000 = 15 %). Rounding unit still LEGAL/TAX TO CONFIRM (rupees would be a new rule version).
+- **OP-38 statement as built** (`pt-rent-statement-v2`, canonical JSON, keys sorted, every integer a decimal string): `kind, calculation, token, period, recordDate, recordBlock, incomeType, leaf, totals {collected, expenses, fees, reserveContribution, reserveRelease, distributableGross, wht, net}, entitlements [{wallet, units, netPaisa}], taxScheduleHash`. Tax schedule `pt-tax-schedule-v1`: `kind, calculation, token, period, recordDate, incomeType, rounding: half-up-paisa, rateScale: 1000000, lines [{wallet, subject, units, grossPaisa, status, filerCheck, filerAsOf, flagged, rateId, ratePpm, whtPaisa, netPaisa}]`. Both hashes keccak256. Not in v2 yet: per-fee-type totals, rent-roll hash (no leases).
+- **Q-2 resolved by [ADR 0014](../decisions/0014-sealed-cnic-for-tax.md) (Proposed):** sealed CNIC under a tax-only key, ATL checks by the tax service, two-officer one-time FBR filing export.
+- **Roles:** finance and tax officer of §2 are one portal role `tax_officer` (rates proposed and approved by two different tax officers; exports likewise). Distribution approval is the operations checker after the trustee's pre-check (D4, section 17).
+
+Deviations from this spec (to confirm):
+
+1. OP-21: the per-expense limit is a setting (placeholder Rs 1,000,000); above it the trustee approves in the trustee portal before the operations checker (section 17, migration 0023).
+2. OP-23 fees are entered as charges with an evidence hash, not computed from the offering document's formula.
+3. OP-33 record block: the operator supplies it; the database checks it is indexed, not the timestamp rule (`rent.record_block_rule` not built).
+4. `tax.wht_unremitted` is a warning only (spec: blocking after the due date): freezing payouts would not speed up the remittance; due date (15 days after booking) is a placeholder.
+5. The rent pool is one ledger account per token: an approved expense of a later period uses the same cash; booking an earlier distribution then fails on the ledger's overdraft check rather than spending money twice (safe, but operations must sequence periods).
+6. Rate changes take effect today or later only; past periods are corrected by adjustments, never by a retroactive rate.
+
+## 17. Amendment 2026-10-13 (updated 2026-10-22): trustee decisions in the database (Step 6d, T-006, migration 0023)
+
+Changed before the behaviour (CLAUDE.md), together with ADR 0011 section 12. Applies on top of migration 0021 (section 16).
+
+1. **OP-21 / E1, expenses and fees above the operations limit:** the trustee approves or rejects them in the trustee portal (step-up, the charge's digest, reason); the operations checker can approve such a charge only after the trustee approved it, and a trustee rejection leaves only "reject". Enforced in `ops.decide_charge` (replaced) and by a trigger on the approved state.
+2. **D4, trustee pre-check:** an attached calculation is approved by the operations checker only after the trustee's pre-check: an independent recomputation of the Merkle root (from the record block and the statement) equal to the attached root, with the statement hash recorded. A pre-check rejection means the calculation is returned and recalculated. Enforced by a trigger on the approved state; the publish command (T-022) will find the pre-check in `trustee.calculation_checks`.
+3. **D6, review in the 48-hour challenge window:** while a distribution is `published` in the read model and inside the window (from the publish block's time, the contract's `CHALLENGE_WINDOW`), a trustee officer approves it, giving the recomputed root (OP-SOD-2; it must equal the published root), or rejects it with a reason. One decision per distribution.
+4. **A rejection blocks finalisation in the database**: no payout batch and neither the `rent:wht:<token>:<id>` nor the `rent:distribution:<token>:<id>` journal of the booking (`ops.book_distribution`, section 16) can be written for that distribution afterwards (triggers), whatever the chain says; `rent.record_payout` therefore cannot happen either. The trustee executes the on-chain `reject(id, reason)` from the Trustee Safe within the window; the portal shows rejections not yet seen on chain.
+5. Silence in the window is not an approval: without a rejection the booking follows the finalized chain record (the contract allows `finalize` after the window). Whether a recorded approval must be required before booking is Q-7.

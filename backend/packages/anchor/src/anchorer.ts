@@ -47,6 +47,8 @@ export interface AnchorerOptions {
   confirmations?: bigint;
   gasLimit?: bigint;
   maxGasPriceWei?: bigint;
+  /** Highest tip paid above the base fee (the node's suggestion is capped here). */
+  maxPriorityFeeWei?: bigint;
   receiptWaitMs?: number;
   pollMs?: number;
   hooks?: { at?: (point: CrashPoint) => void | Promise<void> } | undefined;
@@ -92,6 +94,7 @@ export class Anchorer {
       confirmations: 0n,
       gasLimit: 150_000n,
       maxGasPriceWei: 50_000_000_000n,
+      maxPriorityFeeWei: 2_000_000_000n,
       receiptWaitMs: 30_000,
       pollMs: 250,
       ...options,
@@ -189,8 +192,7 @@ export class Anchorer {
       await failAnchor(client, rec.id, reason, this.o.actor);
       throw new AnchorAlarm(reason);
     }
-    const price = await this.chain.gasPrice();
-    const gasPrice = price + price / 4n;
+    const gasPrice = await this.price();
     if (gasPrice > this.o.maxGasPriceWei) {
       return { action: "pending", id: rec.id, reason: `gas price ${gasPrice.toString()} wei is above the cap ${this.o.maxGasPriceWei.toString()}; nothing sent` };
     }
@@ -214,6 +216,23 @@ export class Anchorer {
     await this.broadcast(raw);
     await this.o.hooks?.at?.("broadcast");
     return this.settle(client, { ...rec, status: "sent", tx });
+  }
+
+  /**
+   * The price of a legacy transaction. On an EIP-1559 chain it is 2 x base fee + a capped tip: the
+   * base fee is set by the protocol, so our own transactions cannot raise the next price. (Pricing
+   * from eth_gasPrice + 25 % fed back into a node that suggests tips from recent transactions: on a
+   * quiet chain each anchor raised the next suggestion until the cap stopped anchoring, 2026-10-13.)
+   * Without a base fee (pre-London chain) it falls back to eth_gasPrice + 25 %.
+   */
+  private async price(): Promise<bigint> {
+    const f = await this.chain.fees();
+    if (f.baseFee === null) {
+      const p = await this.chain.gasPrice();
+      return p + p / 4n;
+    }
+    const tip = f.priorityFee < this.o.maxPriorityFeeWei ? f.priorityFee : this.o.maxPriorityFeeWei;
+    return 2n * f.baseFee + tip;
   }
 
   /** The outcome is decided from the chain afterwards, never from the error of the broadcast itself. */

@@ -25,10 +25,10 @@ export default async function TrusteePage() {
       <div className="kpis" data-testid="trustee-kpis">
         <div className="kpi">
           <div className="label">Co-signatures waiting</div>
-          <div className="val">{int(d.cosignSigner + d.cosignOffering)}</div>
+          <div className="val">{int(d.cosignSigner + d.cosignOffering + d.cosignCharges + d.prechecks)}</div>
           <div className="sub">
             <a href="/trustee/cosign">
-              {int(d.cosignSigner)} signing · {int(d.cosignOffering)} offering
+              {int(d.cosignSigner)} signing Â· {int(d.cosignOffering)} offering
             </a>
           </div>
         </div>
@@ -43,10 +43,10 @@ export default async function TrusteePage() {
         <div className="kpi">
           <div className="label">Register differences</div>
           <div className={`val ${tokensWithDiff > 0 ? "dn" : "up"}`} data-testid="register-state">
-            {tokensWithDiff > 0 ? `${int(tokensWithDiff)} token(s)` : "None ✓"}
+            {tokensWithDiff > 0 ? `${int(tokensWithDiff)} token(s)` : "None âœ“"}
           </div>
           <div className="sub">
-            <a href="/trustee/register">register vs chain read model</a> · {int(d.openAdjustments)} adjustment(s) open
+            <a href="/trustee/register">register vs chain read model</a> Â· {int(d.openAdjustments)} adjustment(s) open
           </div>
         </div>
         <div className="kpi">
@@ -55,7 +55,7 @@ export default async function TrusteePage() {
           <div className="sub">
             {d.latestRun ? (
               <a href={`/trustee/recon/${String(d.latestRun.id)}`}>
-                run #{d.latestRun.id} · {pkt(d.latestRun.finishedAt)}
+                run #{d.latestRun.id} Â· {pkt(d.latestRun.finishedAt)}
               </a>
             ) : (
               "no run yet"
@@ -74,7 +74,7 @@ export default async function TrusteePage() {
           <div className="val small" style={{ fontSize: 13 }}>
             Trustee officers only
           </div>
-          <div className="sub">step-up &lt; 5 min · reason · digest · audit</div>
+          <div className="sub">step-up &lt; 5 min Â· reason Â· digest Â· audit</div>
         </div>
       </div>
 
@@ -117,7 +117,7 @@ export default async function TrusteePage() {
                         {BigInt(t.supply) > BigInt(t.cap) ? <span className="chip bad">supply above cap</span> : null} {t.paused ? <span className="chip">paused</span> : null}
                       </td>
                       <td className="mono small">
-                        {t.pinned ? `#${String(t.pinned.block)}` : "–"} {t.pinned?.halted ? <span className="chip bad">indexer halted</span> : null}
+                        {t.pinned ? `#${String(t.pinned.block)}` : "â€“"} {t.pinned?.halted ? <span className="chip bad">indexer halted</span> : null}
                       </td>
                     </tr>
                   );

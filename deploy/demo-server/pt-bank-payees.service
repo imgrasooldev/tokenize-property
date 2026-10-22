@@ -1,0 +1,20 @@
+[Unit]
+Description=Property Token demo: bank payout-account API for the website (127.0.0.1:4920, demo title fetch)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+Environment=NODE_OPTIONS=--max-old-space-size=128
+# Same as `npm run bank:payees`, without the extra npm process.
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/bank/src/cli.ts serve-payees
+Restart=always
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

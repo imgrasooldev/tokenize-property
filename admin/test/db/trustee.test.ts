@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { operationsWorld, type OperationsWorld } from "../support/operations";
 import { distribution, hex, holding, readModelToken, type TestToken } from "../support/trustee";
 import { cast, createWorld, invite, verify, type Actor, type Cast, type World } from "../support/world";
 
@@ -207,6 +209,79 @@ describe("the trustee register (T-4)", () => {
     const a = await w.su.query<{ action: string; detail: { sha256: string; block: number } }>("SELECT action, detail FROM trustee.audit WHERE id = $1", [r.trusteeAuditId]);
     expect(a.rows[0]).toMatchObject({ action: "register.exported", detail: { sha256: "cd".repeat(32), block: 5 } });
     expect(await code(w.portal.query("SELECT admin.record_register_export($1, $2, 5, 2, 'not-a-hash')", [c.auditor.sessionHash, tok.token]))).toBe("23514");
+  });
+});
+
+describe("S-03 trustee duties on the operations path (T-8)", () => {
+  let ow: OperationsWorld;
+  beforeAll(async () => {
+    ow = await operationsWorld(w.su, [{ wallet: hex(20), units: 10n }]);
+  });
+
+  async function chargeOf(id: string, a: Actor): Promise<{ digest: string; blockers: string[] }> {
+    return one<{ digest: string; blockers: string[] }>("SELECT admin.trustee_charge($1, $2) AS r", [a.sessionHash, id]);
+  }
+
+  it("OP-21: a charge above the operations limit needs the trustee before the operations checker", async () => {
+    // A low limit (Rs 10,000) so the rent in the pool covers the charge; the setting change is audited by 0021.
+    await w.su.query("UPDATE ops.settings SET value = '1000000'::jsonb WHERE key = 'expense_ops_limit_paisa'");
+    const big = (await w.su.query<{ id: string }>(
+      "SELECT ops.propose_charge($1, '2026-10', 'expense', NULL, 'roof-co', 'roof repair, tower A', 5000000, $2, 'operator:ali') AS id",
+      [ow.token, createHash("sha256").update("roof invoice").digest()],
+    )).rows[0]?.id ?? "";
+    const opsView = async () => one<{ digest: string; blockers: { approve: string[] } }>("SELECT admin.operations_charge($1, $2) AS r", [c.ops_checker.sessionHash, big]);
+    expect((await opsView()).blockers.approve.join(" ")).toMatch(/trustee approves it first/);
+    await stepUp(c.ops_checker);
+    const early = await one<R>("SELECT admin.decide_charge($1, $2, 'approve', 'invoice checked against the budget', $3) AS r", [c.ops_checker.sessionHash, big, Buffer.from((await opsView()).digest, "hex")]);
+    expect(early).toMatchObject({ ok: false, error: expect.stringMatching(/trustee approves it first/) as unknown });
+    // Only trustee officers decide for the trustee; the digest of what was shown is bound.
+    expect(await code(w.portal.query("SELECT admin.decide_trustee_charge($1, $2, 'approve', 'reason long enough', $3)", [c.ops_checker.sessionHash, big, randomBytes(32)]))).toBe("42501");
+    const v = await chargeOf(big, c.trustee_officer);
+    expect(v.blockers).toEqual([]);
+    await stepUp(c.trustee_officer);
+    expect(await one<R>("SELECT admin.decide_trustee_charge($1, $2, 'approve', 'capital expense within the budget line', $3) AS r", [c.trustee_officer.sessionHash, big, randomBytes(32)]))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/differs/) as unknown });
+    expect(await one<R>("SELECT admin.decide_trustee_charge($1, $2, 'approve', 'capital expense within the budget line', $3) AS r", [c.trustee_officer.sessionHash, big, Buffer.from(v.digest, "hex")]))
+      .toEqual({ ok: true, status: "approved" });
+    expect(await one<R>("SELECT admin.decide_trustee_charge($1, $2, 'reject', 'second thoughts are not allowed', $3) AS r", [t2.sessionHash, big, Buffer.from(v.digest, "hex")]))
+      .toMatchObject({ ok: false });
+    await stepUp(c.ops_checker);
+    expect(await one<R>("SELECT admin.decide_charge($1, $2, 'approve', 'invoice checked against the budget', $3) AS r", [c.ops_checker.sessionHash, big, Buffer.from((await opsView()).digest, "hex")]))
+      .toEqual({ ok: true, status: "approved" });
+    // A charge within the limit needs no trustee.
+    const smallId = (await w.su.query<{ id: string }>(
+      "SELECT ops.propose_charge($1, '2026-10', 'expense', NULL, 'acme-repairs', 'door lock, tower B', 500000, $2, 'operator:ali') AS id",
+      [ow.token, createHash("sha256").update("lock invoice").digest()],
+    )).rows[0]?.id ?? "";
+    await stepUp(c.trustee_officer);
+    const small = await chargeOf(smallId, c.trustee_officer);
+    expect(small.blockers.join(" ")).toMatch(/no trustee approval is needed/);
+    expect(await one<R>("SELECT admin.decide_trustee_charge($1, $2, 'approve', 'not needed for this one', $3) AS r", [c.trustee_officer.sessionHash, smallId, Buffer.from(small.digest, "hex")]))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/within the operations limit/) as unknown });
+  });
+
+  it("D4: the pre-check is for an attached statement; approval of a calculation needs it (also against a direct UPDATE)", async () => {
+    const v = await one<{ digest: string; blockers: string[]; status: string }>("SELECT admin.trustee_calculation($1, $2) AS r", [c.trustee_officer.sessionHash, ow.distributionId]);
+    expect(v.status).toBe("calculated");
+    expect(v.blockers.join(" ")).toMatch(/attached statement/);
+    await stepUp(c.trustee_officer);
+    expect(await one<R>("SELECT admin.precheck_distribution($1, $2, 'reject', 'statement not attached yet', $3, NULL) AS r", [c.trustee_officer.sessionHash, ow.distributionId, Buffer.from(v.digest, "hex")]))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/calculated/) as unknown });
+    expect((await w.su.query<{ p: string }>("SELECT trustee.calculation_problem($1) AS p", [ow.distributionId])).rows[0]?.p).toMatch(/not pre-checked/);
+  });
+
+  it("a rejected on-chain distribution also blocks S-03's withholding journal; recovery cases reach the trustee read-only", async () => {
+    const d = await distribution(w.su, tok, 5);
+    expect(await review(c.trustee_officer, d.id, "reject", null)).toMatchObject({ ok: true, status: "rejected" });
+    await expect(
+      w.su.query(
+        `INSERT INTO ledger.journal (idempotency_key, kind, created_by, created_at, payload_hash, prev_hash, hash)
+         VALUES ($1, 'rent_wht', 'test', now(), $2, $2, $3)`,
+        [`rent:wht:${tok.token}:5`, randomBytes(32), randomBytes(32)],
+      ),
+    ).rejects.toThrow(/booking refused: the trustee rejected/);
+    const r = await one<{ cases: unknown }>("SELECT admin.trustee_recoveries($1) AS r", [c.auditor.sessionHash]);
+    expect(Array.isArray(r.cases)).toBe(true);
   });
 });
 

@@ -4,9 +4,10 @@ import { config } from "./config";
 /**
  * The portal's client of the signing service (ADR 0005, Step 6b). Same request authentication as
  * the backend's @pt/http-auth (HMAC-SHA256 over method, path, timestamp, one-time nonce and body
- * hash), with its own client id and secret. The service gives this client exactly two paths:
- * preview a pending request and decide it with a one-time ticket from the admin database. It can
- * never ask for a signature. No code is shared with the backend at runtime (separate app).
+ * hash), with its own client id and secret. The service gives this client exactly three paths:
+ * preview a pending request, decide it with a one-time ticket from the admin database, and create a
+ * custodial wallet for a wallet-recovery case (S-06). It can never ask for a signature. No code is
+ * shared with the backend at runtime (separate app).
  */
 
 export interface CallArg {
@@ -77,6 +78,17 @@ export async function signerPreview(requestId: string): Promise<SignerPreview | 
   if (r.status === 404) return null;
   if (r.status !== 200) throw new Error(`signing service answered ${String(r.status)}`);
   return r.json as SignerPreview;
+}
+
+/**
+ * S-06 RF-9: a new custodial wallet inside the signing service for a wallet-recovery case. Only the
+ * address comes back; the key has no rights until an executed recovery binds it.
+ */
+export async function signerCreateWallet(): Promise<string> {
+  const r = await post("/v1/custody/wallets", {}, 15_000);
+  const address = (r.json as { address?: unknown } | null)?.address;
+  if (r.status !== 200 || typeof address !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(address)) throw new Error(`signing service answered ${String(r.status)}`);
+  return address.toLowerCase();
 }
 
 /** The decision, carried by the one-time ticket the admin database issued for it. */

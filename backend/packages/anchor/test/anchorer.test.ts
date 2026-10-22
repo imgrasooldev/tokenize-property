@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import type pg from "pg";
+import { parseTransaction } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AnchorAlarm, Anchorer, type AnchorerOptions, type CrashPoint, type RunResult } from "../src/anchorer.ts";
 import { anchorsOf } from "../src/store.ts";
@@ -133,11 +134,31 @@ describe("anchoring job on a fake public chain", () => {
 
   it("sends nothing while the gas price is above the cap", async () => {
     const w = world(pool);
-    w.chain.gasPriceWei = 10n ** 12n;
+    w.chain.baseFeeWei = 10n ** 12n;
     expect(await w.job({ maxGasPriceWei: 10n ** 10n }).runOnce()).toMatchObject({ action: "pending", reason: expect.stringMatching(/cap/) as unknown });
     expect(w.chain.events).toHaveLength(0);
-    w.chain.gasPriceWei = 10n ** 9n;
+    w.chain.baseFeeWei = 10n ** 8n;
     expect(await w.job({ maxGasPriceWei: 10n ** 10n }).runOnce()).toMatchObject({ action: "anchored" });
+  });
+
+  it("prices from the base fee with a capped tip, so a runaway tip suggestion cannot stop anchoring", async () => {
+    // Regression (demo server, 2026-10-13): eth_gasPrice + 25 % fed back into Anvil's tip suggestion
+    // until the price passed the cap and anchoring stopped.
+    const w = world(pool);
+    w.chain.gasPriceWei = 10n ** 12n; // the node's legacy suggestion has run away
+    w.chain.priorityFeeWei = 10n ** 12n; // and so has its tip suggestion
+    w.chain.baseFeeWei = 136_369_807n;
+    expect(await w.job({ maxGasPriceWei: 50n * 10n ** 9n }).runOnce()).toMatchObject({ action: "anchored" });
+    const sent = parseTransaction(w.chain.lastRaw());
+    expect(sent.gasPrice).toBe(2n * 136_369_807n + 2_000_000_000n);
+  });
+
+  it("falls back to eth_gasPrice + 25 % on a chain without a base fee", async () => {
+    const w = world(pool);
+    w.chain.baseFeeWei = null;
+    w.chain.gasPriceWei = 4_000_000_000n;
+    expect(await w.job().runOnce()).toMatchObject({ action: "anchored" });
+    expect(parseTransaction(w.chain.lastRaw()).gasPrice).toBe(5_000_000_000n);
   });
 
   it("lets only one process anchor a contract at a time", async () => {

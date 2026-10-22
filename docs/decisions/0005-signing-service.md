@@ -74,6 +74,14 @@ Before the fixed gas limit: p50 738 ms. Besu reads vary from run to run; the ide
 - `compliance.freeze` is unchanged: a compliance freeze of a verified investor is signed because the approved freeze places a hold that makes the investor read `suspended` (not verified) in `kyc.subject_status()` (ADR 0011 section 11).
 - Tested in `signer/test/compliance-freeze.test.ts` and `signer/test/preview.test.ts`.
 
+## Amendment 2026-10-13: recovery kinds (spec S-06 section 14.6, T-026, migration 0020)
+
+- Six new kinds, each denied unless `recovery.command_allowed(kind, payload)` confirms that a recovery case enqueued exactly this payload and is in the state the kind needs at signing time: `recovery.freeze` (FreezeGuard.freezeAddress, Ops key; also for a KYC-verified holder, which resolves S-06 Q-4), `recovery.unfreeze` (after a two-officer release), `recovery.add_key` (Identity.addKey of the new wallet as MANAGEMENT key, signed by the OLD custodial wallet), `recovery.propose`, `recovery.execute`, `recovery.cancel` (RecoveryGuard, Trustee key; production: the Trustee Safe multisig).
+- Chain facts on top: identity of the old wallet in the registry, new wallet unregistered, pending requests from the wallet (read model, `recovery.pending_from`), heir verified and within the policy's `maxBalance` (the MaxBalanceModule cap), chain time past `eta` and the management key present at execution.
+- The admin portal's client may now also call `/v1/custody/wallets` (a new custodial wallet for a wallet-recovery case; the key has no rights until an executed recovery binds it). It still can never ask for a signature.
+- `signer:setup` imports the dev `TRUSTEE_SAFE` key as `trustee` and activates local policies for the six kinds.
+- Tested in `signer/test/recovery-kinds.test.ts` (pure, calldata decoded) and `recovery/test/recovery.test.ts` (real database and signing service).
+
 ## Amendment 2026-10-13: trustee co-signature (Step 6d, T-006, migration 0023)
 
 - The maker-checker of the signing service gains a second capacity. Kinds the specs assign to the trustee are listed in `signer.trustee_cosign_kinds` (today `issuance.mint`: the Issuance Safe always includes a trustee signer, contract-spec section 3, S-02 sections 3 and 8). A request of such a kind that needs approvals under its policy (amount above `approvalAbove`) needs **one trustee approval in addition to** the policy's `approvals` platform approvals. The requirement is set by a trigger on insert (`trustee_approvals_needed`; the service cannot lower it) and never changes; requests already waiting when 0023 ran need it as well.
