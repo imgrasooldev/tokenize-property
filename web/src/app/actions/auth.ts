@@ -18,7 +18,7 @@ export async function loginAsPersona(formData: FormData): Promise<void> {
   const persona = formData.get("persona");
   if (persona !== "ALICE" && persona !== "BOB") throw new Error("Unknown persona");
   if (!take("login", await clientKey())) redirect("/login?e=rate");
-  await startSession(await upsertPersona(persona));
+  await startSession(await upsertPersona(persona), "persona");
   redirect("/account");
 }
 
@@ -121,6 +121,6 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
     return { error: "generic" };
   }
   void nudgeFollower();
-  await startSession(id);
+  await startSession(id, "signup");
   redirect("/account");
 }

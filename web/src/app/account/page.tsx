@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PortalShell, Sample } from "@/components/Shell";
+import { PortalShell } from "@/components/Shell";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { PayoutForm } from "@/components/account/PayoutForm";
 import { Countdown } from "@/components/offering/Countdown";
@@ -11,15 +11,20 @@ import { getDict } from "@/lib/server/lang";
 import { onboardingProgress } from "@/lib/server/onboarding";
 import { maskedIban, payeeState, payoutAccounts } from "@/lib/server/payees";
 import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
-import { currentInvestorId, sessionExpiresAt } from "@/lib/server/session";
+import { passkeyAvailability } from "@/lib/server/passkey-config";
+import { listPasskeys } from "@/lib/server/passkeys";
+import { currentSession, sessionExpiresAt } from "@/lib/server/session";
+import { PasskeyPanel } from "@/components/passkey/PasskeyPanel";
+import { passkeyDict } from "@/lib/i18n-passkey";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const id = await currentInvestorId();
-  const investor = id ? await investorById(id) : null;
-  if (!investor) redirect("/login");
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
   const { lang, t } = await getDict();
+  const [passkeys, availability] = await Promise.all([listPasskeys(session.hash, lang), passkeyAvailability()]);
 
   // Read model (ADR 0010): as of the indexer cursor, never a chain call per page.
   const onboarding = investor.onboard_step === "identity" || investor.onboard_step === "claims" || investor.onboard_step === "register";
@@ -104,6 +109,7 @@ export default async function AccountPage() {
           </p>
         </section>
         <div className="stack">
+          <PasskeyPanel l={passkeyDict(lang)} availability={availability} passkeys={passkeys} />
           <section className="panel">
             <h2>{t.howVerified}</h2>
             <div className="timeline">
@@ -158,12 +164,6 @@ export default async function AccountPage() {
               {l.sessionTitle}
             </h3>
             <p className="note">{expires ? fill(l.sessionBody, { t: pktTime(expires) }) : "—"}</p>
-            <div className="checks">
-              <div className="check">
-                <i className="wait">…</i>
-                {t.passkeyFact1} <Sample t={t} soon />
-              </div>
-            </div>
             <p className="fine">{l.sessionsSoon}</p>
           </section>
         </div>

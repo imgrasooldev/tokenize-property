@@ -188,7 +188,7 @@ const en = {
   demoTitleNote: "Demo: the bank's title inquiry is simulated and answers the title you type; the check against your verified name is real.",
   sessionTitle: "This session",
   sessionBody: "Signed in on this device until {t} (PKT). Signing out ends it at once.",
-  sessionsSoon: "A list of your other devices and passkey sign-in arrive with investor passkeys.",
+  sessionsSoon: "A list of your other signed-in devices will follow. Adding or changing the payout account asks for your passkey when you have one.",
   pktSuffix: "PKT",
 };
 
@@ -369,7 +369,7 @@ const ur: CatalogDict = {
   demoTitleNote: "ڈیمو: بینک سے عنوان کی جانچ فرضی ہے اور آپ کا لکھا عنوان واپس دیتی ہے؛ آپ کے تصدیق شدہ نام سے موازنہ اصل ہے۔",
   sessionTitle: "یہ سیشن",
   sessionBody: "اس آلے پر {t} (پاکستانی وقت) تک سائن ان۔ سائن آؤٹ کرنے سے فوراً ختم ہو جاتا ہے۔",
-  sessionsSoon: "آپ کے دوسرے آلات کی فہرست اور پاس کی سائن ان سرمایہ کاروں کی پاس کی کے ساتھ آئیں گے۔",
+  sessionsSoon: "آپ کے دوسرے سائن ان آلات کی فہرست بعد میں آئے گی۔ اگر آپ کی پاس کی ہے تو ادائیگی کا اکاؤنٹ شامل کرنے یا بدلنے پر وہ مانگی جاتی ہے۔",
   pktSuffix: "پاکستانی وقت",
 };
 

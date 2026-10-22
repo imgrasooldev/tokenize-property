@@ -23,6 +23,11 @@ beforeAll(async () => {
   w = await makeWorld();
   await w.client.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD ${w.client.escapeLiteral(password)}`);
   await w.client.query(`GRANT pt_web TO ${role} WITH INHERIT TRUE, SET FALSE`);
+  // Since migration 0024 (T-030) pt_web reserves and cancels only through the session-bound
+  // webauth.web_reserve / web_cancel (tested in db/test/webauth.test.ts and the website's
+  // integration tests). This file keeps testing the 0018 wrappers themselves, so the test login
+  // gets them directly.
+  await w.client.query(`GRANT EXECUTE ON FUNCTION offering.web_reserve(uuid, uuid, text, uuid, bigint, text, text), offering.web_cancel(uuid, uuid, text) TO ${role}`);
   web = new pg.Client({ ...w.settings, user: role, password });
   await web.connect();
   o = await liveOffering(w, { cap: 100n, maxUnits: 50n });

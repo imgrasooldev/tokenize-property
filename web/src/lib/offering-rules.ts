@@ -193,7 +193,8 @@ export function timeline(state: string, events: { toState: string; at: string }[
   return { steps, outcome };
 }
 
-export type ReserveErrorKey = "input" | "rate" | "kyc" | "notOpen" | "units" | "docs" | "already" | "paused" | "unknown" | "generic";
+/** stepup / enrolPasskey / session: the passkey gate of migration 0024 (T-030) refused. */
+export type ReserveErrorKey = "input" | "rate" | "kyc" | "notOpen" | "units" | "docs" | "already" | "paused" | "unknown" | "generic" | "stepup" | "enrolPasskey" | "session";
 
 /**
  * Maps the backend's refusal (SQLSTATE and message of offering.reserve / web_reserve, migrations
@@ -212,7 +213,7 @@ export function reserveErrorKey(code: string | undefined, message: string): Rese
   return "generic";
 }
 
-export type CancelErrorKey = "input" | "rate" | "state" | "unknown" | "generic";
+export type CancelErrorKey = "input" | "rate" | "state" | "unknown" | "generic" | "stepup" | "enrolPasskey" | "session";
 export function cancelErrorKey(code: string | undefined): CancelErrorKey {
   if (code === "P0002") return "unknown";
   if (code === "23514") return "state";

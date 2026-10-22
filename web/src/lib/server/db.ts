@@ -40,6 +40,8 @@ export function backendEnv(): Map<string, string> {
  */
 function testDatabase(name: string | undefined): string | null {
   if (name === "property_token_test") return name;
+  // The passkey end-to-end run (T-030): a throw-away database re-created by test/passkey-e2e-db.ts.
+  if (name === "pt_web_e2e") return name;
   if (process.env.VITEST === "true" && name !== undefined && /^pt_scratch_[0-9]{1,16}_[0-9]{1,8}$/.test(name)) return name;
   return null;
 }

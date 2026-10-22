@@ -2,6 +2,13 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-030 investor passkeys (2026-10-13, branch `t-030-investor-passkeys`, not merged; migration 0024)
+
+- Passkeys on the website (register/list/remove on `/account`, sign-in on `/login`), database-enforced sessions for every sign-in path, passkey step-up for offering reserve (from PKR 100,000) and cancel decided in SQL. ADR 0010 section 8.
+- Up to date with main (0020-0023 merged in); after merging, `npm run migrate` before the website starts (pages read sessions from `webauth`).
+- Passkeys are off on the plain-HTTP IP demo (the sign-in page says why). **Owner action:** domain + TLS, then `WEB_ORIGIN`, then `require_passkey` on. Demo personas still sign in without authentication.
+
+## Latest update (2026-10-13, Step 6c merged)
 ## Latest update (2026-10-13, Step 6d built on a branch)
 
 - **Step 6d (T-006) on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; merge the reserved 0020-0022 first, the backend runner refuses the gap). Trustee portal: register vs chain read model (pinned block, supply vs cap, differences, two-officer adjustments, SHA-256 export), co-signing (mints above the threshold now need a trustee officer in addition to the platform approvals, decided through the signing service; S-02 trustee votes), distribution review in the 48 h window (a rejection blocks booking and payout in SQL), daily reconciliation report, recovery requests (S-06 hook), trustee audit chain.

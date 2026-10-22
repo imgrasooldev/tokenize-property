@@ -40,6 +40,7 @@
     "tools/**/*.ts",
     "e2e/**/*.ts",
     "playwright.config.ts",
+    "playwright.passkey.config.ts",
     "vitest.config.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",

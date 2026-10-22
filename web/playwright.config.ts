@@ -7,6 +7,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "e2e",
+  // Passkeys need http://localhost (an IP address cannot be a WebAuthn RP ID): own run, playwright.passkey.config.ts.
+  testIgnore: "passkey.spec.ts",
   // Tests share one chain and one test database; run them one after another.
   workers: 1,
   fullyParallel: false,

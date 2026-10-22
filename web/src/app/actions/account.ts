@@ -7,7 +7,7 @@ import { investorById, type InvestorRow } from "@/lib/server/db";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
 import { registerPayoutAccount } from "@/lib/server/services";
-import { currentInvestorId } from "@/lib/server/session";
+import { currentInvestorId, requireRecentPasskey } from "@/lib/server/session";
 
 async function signedIn(): Promise<InvestorRow> {
   const id = await currentInvestorId();
@@ -16,7 +16,7 @@ async function signedIn(): Promise<InvestorRow> {
   return investor;
 }
 
-export type PayeeError = "input" | "rate" | "noKyc" | "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "unavailable";
+export type PayeeError = "input" | "rate" | "noKyc" | "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "unavailable" | "stepup" | "enrolPasskey";
 
 export interface PayeeState {
   ok?: boolean;
@@ -51,6 +51,14 @@ export async function registerPayeeAction(_prev: PayeeState, formData: FormData)
   if (!investor.kyc_subject) return { error: "noKyc" };
   const parsed = payeeSchema.safeParse({ iban: formData.get("iban"), title: formData.get("title") });
   if (!parsed.success) return { error: parsed.error.issues.some((i) => i.path[0] === "iban") ? "invalid_iban" : "input" };
+  // T-030 (migration 0024 IP-6): `bank.payout_account` always needs a passkey step-up within 5
+  // minutes when the investor has a passkey; decided and audited by the database before the bank
+  // service is asked.
+  const gate = await requireRecentPasskey("bank.payout_account");
+  if (!gate.ok) {
+    if (gate.error === "session") redirect("/login");
+    return { error: gate.error };
+  }
   let r: Awaited<ReturnType<typeof registerPayoutAccount>>;
   try {
     r = await registerPayoutAccount({ subjectId: investor.kyc_subject, iban: parsed.data.iban, title: parsed.data.title });
