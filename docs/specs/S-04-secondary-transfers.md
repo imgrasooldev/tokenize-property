@@ -206,12 +206,12 @@ States: `requested` → `checks` → (`rejected` | `awaiting_cash` | `proposed`)
 | `buyer_headroom` | units of every wallet of the buyer's identity + these + other live inbound cases ≤ cap (policy `maxBalance`, or the offering's `max_holding_units` if lower) |
 | `lockup` | now ≥ offering `completed_at` + `lockup_months` (6); court orders exempt; no completed offering = refused |
 | `exit` | no open block for the token (`transfer.blocks`, S-05 hook) |
-| `paused` | token paused in the read model (TR-1) |
-| `price_band` | sale price within ±`price_band_ppm` (20 %) of the reference price, or an explanation recorded at opening |
-| `min_holding` | seller keeps 0 or ≥ offering `min_units`, or a reason recorded at opening |
-| `policy` | active `transfer.*` policies for this token and RecoveryGuard |
+| `price_band` | sale price within ±`price_band_ppm` (20 %) of the reference price, or an explanation recorded at opening (completion and approval only) |
+| `min_holding` | seller keeps 0 or ≥ offering `min_units`, or a reason recorded at opening (completion and approval only) |
+| `escrow` | sale: the case's escrow holds exactly the price (payment and execution only) |
+| `policy` | active `transfer.*` policies for this token, RecoveryGuard and identity registry |
 
-Reference price: the latest `transfer.reference_prices` row (operations checker, with the valuation's SHA-256), else the offering price. TR-11: the checks run again when the payment is booked and before each `transfer.execute`; a failure cancels instead of executing.
+Reference price: the latest `transfer.reference_prices` row (operations checker, with the valuation's SHA-256), else the offering price. TR-11: the checks run again when the payment is booked and before each `transfer.execute`. A **hard** failure then cancels (refund if paid; on-chain cancel first if proposed) instead of executing; a stale screening or a missing policy only **waits** (`transfer.wait_codes()`) and queues a 6c re-screening (`compliance.request_rescreen`, also when an approval is refused for it). TR-1 (token paused) is a reconciliation rule (16.8), not a case check: a forced transfer works in either state and S-02 mint windows unpause the token.
 
 ### 16.4 Cash leg and settlement (TR-20, TR-22, section 7)
 
@@ -240,7 +240,7 @@ On completion the database evaluates `price_outside_band`, `round_trip` (opposit
 
 | Check | Severity | Rule |
 |---|---|---|
-| `transfer.unapproved` | blocking | a holder-to-holder `Transfer` neither in the transaction of an executed RecoveryGuard request linked to a transfer or recovery case nor in that of a confirmed `token.transfer` command (demo market) |
+| `transfer.unapproved` | blocking | while the token is paused in the read model (phase 0 mode; a movement during a mint window is reported once it is paused again), and from block `unapproved_from_block` on (the head when 0028 ran): a holder-to-holder `Transfer` neither in the transaction of an executed RecoveryGuard request linked to a transfer or recovery case nor in that of a confirmed `token.transfer` command (demo market) |
 | `transfer.settlement_mismatch` | blocking | executed/settled case without its movement, `:settled` journal without an executed case, or settled ≠ gross − fee − tax |
 | `transfer.register_mismatch` | blocking | executed case without exactly its two register entries |
 | `transfer.escrow_residual` | blocking | final case with escrow ≠ 0, or executed case still holding escrow after `escrow_residual_hours` (72) |

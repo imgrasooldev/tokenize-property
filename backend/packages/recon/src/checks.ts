@@ -517,7 +517,8 @@ export function checkRecovery(d: ReconData): Finding[] {
   const out: Finding[] = [];
   const r = d.recovery;
   if (!r) return out;
-  const linked = new Set(r.caseRequestIds);
+  // Requests of S-04 transfer cases are checked by checkTransfers, not here.
+  const linked = new Set([...r.caseRequestIds, ...(d.transfers?.caseRequestIds ?? [])]);
   for (const q of [...r.requests].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     if (linked.has(q.id)) continue;
     const what = `${q.kind} ${s(q.amount)} from ${q.from} to ${q.to}, ${q.status}`;
@@ -538,7 +539,24 @@ export function checkRecovery(d: ReconData): Finding[] {
   return out;
 }
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax] as const;
+// ------------------------------------------------------------------ secondary transfers (S-04 §16.8)
+
+const TRANSFER_CHECKS = new Set<string>(["transfer.unapproved", "transfer.settlement_mismatch", "transfer.register_mismatch", "transfer.escrow_residual",
+  "transfer.paid_not_executed", "transfer.paid_not_executed_overdue"]);
+const isTransferCheck = (x: string): x is CheckName => TRANSFER_CHECKS.has(x);
+
+/**
+ * The phase 0 transfer rules are evaluated in the database (transfer.reconcile: unapproved
+ * holder-to-holder movements, settlement and register mismatches, escrow residue, paid but not
+ * executed); an unknown rule name from the database is reported as a settlement mismatch (blocking).
+ */
+export function checkTransfers(d: ReconData): Finding[] {
+  const t = d.transfers;
+  if (!t) return [];
+  return t.findings.map((r) => f(isTransferCheck(r.check) ? r.check : "transfer.settlement_mismatch", r.subject, r.expected, r.actual));
+}
+
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax, checkTransfers] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

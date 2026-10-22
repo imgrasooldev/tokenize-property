@@ -697,6 +697,11 @@ describe("surveillance (TR-23) and reconciliation (16.8)", () => {
     const findings = await reconcile(db, token);
     expect(findings.filter((f) => f.check === "transfer.unapproved")).toHaveLength(1);
     expect(findings.find((f) => f.check === "transfer.unapproved")?.actual).toContain(`1 units from ${x.wallet}`);
+    // Only while the token is paused (phase 0); a movement made while unpaused (a mint window) is reported once it is paused again.
+    await mine([{ role: "token", name: "Unpaused", args: { _userAddress: ZERO } }]);
+    expect((await reconcile(db, token)).some((f) => f.check === "transfer.unapproved")).toBe(false);
+    await mine([{ role: "token", name: "Paused", args: { _userAddress: ZERO } }]);
+    expect((await reconcile(db, token)).some((f) => f.check === "transfer.unapproved")).toBe(true);
     // The "TR-11 cancelled" case above: paid, not executed, not yet refunded.
     expect(findings.some((f) => f.check === "transfer.paid_not_executed")).toBe(true);
     await db.query("UPDATE transfer.settings SET value = '0' WHERE key = 'paid_not_executed_hours'");

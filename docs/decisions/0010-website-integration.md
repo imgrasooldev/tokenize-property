@@ -105,3 +105,8 @@ The website reads anchoring the same way as the reconciliation status (0022): `p
   - `backend/packages/recon/test/local-stack.test.ts` replays a fresh stack (flow.py, website subscriptions and a trade, rent, bank) on a fake chain with the real indexer and proves zero findings; each booking is also shown to be necessary.
 - **Shared keys across databases (local only):** two signing services on one chain with the same platform key (for example the dev site and the test suite) can race for a nonce; the outbox resolves the loser as dropped and signs it again. Production has one signing service per chain.
 - **Not in this step:** the operations portal for approvals and reviews (Step 6), real providers and HSM/MPC custody, login roles for the other services (they still connect as the local admin; the website is the first to use its own role), and moving the website's demo records (`webdemo`) into backend services.
+
+## Amendment 2026-10-22: transfers on the website (S-04 section 16.9, migration 0028)
+
+- The website reaches transfers only through session-bound wrappers: `webauth.web_transfers` (read), `webauth.web_transfer_code` (a receive code), `webauth.web_transfer_request`, `webauth.web_transfer_accept` and `webauth.web_transfer_withdraw`. The KYC subject comes from the session; the three writes need the new step-up actions `transfer.request`, `transfer.accept`, `transfer.withdraw` (from PKR 0). `pt_web` has no grant on schema `transfer`.
+- The seller names the buyer by the buyer's receive code; the buyer accepts by re-entering the SHA-256 of the signed agreement (hashed in the browser, never uploaded). Investors see investor-facing states only, never the other party's identity or a reason for a refusal (tipping-off).

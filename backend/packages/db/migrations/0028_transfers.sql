@@ -1830,9 +1830,12 @@ DECLARE
   r record;
   v_now timestamptz := clock_timestamp();
 BEGIN
-  -- transfer.unapproved
+  -- transfer.unapproved: evaluated while the token is paused (phase 0 transfer-closed mode, TR-1), so a
+  -- movement during a mint window is caught once the token is paused again. A token kept unpaused (the
+  -- demo network's market, phase 1) has its movements controlled by the market's own rules.
   FOR r IN SELECT t.tx_hash, t.block_number, t.from_addr, t.to_addr, t.amount FROM chain.transfers t
            WHERE t.token = v_token AND t.kind = 'transfer' AND t.block_number >= v_from
+             AND coalesce((SELECT k.paused FROM chain.tokens k WHERE k.token = v_token), true)
              AND NOT EXISTS (SELECT 1 FROM chain.events e WHERE e.tx_hash = t.tx_hash AND e.name = 'RecoveryExecuted'
                                AND (EXISTS (SELECT 1 FROM transfer.cases x WHERE x.recovery_guard = e.address AND x.request_id = (e.args->>'id')::numeric)
                                     OR EXISTS (SELECT 1 FROM recovery.proposals p WHERE p.recovery_guard = e.address AND p.request_id = (e.args->>'id')::numeric)))
