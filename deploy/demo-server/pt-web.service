@@ -12,6 +12,8 @@ WorkingDirectory=/home/ubuntu/property-token/web
 Environment=NODE_ENV=production
 Environment=WEB_PLAIN_HTTP=1
 Environment=TRUST_PROXY=1
+# Same interval as pt-anchor.service: the rail and /verify warn after 2 x this (T-047).
+Environment=ANCHOR_INTERVAL_SECONDS=900
 Environment=NODE_OPTIONS=--max-old-space-size=384
 ExecStart=/usr/bin/npx next start --hostname 127.0.0.1 --port 3100
 Restart=always

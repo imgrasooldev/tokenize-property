@@ -78,13 +78,22 @@ export function registerCheck(supply: bigint, attestation: RegisterAttestation |
   return { kind: "mismatch", units: attestation.units, supply, difference: supply - attestation.units };
 }
 
-/** PV-23: an anchor older than this is shown with a warning. */
+/** PV-23: an anchor older than this is shown with a warning (2 x the hourly default interval). */
 export const ANCHOR_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
-export function anchorFresh(latestConfirmedAt: Date | null, now: Date): { ageMs: number | null; fresh: boolean } {
+export function anchorFresh(latestConfirmedAt: Date | null, now: Date, maxAgeMs = ANCHOR_MAX_AGE_MS): { ageMs: number | null; fresh: boolean } {
   if (!latestConfirmedAt) return { ageMs: null, fresh: false };
   const ageMs = Math.max(0, now.getTime() - latestConfirmedAt.getTime());
-  return { ageMs, fresh: ageMs <= ANCHOR_MAX_AGE_MS };
+  return { ageMs, fresh: ageMs <= maxAgeMs };
+}
+
+/**
+ * The anchoring interval in seconds, read like the anchoring job's ANCHOR_INTERVAL_SECONDS
+ * (10..86,400, default hourly). The page and the rail warn after 2 x this interval.
+ */
+export function anchorIntervalSeconds(raw: string | undefined): number {
+  const n = Number(raw);
+  return raw !== undefined && Number.isInteger(n) && n >= 10 && n <= 86_400 ? n : 3_600;
 }
 
 /** The read model's state as the page must present it (S-07 section 6, ADR 0006/0010). */
@@ -96,8 +105,4 @@ export function indexGate(status: { halted: string | null; stale: boolean } | nu
   return status.stale ? "stale" : "ok";
 }
 
-/** Formats a duration for "age" labels: minutes below two hours, then hours. */
-export function ageParts(ms: number): { unit: "min" | "h"; value: number } {
-  const min = Math.floor(ms / 60_000);
-  return min < 120 ? { unit: "min", value: min } : { unit: "h", value: Math.floor(min / 60) };
-}
+export { ageParts } from "./pulse-view";

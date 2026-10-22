@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
-import { isHealthy, shortHash, type PulseBlock } from "@/lib/pulse-view";
+import { ageParts, anchorRail, isHealthy, shortHash, type AnchorTone, type Pulse, type PulseBlock } from "@/lib/pulse-view";
 import { usePulse } from "./PulseProvider";
 
 const nf = (lang: Lang) => new Intl.NumberFormat(lang === "ur" ? "ur-PK" : "en-PK");
@@ -19,8 +20,67 @@ export interface RailLabels {
   intact: string;
   broken: string;
   anchor: string;
-  comingSoon: string;
   vsNav: string;
+  anchorStandIn: string;
+  anchorStandInTitle: string;
+  anchored: string;
+  anchorBlockN: string;
+  ago: string;
+  unitMin: string;
+  unitHour: string;
+  late: string;
+  failed: string;
+  pending: string;
+  noneYet: string;
+  notAvailable: string;
+  details: string;
+}
+
+const tpl = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/g, (m, k: string) => new Map(Object.entries(values)).get(k) ?? m);
+
+const TONE_CLASS: Record<AnchorTone, string> = { fresh: "up", late: "am", failed: "dn", pending: "am", none: "mu", unavailable: "mu" };
+
+/**
+ * Anchoring state in the rail (T-047, anchor.web_status via the pulse): the latest confirmed
+ * anchor's private block and age, amber when older than 2 x the interval, red when the newest
+ * anchor failed. Links to the anchor section of /verify. On the local stand-in chain the label
+ * says so: it never calls the stand-in a public network.
+ */
+function AnchorRailItem({ lang, l, p }: { lang: Lang; l: RailLabels; p: Pulse }) {
+  const a = anchorRail(p.anchor, p.at);
+  const age = a.ageMs === null ? null : ageParts(a.ageMs);
+  const ago = age === null ? null : tpl(l.ago, { n: nf(lang).format(age.value), u: age.unit === "min" ? l.unitMin : l.unitHour });
+  const block = a.block === null ? null : tpl(l.anchorBlockN, { n: `#${nf(lang).format(BigInt(a.block))}` });
+  let text: string;
+  switch (a.tone) {
+    case "fresh":
+    case "late":
+      text = [l.anchored, block, ago, a.tone === "late" ? l.late : null].filter((x) => x !== null).join(" · ");
+      break;
+    case "failed":
+      text = [l.failed, block, ago].filter((x) => x !== null).join(" · ");
+      break;
+    case "pending":
+      text = l.pending;
+      break;
+    case "none":
+      text = l.noneYet;
+      break;
+    case "unavailable":
+      text = l.notAvailable;
+      break;
+  }
+  const standInNote = p.anchor?.state === "ok" && a.standIn ? tpl(l.anchorStandInTitle, { n: String(p.anchor.chainId) }) : null;
+  return (
+    <Link href="/verify#anchor" className="rail-link" title={standInNote ?? l.details} data-anchor-tone={a.tone}>
+      {a.standIn ? l.anchorStandIn : l.anchor} <b className={TONE_CLASS[a.tone]}>{text}</b>
+      <span className="sr-only">
+        {" "}
+        ({standInNote ? `${standInNote} ` : ""}
+        {l.details})
+      </span>
+    </Link>
+  );
 }
 
 /** Top status rail: every value is read live from the chain or the ledger. */
@@ -75,9 +135,7 @@ export function ChainRail({ lang, l }: { lang: Lang; l: RailLabels }) {
             {l.ledger} <b className={p.ledgerOk ? "up" : "dn"}>{p.ledgerOk ? l.intact : l.broken}</b>
           </span>
         )}
-        <span>
-          {l.anchor} <b className="mu">{l.comingSoon}</b>
-        </span>
+        <AnchorRailItem lang={lang} l={l} p={p} />
       </div>
     </div>
   );

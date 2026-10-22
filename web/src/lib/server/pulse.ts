@@ -1,6 +1,7 @@
 import type { Block } from "viem";
 import { PROPERTIES } from "../properties";
 import type { Pulse, PulseBlock } from "../pulse-view";
+import { anchorRailStatus } from "./anchors";
 import { publicClient } from "./chain";
 import { db } from "./db";
 import { liveToken } from "./readmodel";
@@ -9,7 +10,8 @@ import { marketSnapshot } from "./market";
 
 /**
  * Public "network pulse" for the status rail, the live block row and the home page: the latest
- * blocks, validator count, the live token's price and supply, and the ledger hash-chain check.
+ * blocks, validator count, the live token's price and supply, the ledger hash-chain check and the
+ * public-anchoring status (anchor.web_status, migration 0025).
  * Everything is read from the chain or the database; nothing is invented. One shared value per
  * second for all viewers (the same pattern as the market snapshot), so polling clients cannot
  * multiply the load on the chain or the database. No personal data.
@@ -44,7 +46,7 @@ export function chainPulse(): Promise<Pulse> {
   return pending ?? Promise.resolve(EMPTY);
 }
 
-const EMPTY: Pulse = { ok: false, at: 0, blocks: [], blockSeconds: null, validators: null, market: null, ledgerOk: null };
+const EMPTY: Pulse = { ok: false, at: 0, blocks: [], blockSeconds: null, validators: null, market: null, ledgerOk: null, anchor: null };
 
 function toPulseBlock(b: Block): PulseBlock {
   return {
@@ -79,7 +81,7 @@ async function readValidators(): Promise<number | null> {
 
 async function readPulse(): Promise<Pulse> {
   const liveP = PROPERTIES.at(0);
-  const [blocks, validators, snapshot, token, ledger] = await Promise.all([
+  const [blocks, validators, snapshot, token, ledger, anchor] = await Promise.all([
     readBlocks().catch(() => [] as PulseBlock[]),
     readValidators(),
     liveP ? marketSnapshot(liveP.symbol).catch(() => null) : Promise.resolve(null),
@@ -87,6 +89,7 @@ async function readPulse(): Promise<Pulse> {
     db()
       .then((pool) => chainProblemsCached(pool))
       .catch(() => null),
+    anchorRailStatus(),
   ]);
   const first = blocks.at(-1);
   const last = blocks.at(0);
@@ -108,5 +111,6 @@ async function readPulse(): Promise<Pulse> {
         }
       : null,
     ledgerOk: ledger === null ? null : ledger === 0,
+    anchor,
   };
 }
