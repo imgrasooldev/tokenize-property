@@ -163,8 +163,8 @@ describe("seed:catalog with the demo officers enrolled", () => {
       const p = await demoOf(m.property_id);
       // No quorum yet: the chair cannot close.
       expect(await committeeClose(db.client, DEMO_ROLES.icChair.handle, m.id, fileSha(minutesFile(p)))).toMatchObject({ ok: false, state: "23514" });
-      for (const k of ["icChair", "icMember", "icIndependent"] as const) {
-        expect(await committeeVote(db.client, DEMO_ROLES[k].handle, m.id, "approve", "title, encumbrances, two valuations and the opinion are clean")).toMatchObject({ ok: true, status: "approve" });
+      for (const member of [DEMO_ROLES.icChair, DEMO_ROLES.icMember, DEMO_ROLES.icIndependent]) {
+        expect(await committeeVote(db.client, member.handle, m.id, "approve", "title, encumbrances, two valuations and the opinion are clean")).toMatchObject({ ok: true, status: "approve" });
       }
       // Only the chair closes.
       expect(await committeeClose(db.client, DEMO_ROLES.icMember.handle, m.id, fileSha(minutesFile(p)))).toMatchObject({ ok: false, state: "42501" });
