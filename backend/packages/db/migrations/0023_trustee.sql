@@ -22,10 +22,9 @@
 --        incl. the completion payment batch, L3, L7, L8, L10..L16, SD) are voted through
 --        admin.decide_offering_request under the officer's handle. For a portal officer the S-02
 --        trustee duty IS the trustee_officer role (active), and a trustee officer holds no other
---        offering duty (OF-SOD-4). Every portal decision needs a step-up younger than five minutes
---        and the digest of what was shown. Offering votes under an officer's handle from the
---        command line stay possible (break-glass, as the S-01 property path; the demo catalogue
---        seed of T-045 relies on it): binding them to sessions is an open item.
+--        offering duty (OF-SOD-4); votes under an officer's handle are accepted only inside the portal
+--        (binding trigger on offering.request_votes, as 0016 A-3). Every decision needs a step-up
+--        younger than five minutes and the digest of what was shown.
 --   T-3  Rent distributions (spec S-03 D4/D6): a trustee officer approves (stating the Merkle root
 --        they recomputed, which must equal the published root) or rejects with a reason while the
 --        distribution is published on chain and inside the 48-hour challenge window counted from
@@ -466,6 +465,15 @@ BEGIN
 END $$;
 CREATE TRIGGER duties_officer_check BEFORE INSERT ON offering.duties FOR EACH ROW EXECUTE FUNCTION admin.check_offering_duty();
 
+
+/** Officer handles on offering votes are bound to officer sessions (as 0016 A-3). */
+CREATE FUNCTION admin.bind_offering_vote() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, admin AS $$
+BEGIN
+  PERFORM admin.guard_officer_name(NEW.officer, 'offering vote by');
+  RETURN NEW;
+END $$;
+CREATE TRIGGER request_votes_officer_binding BEFORE INSERT ON offering.request_votes FOR EACH ROW EXECUTE FUNCTION admin.bind_offering_vote();
 
 /** Digest of an S-02 request as the trustee officer reviewed it. */
 CREATE FUNCTION admin.offering_request_digest(p_request bigint) RETURNS bytea

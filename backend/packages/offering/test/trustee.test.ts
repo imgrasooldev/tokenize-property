@@ -65,6 +65,8 @@ describe("trustee votes on S-02 requests through the portal (migration 0023)", (
     await ageClose(w, o.id);
     const t = await w.of("tick", { offeringId: o.id, actor: OF.system });
     const l11 = String(t.proposed);
+    // The officer's handle cannot be used on the command line.
+    expect(await code(w.of("decide", { requestId: l11, officer: t1.handle, approve: true, reason: "pretending to be the portal" }))).toBe("FORBIDDEN");
     // An operations officer has no trustee permission.
     expect(await code(vote(ops, l11, "approve", "operations is not the trustee"))).toBe("42501");
     // What the officer reviewed must still be the request.

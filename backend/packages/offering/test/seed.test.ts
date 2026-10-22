@@ -8,11 +8,13 @@ import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
 import { officer, officerForDuty } from "../../db/test/officers.ts";
 import { contiguousMigrations } from "../../property/test/helpers.ts";
-import { DEMO_DIR, DEMO_PROPERTIES, DEMO_ROLES, offeringFiles, propertyFiles, seedCatalog, SPONSOR, type SeedResult, type SeedSecrets } from "../src/seed.ts";
+import { DEMO_DIR, DEMO_PROPERTIES, DEMO_ROLES, propertyFiles, seedCatalog, SPONSOR, type SeedResult, type SeedSecrets } from "../src/seed.ts";
 
 /**
  * The demo catalog seed (npm run seed:catalog) against scratch databases. The TEST creates the demo
- * officers with the test-only helper (bootstrap admins + stand-in keys); the seed itself never does.
+ * officers with the test-only helper (bootstrap admins + stand-in keys); the seed itself never does,
+ * and it never votes under an officer's name: it stops at each vote, which the test casts through
+ * the portal's own function with a real officer session where PT Control has a screen for it.
  */
 
 const fileSha = (name: string): string => createHash("sha256").update(readFileSync(`${DEMO_DIR}${name}`)).digest("hex");
@@ -67,6 +69,8 @@ describe("seed:catalog with the demo officers enrolled", () => {
   let db: Db;
   const keys = secrets();
   let first: Extract<SeedResult, { status: "done" }>;
+  const q = async (sql: string, params: unknown[] = []): Promise<number> =>
+    Number((await db.client.query<{ n: string }>(sql.replace("SELECT count(*)", "SELECT count(*) AS n"), params)).rows[0]?.n ?? "-1");
 
   beforeAll(async () => {
     db = await database();
@@ -81,80 +85,87 @@ describe("seed:catalog with the demo officers enrolled", () => {
     await db.drop();
   }, 120_000);
 
-  it("onboards both properties to Tokenization Ready and their offerings to approved", async () => {
-    expect(first.properties.map((p) => p.outcome)).toEqual(["created", "created"]);
+  /** Every vote or decision recorded under a portal officer's handle. */
+  const officerVotes = async (): Promise<number> =>
+    (await q("SELECT count(*) FROM property.requests r JOIN admin.officers o ON o.handle = r.decided_by")) +
+    (await q("SELECT count(*) FROM property.ic_votes v JOIN admin.officers o ON o.handle = v.member")) +
+    (await q("SELECT count(*) FROM property.trustee_decisions d JOIN admin.officers o ON o.handle = d.trustee")) +
+    (await q("SELECT count(*) FROM offering.request_votes v JOIN admin.officers o ON o.handle = v.officer"));
+
+  it("prepares the KYB file, then stops at the K4 decision: no vote is cast under an officer's name", async () => {
+    expect(first.properties.map((p) => p.outcome)).toEqual(["waiting", "waiting"]);
     for (const p of first.properties) {
-      expect(p.line).toContain("created");
-      const { rows } = await db.client.query<{ state: string; offering: string }>(
-        "SELECT p.state, o.state AS offering FROM property.properties p JOIN offering.offerings o ON o.property_id = p.id WHERE p.id = $1",
-        [p.propertyId],
-      );
-      expect(rows).toEqual([{ state: "tokenization_ready", offering: "approved" }]);
+      expect(p.votes).toHaveLength(1);
+      expect(p.votes[0]).toMatch(/K4 KYB approval .* decides it in PT Control, Approvals > Property & KYB \(\/approvals\/property\/\d+\)/);
+      expect(p.propertyId).toBeNull();
     }
     expect(first.dutiesGranted).toBe(Object.keys(DEMO_ROLES).length);
+    expect(await q("SELECT count(*) FROM property.requests WHERE code = 'K4' AND status = 'open'")).toBe(1);
+    expect(await officerVotes()).toBe(0);
   });
 
-  it("keeps maker and checker apart everywhere", async () => {
-    const q = async (sql: string): Promise<number> => Number((await db.client.query<{ n: string }>(sql.replace("SELECT count(*)", "SELECT count(*) AS n"))).rows[0]?.n ?? "-1");
-    expect(await q("SELECT count(*) FROM property.requests WHERE status = 'approved' AND decided_by = requested_by")).toBe(0);
-    expect(await q("SELECT count(*) FROM property.requests WHERE status = 'approved'")).toBe(1);
-    expect(await q("SELECT count(*) FROM property.staff_duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
-    expect(await q("SELECT count(*) FROM offering.duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
-    expect(await q("SELECT count(*) FROM property.valuers WHERE approved_by = added_by")).toBe(0);
-    expect(await q("SELECT count(*) FROM offering.request_votes v JOIN offering.requests r ON r.id = v.request_id WHERE v.officer = r.requested_by")).toBe(0);
-    // L3: four distinct approvers per offering, none of them a party to the property's S-01 file.
-    const { rows } = await db.client.query<{ n: number; parties: number }>(
-      `SELECT count(DISTINCT v.officer)::int AS n,
-              count(*) FILTER (WHERE v.officer = ANY (property.parties(o.property_id)))::int AS parties
-       FROM offering.request_votes v JOIN offering.requests r ON r.id = v.request_id AND r.code = 'L3'
-       JOIN offering.offerings o ON o.id = r.offering_id GROUP BY o.id`,
+  it("writes nothing on a second run while the same votes are due", async () => {
+    const before = await counts(db.client, ["property", "offering", "kyc", "admin"]);
+    const again = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(again.dutiesGranted).toBe(0);
+    expect(again.properties.map((p) => [p.outcome, p.writes])).toEqual([
+      ["waiting", 0],
+      ["waiting", 0],
+    ]);
+    expect(again.properties.map((p) => p.votes)).toEqual(first.properties.map((p) => p.votes));
+    expect(await counts(db.client, ["property", "offering", "kyc", "admin"])).toEqual(before);
+  });
+
+  it("continues once the compliance officer decided K4 in the portal (session, step-up, digest), and stops at the committee votes", async () => {
+    const k4 = (await db.client.query<{ id: string; requested_by: string }>("SELECT id::text, requested_by FROM property.requests WHERE code = 'K4' AND status = 'open'")).rows[0];
+    const checker = k4?.requested_by === DEMO_ROLES.complianceChecker.handle ? DEMO_ROLES.complianceMaker.handle : DEMO_ROLES.complianceChecker.handle;
+    const o = await officer(db.client, checker, "compliance_officer");
+    const digest = (await db.client.query<{ d: Buffer }>("SELECT admin.property_request_digest($1) AS d", [k4?.id])).rows[0]?.d;
+    const r = await db.client.query<{ r: { ok: boolean; status?: string; error?: string } }>(
+      "SELECT admin.decide_property_request($1, $2, 'approve', 'KYB file reviewed in PT Control, agree', $3) AS r",
+      [o.sessionHash, k4?.id, digest],
     );
-    expect(rows).toEqual([
-      { n: 4, parties: 0 },
-      { n: 4, parties: 0 },
+    expect(r.rows[0]?.r).toMatchObject({ ok: true });
+    const next = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(next.properties.map((p) => p.outcome)).toEqual(["waiting", "waiting"]);
+    for (const p of next.properties) {
+      expect(p.propertyState).toBe("under_review");
+      expect(p.votes.join("\n")).toMatch(/investment committee vote of /);
+      expect(p.votes.join("\n")).toMatch(/no PT Control screen for this vote yet/);
+    }
+    // The only decision under an officer's name is the one taken in the portal.
+    expect(await officerVotes()).toBe(1);
+    expect(await q("SELECT count(*) FROM admin.audit WHERE action = 'approval.decided' AND detail->>'kind' = 'property'")).toBe(1);
+    expect(await q("SELECT count(*) FROM property.requests WHERE status = 'approved' AND decided_by = requested_by")).toBe(0);
+    // Idempotent at this stop as well.
+    const again = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(again.properties.map((p) => [p.outcome, p.writes])).toEqual([
+      ["waiting", 0],
+      ["waiting", 0],
     ]);
   });
 
-  it("leaves intact property and offering audit chains", async () => {
+  it("keeps maker and checker apart and leaves intact property, offering and KYC audit chains", async () => {
+    expect(await q("SELECT count(*) FROM property.staff_duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
+    expect(await q("SELECT count(*) FROM offering.duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
+    expect(await q("SELECT count(*) FROM property.valuers WHERE approved_by = added_by")).toBe(0);
     expect((await db.client.query("SELECT * FROM property.verify_audit()")).rows).toEqual([]);
     expect((await db.client.query("SELECT * FROM offering.verify_audit()")).rows).toEqual([]);
     expect((await db.client.query("SELECT * FROM kyc.verify_audit()")).rows).toEqual([]);
+    expect((await db.client.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 
   it("records the SHA-256 of the demo files' exact bytes", async () => {
     const { rows: kyb } = await db.client.query<{ sha256: string }>("SELECT sha256 FROM property.document_list WHERE property_id IS NULL ORDER BY sha256");
     expect(kyb.map((r) => r.sha256)).toEqual(SPONSOR.docs.map(([, f]) => fileSha(f)).sort());
-    for (const [i, p] of DEMO_PROPERTIES.entries()) {
-      const id = first.properties.at(i)?.propertyId;
-      const { rows } = await db.client.query<{ doc_type: string; sha256: string }>("SELECT doc_type, sha256 FROM property.document_list WHERE property_id = $1", [id]);
-      const recorded = rows.map((r) => `${r.doc_type}:${r.sha256}`).sort();
-      expect(recorded).toEqual(propertyFiles(p).map((f) => `${f.docType}:${fileSha(f.file)}`).sort());
-      const f = offeringFiles(p);
-      const { rows: o } = await db.client.query<{ en: string; ur: string; risk: string }>(
-        "SELECT encode(doc_en_sha, 'hex') AS en, encode(doc_ur_sha, 'hex') AS ur, encode(risk_sha, 'hex') AS risk FROM offering.offerings WHERE property_id = $1",
-        [id],
+    for (const p of DEMO_PROPERTIES) {
+      const { rows } = await db.client.query<{ doc_type: string; sha256: string }>(
+        "SELECT d.doc_type, d.sha256 FROM property.document_list d JOIN property.properties x ON x.id = d.property_id WHERE x.building = $1 AND x.deed_no = $2",
+        [p.identifiers.building, p.identifiers.deed_no],
       );
-      expect(o).toEqual([{ en: fileSha(f.en), ur: fileSha(f.ur), risk: fileSha(f.risk) }]);
-    }
-  });
-
-  it("writes nothing on a second run and reports already approved", async () => {
-    const before = await counts(db.client, ["property", "offering", "kyc", "admin"]);
-    const again = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
-    expect(again.dutiesGranted).toBe(0);
-    expect(again.properties.map((p) => [p.outcome, p.writes])).toEqual([
-      ["already", 0],
-      ["already", 0],
-    ]);
-    for (const p of again.properties) expect(p.line).toMatch(/: already approved$/);
-    expect(await counts(db.client, ["property", "offering", "kyc", "admin"])).toEqual(before);
-  });
-
-  it("lets the database refuse mark_ready for a token that is not in the read model", async () => {
-    const r = done(await seedCatalog(db.pool, { env: {}, secrets: keys, token: `0x${"ab".repeat(20)}` }));
-    for (const p of r.properties) {
-      expect(p.offeringState).toBe("approved");
-      expect(p.line).toContain("mark_ready refused: the token is not in the read model");
+      expect(rows.length).toBeGreaterThan(0);
+      const expected = new Set(propertyFiles(p).map((f) => `${f.docType}:${fileSha(f.file)}`));
+      for (const r of rows) expect(expected.has(`${r.doc_type}:${r.sha256}`)).toBe(true);
     }
   });
 

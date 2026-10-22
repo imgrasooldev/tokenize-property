@@ -223,8 +223,8 @@ every decision, the digest of what the officer saw, and then bind the officer's 
   sale deed and the completion payment batch file hash) are voted by trustee officers in the portal:
   `admin.decide_offering_request` runs `offering.decide` under the officer's handle. For a portal
   officer the trustee duty is the `trustee_officer` role (active); a trustee officer holds no other
-  offering duty (OF-SOD-4, trigger on `offering.duties`). Command-line votes under an officer's
-  handle are not bound to a session yet (the T-045 catalogue seed votes that way; open item 13). Names that are not portal
+  offering duty (OF-SOD-4, trigger on `offering.duties`); votes under an officer's handle need the
+  officer's session (binding trigger on `offering.request_votes`). Names that are not portal
   officers keep the 0015 command-line duties (break-glass; open item 12).
 - **Distribution review (T-3, spec S-03 D4/D6 amendment).** While a distribution is `published` in the
   read model and inside the 48-hour challenge window counted from its publish block's time (the
@@ -361,10 +361,10 @@ every decision, the digest of what the officer saw, and then bind the officer's 
     approvals (above `approvalAbove`); owner/trustee to confirm whether every mint (Issuance Safe
     2-of-3 incl. trustee) should need it, and whether the off-chain rule should equal the Safe's
     2-of-3 (today it is stricter: platform approvals plus the trustee).
-13. (6d) Command-line offering votes still work, for names that are not portal officers and for
-    officer handles without a session (break-glass, server access needed; the T-045 `seed:catalog`
-    acts this way). Bind offering (and S-01 property) votes to sessions before the pilot: trustee
-    only through the portal; the seed would then need officer sessions.
+13. (6d) Command-line offering duties for names that are not portal officers still work for the
+    trustee duty (break-glass, server access needed); close before the pilot (trustee only through
+    the portal). Votes under a portal officer's handle are refused outside the portal (enforced).
+    `seed:catalog` (T-045) never casts a vote or decision under an officer's handle: it prepares everything up to the first vote (K4, investment committee, P8, L3), stops with outcome `waiting` and lists which votes officers must cast in PT Control (session + step-up), and writes nothing on a re-run while they are due. PT Control has screens for K4 (Approvals > Property & KYB) and the trustee's L3 vote (Trustee > Co-signing); investment committee votes, the P8 trustee acceptance and the non-trustee L3 votes have no screen yet, so the demo catalogue currently stops at the committee.
 14. (6d) The trustee register is the trustee's record inside our database; the trustee's own system
     of record (e.g. CDC) and a signed attestation feed (S-07 Q-2, recon `supply.register_mismatch`)
     are not wired yet.

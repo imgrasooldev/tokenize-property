@@ -32,8 +32,15 @@ import { OfferingError, runAction as runOffering, type ActionInput as OfferingIn
  *     operator name as `by` (no portal session is needed).
  *   - Idempotent: identifiers are deterministic (sponsor CUIN, building + deed number, valuer
  *     licences, document bytes); a second run finds everything and writes nothing.
- *   - Ends at offering state `approved` (L3). `ready` needs a deployed, paused token with the trustee
- *     cap and the documents anchored (offering.mark_ready): only attempted with an explicit token.
+ *   - It NEVER casts a vote or decision under an officer's handle (lead decision 2026-10-22, ADR 0011
+ *     open item 13): the K4 KYB decision, the investment committee votes and its close, the trustee's
+ *     P8 acceptance and the L3 offering votes are the officers' own, in PT Control with a session and
+ *     a security-key step-up. The seed prepares everything up to the first such vote, then stops and
+ *     reports which votes are due and where ("waiting"); run it again after the officers decided.
+ *     A run that finds the same votes still due writes nothing.
+ *   - With every vote cast, it ends at offering state `approved` (L3). `ready` needs a deployed, paused
+ *     token with the trustee cap and the documents anchored (offering.mark_ready): only attempted
+ *     with an explicit token.
  *   - Documents are the files in ../demo/: their SHA-256 (of the exact bytes) is what gets recorded.
  */
 
@@ -288,7 +295,9 @@ export interface SeedOptions {
 export interface PropertyOutcome {
   slug: string;
   name: string;
-  outcome: "created" | "resumed" | "already" | "blocked" | "failed";
+  outcome: "created" | "resumed" | "already" | "waiting" | "blocked" | "failed";
+  /** For "waiting": the votes officers must cast in PT Control before the seed can continue. */
+  votes: string[];
   propertyId: string | null;
   offeringId: string | null;
   propertyState: string | null;
@@ -306,6 +315,15 @@ export type SeedResult =
 const sha = (b: Buffer | string): string => createHash("sha256").update(b).digest("hex");
 /** Hash of a short, labelled statement standing in for an evidence file of the demo (no such file exists). */
 const evidence = (slug: string, what: string): string => sha(`DEMO EVIDENCE - ${what} - ${slug} (fictional)`);
+
+/** The seed reached a vote that only an officer may cast (in PT Control): it stops here. */
+class Waiting extends Error {
+  constructor(readonly votes: string[]) {
+    super(`waiting for officers: ${votes.join("; ")}`);
+  }
+}
+
+const NO_SCREEN = "no PT Control screen for this vote yet (the seed never casts it under the officer's name)";
 
 interface DemoFile {
   bytes: Buffer;
@@ -605,8 +623,9 @@ async function ensureSponsor(c: Ctx): Promise<SponsorRef> {
     );
     const requestId = open?.id ?? String(await c.p("requestTransition", { entity: "sponsor", id: sponsorId, code: "K4", officer: c.h.complianceMaker, reason: "demo catalog: all KYB checks complete and clear" }));
     const checker = open?.requested_by === c.h.complianceChecker ? c.h.complianceMaker : c.h.complianceChecker;
-    await c.p("decideRequest", { requestId, officer: checker, approve: true, reason: "demo catalog: KYB file reviewed, agree" });
-    state = await sponsorState(c.pool, sponsorId);
+    throw new Waiting([
+      `K4 KYB approval of the demo sponsor (request #${requestId}): ${checker} decides it in PT Control, Approvals > Property & KYB (/approvals/property/${requestId}), with a security-key step-up`,
+    ]);
   }
   if (state !== "kyb_approved") throw new Error(`the demo sponsor is ${state ?? "unknown"}, not kyb_approved`);
   return { sponsorId, repId };
@@ -707,12 +726,14 @@ async function dueDiligence(c: Ctx, p: DemoProperty, propertyId: string, sponsor
 async function committee(c: Ctx, p: DemoProperty, propertyId: string): Promise<void> {
   const open = await c.one<{ id: string }>("SELECT id::text FROM property.ic_meetings WHERE property_id = $1 AND status = 'open'", [propertyId]);
   const meetingId = open?.id ?? String(await c.p("openIc", { propertyId, chair: c.h.icChair }));
+  const due: string[] = [];
   for (const member of [c.h.icChair, c.h.icMember, c.h.icIndependent]) {
     if (!(await c.one("SELECT 1 FROM property.ic_votes WHERE meeting_id = $1 AND member = $2", [meetingId, member]))) {
-      await c.p("castVote", { meetingId, member, vote: "approve" });
+      due.push(`investment committee vote of ${member} (${p.name}, meeting #${meetingId}): ${NO_SCREEN}`);
     }
   }
-  await c.p("closeIc", { meetingId, chair: c.h.icChair, minutes: evidence(p.slug, `investment committee minutes ${meetingId}`) });
+  due.push(`closing the investment committee by the chair ${c.h.icChair} (meeting #${meetingId}, minutes): ${NO_SCREEN}`);
+  throw new Waiting(due);
 }
 
 async function structureAndTrustee(c: Ctx, p: DemoProperty, propertyId: string, sponsorId: string): Promise<void> {
@@ -737,7 +758,7 @@ async function structureAndTrustee(c: Ctx, p: DemoProperty, propertyId: string, 
             trustDeedId: deed,
           }),
         );
-  await c.p("trusteeDecide", { propertyId, trustee: c.h.trustee, structureId, accept: true, reason: "demo catalog: documents and structure accepted by the trustee" });
+  throw new Waiting([`trustee acceptance (P8) of ${p.name} (structure #${structureId}) by ${c.h.trustee}: ${NO_SCREEN}`]);
 }
 
 async function seedProperty(c: Ctx, p: DemoProperty): Promise<{ propertyId: string | null; state: string; blocked?: string }> {
@@ -815,15 +836,21 @@ async function seedOffering(c: Ctx, p: DemoProperty, propertyId: string): Promis
         [row.id],
       );
       if (!q || q.expired) {
-        if (q) await c.o("decide", { requestId: q.id, officer: c.h.offeringChecker, approve: true, reason: "demo catalog: closing the expired request" });
-        await c.o("returnOffering", { offeringId: row.id, actor: c.h.offeringChecker, reason: "demo catalog: the approval request lapsed, resubmitting" });
-      } else {
-        for (const k of ["offeringChecker", "offeringLegalHead", "offeringCompliance", "offeringTrustee"] as const) {
-          if (!(await c.one("SELECT 1 FROM offering.request_votes WHERE request_id = $1 AND officer = $2", [q.id, handle(c.h, k)]))) {
-            await c.o("decide", { requestId: q.id, officer: handle(c.h, k), approve: true, reason: `demo catalog: ${def(k).what}` });
-          }
+        throw new Waiting([
+          `the L3 approval request of ${p.name} ${q ? `(#${q.id}) expired` : "is missing"}: an offering checker closes it and returns the offering in PT Control; ${NO_SCREEN}`,
+        ]);
+      }
+      const due: string[] = [];
+      for (const k of ["offeringChecker", "offeringLegalHead", "offeringCompliance", "offeringTrustee"] as const) {
+        if (!(await c.one("SELECT 1 FROM offering.request_votes WHERE request_id = $1 AND officer = $2", [q.id, handle(c.h, k)]))) {
+          due.push(
+            k === "offeringTrustee"
+              ? `L3 vote of the trustee ${handle(c.h, k)} on request #${q.id} (${p.name}): in PT Control, Trustee > Co-signing (/trustee/cosign/offering/${q.id}), with a security-key step-up`
+              : `L3 vote of ${handle(c.h, k)} (${def(k).what}) on request #${q.id} (${p.name}): ${NO_SCREEN}`,
+          );
         }
       }
+      if (due.length) throw new Waiting(due);
     } else if (row.state === "approved" && c.token) {
       try {
         await runOffering(c.pool, "markReady", { offeringId: row.id, token: c.token, actor: c.h.offeringMaker });
@@ -903,6 +930,7 @@ export async function seedCatalog(pool: pg.Pool, options: SeedOptions = {}): Pro
           slug: p.slug,
           name: p.name,
           outcome: kind,
+          votes: [],
           propertyId: pr.propertyId,
           offeringId: off.offeringId,
           propertyState: pr.state,
@@ -912,10 +940,30 @@ export async function seedCatalog(pool: pg.Pool, options: SeedOptions = {}): Pro
         };
       } catch (e) {
         const row = await propertyRow(c, p);
+        if (e instanceof Waiting) {
+          const off = row ? await offeringRow(c, row.id) : undefined;
+          out = {
+            slug: p.slug,
+            name: p.name,
+            outcome: "waiting",
+            votes: e.votes,
+            propertyId: row?.id ?? null,
+            offeringId: off?.id ?? null,
+            propertyState: row?.state ?? null,
+            offeringState: off?.state ?? null,
+            writes: c.writes,
+            line: `${p.name}: waiting at ${off ? `offering ${off.state}` : (row?.state ?? "the sponsor's KYB")} for ${String(e.votes.length)} officer vote(s) in PT Control`,
+          };
+          log(out.line);
+          for (const v of e.votes) log(`  - ${v}`);
+          properties.push(out);
+          continue;
+        }
         out = {
           slug: p.slug,
           name: p.name,
           outcome: "failed",
+          votes: [],
           propertyId: row?.id ?? null,
           offeringId: null,
           propertyState: row?.state ?? null,
