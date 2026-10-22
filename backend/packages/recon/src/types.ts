@@ -81,6 +81,13 @@ export const CHECKS = {
   // A cancelled request moved nothing; still worth a look (the local chain/flow.py scenario has one).
   "recovery.unmatched_cancelled": "warning",
   "recovery.reversal_unmatched": "blocking",
+  // Operations and FBR withholding (spec S-03 §8, migration 0021; rules in tax.reconcile())
+  "rent.wht_mismatch": "blocking",
+  "rent.statement_totals": "blocking",
+  "tax.line_arithmetic": "blocking",
+  "tax.payable_mismatch": "blocking",
+  // Warning only: freezing payouts would not make the remittance happen sooner (due date LEGAL/TAX TO CONFIRM).
+  "tax.wht_unremitted": "warning",
 } as const satisfies Record<string, Severity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -238,6 +245,14 @@ export interface RecoveryData {
   reversals: { caseId: bigint; journalId: bigint; reversalJournalId: bigint }[];
 }
 
+/** S-03 operations and tax of this token (migration 0021); absent where it is not applied. */
+export interface TaxData {
+  /** Rows of tax.reconcile(token): the consistency rules, evaluated in the database. */
+  findings: { check: string; subject: string; expected: string; actual: string }[];
+  /** Calculations with an attached statement, re-verified here independently (keccak, Merkle root, totals). */
+  documents: { id: string; status: string; onchainId: bigint | null; statement: string; statementHash: string; schedule: string; scheduleHash: string; root: string }[];
+}
+
 export interface ReconData {
   /** Database time of the snapshot; all ages are measured from it. */
   asOf: Date;
@@ -259,6 +274,8 @@ export interface ReconData {
   offerings?: OfferingData;
   /** S-06 recovery cases and reversals; absent where migration 0020 is not applied. */
   recovery?: RecoveryData;
+  /** S-03 operations and FBR withholding of this token; absent where migration 0021 is not applied. */
+  tax?: TaxData;
   bank: {
     accounts: BankAccount[];
     statements: BankStatement[];

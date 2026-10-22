@@ -32,6 +32,14 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     ],
   },
   { title: "Cases", items: [{ href: "/recovery", label: "Recovery & succession", icon: "⟲", need: "recovery.read" }] },
+  {
+    title: "Operations & tax",
+    items: [
+      { href: "/operations", label: "Property operations", icon: "₨", need: "operations.read" },
+      { href: "/tax", label: "Withholding tax", icon: "%", need: "tax.read" },
+      { href: "/tax/exports", label: "FBR filing exports", icon: "⇩", need: "tax.read" },
+    ],
+  },
   { title: "Trustee", items: [{ href: "/trustee", label: "Register", icon: "▦", need: "trustee.read", tag: "6d" }] },
   { title: "Administration", items: [{ href: "/officers", label: "Officers & roles", icon: "⚿", need: "officers.read" }] },
 ];

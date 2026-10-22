@@ -2,7 +2,11 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Latest update (2026-10-13, S-06 on branch `s-06-recovery`, not merged)
+## Latest update (2026-10-22, S-03 on a branch, brought up to date with main)
+
+- **S-03 operations + FBR withholding (T-023/T-024) built on branch `s-03-operations-tax`, not merged** (migration `0021_operations_tax.sql`, applies on top of S-06's 0020; ADR 0014 Proposed: sealed CNIC for tax). Partial: see TASKS T-023/T-024 for what is not built. Tax rates are PLACEHOLDERS (LEGAL/TAX TO CONFIRM); approval of a distribution with them is refused unless `ops.settings.allow_placeholder_rates` (local dev only).
+
+## Earlier update (2026-10-13, S-06 on branch `s-06-recovery`, not merged)
 
 - **S-06 recovery / succession / reversals (T-026)** built on a branch: migration `0020_recovery.sql` (0021 is reserved for parallel work), signer kinds `recovery.*`, `@pt/recovery`, KYC re-verification, recon checks, portal `/recovery` with the new `legal_officer` role. Spec S-06 section 14 lists what is built and owner questions OQ-1..OQ-7 (notably: a lost custodial key cannot be recovered on chain with today's identities). Not run on Besu (48 h delay), no Playwright e2e; the website still shows the old wallet after a recovery (T-045).
 

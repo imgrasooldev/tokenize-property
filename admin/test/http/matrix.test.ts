@@ -9,6 +9,7 @@ import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
 import { caseOf, freezePolicies, investor } from "../support/compliance";
 import { reversalCase, walletCase } from "../support/recovery";
+import { operationsWorld } from "../support/operations";
 import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
 
 /**
@@ -20,9 +21,9 @@ import { cast, createWorld, invite, type Actor, type Cast, type World } from "..
 const PORT = 3399;
 const ORIGIN = `http://localhost:${String(PORT)}`;
 const COOKIE = "__Host-pt_admin";
-type Role = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "auditor" | "admin";
+type Role = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "tax_officer" | "auditor" | "admin";
 type Who = Role | "anonymous" | "investor";
-const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"];
+const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"];
 const EVERYONE: Who[] = [...ROLES, "anonymous", "investor"];
 const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 
@@ -31,6 +32,8 @@ const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "aud
 const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 // S-06: every role that works on cases reads them (never trustee officers or administrators).
 const RECOVERY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"];
+const OPERATIONS: Role[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
+const TAX: Role[] = ["tax_officer", "auditor"];
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -69,6 +72,14 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/recovery/999999", allowed: RECOVERY, okStatus: 404 },
   { path: "/audit/recovery", allowed: RECOVERY },
   { path: "/trustee", allowed: ["trustee_officer", "auditor"] },
+  // S-03 (migration 0021): operations for makers, checkers, the trustee, tax officers and auditors; tax for tax officers and auditors.
+  { path: "/operations", allowed: OPERATIONS },
+  { path: "/operations/charges/{charge}", allowed: OPERATIONS },
+  { path: "/operations/charges/999999", allowed: OPERATIONS, okStatus: 404 },
+  { path: "/operations/distributions/{distribution}", allowed: OPERATIONS },
+  { path: "/tax", allowed: TAX },
+  { path: "/tax/exports", allowed: TAX },
+  { path: "/tax/exports/{taxExport}", allowed: TAX },
 ];
 
 /** Session-protected POST routes: who passes authorisation, and the status they then get. */
@@ -108,12 +119,23 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/recovery/cases/{reversalCase}/wallet", allowed: ["ops_maker"], okStatus: 303, form: {} },
   { path: "/api/recovery/cases/{reversalCase}/act", allowed: ["ops_checker", "compliance_officer", "legal_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/recovery/sync", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  // S-03: an incomplete form (or a missing step-up, or no generate button) is answered with a 303 back (nothing done).
+  { path: "/api/operations/charges", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/operations/charges/{charge}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/operations/distributions/{distribution}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/tax/rates", allowed: ["tax_officer"], okStatus: 303, form: {} },
+  { path: "/api/tax/rates/{taxRate}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/tax/exports", allowed: ["tax_officer"], okStatus: 303, form: {} },
+  { path: "/api/tax/exports/{taxExport}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/tax/exports/{taxExport}/generate", allowed: ["tax_officer"], okStatus: 303, form: {} },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
 function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
   if (path.startsWith("/api/compliance/")) return "compliance_officer";
+  if (path.startsWith("/api/tax/")) return "tax_officer";
+  if (path.startsWith("/api/operations/") && path.endsWith("/decide")) return "ops_checker";
   if (path.includes("export")) return "auditor";
   if (path.startsWith("/api/recovery/") && path.endsWith("/act")) return "compliance_officer";
   if (path.includes("/approvals/property/")) return "compliance_officer";
@@ -225,6 +247,12 @@ beforeAll(async () => {
   // S-06 items: a reversal case of a duplicated booking and a wallet-recovery case (command-line names).
   ids.set("reversalCase", await reversalCase(w.su));
   ids.set("walletCase", await walletCase(w.su));
+  // S-03 items: a calculated distribution, a proposed charge, a proposed rate and a requested export (command-line names).
+  const ops = await operationsWorld(w.su, [{ wallet: held.wallet, units: 10n }]);
+  ids.set("charge", ops.chargeId);
+  ids.set("distribution", ops.distributionId);
+  ids.set("taxRate", ops.rateId);
+  ids.set("taxExport", ops.exportId);
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -270,7 +298,9 @@ describe("route coverage", () => {
           .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|recovery)$/, "/audit/[source]")
           .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
           .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
-          .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]"),
+          .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
+          .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
+          .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]"),
       ),
       ...APIS.map((a) =>
         a.path
@@ -278,7 +308,9 @@ describe("route coverage", () => {
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
           .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
-          .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1"),
+          .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
+          .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")
+          .replace(/^\/api\/tax\/(rates|exports)\/\{\w+\}\/(decide|generate)$/, "/api/tax/$1/[id]/$2"),
       ),
       ...ANONYMOUS_POSTS,
       "/login",
@@ -311,6 +343,7 @@ describe("pages × roles", () => {
     expect(admin.status).toBe(307);
     expect(admin.headers.get("location")).toBe("/officers");
     expect((await req("/login", { who: "trustee_officer" })).headers.get("location")).toBe("/trustee");
+    expect((await req("/login", { who: "tax_officer" })).headers.get("location")).toBe("/tax");
     expect((await req("/enrol")).status).toBe(200);
     expect((await req("/api/health")).status).toBe(200);
   });
@@ -662,6 +695,33 @@ describe("recovery over HTTP (S-06)", () => {
     expect(j.rows[0]?.kind).toBe("reversal");
     expect((await w.su.query("SELECT * FROM recovery.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("operations and tax over HTTP (S-03)", () => {
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  let counter = Date.now() + 2_000_000;
+
+  it("a checker approves a charge as shown (step-up, digest); the journal is posted under the checker's handle", async () => {
+    const path = `/operations/charges/${resolve("{charge}")}`;
+    const html = await (await req(path, { who: "ops_checker" })).text();
+    expect(html).toContain("lift repair, tower B");
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [c.ops_checker.sessionHash, c.ops_checker.credentialId, ++counter]);
+    const res = await req(`/api${path}/decide`, { method: "POST", who: "ops_checker", form: { decision: "approve", reason: "invoice checked against the budget", digest: digestOf(html) } });
+    expect(location(res), serverLog.slice(-2000)).toMatch(/ok=Approved: the journal is posted/);
+    const j = await w.su.query<{ created_by: string }>("SELECT created_by FROM ledger.journal WHERE idempotency_key LIKE $1", [`expense:%:${resolve("{charge}")}:approved`]);
+    expect(j.rows[0]?.created_by).toBe(c.ops_checker.handle);
+  });
+
+  it("tax pages show placeholder rates and never a CNIC; without the tax service client no file can be generated", async () => {
+    const tax = await (await req("/tax", { who: "tax_officer" })).text();
+    expect(tax).toContain("placeholder-banner");
+    const exp = await (await req(`/tax/exports/${resolve("{taxExport}")}`, { who: "tax_officer" })).text();
+    expect(exp).toContain("generate-unavailable");
+    for (const p of [tax, exp, await (await req(`/operations/distributions/${resolve("{distribution}")}`, { who: "auditor" })).text()]) {
+      expect(p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}/);
+    }
   });
 });
 

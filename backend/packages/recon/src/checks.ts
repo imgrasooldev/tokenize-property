@@ -1,3 +1,4 @@
+import { verifyDocuments } from "@pt/tax";
 import {
   addDays,
   dayEnd,
@@ -453,6 +454,38 @@ export function checkOfferings(d: ReconData): Finding[] {
   return out;
 }
 
+// ------------------------------------------------------------------ operations and FBR withholding (S-03 §8)
+
+const TAX_CHECKS = new Set<string>(["rent.wht_mismatch", "tax.line_arithmetic", "tax.payable_mismatch", "tax.wht_unremitted"]);
+const isTaxCheck = (x: string): x is CheckName => TAX_CHECKS.has(x);
+
+/**
+ * The tax rules evaluated in the database (tax.reconcile: per line gross = net + WHT with the
+ * rounding rule, calculation totals, WHT journal = calculation, per period withheld - remitted =
+ * the FBR payable account) plus an independent re-verification here of every attached statement:
+ * keccak hashes, the Merkle root of its own entitlements (leaf = net), and its totals.
+ */
+export function checkTax(d: ReconData): Finding[] {
+  const td = d.tax;
+  if (!td) return [];
+  const out: Finding[] = [];
+  for (const r of td.findings) {
+    out.push(f(isTaxCheck(r.check) ? r.check : "tax.line_arithmetic", r.subject, r.expected, r.actual));
+  }
+  const onChain = new Map(d.chain.distributions.filter((x) => x.token === d.deployment.token).map((x) => [x.id, x]));
+  for (const doc of td.documents) {
+    const subject = `calculation ${doc.id}`;
+    for (const p of verifyDocuments(doc)) out.push(f("rent.statement_totals", subject, "a statement consistent with its hashes, root and totals", p));
+    if (doc.status === "booked" && doc.onchainId !== null) {
+      const c = onChain.get(doc.onchainId);
+      if (c && c.statementHash !== doc.statementHash.toLowerCase()) {
+        out.push(f("rent.statement_totals", subject, `${doc.statementHash} (calculation)`, `${c.statementHash} (distribution ${s(c.id)} on chain)`));
+      }
+    }
+  }
+  return out;
+}
+
 const mintedText = (m: ChainIssuance): string => `minted ${s(m.amount)} to ${m.account} at block ${s(m.blockNumber)}`;
 
 // ------------------------------------------------------------------ recovery, succession, reversals (S-06 §14.7)
@@ -505,7 +538,7 @@ export function checkRecovery(d: ReconData): Finding[] {
   return out;
 }
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery] as const;
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

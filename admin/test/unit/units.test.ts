@@ -57,9 +57,11 @@ describe("roles", () => {
     }
   });
 
-  it("administrators cannot read operations data and trustee officers see only the trustee view", () => {
+  it("administrators cannot read operations data; trustee officers see the trustee view and (S-03) the operating statements only", () => {
     expect(permissionsOf(["admin"]).has("ops.read")).toBe(false);
-    expect([...permissionsOf(["trustee_officer"])]).toEqual(["trustee.read"]);
+    expect([...permissionsOf(["trustee_officer"])]).toEqual(["trustee.read", "operations.read"]);
+    expect(landingFor(permissionsOf(["tax_officer"]))).toBe("/tax");
+    expect(permissionsOf(["tax_officer"]).has("ops.read")).toBe(false);
     expect(landingFor(permissionsOf(["admin"]))).toBe("/officers");
     expect(landingFor(permissionsOf(["trustee_officer"]))).toBe("/trustee");
     expect(landingFor(permissionsOf(["ops_maker"]))).toBe("/");

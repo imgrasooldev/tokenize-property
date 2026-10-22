@@ -15,6 +15,7 @@ import type {
   OutboxCommand,
   PayoutBatch,
   ReconData,
+  TaxData,
 } from "./types.ts";
 
 export interface LoadOptions {
@@ -162,6 +163,21 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       recovery = { requests, caseRequestIds, reversals };
     }
 
+    // S-03 operations and FBR withholding of this token (migration 0021), read-only, when the schema exists.
+    let tax: TaxData | undefined;
+    const hasTax = (await q<{ ok: boolean }>("SELECT to_regprocedure('tax.reconcile(text)') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasTax) {
+      const token = lower(d.contracts.token);
+      const findings = (await q<{ check_name: string; subject: string; expected: string; actual: string }>("SELECT check_name, subject, expected, actual FROM tax.reconcile($1)", [token]))
+        .map((r) => ({ check: r.check_name, subject: r.subject, expected: r.expected, actual: r.actual }));
+      const documents = (await q<{ id: string; status: string; onchain_id: string | null; statement: string; statement_hash: string; tax_schedule: string; tax_schedule_hash: string; merkle_root: string }>(
+        `SELECT id::text, status, onchain_id::text, statement, statement_hash, tax_schedule, tax_schedule_hash, merkle_root FROM ops.distributions
+         WHERE token = $1 AND statement IS NOT NULL ORDER BY id`, [token]))
+        .map((r) => ({ id: r.id, status: r.status, onchainId: r.onchain_id === null ? null : BigInt(r.onchain_id), statement: r.statement, statementHash: r.statement_hash,
+          schedule: r.tax_schedule, scheduleHash: r.tax_schedule_hash, root: r.merkle_root }));
+      tax = { findings, documents };
+    }
+
     const statements = new Map<string, BankStatement>();
     for (const r of await q<{ id: string; account: string; statement_date: string; opening_paisa: string; closing_paisa: string }>(
       "SELECT id, account, statement_date::text, opening_paisa::text, closing_paisa::text FROM recon.bank_statements ORDER BY account, statement_date")) {
@@ -200,6 +216,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       expectedMints,
       ...(offerings ? { offerings } : {}),
       ...(recovery ? { recovery } : {}),
+      ...(tax ? { tax } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };

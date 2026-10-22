@@ -50,6 +50,13 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/recovery", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
   { path: "/recovery/[id]", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
   { path: "/trustee", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  // S-03 operations and FBR withholding (migration 0021).
+  { path: "/operations", kind: "page", methods: ["GET"], access: "operations.read", mutating: false },
+  { path: "/operations/charges/[id]", kind: "page", methods: ["GET"], access: "operations.read", mutating: false },
+  { path: "/operations/distributions/[id]", kind: "page", methods: ["GET"], access: "operations.read", mutating: false },
+  { path: "/tax", kind: "page", methods: ["GET"], access: "tax.read", mutating: false },
+  { path: "/tax/exports", kind: "page", methods: ["GET"], access: "tax.read", mutating: false },
+  { path: "/tax/exports/[id]", kind: "page", methods: ["GET"], access: "tax.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -82,6 +89,15 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/recovery/cases/[id]/wallet", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
   { path: "/api/recovery/cases/[id]/act", kind: "api", methods: ["POST"], access: "recovery.decide", mutating: true },
   { path: "/api/recovery/sync", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
+  // S-03 (migration 0021): decisions and exports need a step-up as well (checked by the database).
+  { path: "/api/operations/charges", kind: "api", methods: ["POST"], access: "operations.request", mutating: true },
+  { path: "/api/operations/charges/[id]/decide", kind: "api", methods: ["POST"], access: "operations.decide", mutating: true },
+  { path: "/api/operations/distributions/[id]/decide", kind: "api", methods: ["POST"], access: "operations.decide", mutating: true },
+  { path: "/api/tax/rates", kind: "api", methods: ["POST"], access: "tax.decide", mutating: true },
+  { path: "/api/tax/rates/[id]/decide", kind: "api", methods: ["POST"], access: "tax.decide", mutating: true },
+  { path: "/api/tax/exports", kind: "api", methods: ["POST"], access: "tax.export", mutating: true },
+  { path: "/api/tax/exports/[id]/decide", kind: "api", methods: ["POST"], access: "tax.export", mutating: true },
+  { path: "/api/tax/exports/[id]/generate", kind: "api", methods: ["POST"], access: "tax.export", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */

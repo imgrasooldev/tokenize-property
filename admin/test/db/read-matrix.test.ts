@@ -5,8 +5,9 @@ import { cast, createWorld, sha, token, type Cast, type World } from "../support
  * Authorisation inside the database (defence in depth): every function the portal can call, for
  * every role and for no session, against an explicit expected table (not derived from the code).
  */
-type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "auditor" | "admin" | "nobody";
-const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin", "nobody"];
+type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "tax_officer" | "auditor" | "admin" | "nobody";
+const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin", "nobody"];
+const OPERATIONS: Who[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
 
 const EXPECT: Record<string, Who[]> = {
   ops_overview: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
@@ -18,8 +19,8 @@ const EXPECT: Record<string, Who[]> = {
   "record_export:admin": ["compliance_officer", "auditor"],
   officers_list: ["auditor", "admin"],
   changes_list: ["auditor", "admin"],
-  my_account: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"],
-  session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"],
+  my_account: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"],
+  session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"],
   request_change: ["admin"],
   // Step 6b (migration 0016)
   approvals_inbox: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
@@ -64,6 +65,22 @@ const EXPECT: Record<string, Who[]> = {
   recovery_set_wallet: ["ops_maker"],
   recovery_sync: ["ops_maker"],
   recovery_act: ["ops_checker", "compliance_officer", "legal_officer"],
+  // S-03 (migration 0021): operations makers propose, checkers decide; tax officers act on tax; auditors read.
+  operations_periods: OPERATIONS,
+  operations_statement: OPERATIONS,
+  operations_charge: OPERATIONS,
+  operations_distribution: OPERATIONS,
+  tax_overview: ["tax_officer", "auditor"],
+  tax_exports: ["tax_officer", "auditor"],
+  tax_export: ["tax_officer", "auditor"],
+  propose_charge: ["ops_maker"],
+  decide_charge: ["ops_checker"],
+  decide_distribution: ["ops_checker"],
+  propose_tax_rate: ["tax_officer"],
+  decide_tax_rate: ["tax_officer"],
+  request_tax_export: ["tax_officer"],
+  decide_tax_export: ["tax_officer"],
+  issue_tax_export_ticket: ["tax_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -123,6 +140,22 @@ const CALLS: Record<string, string> = {
   recovery_set_wallet: `SELECT admin.recovery_set_wallet($1, 999999, '0x${"9".repeat(40)}')`,
   recovery_sync: "SELECT admin.recovery_sync($1)",
   recovery_act: `SELECT admin.recovery_act($1, 999999, 'approve', 'compliance', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  operations_periods: "SELECT admin.operations_periods($1)",
+  operations_statement: `SELECT admin.operations_statement($1, '0x${"a".repeat(40)}', '2026-09')`,
+  operations_charge: "SELECT admin.operations_charge($1, 999999)",
+  operations_distribution: "SELECT admin.operations_distribution($1, 999999)",
+  tax_overview: "SELECT admin.tax_overview($1)",
+  tax_exports: "SELECT admin.tax_exports($1)",
+  tax_export: "SELECT admin.tax_export($1, 999999)",
+  // Invalid or unknown items: refusals are audited and returned, so only the permission decides.
+  propose_charge: `SELECT admin.propose_charge($1, '0x${"a".repeat(40)}', '2026-09', 'expense', NULL, 'probe-co', 'matrix probe', 100, 'not-a-digest')`,
+  decide_charge: `SELECT admin.decide_charge($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  decide_distribution: `SELECT admin.decide_distribution($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  propose_tax_rate: "SELECT admin.propose_tax_rate($1, 'no_such_type', 'filer', 1, current_date + 1, 'matrix permission probe')",
+  decide_tax_rate: `SELECT admin.decide_tax_rate($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  request_tax_export: "SELECT admin.request_tax_export($1, NULL, 'bad', 'bad', 'matrix permission probe')",
+  decide_tax_export: `SELECT admin.decide_tax_export($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  issue_tax_export_ticket: "SELECT admin.issue_tax_export_ticket($1, 999999, sha256(random()::text::bytea))",
 };
 
 const DECISIONS = new Set([
@@ -138,6 +171,13 @@ const DECISIONS = new Set([
   "recovery_open",
   "recovery_set_wallet",
   "recovery_act",
+  "decide_charge",
+  "decide_distribution",
+  "propose_tax_rate",
+  "decide_tax_rate",
+  "request_tax_export",
+  "decide_tax_export",
+  "issue_tax_export_ticket",
 ]);
 let stepCounter = Date.now();
 let w: World;
@@ -188,6 +228,7 @@ describe("database authorisation matrix", () => {
     expect(await chains("legal_officer")).toEqual(["recovery"]);
     expect(await chains("admin")).toEqual(["admin"]);
     expect(await chains("trustee_officer")).toEqual([]);
+    expect(await chains("tax_officer")).toEqual([]);
     const code = await w.portal.query("SELECT * FROM admin.verify_chains($1, NULL)", [sessionOf("nobody")]).then(
       () => "ok",
       (e: unknown) => (e as { code?: string }).code,
