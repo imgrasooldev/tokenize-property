@@ -30,6 +30,7 @@ jobs:
           shellcheck --version
           shellcheck -S warning -x deploy/ops/*.sh
           shellcheck -S warning deploy/demo-server/*.sh
+          shellcheck -S warning .github/scripts/*.sh
 
   contracts:
     runs-on: ubuntu-latest
@@ -76,8 +77,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install (exact lockfile, no install scripts)
         run: npm ci --ignore-scripts
-      - name: Dependency audit
-        run: npm audit --audit-level=high
+      - name: Dependency audit (retries only when the npm endpoint fails)
+        run: bash ../.github/scripts/npm-audit.sh
       - name: Typecheck
         run: npm run typecheck
       - name: Lint (zero warnings)
@@ -130,8 +131,8 @@ jobs:
       - name: Backend install (the 6b tests start a real signing service from backend/)
         working-directory: backend
         run: npm ci --ignore-scripts
-      - name: Dependency audit
-        run: npm audit --audit-level=high
+      - name: Dependency audit (retries only when the npm endpoint fails)
+        run: bash ../.github/scripts/npm-audit.sh
       - name: Typecheck
         run: npm run typecheck
       - name: Lint (zero warnings)
@@ -177,8 +178,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install (exact lockfile, no install scripts)
         run: npm ci --ignore-scripts
-      - name: Dependency audit
-        run: npm audit --audit-level=high
+      - name: Dependency audit (retries only when the npm endpoint fails)
+        run: bash ../.github/scripts/npm-audit.sh
       - name: Typecheck
         run: npm run typecheck
       - name: Lint (zero warnings)
