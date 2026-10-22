@@ -1,0 +1,18 @@
+[Unit]
+Description=Property Token demo: anchor chain stand-in (Anvil, chain 586650, 127.0.0.1:8650; stands in for the public L2 until the owner picks it, ADR 0008)
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token
+ExecStartPre=/usr/bin/mkdir -p /home/ubuntu/property-token/chain/data/anchor
+# Loopback only. State is saved every 5 s, so a restart keeps the StateAnchor contract and its anchors.
+ExecStart=/home/ubuntu/.foundry/bin/anvil --host 127.0.0.1 --port 8650 --chain-id 586650 --state /home/ubuntu/property-token/chain/data/anchor/state.json --state-interval 5 --quiet
+Restart=always
+RestartSec=5
+MemoryMax=200M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

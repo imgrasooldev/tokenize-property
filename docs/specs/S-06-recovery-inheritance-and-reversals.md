@@ -1,6 +1,6 @@
 # S-06: Lost wallets, inheritance, payment reversals and sanctioned investors
 
-- Status: Draft for owner review (functional specification; no code yet)
+- Status: Draft for owner review; build refinements in section 14 (backend + portal, migration `0020_recovery.sql`, 2026-10-13)
 - Date: 2026-10-13
 - Lifecycle: cross-cutting cases after (or during) issuance
 - Exceptions covered: lost wallet, deceased investor, payment reversal after allocation, sanctioned investor or wallet
@@ -158,3 +158,80 @@ Claimant: received, evidence needed, approved/rejected, proposed on chain, execu
 - Q-2 Threshold for in-person or video verification in recoveries.
 - Q-3 Payment reversal after completion: replacement sale (recommended) vs burn and return from trust funds.
 - Q-4 A case-based freeze kind for verified holders (`compliance.freeze_case`) needs a signer policy change; agree before Step 6.
+
+## 14. Build refinements (2026-10-13, migration 0020, ADR 0005 / 0011 amendments)
+
+Written before the code, as "change the spec before changing behaviour" requires. Where this section and sections 1 to 13 differ, this section describes what is built; the owner questions at the end decide whether it stays.
+
+### 14.1 Custody and what "lost wallet" means (Q-1 answered by ADR 0010)
+
+- **RF-1** Investor wallets are custodial (ADR 0010: keys in the signing service). A lost phone or a forgotten login is an **account recovery** (RC-1), not a case here. An **on-chain wallet recovery** is for a custodial key that is compromised, suspected compromised or must be retired, and later for self-custody wallets.
+- **RF-2** The investor's ONCHAINID is created by `IdFactory.createIdentity(wallet, salt)`, so the old wallet is its only management key. Adding the new wallet as a management key (RC-4) is therefore signed **with the old custodial key** (signer kind `recovery.add_key`). If that key is unusable, an on-chain wallet recovery is impossible with today's identities (owner question OQ-1).
+
+### 14.2 Case lifecycle as built (refines section 3)
+
+```
+opened --(all approvals)--> approved --(every on-chain request executed)--> executed --(release)--> closed
+opened --(a rejection)--> rejected --(release)--> closed
+opened | approved --(cancel: objection, error)--> cancelled --(release)--> closed
+reversal: opened --(checker approves: correcting journal posted)--> closed;  opened --> rejected | cancelled (final)
+succession: executed --> closed by itself when no units remain in the deceased's wallet
+```
+
+- **RF-3** A cancelled case is final; reopening (C10) is a new case. Every case has `caseId = 0x || SHA-256("pt-case-v1:" || caseUuid)` and every change is in the hash-chained `recovery.audit`.
+- **RF-4** Release (C9) is the unfreeze of the wallet the case left frozen: the **new** wallet after a wallet recovery (the token carries the freeze over, RC-5), the **old / deceased** wallet after a rejection or cancellation. Two different compliance officers, neither the officer who opened (froze) the case. If the read model shows the wallet unfrozen, release closes the case without a command.
+- **RF-5** Protective freeze (C1) is enqueued when a wallet-recovery or succession case is opened (one officer, protective), unless the read model already shows the wallet frozen. Approval needs the freeze **on chain** (read model) first.
+- **RF-6** The on-chain steps are driven by `recovery.tick()` (`npm run recovery:tick`, and the portal's "Refresh from chain"): it links each confirmed `propose` command to its `RecoveryProposed` event (same transaction hash), enqueues `execute` once the request's `eta` has passed, enqueues `cancel` for pending requests of a cancelled case, and marks requests executed or cancelled from the read model. An `execute` refused by the signing service is retried at most three times.
+
+### 14.3 Lost-wallet recovery (refines 4.1)
+
+- **RF-7** Opened by an operations maker on the investor's request: the investor's bound wallet (kyc), a balance above zero and a registered identity in the read model; one live case per wallet. The investor's contacts of record get `security.wallet_recovery_requested` with the end of the 48-hour **objection window** (RC-2). No approval before the window ends.
+- **RF-8** Re-verification (RC-2): a NADRA `pass` and a liveness `pass` recorded **after the case was opened**, for the same KYC subject (the CNIC hash finds the subject: `KycService.reverify`), and the subject's KYC status `verified` (no compliance hold, so a sanctions or freeze case stops recovery).
+- **RF-9** The new wallet is a custodial wallet created by the signing service for this case (portal button; the admin client may now create custodial wallets, ADR 0005 amendment), bound to nobody, not registered in the identity registry, holding nothing, used by no other live case. It cannot change once an approval exists.
+- **RF-10** Approval: one **operations** checker and one **compliance** officer, different people, neither the maker. On the second approval, in one transaction: the evidence hash, one `WalletRecovery` request (amount 0, the identity from the read model), and the commands `recovery.add_key` and `recovery.propose`.
+- **RF-11** Execution (after the 48-hour on-chain delay) also needs the subject still `verified` and the new wallet still a management key; then the KYC binding moves to the new wallet (`kyc.wallets` changes only this way; history in `recovery.wallet_history`, audit `wallet.rebound`), the case is `executed` and waits for release (RF-4).
+
+### 14.4 Succession (refines 4.2)
+
+- **RF-12** Opened by an operations maker for the deceased's bound wallet; protective freeze at once (RC-10). Documents are **metadata and SHA-256 only** (type, a reference such as the certificate or court-order number, issuer): death certificate, succession certificate, letters of administration, court order, family settlement, other. No file is stored (vault: T-038). Free text never holds a CNIC, IBAN or phone number.
+- **RF-13** Heirs: KYC subjects with status `verified`, a bound wallet registered in the identity registry, never the deceased. Shares are fractions `numerator/denominator` from the certificate; approval needs a death certificate, one of succession certificate / letters of administration / court order, at least one heir and shares that sum to exactly 1.
+- **RF-14** Units (RC-13): each heir gets `floor(balance × share)`. The remaining units go by the **largest remainder** (ties: the heir added first) only if a `family_settlement` document is recorded; otherwise they stay frozen in the deceased's wallet for a cash-out (RC-14, not built). The balance is read from the read model at the final approval.
+- **RF-15** Approval: one **legal** officer (new portal role `legal_officer`, conflicting with every other role) and one **compliance** officer, different people, neither the maker. Then one `ForcedTransfer` request per heir with units, each checked by the signing service against `maxBalance` (the per-investor cap of the compliance module, in the policy) and the heir's verification, again at execution.
+- **RF-16** Not built yet: payable transfer of held distributions (`case:<caseId>:payable-transfer:<n>`, section 6) and retirement of the deceased's payout account (S-03 OP-53), cash-out (RC-14), identity deletion (RC-16, timelock).
+
+### 14.5 Reversals of platform errors (new 4.5; bank recalls RC-20..24 not built)
+
+- **RF-17** A reversal corrects **one ledger journal booked in error by the platform** (duplicate, wrong account, wrong amount, system error). It never moves tokens and never touches a legitimate trade or anything with an on-chain counterpart.
+- **RF-18** Only journals of kinds in `recovery.reversible_kinds` (today `rent_received`, `cash_topup`; owner question OQ-6), never a journal of kind `reversal`, never one already reversed or under an open reversal case, never one whose key belongs to a subscription, trade, rent distribution or payout, bank return or case (`sub:`, `web:sub:`, `web:trade:`, `web:order:`, `rent:`, `bank:`, `case:`), never one whose external reference is an indexed transaction hash.
+- **RF-19** Maker: operations maker (reason code, reason, SHA-256 of the evidence). Checker: an operations checker, never the maker. The approval posts, in the same transaction, the **correcting journal**: the exact contra postings, key `case:<caseRef>:reversal`, kind `reversal`, the original's external reference. The ledger's own overdraft rule refuses it when the money has already moved on.
+- **RF-20** Reconciliation treats the reversed journal and its correcting journal as void for cash matching (both, from the start), and reports any `reversal` journal without its approved case.
+
+### 14.6 Signing service kinds (resolves Q-4)
+
+| Kind | Call | Key | Gate (deny by default) |
+|---|---|---|---|
+| `recovery.freeze` | `FreezeGuard.freezeAddress(wallet, caseId)` | Ops | case enqueued exactly this payload, case opened or approved; wallet not frozen; daily count |
+| `recovery.unfreeze` | `FreezeGuard.unfreezeAddress(wallet, caseId)` | Ops | release decided by two compliance officers; wallet frozen; owner verified; daily count |
+| `recovery.add_key` | `Identity.addKey(keccak256(abi.encode(newWallet)), 1, 1)` | old custodial wallet | approved wallet-recovery case; identity = registry identity of the old wallet; key not yet present |
+| `recovery.propose` | `RecoveryGuard.propose(kind, from, to, onchainId, amount, evidenceHash)` | Trustee | approved case, request not yet proposed; recovery: identity matches, new wallet unregistered, balance > 0, no pending request from the wallet; forced transfer: heir verified, amount ≤ balance minus pending, heir stays ≤ `maxBalance` |
+| `recovery.execute` | `RecoveryGuard.execute(id)` | Trustee | approved case, linked pending request, `eta` passed; the same chain checks again (and the management key for a recovery) |
+| `recovery.cancel` | `RecoveryGuard.cancel(id)` | Trustee | cancelled case with this pending request |
+
+Every gate is `recovery.command_allowed(kind, payload)`: the payload must be exactly the one the case enqueued, and the case and request must be in the state the kind needs at signing time. The Trustee Safe's own approval is its signature (multisig in production, T-039); a policy may also require approvals in the approvals inbox.
+
+### 14.7 Reconciliation (refines section 7)
+
+- `recovery.unmatched` (blocking): a pending or executed RecoveryGuard request that is not a case's proposal.
+- `recovery.unmatched_cancelled` (warning): a cancelled request without a case (moved nothing; the local `chain/flow.py` scenario has one).
+- `recovery.reversal_unmatched` (blocking): a `reversal` journal without its closed case, or a closed reversal case whose journal is missing or different.
+- `compliance.freeze_unmatched`, `kyc.holder_unverified_unfrozen` and `issuance.reversed_not_resolved` are not built yet.
+
+### 14.8 Owner questions (raised by the build)
+
+- **OQ-1** Add a platform recovery management key to every investor ONCHAINID at creation, so a recovery works when the custodial key is lost (today it needs the old key)?
+- **OQ-2** Objection window 48 h from opening (plus 48 h on chain): keep, or run both in parallel?
+- **OQ-3** Trustee officer approval in the portal (6d) before `recovery.propose`, in addition to the Trustee Safe signature?
+- **OQ-4** Threshold above which the re-verification must be in person or by video (Q-2), and who records it.
+- **OQ-5** Remainder units without a family settlement: redemption, sale (S-04) or keep frozen? Legal to confirm the accepted documents (RC-11) and minors' shares.
+- **OQ-6** Which ledger journal kinds may be corrected by a reversal, and whether a reversal above an amount needs compliance as a second checker.
+- **OQ-7** The website still maps an investor to the wallet in `webdemo.investors`; after a wallet recovery it must follow `kyc.wallets` (follow-up T-045).

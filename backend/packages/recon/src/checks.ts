@@ -182,6 +182,7 @@ export function checkCash(d: ReconData): Finding[] {
     return out;
   }
   const today = pktDate(d.asOf);
+  const voided = voidedJournals(d);
   for (const acct of [...d.bank.accounts].sort((a, b) => a.account.localeCompare(b.account))) {
     const stmts = d.bank.statements.filter((x) => x.account === acct.account).sort((a, b) => a.date.localeCompare(b.date));
     const first = stmts[0];
@@ -190,7 +191,9 @@ export function checkCash(d: ReconData): Finding[] {
       out.push(f("cash.no_statement", `bank account ${acct.account}`, "an imported statement", "none"));
       continue;
     }
-    const postings = d.ledger.journals.flatMap((j) => j.postings.filter((p) => p.account === acct.ledgerAccount).map((p) => ({ j, amount: p.amount })));
+    const postings = d.ledger.journals
+      .filter((j) => !voided.has(j.id))
+      .flatMap((j) => j.postings.filter((p) => p.account === acct.ledgerAccount).map((p) => ({ j, amount: p.amount })));
     const balanceBefore = (t: Date): bigint => sum(postings.filter((p) => p.j.createdAt < t).map((p) => p.amount));
 
     const opening = balanceBefore(dayStart(first.date));
@@ -485,7 +488,57 @@ export function checkTax(d: ReconData): Finding[] {
 
 const mintedText = (m: ChainIssuance): string => `minted ${s(m.amount)} to ${m.account} at block ${s(m.blockNumber)}`;
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkTax] as const;
+// ------------------------------------------------------------------ recovery, succession, reversals (S-06 §14.7)
+
+/**
+ * Journals that are void for cash matching (S-06 RF-20): a journal reversed by a closed reversal case
+ * together with its correcting journal, when both are in the data. Each pair nets to zero, so the
+ * ledger balance is unchanged by removing both; matching without them pairs the bank lines with
+ * the bookings that really happened.
+ */
+export function voidedJournals(d: ReconData): Set<bigint> {
+  const ids = new Set(d.ledger.journals.map((j) => j.id));
+  const out = new Set<bigint>();
+  for (const r of d.recovery?.reversals ?? []) {
+    if (ids.has(r.reversalJournalId)) {
+      out.add(r.journalId);
+      out.add(r.reversalJournalId);
+    }
+  }
+  return out;
+}
+
+/**
+ * Every RecoveryGuard request is a case's proposal (a pending or executed one without a case is
+ * blocking; a cancelled one moved nothing and is a warning), and every correcting journal belongs to
+ * exactly its closed reversal case.
+ */
+export function checkRecovery(d: ReconData): Finding[] {
+  const out: Finding[] = [];
+  const r = d.recovery;
+  if (!r) return out;
+  const linked = new Set(r.caseRequestIds);
+  for (const q of [...r.requests].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    if (linked.has(q.id)) continue;
+    const what = `${q.kind} ${s(q.amount)} from ${q.from} to ${q.to}, ${q.status}`;
+    out.push(f(q.status === "cancelled" ? "recovery.unmatched_cancelled" : "recovery.unmatched", `recovery request ${s(q.id)}`,
+      "an approved recovery or succession case (maker, checker, trustee)", what));
+  }
+  const byReversal = new Map(r.reversals.map((x) => [x.reversalJournalId, x]));
+  const journals = new Map(d.ledger.journals.map((j) => [j.id, j]));
+  for (const j of d.ledger.journals.filter((x) => x.kind === "reversal").sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    if (!byReversal.has(j.id)) out.push(f("recovery.reversal_unmatched", `journal ${s(j.id)} (${j.key})`, "a closed reversal case", "a reversal journal without its case"));
+  }
+  for (const x of r.reversals) {
+    const j = journals.get(x.reversalJournalId);
+    if (!j || j.kind !== "reversal") {
+      out.push(f("recovery.reversal_unmatched", `reversal case ${s(x.caseId)}`, `correcting journal ${s(x.reversalJournalId)} of kind reversal`, j ? `kind ${j.kind}` : "missing"));
+    }
+  }
+  return out;
+}
+
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

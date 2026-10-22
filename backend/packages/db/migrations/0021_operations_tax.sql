@@ -2,8 +2,8 @@
 -- tax certificates, the sealed CNIC for tax filing (ADR 0014, Proposed) and the operations / tax
 -- screens of the admin portal.
 --
--- Numbered 0021: 0020 is reserved for work built in parallel. Nothing here depends on 0020. Until
--- both are merged the backend runner refuses the gap (tests use contiguousMigrations()).
+-- Applies on top of 0020 (S-06 recovery): role tax_officer is incompatible with 0020's legal_officer
+-- as with every other role but ops_checker; the role-matrix digest is fixed again after both.
 --
 -- Safety properties enforced by the database itself (schemas ops and tax, plus admin.* wrappers):
 --   OT-1  Rent collections come from imported bank statement lines (recon.bank_lines) only: a line is
@@ -1733,7 +1733,8 @@ INSERT INTO admin.role_conflicts (a, b, reason) VALUES
   ('auditor', 'tax_officer', 'auditors are read-only and independent of everyone they audit'),
   ('tax_officer', 'trustee_officer', 'trustee officers belong to the independent trustee and hold no platform role'),
   ('ops_maker', 'tax_officer', 'whoever prepares a distribution never sets the tax rates it uses'),
-  ('compliance_officer', 'tax_officer', 'least privilege: identity reviews and tax filing (which unseals CNICs) stay with different people');
+  ('compliance_officer', 'tax_officer', 'least privilege: identity reviews and tax filing (which unseals CNICs) stay with different people'),
+  ('legal_officer', 'tax_officer', 'the legal reviewer is independent of every other duty in a case');
 INSERT INTO admin.role_permissions (role, permission) VALUES
   ('ops_maker', 'operations.read'), ('ops_checker', 'operations.read'), ('tax_officer', 'operations.read'), ('trustee_officer', 'operations.read'),
   ('auditor', 'operations.read'),

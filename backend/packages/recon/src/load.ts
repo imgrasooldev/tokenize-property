@@ -4,6 +4,8 @@ import type { ChainState } from "./chain.ts";
 import type {
   BankStatement,
   ChainDistribution,
+  ChainRecoveryRequest,
+  RecoveryData,
   ChainIssuance,
   DistributionStatus,
   ExpectedMint,
@@ -84,7 +86,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
     const journals: LedgerJournal[] = (await q<{ id: string; idempotency_key: string; kind: string; external_ref: string | null; created_at: Date; postings: [string, string][] }>(
       `WITH linked AS (
          SELECT id FROM ledger.journal
-         WHERE idempotency_key LIKE 'web:sub:%' OR idempotency_key LIKE 'sub:%' OR idempotency_key LIKE 'rent:%'
+         WHERE idempotency_key LIKE 'web:sub:%' OR idempotency_key LIKE 'sub:%' OR idempotency_key LIKE 'rent:%' OR kind = 'reversal'
          UNION
          SELECT p.journal_id FROM ledger.postings p JOIN ledger.accounts a ON a.id = p.account_id WHERE a.code = ANY($1)
        )
@@ -142,6 +144,25 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       offerings = { subscriptions, refundSlaMs: Number(sla) * 3_600_000, trusteeCap: BigInt(cap), paymentAnomalies };
     }
 
+    // S-06 recovery cases and reversals (migration 0020), read-only, when the schema exists.
+    let recovery: RecoveryData | undefined;
+    const hasRecovery = (await q<{ ok: boolean }>("SELECT to_regclass('recovery.recon_requests') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasRecovery) {
+      const guard = d.contracts.recovery ? lower(d.contracts.recovery) : null;
+      const requests = guard
+        ? (await q<{ id: string; kind: ChainRecoveryRequest["kind"]; status: ChainRecoveryRequest["status"]; from_addr: string; to_addr: string; amount: string }>(
+          "SELECT id::text, kind, status, from_addr, to_addr, amount::text FROM chain.recoveries WHERE guard = $1 ORDER BY id", [guard]))
+          .map((r) => ({ id: BigInt(r.id), kind: r.kind, status: r.status, from: r.from_addr, to: r.to_addr, amount: BigInt(r.amount) }))
+        : [];
+      const caseRequestIds = guard
+        ? (await q<{ request_id: string }>("SELECT request_id::text FROM recovery.recon_requests WHERE guard = $1 ORDER BY request_id", [guard])).map((r) => BigInt(r.request_id))
+        : [];
+      const reversals = (await q<{ case_id: string; journal_id: string; reversal_journal_id: string }>(
+        "SELECT case_id::text, journal_id::text, reversal_journal_id::text FROM recovery.recon_reversals ORDER BY case_id"))
+        .map((r) => ({ caseId: BigInt(r.case_id), journalId: BigInt(r.journal_id), reversalJournalId: BigInt(r.reversal_journal_id) }));
+      recovery = { requests, caseRequestIds, reversals };
+    }
+
     // S-03 operations and FBR withholding of this token (migration 0021), read-only, when the schema exists.
     let tax: TaxData | undefined;
     const hasTax = (await q<{ ok: boolean }>("SELECT to_regprocedure('tax.reconcile(text)') IS NOT NULL AS ok"))[0]?.ok ?? false;
@@ -194,6 +215,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       ledger: { journals },
       expectedMints,
       ...(offerings ? { offerings } : {}),
+      ...(recovery ? { recovery } : {}),
       ...(tax ? { tax } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },

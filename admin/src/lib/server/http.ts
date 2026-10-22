@@ -35,7 +35,7 @@ const PAGES = ROUTES.filter((r) => r.kind === "page" && !r.path.includes("[")).m
 /** Only our own page paths are accepted as "next" after sign-in (no open redirect). */
 export function safeNext(v: unknown): string | null {
   if (typeof v !== "string") return null;
-  if (/^\/audit\/(signer|recon|ledger|admin|compliance)$/.test(v)) return v;
+  if (/^\/audit\/(signer|recon|ledger|admin|compliance|recovery)$/.test(v)) return v;
   return PAGES.includes(v) && v !== "/login" && v !== "/enrol" ? v : null;
 }
 
