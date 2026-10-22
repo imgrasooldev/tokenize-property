@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { crc32, csvCell, sha256Hex, sha256sums, toCsv, unzipStore, zipStore, type AuditRow } from "@/lib/export";
+import { buildDetail, exitChip, fieldsOf, paisaFromRupees, pktLocalToUtc } from "@/lib/exit";
 import { age, short, utc } from "@/lib/format";
 import { conflicts, permissionsOf, ROLE_CONFLICTS, ROLES } from "@/lib/permissions";
 import { ROUTES } from "@/lib/routes";
@@ -60,7 +61,12 @@ describe("roles", () => {
   it("administrators cannot read operations data; trustee officers see the trustee view and (S-03) the operating statements only", () => {
     expect(permissionsOf(["admin"]).has("ops.read")).toBe(false);
     // Step 6d: the trustee view, its decisions and exports, the export of the trustee audit chain only, and (S-03) the operating statements.
-    expect([...permissionsOf(["trustee_officer"])].sort()).toEqual(["audit.export", "operations.read", "trustee.decide", "trustee.export", "trustee.read"]);
+    // S-05 (0027): plus reading exit cases and deciding in the trustee capacity.
+    expect([...permissionsOf(["trustee_officer"])].sort()).toEqual(["audit.export", "exit.decide", "exit.read", "operations.read", "trustee.decide", "trustee.export", "trustee.read"]);
+    expect(permissionsOf(["trustee_officer"]).has("exit.request")).toBe(false);
+    expect(permissionsOf(["auditor"]).has("exit.decide")).toBe(false);
+    expect(permissionsOf(["tax_officer"]).has("exit.read")).toBe(false);
+    expect(permissionsOf(["admin"]).has("exit.read")).toBe(false);
     expect(permissionsOf(["trustee_officer"]).has("approvals.decide")).toBe(false);
     expect(permissionsOf(["trustee_officer"]).has("operations.decide")).toBe(false);
     expect(permissionsOf(["auditor"]).has("trustee.decide")).toBe(false);
@@ -159,5 +165,57 @@ describe("format", () => {
     expect(age(7200)).toBe("2 h");
     expect(short("0x" + "a".repeat(64))).toBe("0xaaaaaa…aaaaaa");
     expect(utc("2026-10-13T07:41:02.123Z")).toBe("2026-10-13 07:41:02Z");
+  });
+});
+
+describe("exit helpers (S-05)", () => {
+  it("rupees to paisa without floating point", () => {
+    expect(paisaFromRupees("1,234,500.5")).toBe("123450050");
+    expect(paisaFromRupees("Rs 100")).toBe("10000");
+    expect(paisaFromRupees("PKR 0.07")).toBe("7");
+    expect(paisaFromRupees("0")).toBe("0");
+    expect(paisaFromRupees("999999999999999.99")).toBe("99999999999999999");
+    for (const bad of ["", "-5", "1.234", "1.", "1e6", "abc", "1.2.3", "1234567890123456", null, undefined]) expect(paisaFromRupees(bad)).toBeNull();
+  });
+
+  it("Pakistan local time to UTC", () => {
+    expect(pktLocalToUtc("2026-10-22T14:30")).toBe("2026-10-22T09:30:00.000Z");
+    expect(pktLocalToUtc("2026-10-22 14:30")).toBeNull();
+    expect(pktLocalToUtc(null)).toBeNull();
+  });
+
+  it("builds each decision's detail as exit.normalize_detail expects, and names the first bad field", () => {
+    const sha = "ab".repeat(32);
+    const form = (m: Record<string, string>) => (k: string) => new Map(Object.entries(m)).get(k) ?? null;
+    expect(buildDetail("X1", form({ minutesSha: sha.toUpperCase() }))).toEqual({ minutesSha: sha });
+    expect(buildDetail("X2", form({ minutesSha: sha, noticeSha: sha, voteRecordBlock: "120" }))).toEqual({ minutesSha: sha, noticeSha: sha, voteRecordBlock: "120" });
+    expect(buildDetail("X5", form({ ballotsSha: sha, eligibleUnits: "100", votesFor: "80", votesAgainst: "10", votesAbstain: "0", lowerPriceApproved: "false" }))).toEqual({
+      ballotsSha: sha,
+      eligibleUnits: "100",
+      votesFor: "80",
+      votesAgainst: "10",
+      votesAbstain: "0",
+      lowerPriceApproved: false,
+    });
+    expect(buildDetail("X7", form({ legalAdviceSha: sha, conflictsCleared: "true" }))).toEqual({ legalAdviceSha: sha, conflictsCleared: true });
+    expect(buildDetail("X7", form({ legalAdviceSha: sha }))).toMatch(/Related parties/);
+    expect(
+      buildDetail("X9", form({ buyerChecksSha: sha, agreementSha: sha, buyerRef: "KYB-77", salePricePaisa: "1,000,000", depositPaisa: "0", cpDeadline: "2027-01-31" })),
+    ).toEqual({ buyerChecksSha: sha, agreementSha: sha, buyerRef: "KYB-77", salePricePaisa: "100000000", depositPaisa: "0", cpDeadline: "2027-01-31" });
+    expect(buildDetail("X9", form({ buyerChecksSha: sha, agreementSha: sha, buyerRef: "KYB-77", salePricePaisa: "0", depositPaisa: "0", cpDeadline: "2027-01-31" }))).toMatch(/Sale price/);
+    expect(buildDetail("X10", form({ evidenceSha: sha, depositTreatment: "keep" }))).toMatch(/Deposit treatment/);
+    expect(buildDetail("X12", form({}))).toEqual({});
+    expect(buildDetail("HR", form({ wallet: `0x${"A".repeat(40)}` }))).toEqual({ wallet: `0x${"a".repeat(40)}` });
+    expect(buildDetail("X1", form({ minutesSha: "zz" }))).toMatch(/Committee minutes/);
+    expect(buildDetail("X13", form({}))).toBe("Choose a decision.");
+    expect(fieldsOf("X5")).toEqual(fieldsOf("X4"));
+    expect(exitChip("approved")).toBe("chip ok");
+    expect(exitChip("held")).toBe("chip bad");
+    expect(exitChip("vote_open")).toBe("chip warn");
+  });
+
+  it("the exit audit chain is a valid sign-in target", () => {
+    expect(safeNext("/audit/exit")).toBe("/audit/exit");
+    expect(safeNext("/exit")).toBe("/exit");
   });
 });
