@@ -253,3 +253,11 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
 8. (6c) Investor-facing wording of `suspended`, `review` and the PEP reason (tipping-off): the website shows KYC reasons today; compliance to confirm the generic text (also T-028 item 4).
 9. (6c) Partial freezes (`freezePartial`), freezes of investors without a bound wallet, and assisted payout-account changes are not in the portal yet.
 10. (6c) Real PEP list provider and FMU goAML format (T-031); SLA values are working defaults for the owner to confirm.
+11. (S-06) Trustee-officer approval in the portal before `recovery.propose` (today the Trustee Safe's signature, OQ-3); no Playwright e2e for `/recovery` yet.
+
+## Addendum 2026-10-13: S-06 recovery, succession and reversal cases (T-026, migration 0020)
+
+- New role `legal_officer` (conflicts with every other role). New permissions: `recovery.read` (operations makers and checkers, compliance, legal, auditors), `recovery.request` (operations makers: open cases, documents, heirs, the new wallet, refresh from chain), `recovery.decide` (operations checkers, compliance and legal officers: approve/reject in a capacity, cancel, release). The capacity must be one of the officer's roles and is checked again in SQL (`recovery.capacity_ok`). Role matrix digest re-fixed in 0020.
+- Pages `/recovery`, `/recovery/[id]`; routes `POST /api/recovery/cases`, `/api/recovery/cases/[id]/evidence|wallet|act`, `/api/recovery/sync`; audit source `recovery`. Opening, setting the new wallet and every decision need a step-up younger than five minutes; decisions are bound to the case digest; officer handles are bound to sessions (`compliance.bind_actor`). The wallet route checks the case and the step-up before asking the signing service for a wallet.
+- Landing page for an officer with `recovery.read` but no `ops.read` (legal officers): `/recovery`.
+- Tests: `test/db/recovery.test.ts` (5), read matrix +10 functions × 8 identities, HTTP matrix +4 pages, +6 routes, +3 behaviour tests (hex hashes are now stripped before the CNIC-pattern check: a random digest once held 15 decimal digits in a row).

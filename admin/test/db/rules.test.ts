@@ -58,7 +58,11 @@ describe("role matrix", () => {
     expect(conflicts("ops_maker", "ops_checker")).toBe(true);
     for (const r of ROLES) if (r !== "trustee_officer") expect(conflicts("trustee_officer", r)).toBe(true);
     for (const r of ROLES) if (r !== "auditor") expect(conflicts("auditor", r)).toBe(true);
-    for (const r of ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer"] as Role[]) expect(conflicts("admin", r)).toBe(true);
+    for (const r of ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "tax_officer"] as Role[]) expect(conflicts("admin", r)).toBe(true);
+    // S-03: whoever prepares a distribution never sets its tax rates; tax filing (which unseals CNICs) stays apart from compliance.
+    expect(conflicts("ops_maker", "tax_officer")).toBe(true);
+    expect(conflicts("compliance_officer", "tax_officer")).toBe(true);
+    expect(conflicts("ops_checker", "tax_officer")).toBe(false);
   });
 });
 
@@ -69,6 +73,7 @@ describe("segregation of duties (enforced by the database for any writer)", () =
       ["ops_checker", c.ops_checker],
       ["compliance_officer", c.compliance_officer],
       ["trustee_officer", c.trustee_officer],
+      ["tax_officer", c.tax_officer],
       ["auditor", c.auditor],
     ] as const) {
       for (const role of ROLES) {

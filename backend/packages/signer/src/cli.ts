@@ -66,7 +66,11 @@ const PLATFORM_KEYS = [
   ["identity", "IDENTITY_OPERATOR", "Identity operator (local dev key)"],
   ["registrar", "REGISTRAR", "Registrar (local dev key)"],
   ["claims", "CLAIM_SIGNER", "Claim signer of the trusted ClaimIssuer (local dev key)"],
+  // S-06: RecoveryGuard propose/execute/cancel (production: the Trustee Safe multisig, T-039).
+  ["trustee", "TRUSTEE_SAFE", "Trustee Safe (local dev key)"],
 ] as const;
+/** MaxBalanceModule cap per investor identity on the local chain (contract-spec 4.3). */
+const MAX_BALANCE = "100000";
 const PERSONAS = ["ALICE", "BOB"] as const;
 const PAKISTAN = 586;
 
@@ -123,6 +127,13 @@ async function setup(): Promise<void> {
         topics: [1, 2], maxPerDay: 1000 }],
       ["identity.register", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "registrar", registrarGuard: lc(d.registrarGuard), identityRegistry: lc(d.ir),
         idFactory: lc(factories.idFactory), claimIssuer: lc(factories.claimIssuer), countries: [PAKISTAN], topics: [1, 2], maxPerDay: 500 }],
+      // S-06 (migration 0020): every command also needs recovery.command_allowed (an approved case).
+      ["recovery.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
+      ["recovery.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
+      ["recovery.add_key", { chainId: LOCAL_DEV_CHAIN_ID, identityRegistry: lc(d.ir), maxPerDay: 20 }],
+      ...(["recovery.propose", "recovery.execute", "recovery.cancel"] as const).map((kind): [string, object] => [kind, {
+        chainId: LOCAL_DEV_CHAIN_ID, keyRef: "trustee", recoveryGuard: lc(d.recovery), token: lc(d.token), identityRegistry: lc(d.ir),
+        maxBalance: MAX_BALANCE, maxPerDay: 50, approvals: 0 }]),
     ];
     for (const [kind, rule] of policies) {
       const active = await db.query<{ rule: unknown }>("SELECT rule FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL", [kind]);
