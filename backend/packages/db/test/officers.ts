@@ -156,3 +156,95 @@ export async function trusteeCosign(
   const out = await db.query<{ s: string }>("SELECT signer.decide_officer($1, $2, $3, $4, $5) AS s", [sha(ticket), requestId, decision, reason, call]);
   return out.rows[0]?.s ?? "";
 }
+
+/** The answer of an admin.* decision function (0016 refusals are returned; 0026 adds the SQLSTATE). */
+export interface PortalResult {
+  ok: boolean;
+  status?: string;
+  error?: string;
+  /** SQLSTATE of the backend's refusal (migration 0026): 23514 guard, 23505 duplicate, 42501 forbidden, 22023 input. */
+  state?: string;
+  meeting?: number;
+  vote?: number;
+}
+
+async function portalCall(db: pg.ClientBase, sql: string, params: unknown[]): Promise<PortalResult> {
+  const { rows } = await db.query<{ r: PortalResult | null }>(sql, params);
+  const r = rows[0]?.r;
+  if (!r) throw new Error("no answer from the portal function");
+  return r;
+}
+
+async function portalRead<T>(db: pg.ClientBase, sql: string, params: unknown[]): Promise<T> {
+  const { rows } = await db.query<{ v: T | null }>(sql, params);
+  const v = rows[0]?.v;
+  if (!v) throw new Error("not found in the portal");
+  return v;
+}
+
+const DEFAULT_REASON = "reviewed the file in PT Control, agree with the outcome";
+
+/**
+ * Migration 0026 (T-046): investment-committee and P8 votes and platform votes on S-02 requests,
+ * cast the way PT Control casts them: the officer signs in (a fresh step-up), reads the item through
+ * the portal's own function (the digest of what is shown) and decides through the admin.* function,
+ * which runs the backend function under the officer's handle. A missing committee or offering
+ * officer is created as an operations checker; existing officers are only signed in again.
+ */
+export async function committeeOpen(db: pg.ClientBase, chair: string, propertyId: string, reason = "the file is complete and ready for the committee"): Promise<PortalResult> {
+  const o = await officer(db, chair, "ops_checker");
+  return portalCall(db, "SELECT admin.open_committee($1, $2, $3) AS r", [o.sessionHash, propertyId, reason]);
+}
+
+export async function committeeVote(
+  db: pg.ClientBase,
+  member: string,
+  meetingId: string,
+  vote: "approve" | "reject" | "abstain" | "conflict",
+  reason = DEFAULT_REASON,
+): Promise<PortalResult> {
+  const o = await officer(db, member, "ops_checker");
+  const m = await portalRead<{ digest: string }>(db, "SELECT admin.committee($1, $2) AS v", [o.sessionHash, meetingId]);
+  return portalCall(db, "SELECT admin.committee_vote($1, $2, $3, $4, $5) AS r", [o.sessionHash, meetingId, vote, reason, Buffer.from(m.digest, "hex")]);
+}
+
+export async function committeeClose(db: pg.ClientBase, chair: string, meetingId: string, minutesSha256: string, reason = "votes counted, minutes signed and filed"): Promise<PortalResult> {
+  const o = await officer(db, chair, "ops_checker");
+  const m = await portalRead<{ closeDigest: string }>(db, "SELECT admin.committee($1, $2) AS v", [o.sessionHash, meetingId]);
+  return portalCall(db, "SELECT admin.close_committee($1, $2, $3, $4, $5) AS r", [o.sessionHash, meetingId, minutesSha256, reason, Buffer.from(m.closeDigest, "hex")]);
+}
+
+/** The trustee's P8 decision on the latest structure of a property. */
+export async function trusteePropertyDecision(
+  db: pg.ClientBase,
+  trustee: string,
+  propertyId: string,
+  decision: "accept" | "decline",
+  opts: { reason?: string; conditions?: string; structureId?: string } = {},
+): Promise<PortalResult> {
+  const o = await officer(db, trustee, "trustee_officer");
+  const p = await portalRead<{ digest: string; structure: { id: number } | null }>(db, "SELECT admin.trustee_property($1, $2) AS v", [o.sessionHash, propertyId]);
+  return portalCall(db, "SELECT admin.decide_property_trustee($1, $2, $3, $4, $5, $6, $7) AS r", [
+    o.sessionHash,
+    propertyId,
+    opts.structureId ?? String(p.structure?.id ?? 0),
+    decision,
+    opts.conditions ?? null,
+    opts.reason ?? "trust deed, structure and register size accepted",
+    Buffer.from(p.digest, "hex"),
+  ]);
+}
+
+/** A platform officer's vote on an S-02 request (Operations > Offering approvals). */
+export async function offeringVote(db: pg.ClientBase, handle: string, requestId: string, decision: "approve" | "reject", reason = DEFAULT_REASON): Promise<PortalResult> {
+  const o = await officer(db, handle, "ops_checker");
+  const q = await portalRead<{ digest: string }>(db, "SELECT admin.offering_vote_request($1, $2) AS v", [o.sessionHash, requestId]);
+  return portalCall(db, "SELECT admin.vote_offering_request($1, $2, $3, $4, $5) AS r", [o.sessionHash, requestId, decision, reason, Buffer.from(q.digest, "hex")]);
+}
+
+/** The trustee's vote on an S-02 request (Trustee > Co-signing, migration 0023). */
+export async function offeringTrusteeVote(db: pg.ClientBase, handle: string, requestId: string, decision: "approve" | "reject", reason = DEFAULT_REASON): Promise<PortalResult> {
+  const o = await officer(db, handle, "trustee_officer");
+  const q = await portalRead<{ digest: string }>(db, "SELECT admin.trustee_offering_request($1, $2) AS v", [o.sessionHash, requestId]);
+  return portalCall(db, "SELECT admin.decide_offering_request($1, $2, $3, $4, $5) AS r", [o.sessionHash, requestId, decision, reason, Buffer.from(q.digest, "hex")]);
+}

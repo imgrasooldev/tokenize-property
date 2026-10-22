@@ -159,6 +159,37 @@ into `admin/.env.local`; never printed. pt-signer and pt-admin are restarted by 
 Exposure is unchanged (SSH tunnel only). Migration `0016_admin_approvals.sql` needs `0015` (S-02)
 merged first, or `npm run migrate` refuses the numbering gap.
 
+### Demo catalogue (DHA6, BAO2) through PT Control (T-046, migration 0026)
+
+`update.sh` runs `npm run seed:catalog` after each deploy (non-fatal). It onboards the two fictional
+properties through the real S-01/S-02 workflows but never votes for an officer: it stops at each vote
+(`waiting`), prints who votes on which PT Control page, and continues on the next run. Migration
+`0026_portal_votes.sql` needs `0025` merged first (numbering gap).
+
+1. Enrol the 14 demo officers once (`npm run officer -- enrol-link <handle>` after two
+   administrators invited them in Officers & roles): `demo.onb-1`, `demo.onb-2`, `demo.off-maker`
+   (ops_maker); `demo.comp-1`, `demo.comp-2` (compliance_officer); `demo.legal-1`, `demo.legal-head`,
+   `demo.val-1`, `demo.tech-1`, `demo.ic-1`, `demo.ic-2`, `demo.ic-indep`, `demo.off-checker`
+   (ops_checker); `demo.trustee-1` (trustee_officer). Each needs its own FIDO2 key. Without them the
+   seed prints this plan and writes nothing.
+2. Then, with `cd ~/property-token/backend && npm run seed:catalog` between the steps:
+
+| Step | Seed stops at | Officer | PT Control (http://localhost:3300 via the tunnel) | Result |
+|---|---|---|---|---|
+| 1 | K4 of the demo sponsor | `demo.comp-2` | Operations > Property & KYB > K4 request > Approve | sponsor KYB approved |
+| 2 | committee, per property | `demo.ic-1`, `demo.ic-2`, `demo.ic-indep` | Operations > Investment committee > meeting > Approve (reason) | 3 votes, quorum with the independent member |
+| 2b | close, per property | `demo.ic-1` (chair) | same page > Close, with the minutes SHA-256 the seed printed | Legal Approved |
+| 3 | P8, per property | `demo.trustee-1` | Trustee > Property acceptance > property > Accept for the trust | Tokenization Ready |
+| 4 | L3, per offering | `demo.off-checker`, `demo.legal-head`, `demo.comp-2` | Operations > Offering approvals > request > Approve | three platform votes |
+| 4b | L3 trustee vote | `demo.trustee-1` | Trustee > Co-signing > offering request > Approve | offering Approved |
+| 5 | - | - | `npm run seed:catalog` reports "already approved" | nothing written |
+
+The website lists an offering from `ready`. Reaching `ready` (L4) still needs, outside the portal:
+the token deployed through `contracts/script/DeployLib.sol` (paused) and seen by the indexer, the
+trustee cap set through the timelock to at least the hard cap, and the English and Urdu offering
+documents anchored in the token's DocumentRegistry; then `npm run seed:catalog -- --token 0x...`.
+Details, refusals and the expired-request path: `docs/runbooks/portal-votes.md`.
+
 ## Operating
 
 ```bash

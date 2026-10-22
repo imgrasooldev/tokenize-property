@@ -2,6 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-046 portal votes (2026-10-22, branch `t-046-portal-votes`, not merged; migration 0026)
+
+- PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.
+- `seed:catalog` + these screens take DHA6 and BAO2 to approved offerings (walkthrough: `docs/runbooks/portal-votes.md`, `deploy/demo-server/README.md`). `ready` still needs the token (DeployLib), trustee cap and anchored documents.
+- **Merge 0025 first** (runner refuses the gap). Not seen in a browser; no Playwright spec yet.
+
 ## T-030 investor passkeys (2026-10-13, branch `t-030-investor-passkeys`, not merged; migration 0024)
 
 - Passkeys on the website (register/list/remove on `/account`, sign-in on `/login`), database-enforced sessions for every sign-in path, passkey step-up for offering reserve (from PKR 100,000) and cancel decided in SQL. ADR 0010 section 8.

@@ -108,6 +108,20 @@ const EXPECT: Record<string, Who[]> = {
   trustee_calculation: ["trustee_officer", "auditor"],
   decide_trustee_charge: ["trustee_officer"],
   precheck_distribution: ["trustee_officer"],
+  // T-046 (migration 0026): committee members vote (maker, checker, compliance), the trustee accepts (P8),
+  // operations checkers and compliance officers vote on offering requests; auditors read.
+  committees: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  committee: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  open_committee: ["ops_maker", "ops_checker", "compliance_officer"],
+  committee_vote: ["ops_maker", "ops_checker", "compliance_officer"],
+  close_committee: ["ops_maker", "ops_checker", "compliance_officer"],
+  trustee_properties: ["trustee_officer", "auditor"],
+  trustee_property: ["trustee_officer", "auditor"],
+  decide_property_trustee: ["trustee_officer"],
+  offering_votes: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  offering_vote_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  vote_offering_request: ["ops_checker", "compliance_officer"],
+  return_offering: ["ops_checker", "compliance_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -208,6 +222,19 @@ const CALLS: Record<string, string> = {
   trustee_calculation: "SELECT admin.trustee_calculation($1, 999999)",
   decide_trustee_charge: `SELECT admin.decide_trustee_charge($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
   precheck_distribution: `SELECT admin.precheck_distribution($1, 999999, 'reject', 'matrix permission probe', '\\x${"a".repeat(64)}', NULL)`,
+  committees: "SELECT admin.committees($1)",
+  committee: "SELECT admin.committee($1, 999999)",
+  trustee_properties: "SELECT admin.trustee_properties($1)",
+  trustee_property: "SELECT admin.trustee_property($1, gen_random_uuid())",
+  offering_votes: "SELECT admin.offering_votes($1)",
+  offering_vote_request: "SELECT admin.offering_vote_request($1, 999999)",
+  // Unknown meetings, properties and requests: refusals are audited and returned, so only the permission (and step-up) decides.
+  open_committee: "SELECT admin.open_committee($1, gen_random_uuid(), 'matrix permission probe')",
+  committee_vote: `SELECT admin.committee_vote($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  close_committee: `SELECT admin.close_committee($1, 999999, '${"c".repeat(64)}', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  decide_property_trustee: `SELECT admin.decide_property_trustee($1, gen_random_uuid(), 999999, 'accept', NULL, 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  vote_offering_request: `SELECT admin.vote_offering_request($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  return_offering: `SELECT admin.return_offering($1, 999999, 'matrix permission probe', '\\x${"a".repeat(64)}')`,
 };
 
 const DECISIONS = new Set([
@@ -237,6 +264,12 @@ const DECISIONS = new Set([
   "decide_register_adjustment",
   "decide_trustee_charge",
   "precheck_distribution",
+  "open_committee",
+  "committee_vote",
+  "close_committee",
+  "decide_property_trustee",
+  "vote_offering_request",
+  "return_offering",
 ]);
 let stepCounter = Date.now();
 let w: World;

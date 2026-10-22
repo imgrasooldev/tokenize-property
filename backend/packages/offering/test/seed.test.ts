@@ -6,15 +6,16 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
-import { officer, officerForDuty } from "../../db/test/officers.ts";
+import { committeeClose, committeeVote, offeringTrusteeVote, offeringVote, officer, officerForDuty, trusteePropertyDecision } from "../../db/test/officers.ts";
 import { contiguousMigrations } from "../../property/test/helpers.ts";
-import { DEMO_DIR, DEMO_PROPERTIES, DEMO_ROLES, propertyFiles, seedCatalog, SPONSOR, type SeedResult, type SeedSecrets } from "../src/seed.ts";
+import { DEMO_DIR, DEMO_PROPERTIES, DEMO_ROLES, minutesFile, propertyFiles, seedCatalog, SPONSOR, type SeedResult, type SeedSecrets } from "../src/seed.ts";
 
 /**
  * The demo catalog seed (npm run seed:catalog) against scratch databases. The TEST creates the demo
  * officers with the test-only helper (bootstrap admins + stand-in keys); the seed itself never does,
  * and it never votes under an officer's name: it stops at each vote, which the test casts through
- * the portal's own function with a real officer session where PT Control has a screen for it.
+ * the portal's own functions with real officer sessions (K4 0016, committee / P8 / platform L3 votes
+ * 0026, the trustee's L3 vote 0023), until both offerings are approved.
  */
 
 const fileSha = (name: string): string => createHash("sha256").update(readFileSync(`${DEMO_DIR}${name}`)).digest("hex");
@@ -130,8 +131,8 @@ describe("seed:catalog with the demo officers enrolled", () => {
     expect(next.properties.map((p) => p.outcome)).toEqual(["waiting", "waiting"]);
     for (const p of next.properties) {
       expect(p.propertyState).toBe("under_review");
-      expect(p.votes.join("\n")).toMatch(/investment committee vote of /);
-      expect(p.votes.join("\n")).toMatch(/no PT Control screen for this vote yet/);
+      expect(p.votes.join("\n")).toMatch(/investment committee vote of .* in PT Control, Operations > Investment committee \(\/committees\/\d+\)/);
+      expect(p.votes.join("\n")).toMatch(/closing of meeting #\d+ by the chair demo\.ic-1 .*SHA-256 [0-9a-f]{64} \(demo file [a-z0-9-]+-ic-minutes\.txt\)/);
     }
     // The only decision under an officer's name is the one taken in the portal.
     expect(await officerVotes()).toBe(1);
@@ -145,6 +146,109 @@ describe("seed:catalog with the demo officers enrolled", () => {
     ]);
   });
 
+  /** The demo property of a property id (by its building and deed number). */
+  const demoOf = async (propertyId: string) => {
+    const r = (await db.client.query<{ building: string; deed_no: string }>("SELECT building, deed_no FROM property.properties WHERE id = $1", [propertyId])).rows[0];
+    const p = DEMO_PROPERTIES.find((x) => x.identifiers.building === r?.building && x.identifiers.deed_no === r.deed_no);
+    if (!p) throw new Error(`not a demo property: ${propertyId}`);
+    return p;
+  };
+
+  it("committee: each member votes and the chair closes in the portal (session, step-up, digest); the seed then stops at P8", async () => {
+    const meetings = (await db.client.query<{ id: string; property_id: string }>("SELECT id::text, property_id FROM property.ic_meetings WHERE status = 'open' ORDER BY id")).rows;
+    expect(meetings).toHaveLength(2);
+    // The database refuses a committee vote under an officer's handle outside the portal (0026 V-2).
+    await expect(db.client.query("SELECT property.cast_vote($1, $2, 'approve', NULL)", [meetings[0]?.id, DEMO_ROLES.icMember.handle])).rejects.toMatchObject({ code: "42501" });
+    for (const m of meetings) {
+      const p = await demoOf(m.property_id);
+      // No quorum yet: the chair cannot close.
+      expect(await committeeClose(db.client, DEMO_ROLES.icChair.handle, m.id, fileSha(minutesFile(p)))).toMatchObject({ ok: false, state: "23514" });
+      for (const k of ["icChair", "icMember", "icIndependent"] as const) {
+        expect(await committeeVote(db.client, DEMO_ROLES[k].handle, m.id, "approve", "title, encumbrances, two valuations and the opinion are clean")).toMatchObject({ ok: true, status: "approve" });
+      }
+      // Only the chair closes.
+      expect(await committeeClose(db.client, DEMO_ROLES.icMember.handle, m.id, fileSha(minutesFile(p)))).toMatchObject({ ok: false, state: "42501" });
+      expect(await committeeClose(db.client, DEMO_ROLES.icChair.handle, m.id, fileSha(minutesFile(p)))).toEqual({ ok: true, status: "legal_approved" });
+      const closed = (await db.client.query<{ m: string }>("SELECT encode(minutes_sha256, 'hex') AS m FROM property.ic_meetings WHERE id = $1", [m.id])).rows[0];
+      expect(closed?.m).toBe(fileSha(minutesFile(p)));
+    }
+    const next = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(next.properties.map((p) => [p.outcome, p.propertyState])).toEqual([
+      ["waiting", "legal_approved"],
+      ["waiting", "legal_approved"],
+    ]);
+    for (const p of next.properties) {
+      expect(p.votes).toHaveLength(1);
+      expect(p.votes[0]).toMatch(/trustee acceptance \(P8\) .* by demo\.trustee-1: in PT Control, Trustee > Property acceptance \(\/trustee\/properties\/[0-9a-f-]{36}\)/);
+    }
+    expect(await q("SELECT count(*) FROM admin.audit WHERE action = 'approval.decided' AND detail->>'kind' = 'committee.vote'")).toBe(6);
+    expect(await q("SELECT count(*) FROM admin.audit WHERE action = 'approval.decided' AND detail->>'kind' = 'committee.close'")).toBe(2);
+    expect(await q("SELECT count(*) FROM property.audit WHERE action = 'ic.vote_reason'")).toBe(6);
+  }, 300_000);
+
+  it("P8: the trustee officer accepts in the portal; the seed then creates and submits the offerings and stops at the L3 votes", async () => {
+    const waiting = (await db.client.query<{ id: string }>("SELECT id FROM property.properties WHERE state = 'legal_approved' ORDER BY created_at")).rows;
+    expect(waiting).toHaveLength(2);
+    await expect(
+      db.client.query("SELECT property.trustee_decide($1, $2, (SELECT max(id) FROM property.structures WHERE property_id = $1), true, NULL, 'accepted from the command line')", [
+        waiting[0]?.id,
+        DEMO_ROLES.trustee.handle,
+      ]),
+    ).rejects.toMatchObject({ code: "42501" });
+    for (const p of waiting) {
+      expect(await trusteePropertyDecision(db.client, DEMO_ROLES.trustee.handle, p.id, "accept")).toEqual({ ok: true, status: "tokenization_ready" });
+    }
+    const next = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(next.properties.map((p) => [p.outcome, p.propertyState, p.offeringState])).toEqual([
+      ["waiting", "tokenization_ready", "pending_approval"],
+      ["waiting", "tokenization_ready", "pending_approval"],
+    ]);
+    for (const p of next.properties) {
+      expect(p.votes).toHaveLength(4);
+      expect(p.votes.filter((v) => /Operations > Offering approvals \(\/approvals\/offering\/\d+\)/.test(v))).toHaveLength(3);
+      expect(p.votes.filter((v) => /Trustee > Co-signing \(\/trustee\/cosign\/offering\/\d+\)/.test(v))).toHaveLength(1);
+    }
+    expect(await q("SELECT count(*) FROM trustee.audit WHERE action = 'property.accepted'")).toBe(2);
+  }, 300_000);
+
+  it("L3: checker, legal head and compliance vote in Offering approvals and the trustee in Co-signing; both offerings reach approved", async () => {
+    const requests = (await db.client.query<{ id: string }>("SELECT id::text FROM offering.requests WHERE code = 'L3' AND status = 'open' ORDER BY id")).rows;
+    expect(requests).toHaveLength(2);
+    for (const r of requests) {
+      // The maker who submitted it holds no offering.decide permission (operations maker) and never approves it.
+      await expect(offeringVote(db.client, DEMO_ROLES.offeringMaker.handle, r.id, "approve")).rejects.toMatchObject({ code: "42501" });
+      // Outside the portal a vote under an officer's handle is refused (0023 binding, kept).
+      await expect(db.client.query("SELECT offering.decide($1, $2, true, 'approved from the command line')", [r.id, DEMO_ROLES.offeringChecker.handle])).rejects.toMatchObject({
+        code: "42501",
+      });
+      expect(await offeringVote(db.client, DEMO_ROLES.offeringChecker.handle, r.id, "approve", "terms, price and use of proceeds checked")).toEqual({ ok: true, status: "open" });
+      expect(await offeringVote(db.client, DEMO_ROLES.offeringLegalHead.handle, r.id, "approve", "offering documents EN and UR checked")).toEqual({ ok: true, status: "open" });
+      // The checker cannot vote twice, not even in another capacity.
+      expect(await offeringVote(db.client, DEMO_ROLES.offeringChecker.handle, r.id, "approve")).toMatchObject({ ok: false });
+      expect(await offeringVote(db.client, DEMO_ROLES.offeringCompliance.handle, r.id, "approve", "eligibility and risk disclosure checked")).toEqual({ ok: true, status: "open" });
+      expect(await offeringTrusteeVote(db.client, DEMO_ROLES.offeringTrustee.handle, r.id, "approve", "trustee approves the offering terms")).toEqual({ ok: true, status: "approved" });
+    }
+    const next = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(next.properties.map((p) => [p.outcome, p.offeringState, p.votes.length, p.writes])).toEqual([
+      ["already", "approved", 0, 0],
+      ["already", "approved", 0, 0],
+    ]);
+    expect(await q("SELECT count(*) FROM offering.offerings WHERE state = 'approved'")).toBe(2);
+    // Every vote or decision under an officer's handle was taken in the portal and is in the admin audit.
+    expect(await officerVotes()).toBe(1 + 6 + 2 + 8);
+    expect(await q("SELECT count(*) FROM admin.audit WHERE action = 'approval.decided' AND detail->>'kind' IN ('property', 'committee.vote', 'trustee.property', 'offering', 'trustee.offering')")).toBe(
+      1 + 6 + 2 + 8,
+    );
+    // Idempotent at the end as well.
+    const before = await counts(db.client, ["property", "offering", "kyc", "admin", "trustee"]);
+    const again = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    expect(again.properties.map((p) => [p.outcome, p.writes])).toEqual([
+      ["already", 0],
+      ["already", 0],
+    ]);
+    expect(await counts(db.client, ["property", "offering", "kyc", "admin", "trustee"])).toEqual(before);
+  }, 300_000);
+
   it("keeps maker and checker apart and leaves intact property, offering and KYC audit chains", async () => {
     expect(await q("SELECT count(*) FROM property.staff_duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
     expect(await q("SELECT count(*) FROM offering.duties WHERE decided_by IN (requested_by, actor)")).toBe(0);
@@ -153,6 +257,7 @@ describe("seed:catalog with the demo officers enrolled", () => {
     expect((await db.client.query("SELECT * FROM offering.verify_audit()")).rows).toEqual([]);
     expect((await db.client.query("SELECT * FROM kyc.verify_audit()")).rows).toEqual([]);
     expect((await db.client.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+    expect((await db.client.query("SELECT * FROM trustee.verify_audit()")).rows).toEqual([]);
   });
 
   it("records the SHA-256 of the demo files' exact bytes", async () => {

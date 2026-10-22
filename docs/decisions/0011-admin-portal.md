@@ -267,6 +267,59 @@ every decision, the digest of what the officer saw, and then bind the officer's 
   `trustee.export` (trustee officers and auditors), `trustee.read` (both, from 0013), `audit.export`
   for trustee officers (only the trustee chain is readable to them).
 
+### 13. The remaining officer votes (addendum, 2026-10-22, task T-046, migration 0026)
+
+Every vote the S-01 and S-02 workflows need from an officer can now be cast in PT Control, so the
+demo catalogue (`seed:catalog`) and real operations reach an approved offering without a single
+officer-named action on the command line. Specs S-01 section 16 and S-02 section 18 changed first.
+The pattern is 6b's (section 10): `admin.*` checks the session, the permission, a step-up younger
+than five minutes and the digest of what was shown, then runs the backend's own function under the
+officer's handle in the same transaction; the backend keeps every business rule.
+
+- **Investment committee (S-01 P7, OB-33).** `/committees` lists open meetings, files ready for a
+  meeting (due diligence complete, `property.p7_problem` empty) and the latest outcomes;
+  `/committees/[id]` shows the file (reviews, valuations, the legal opinion's qualifications, current
+  documents with SHA-256), the votes and the outcome so far. A committee member opens a meeting and
+  chairs it (`admin.open_committee` -> `property.open_ic`); each member votes approve, reject or
+  abstain with a reason, or records a conflict (`admin.committee_vote` -> `property.cast_vote`, the
+  reason in the property audit chain as `ic.vote_reason`), bound to the file digest; the chair closes
+  with the SHA-256 of the minutes (`admin.close_committee` -> `property.close_ic`), bound to the digest
+  plus the votes. Quorum, independence, the majority rule, OB-SOD-1 and "chair only" stay 0014's.
+- **Trustee acceptance (S-01 P8, OB-37).** `/trustee/properties` (Legal Approved properties and the
+  latest decisions) and `/trustee/properties/[id]` (structure with unit rights, planned register and
+  holding limit, trust deed hash, the approving committee and its minutes hash, valuations, current
+  documents). A trustee officer accepts or declines the latest structure with a reason and optional
+  conditions (`admin.decide_property_trustee` -> `property.trustee_decide`), also recorded in
+  `trustee.audit` (`property.accepted` / `property.declined`). New rule (S-01 §16): a structure is
+  decided once; a declined one needs a new structure decision by the legal head.
+- **Platform votes on S-02 requests.** `/approvals/offering` lists open requests that still lack a
+  platform duty (offering checker, legal head, compliance, bank operator) and offerings pending
+  approval whose L3 request lapsed; `/approvals/offering/[id]` shows the terms (price, units, window,
+  use of proceeds, document hashes), the property, the votes and the missing duties. The vote runs
+  `offering.decide` (`admin.vote_offering_request`), bound to `admin.offering_request_digest` (0023);
+  an L3 request's offering can be returned to draft (`admin.return_offering` ->
+  `offering.return_offering`). Trustee votes stay in Trustee > Co-signing (section 12).
+- **Officer names bound (open item 3 closed for these records).** Triggers on `property.ic_votes`
+  (insert), `property.ic_meetings` (status change) and `property.trustee_decisions` (insert) refuse an
+  officer's handle unless the admin function that checked that officer's session bound it in the same
+  transaction (`admin.decision_context`). With 0016 A-7 (S-01 duties only for portal officers) the
+  committee and P8 decisions are portal-only. The `request_votes_officer_binding` of 0023 is unchanged.
+- **Refusals carry the backend's SQLSTATE.** `admin.vote_refused` audits the refusal like
+  `admin.refuse` and adds `state` (23514 guard, 23505 duplicate, 42501 forbidden, 22023 input,
+  P0002 unknown), so callers and tests can tell a quorum refusal from a missing duty.
+- **Permissions (role matrix digest fixed again).** `committee.vote` (operations makers and checkers,
+  compliance officers: the roles allowed to hold committee duties); committees are read with
+  `property.read`; `offering.read` (operations makers and checkers, compliance officers, auditors);
+  `offering.decide` (operations checkers and compliance officers). P8 uses `trustee.read` /
+  `trustee.decide`.
+- **The demo path.** `seed:catalog` now lists, for every vote it stops at, the officer, the PT
+  Control page and (for the close) the SHA-256 of the demo minutes file; it still never votes under
+  an officer's handle and writes nothing while the same votes are due. A committee that did not
+  approve or a structure the trustee declined stops it (`blocked`). The order of clicks is in
+  `deploy/demo-server/README.md` and `docs/runbooks/portal-votes.md`. Reaching `ready` (L4) still
+  needs the token deployed through DeployLib (paused, trustee cap set through the timelock) and the
+  offering documents anchored in the DocumentRegistry; neither is a portal action.
+
 ## Consequences
 
 - Every later approval (6b to 6d) gets identity, segregation of duties, step-up and audit for free by calling `admin.require` and `admin.require_step_up` from its own database function.
@@ -344,11 +397,26 @@ every decision, the digest of what the officer saw, and then bind the officer's 
   and recovery cases) and matrix +4 functions; HTTP matrix +2 pages, +2 routes; backend tax tests extended
   with the trustee steps. Totals: admin 893, HTTP 1048, backend 656 + 13 skipped.
 
+## Tests (T-046)
+
+- Backend: `offering/test/seed.test.ts` drives the demo catalogue to two approved offerings in a
+  scratch database through the portal's own functions with real officer sessions (K4; committee
+  votes and the chair's close incl. "no quorum" and "only the chair"; P8; three platform L3 votes and
+  the trustee's), checks that the same votes from the command line are refused, that every
+  officer-named vote has its `approval.decided` entry and that a final run writes nothing;
+  `property/test/property-db.test.ts` P7/P8 rules now run through the portal (duplicate vote, no
+  duty, quorum, chair only, Shariah certificate, decline final, command line refused); the property
+  test world casts committee and P8 votes through the portal helpers in `db/test/officers.ts`.
+- Admin database: matrix +12 functions x 9 identities; `test/db/votes.test.ts` (portal login cannot
+  reach the backend vote functions or tables, step-up on all six votes, refusals audited with their
+  SQLSTATE, officer handles refused by the binding triggers).
+- HTTP matrix: 6 new pages and 6 new POST routes x 10 callers, CSRF/same-origin on each.
+
 ## Open items
 
 1. AAGUID allow-list of approved hardware keys (FIDO MDS) and the SSO in front of the portal, before the pilot.
 2. Backup key per officer and a key-replacement ceremony (moved to 6c).
-3. ~~Bind the backend's operator names to officer sessions (6b).~~ Done in 0016 for signer approvals, unfreezes and payout batches; S-01 actors are linked to officers (role, active) but the property command line can still act under an officer's handle (break-glass, server access needed): bind it when the S-01 screens move into the portal.
+3. ~~Bind the backend's operator names to officer sessions (6b).~~ Done in 0016 for signer approvals, unfreezes and payout batches; S-01 actors are linked to officers (role, active) but the property command line can still act under an officer's handle (break-glass, server access needed): bind it when the S-01 screens move into the portal. 2026-10-22 (T-046, 0026): bound for committee votes, the committee close and the trustee's P8 decision; K4/P-requests decided with `property.decide_request` and the makers' own S-01 actions (reviews, structure, documents) are not bound yet.
 4. Alert wiring for `admin_alert` (counter regression) and for repeated sign-in failures.
 5. Urdu UI (later; the investor website already has it).
 6. Cross-check in `admin.verify_audit()` that every backend decision under an officer's handle has its `approval.decided` entry (today each chain verifies separately).
@@ -364,7 +432,7 @@ every decision, the digest of what the officer saw, and then bind the officer's 
 13. (6d) Command-line offering duties for names that are not portal officers still work for the
     trustee duty (break-glass, server access needed); close before the pilot (trustee only through
     the portal). Votes under a portal officer's handle are refused outside the portal (enforced).
-    `seed:catalog` (T-045) never casts a vote or decision under an officer's handle: it prepares everything up to the first vote (K4, investment committee, P8, L3), stops with outcome `waiting` and lists which votes officers must cast in PT Control (session + step-up), and writes nothing on a re-run while they are due. PT Control has screens for K4 (Approvals > Property & KYB) and the trustee's L3 vote (Trustee > Co-signing); investment committee votes, the P8 trustee acceptance and the non-trustee L3 votes have no screen yet, so the demo catalogue currently stops at the committee.
+    `seed:catalog` (T-045) never casts a vote or decision under an officer's handle: it prepares everything up to the first vote (K4, investment committee, P8, L3), stops with outcome `waiting` and lists which votes officers must cast in PT Control (session + step-up), and writes nothing on a re-run while they are due. PT Control has screens for K4 (Approvals > Property & KYB) and the trustee's L3 vote (Trustee > Co-signing); investment committee votes, the P8 trustee acceptance and the non-trustee L3 votes have no screen yet, so the demo catalogue currently stops at the committee. 2026-10-22 (T-046, section 13): screens for the committee, P8 and the platform L3 votes exist; the demo catalogue reaches `approved` through PT Control.
 14. (6d) The trustee register is the trustee's record inside our database; the trustee's own system
     of record (e.g. CDC) and a signed attestation feed (S-07 Q-2, recon `supply.register_mismatch`)
     are not wired yet.

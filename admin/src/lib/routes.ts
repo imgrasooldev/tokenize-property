@@ -70,6 +70,13 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/trustee/recon", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/trustee/recon/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/trustee/recoveries", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  // T-046 (migration 0026): committee votes, the trustee's P8 acceptance and platform votes on offering requests.
+  { path: "/committees", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
+  { path: "/committees/[id]", kind: "page", methods: ["GET"], access: "property.read", mutating: false },
+  { path: "/approvals/offering", kind: "page", methods: ["GET"], access: "offering.read", mutating: false },
+  { path: "/approvals/offering/[id]", kind: "page", methods: ["GET"], access: "offering.read", mutating: false },
+  { path: "/trustee/properties", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  { path: "/trustee/properties/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -120,6 +127,13 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/trustee/distributions/[registry]/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
   { path: "/api/trustee/cosign/charge/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
   { path: "/api/trustee/cosign/calculation/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  // T-046 (migration 0026): every vote needs a step-up and the digest of what was shown (checked by the database).
+  { path: "/api/committees/open", kind: "api", methods: ["POST"], access: "committee.vote", mutating: true },
+  { path: "/api/committees/[id]/vote", kind: "api", methods: ["POST"], access: "committee.vote", mutating: true },
+  { path: "/api/committees/[id]/close", kind: "api", methods: ["POST"], access: "committee.vote", mutating: true },
+  { path: "/api/approvals/offering/[id]/decide", kind: "api", methods: ["POST"], access: "offering.decide", mutating: true },
+  { path: "/api/approvals/offering/[id]/return", kind: "api", methods: ["POST"], access: "offering.decide", mutating: true },
+  { path: "/api/trustee/properties/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */

@@ -223,6 +223,8 @@ export interface DecisionResult {
   error?: string;
   id?: number;
   expiresAt?: string;
+  /** T-046 (migration 0026): the meeting a committee member opened. */
+  meeting?: number;
 }
 
 export async function decision(sql: string, params: unknown[]): Promise<DecisionResult> {

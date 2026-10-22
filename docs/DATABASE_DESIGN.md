@@ -344,6 +344,28 @@ Follows 0020-0023 (0022's `pt_web` grants are untouched). Schema `webauth`; advi
 
 Grants: `pt_web` gets `USAGE` on `webauth` and `EXECUTE` on the 18 `webauth.web_*` functions only (no table, no internal function), and **loses** `EXECUTE` on `offering.web_reserve` and `offering.web_cancel`.
 
+### 0026 portal votes (V-1..V-6; task T-046, ADR 0011 section 13, specs S-01 §16, S-02 §18)
+
+Applies on top of 0025 (reserved for parallel work; the runner refuses the gap until it is merged). No new table; the votes land in 0014/0015's tables through their own functions.
+
+| Object | Purpose |
+|---|---|
+| `admin.role_permissions` (+9) | `committee.vote` (ops_maker, ops_checker, compliance_officer), `offering.read` (those three and auditor), `offering.decide` (ops_checker, compliance_officer); digest fixed again |
+| triggers `ic_votes_officer_binding`, `ic_meetings_officer_binding` (status change), `trustee_decisions_officer_binding` | an officer's handle as committee member, closing chair or P8 trustee only with the admin function on the stack (`admin.guard_officer_name`, 0016 A-3) |
+| `admin.committee_digest(meeting, votes)` | SHA-256 (`pt-committee-v1`) of the meeting, property state, latest review per discipline, valuations, current documents and (for the close) the votes |
+| `admin.committees`, `admin.committee` | reads (`property.read`): open meetings, files ready for a meeting, latest outcomes; one meeting with reviews, qualifications, valuation status, documents, votes with their reasons, outcome, digests, vote and close blockers |
+| `admin.open_committee`, `committee_vote`, `close_committee` | `committee.vote` + step-up; `property.open_ic` / `cast_vote` (vote reason as property audit `ic.vote_reason`) / `close_ic` (minutes SHA-256, note as `ic.close_note`) under the officer's handle, bound to the digest |
+| `admin.property_trustee_digest(property)` | SHA-256 (`pt-property-trustee-v1`) of the property, latest structure, approving meeting and current documents |
+| `admin.trustee_properties`, `admin.trustee_property` | reads (`trustee.read`): Legal Approved properties with their latest structure; one property with structure, committee, valuations, documents, decisions, digest, blockers |
+| `admin.decide_property_trustee` | `trustee.decide` + step-up; refuses a second decision on a structure (V-4); `property.trustee_decide` under the officer's handle; `trustee.audit` `property.accepted` / `property.declined` |
+| `admin.offering_missing_duties(request)` | the platform duties (not `trustee`) an open request still lacks |
+| `admin.offering_votes`, `admin.offering_vote_request` | reads (`offering.read`): open requests lacking a platform vote, offerings pending approval whose L3 lapsed, latest platform votes; one request with the offering terms, property, votes, missing duties, digest (`admin.offering_request_digest`, 0023), vote and return blockers |
+| `admin.vote_offering_request`, `admin.return_offering` | `offering.decide` + step-up + digest; `offering.decide` / `offering.return_offering` (L2) under the officer's handle |
+| `admin.vote_refused` | audited refusal (`approval.refused`) with the backend's SQLSTATE in `state` |
+| helpers `admin.reason_ok`, `officer_has`, `property_json`, `property_documents_json`, `committee_*_blockers`, `trustee_property_*blockers`, `offering_*_blockers`, `offering_terms_json`, `committee_row` | internal (no grant) |
+
+Grants: `pt_admin_portal` EXECUTE on the 12 portal functions above (6 reads, 6 decisions). No role reads or writes the property or offering vote tables directly.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
