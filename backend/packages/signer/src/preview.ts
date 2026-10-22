@@ -342,6 +342,49 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
           : ["only a pending request of a cancelled case (objection or error)"],
       };
     }
+    case "transfer.propose": {
+      const r = rule as RecoveryRule;
+      const p = proposePayload.safeParse(payload);
+      if (!p.success || p.data.kind !== "forced_transfer") bad("transfer request");
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({
+          abi: recoveryGuardAbi,
+          functionName: "propose",
+          args: [1, p.data.from as Hex, p.data.to as Hex, "0x0000000000000000000000000000000000000000", BigInt(p.data.amount), p.data.evidenceHash as Hex],
+        }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved RecoveryGuard ${r.recoveryGuard.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the ForcedTransfer an approved transfer case enqueued (transfer.command_allowed: compliance + trustee approvals, buyer's money in escrow)",
+          `seller not frozen, free balance covers it with pending requests; buyer verified and stays within ${n(r.maxBalance)} units`,
+        ],
+      };
+    }
+    case "transfer.execute":
+    case "transfer.cancel": {
+      const r = rule as RecoveryRule;
+      const p = requestPayload.safeParse(payload);
+      if (!p.success) bad(kind === "transfer.execute" ? "transfer execution" : "transfer cancellation");
+      const execute = kind === "transfer.execute";
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: execute ? "execute" : "cancel", args: [BigInt(p.data.requestId)] }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: execute
+          ? [
+              "only the case's own pending ForcedTransfer after its delay; the TR-11 checks pass again (transfer.command_allowed)",
+              `seller not frozen with the free balance; buyer verified and within ${n(r.maxBalance)} units`,
+            ]
+          : ["only a pending request of a case that is being cancelled or failed (transfer.command_allowed)"],
+      };
+    }
     default:
       throw new PreviewError(`no preview for kind ${kind}`);
   }

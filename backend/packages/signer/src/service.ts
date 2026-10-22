@@ -15,6 +15,9 @@ import {
   evaluatePropose,
   evaluateRecoveryFreeze,
   evaluateRecoveryUnfreeze,
+  evaluateTransferCancel,
+  evaluateTransferExecute,
+  evaluateTransferPropose,
   proposePayload,
   requestPayload,
   walletKey,
@@ -22,6 +25,7 @@ import {
   type ChainRequest,
   type RecoveryFreezeRule,
   type RecoveryRule,
+  type TransferRecoveryRule,
   evaluateFreeze,
   evaluateIdentityClaim,
   evaluateIdentityCreate,
@@ -96,6 +100,8 @@ export interface ChainReader {
   recoveryRequest?: (guard: Hex, id: bigint) => Promise<ChainRequest>;
   /** S-06: timestamp of the latest block. */
   chainTime?: () => Promise<bigint>;
+  /** S-04: token.isFrozen(wallet) and token.getFrozenTokens(wallet). */
+  holderFreeze?: (token: Hex, wallet: Hex) => Promise<{ frozen: boolean; frozenTokens: bigint }>;
 }
 
 const REQUEST_STATUS = ["none", "pending", "executed", "cancelled"] as const;
@@ -172,6 +178,13 @@ export function viemChainReader(rpcUrl: string): ChainReader {
       };
     },
     chainTime: async () => (await c.getBlock({ blockTag: "latest" })).timestamp,
+    holderFreeze: async (token, wallet) => {
+      const [frozen, frozenTokens] = await Promise.all([
+        c.readContract({ address: token, abi: tokenAbi, functionName: "isFrozen", args: [wallet] }),
+        c.readContract({ address: token, abi: tokenAbi, functionName: "getFrozenTokens", args: [wallet] }),
+      ]);
+      return { frozen, frozenTokens };
+    },
   };
 }
 
@@ -313,6 +326,11 @@ export class SignerService {
       case "recovery.execute":
       case "recovery.cancel":
         return this.evaluateRequest(c, kind, rule as RecoveryRule, payload, excludeRequest);
+      case "transfer.propose":
+        return this.evaluateTransferPropose(c, rule as TransferRecoveryRule, payload, excludeRequest);
+      case "transfer.execute":
+      case "transfer.cancel":
+        return this.evaluateTransferRequest(c, kind, rule as TransferRecoveryRule, payload, excludeRequest);
       default:
         return { decision: "deny", reason: `no evaluator for ${kind}` };
     }
@@ -531,6 +549,71 @@ export class SignerService {
       recovery ? need(this.chain.keyHasPurpose, "identity keys")(request.onchainId as Hex, walletKey(to), 1n) : Promise.resolve(false),
     ]);
     return evaluateExecute(rule, payload, { chainId, request, chainTime, fromBalance, toVerified, toBalance, newKeyPresent, ...facts });
+  }
+
+  /** S-04 (0028 XF-5): the transfer case enqueued exactly this command and needs it now. */
+  private async transferAllowed(c: pg.ClientBase, kind: string, payload: unknown): Promise<boolean> {
+    const { rows } = await c.query<{ ok: boolean }>("SELECT transfer.command_allowed($1, $2::jsonb) AS ok", [kind, JSON.stringify(payload)]);
+    return rows[0]?.ok === true;
+  }
+
+  private async evaluateTransferPropose(c: pg.ClientBase, rule: TransferRecoveryRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = proposePayload.safeParse(payload);
+    const closed = {
+      chainId: 0, allowed: false, fromBalance: 0n, fromFrozen: true, frozenTokens: 0n, toVerified: false, toBalance: 0n,
+      pendingFrom: { requests: 1, amount: 0n }, signedToday: 0,
+    };
+    if (!p.success) return evaluateTransferPropose(rule, payload, closed);
+    const from = p.data.from.toLowerCase() as Hex;
+    const to = p.data.to.toLowerCase() as Hex;
+    const token = rule.token as Hex;
+    const db = async () => {
+      const allowed = await this.transferAllowed(c, "transfer.propose", payload);
+      const pending = await c.query<{ requests: string; amount: string }>("SELECT requests::text, amount::text FROM recovery.pending_from($1, $2)", [rule.recoveryGuard.toLowerCase(), from]);
+      const used = await this.signedToday(c, "transfer.propose", excludeRequest, false);
+      return { allowed, pendingFrom: { requests: Number(pending.rows[0]?.requests ?? "1"), amount: BigInt(pending.rows[0]?.amount ?? "0") }, signedToday: Number(used) };
+    };
+    const [chainId, fromBalance, freeze, toVerified, toBalance, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.balanceOf, "balances")(token, from),
+      need(this.chain.holderFreeze, "freezes")(token, from),
+      need(this.chain.isVerified, "the identity registry")(rule.identityRegistry as Hex, to),
+      need(this.chain.balanceOf, "balances")(token, to),
+      db(),
+    ]);
+    return evaluateTransferPropose(rule, payload, { chainId, fromBalance, fromFrozen: freeze.frozen, frozenTokens: freeze.frozenTokens, toVerified, toBalance, ...facts });
+  }
+
+  private async evaluateTransferRequest(c: pg.ClientBase, kind: "transfer.execute" | "transfer.cancel", rule: TransferRecoveryRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = requestPayload.safeParse(payload);
+    const none: ChainRequest = { kind: "forced_transfer", status: "none", eta: 0n, from: "", to: "", onchainId: "", amount: 0n };
+    if (!p.success) {
+      return kind === "transfer.cancel"
+        ? evaluateTransferCancel(rule, payload, { chainId: 0, allowed: false, status: "none", signedToday: 0 })
+        : evaluateTransferExecute(rule, payload, { chainId: 0, allowed: false, request: none, chainTime: 0n, fromBalance: 0n, fromFrozen: true, frozenTokens: 0n, toVerified: false, toBalance: 0n, signedToday: 0 });
+    }
+    const db = async () => {
+      const allowed = await this.transferAllowed(c, kind, payload);
+      const used = await this.signedToday(c, kind, excludeRequest, false);
+      return { allowed, signedToday: Number(used) };
+    };
+    const [chainId, request, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.recoveryRequest, "recovery requests")(rule.recoveryGuard.toLowerCase() as Hex, BigInt(p.data.requestId)),
+      db(),
+    ]);
+    if (kind === "transfer.cancel") return evaluateTransferCancel(rule, payload, { chainId, status: request.status, ...facts });
+    const token = rule.token as Hex;
+    const from = (request.from || "0x0000000000000000000000000000000000000000") as Hex;
+    const to = (request.to || "0x0000000000000000000000000000000000000000") as Hex;
+    const [chainTime, fromBalance, freeze, toVerified, toBalance] = await Promise.all([
+      need(this.chain.chainTime, "the chain time")(),
+      need(this.chain.balanceOf, "balances")(token, from),
+      need(this.chain.holderFreeze, "freezes")(token, from),
+      need(this.chain.isVerified, "the identity registry")(rule.identityRegistry as Hex, to),
+      need(this.chain.balanceOf, "balances")(token, to),
+    ]);
+    return evaluateTransferExecute(rule, payload, { chainId, request, chainTime, fromBalance, fromFrozen: freeze.frozen, frozenTokens: freeze.frozenTokens, toVerified, toBalance, ...facts });
   }
 
   private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {
