@@ -222,7 +222,7 @@ const SIGNER_PORT = 4998;
 let compliance2: Actor;
 
 beforeAll(async () => {
-  w = await createWorld("pt_admin_testhttp");
+  w = await createWorld(`pt_admin_testhttp_${String(process.pid)}`);
   c = await cast(w);
   for (const [r, actor] of Object.entries(c)) tokens.set(r as Who, actor.token);
   // Step 6b items: a signing request through a real signing service, a payout batch, an unfreeze request.

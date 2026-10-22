@@ -111,7 +111,8 @@ describe("distribution approval by the checker (OT-6)", () => {
   it("cannot be approved before its statement is attached; returning it unlocks the period", async () => {
     const d = await read<{ digest: string; blockers: { approve: string[] }; lines: { subject: string | null; wallet: string }[] }>("operations_distribution", c.ops_checker, ow.distributionId);
     expect(d.blockers.approve.join(" ")).toMatch(/not attached/);
-    expect(JSON.stringify(d)).not.toMatch(/\d{13}|name_enc|cnic/i);
+    // Wallets and the digest are random hex and can hold 13 decimal digits in a row: strip hex first.
+    expect(JSON.stringify(d).replace(/0x[0-9a-fA-F]+|[0-9a-fA-F]{32,}/g, "")).not.toMatch(/\d{13}|name_enc|cnic/i);
     expect(d.lines.filter((l) => l.subject !== null).every((l) => /^[0-9a-f]{8}$/.test(l.subject ?? ""))).toBe(true);
     await stepUp(c.ops_checker);
     const refused = await call("SELECT admin.decide_distribution($1, $2, 'approve', 'recomputed from chain and statement', $3) AS r", [c.ops_checker.sessionHash, ow.distributionId, Buffer.from(d.digest, "hex")]);

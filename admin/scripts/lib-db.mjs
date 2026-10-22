@@ -116,6 +116,18 @@ export async function dropDatabase(name, existing) {
  * A LOGIN role for the portal that is only a member of pt_admin_portal (least privilege). The
  * password is new on every call and returned to the caller, who keeps it out of git.
  */
+/** Drops a test portal login (only the per-process test names; never a real portal login). */
+export async function dropPortalLogin(login) {
+  if (!/^pt_admin_test(db|http)_[0-9]{1,10}$/.test(login)) throw new Error("only per-process test logins may be dropped");
+  const admin = new pg.Client(adminSettings());
+  await admin.connect();
+  try {
+    await admin.query(`DROP ROLE IF EXISTS ${login}`);
+  } finally {
+    await admin.end();
+  }
+}
+
 export async function ensurePortalLogin(login) {
   if (!/^pt_admin_[a-z0-9_]{2,40}$/.test(login)) throw new Error("bad login role name");
   const password = randomBytes(24).toString("base64url");
