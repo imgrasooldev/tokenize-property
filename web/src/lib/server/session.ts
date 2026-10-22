@@ -129,6 +129,12 @@ export async function currentInvestorId(): Promise<string | null> {
   return (await currentSession())?.investorId ?? null;
 }
 
+/** When the current (valid) session ends, as an ISO time; null without a valid session. */
+export async function sessionExpiresAt(): Promise<string | null> {
+  // The absolute end (12 h after sign-in) kept by the database; 30 minutes without activity end it earlier.
+  return (await currentSession())?.expiresAt.toISOString() ?? null;
+}
+
 /** Keyed hash of the current session cookie (never the cookie itself), or null without a valid session. */
 export async function sessionFingerprint(): Promise<string | null> {
   const token = await cookieToken();
@@ -143,12 +149,15 @@ export async function sessionFingerprint(): Promise<string | null> {
  * all: deny by default). Without a passkey the database waives it until webauth.settings
  * require_passkey is switched on, then asks the investor to add one.
  *
- * This is the message check; the decision that counts is taken again inside the action's own SQL
- * wrapper (webauth.web_reserve, webauth.web_cancel; see API_CONTRACTS.md for adopting it).
+ * The database decides and audits the decision (webauth.web_require_recent_passkey: refusals as
+ * `stepup.required`, waivers as `stepup.waived`). Where the action itself is a SQL function the
+ * website calls, the same gate also runs inside that wrapper (webauth.web_reserve, web_cancel);
+ * the payout account is registered by the bank service, so there this call is the gate (see
+ * API_CONTRACTS.md for adopting it).
  */
 export async function requireRecentPasskey(action: string, amountPaisa: bigint = 0n): Promise<{ ok: true } | { ok: false; error: StepUpError }> {
   const session = await currentSession();
   if (!session) return { ok: false, error: "session" };
-  const { rows } = await (await db()).query<{ r: string }>("SELECT webauth.web_step_up_status($1, $2, $3) AS r", [session.hash, action, amountPaisa.toString()]);
+  const { rows } = await (await db()).query<{ r: string }>("SELECT webauth.web_require_recent_passkey($1, $2, $3) AS r", [session.hash, action, amountPaisa.toString()]);
   return stepUpResult(rows[0]?.r);
 }

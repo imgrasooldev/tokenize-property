@@ -102,6 +102,40 @@ export class KycService {
       }
     }
 
+    const checks = await this.runChecks(subjectId, cnic, name, input.livenessSessionId);
+    const status = await evaluate(this.db, subjectId, this.actor);
+    if (input.wallet && status === "verified") await bindWallet(this.db, subjectId, input.wallet, this.actor);
+    const st = await statusOf(this.db, subjectId);
+    return { subjectId, status, reason: st?.reason ?? "", checks };
+  }
+
+  /**
+   * Re-verification of a person who is already a subject (S-06 RC-2, RF-8: wallet recovery). The
+   * CNIC finds the subject by its keyed hash, so it is the same person; the name must equal the
+   * sealed one. NADRA, liveness and sanctions run again and are recorded, and the status is derived
+   * again. Nothing is bound and no wallet changes here (that is the recovery case's job).
+   */
+  async reverify(input: Omit<OnboardInput, "wallet">): Promise<OnboardResult> {
+    let cnic: string;
+    let name: string;
+    try {
+      cnic = normalizeCnic(input.cnic);
+      name = normalizeName(input.fullName);
+    } catch (e) {
+      throw new KycError("INVALID_INPUT", (e as Error).message);
+    }
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.livenessSessionId)) throw new KycError("INVALID_INPUT", "invalid liveness session id");
+    const subjectId = await findSubject(this.db, this.peppers.hashAll("cnic", cnic).map((h) => h.hash));
+    // The same answer for an unknown CNIC and a wrong name: nothing is learned about who is registered.
+    if (!subjectId || (await this.sealedName(subjectId)) !== name) throw new KycError("UNKNOWN_SUBJECT", "no matching registered investor");
+    const checks = await this.runChecks(subjectId, cnic, name, input.livenessSessionId);
+    const status = await evaluate(this.db, subjectId, this.actor);
+    const st = await statusOf(this.db, subjectId);
+    return { subjectId, status, reason: st?.reason ?? "", checks };
+  }
+
+  /** NADRA, then liveness, then sanctions, stopping at the first failure; every result is recorded. */
+  private async runChecks(subjectId: string, cnic: string, name: string, livenessSessionId: string): Promise<OnboardResult["checks"]> {
     const checks: OnboardResult["checks"] = [];
     const run = async (kind: CheckKind, call: () => Promise<ProviderResult>): Promise<boolean> => {
       const r = await this.call(kind, call);
@@ -110,14 +144,11 @@ export class KycService {
       return r.outcome === "pass" || r.outcome === "review";
     };
     if (await run("nadra", () => this.providers.nadra.verify({ cnic, fullName: name }))) {
-      if (await run("liveness", () => this.providers.liveness.check({ sessionId: input.livenessSessionId }))) {
+      if (await run("liveness", () => this.providers.liveness.check({ sessionId: livenessSessionId }))) {
         await run("sanctions", () => this.providers.sanctions.screen({ fullName: name }));
       }
     }
-    const status = await evaluate(this.db, subjectId, this.actor);
-    if (input.wallet && status === "verified") await bindWallet(this.db, subjectId, input.wallet, this.actor);
-    const st = await statusOf(this.db, subjectId);
-    return { subjectId, status, reason: st?.reason ?? "", checks };
+    return checks;
   }
 
   /** Periodic re-screening against the current sanctions list (e.g. after a list update). */

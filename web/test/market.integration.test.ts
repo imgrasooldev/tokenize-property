@@ -6,7 +6,7 @@ import { stopFollower } from "../src/lib/server/follower";
 import { placeOrder as invest, subscriptionById } from "../src/lib/server/invest";
 import { chainProblems } from "../src/lib/server/ledger";
 import { cancelOrder, cashOf, escrowMatches, escrowOf, placeOrder, runMatcher, topUp } from "../src/lib/server/market";
-import { asAdmin, chainBalance, onboardInvestor, signerRequestFor, until } from "./helpers";
+import { asAdmin, chainBalance, onboardInvestor, signerRequestFor, trusteeCosign, until } from "./helpers";
 import { chainUp, prepare, start, type Stack } from "./stack";
 
 /**
@@ -157,6 +157,8 @@ describe.skipIf(!up)("demo market: DvP through the outbox and the signing servic
     await until("the mint approval request", async () => (await signerRequestFor(mintKey))?.status === "pending_approval", 60_000);
     const mintReq = await signerRequestFor(mintKey);
     for (const op of ["ops-ana", "ops-bilal"]) await asAdmin("SELECT signer.decide($1, $2, 'approve', 'test approval')", [mintReq?.id, op]);
+    // A mint above the threshold also needs the trustee's co-signature (migration 0023).
+    await trusteeCosign(mintReq?.id ?? "");
     await until("the large mint", async () => (await subscriptionById(seller.id, big.subscriptionId))?.status === "done", 90_000);
 
     await topUp(buyer, 6_000_000n * RS, randomUUID());

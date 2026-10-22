@@ -8,6 +8,7 @@ import { generatePrivateKey } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
+import { trusteeCosign } from "../../db/test/officers.ts";
 import { FileKeystore, writeKeyFile } from "../src/keystore.ts";
 import { SignerService, type ChainReader } from "../src/service.ts";
 
@@ -87,7 +88,11 @@ describe("signing requests", () => {
     expect((await admin.query<{ s: string }>("SELECT signer.decide($1, 'ops-ana', 'approve', 'checked lease') AS s", [first.requestId])).rows[0]?.s).toBe("pending_approval");
     await expect(admin.query("SELECT signer.decide($1, 'ops-ana', 'approve', 'again')", [first.requestId])).rejects.toThrow(/duplicate key/);
     expect(await svc().request({ commandRef: r, kind: "issuance.mint", payload: p }, "outbox-worker")).toMatchObject({ status: "pending_approval" });
-    expect((await admin.query<{ s: string }>("SELECT signer.decide($1, 'ops-bilal', 'approve', 'trustee ok') AS s", [first.requestId])).rows[0]?.s).toBe("approved");
+    // Two platform approvals are not enough for a mint: the trustee co-signs as well (migration 0023).
+    expect((await admin.query<{ s: string }>("SELECT signer.decide($1, 'ops-bilal', 'approve', 'second check ok') AS s", [first.requestId])).rows[0]?.s).toBe("pending_approval");
+    await expect(admin.query("SELECT signer.decide($1, 'ops-chan', 'approve', 'a third platform approval')", [first.requestId])).rejects.toThrow(/only the trustee co-signs/);
+    expect(await svc().request({ commandRef: r, kind: "issuance.mint", payload: p }, "outbox-worker")).toMatchObject({ status: "pending_approval" });
+    expect(await trusteeCosign(admin, first.requestId)).toBe("approved");
     expect(await svc().request({ commandRef: r, kind: "issuance.mint", payload: p }, "outbox-worker")).toMatchObject({ status: "signed" });
   });
 
@@ -121,6 +126,7 @@ describe("signing requests", () => {
       if (r.status === "pending_approval") {
         await admin.query("SELECT signer.decide($1, 'ops-ana', 'approve', 'fill')", [r.requestId]);
         await admin.query("SELECT signer.decide($1, 'ops-bilal', 'approve', 'fill')", [r.requestId]);
+        await trusteeCosign(admin, r.requestId);
       }
       left -= amt;
     }

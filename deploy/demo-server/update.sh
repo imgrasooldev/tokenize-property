@@ -52,6 +52,7 @@ echo "== backend dependencies and migrations"
 echo "== backend setup (idempotent, no secrets printed)"
 (cd backend \
   && npm run --silent kyc:setup >/dev/null \
+  && npm run --silent bank:setup >/dev/null \
   && npm run --silent signer:setup >/dev/null \
   && npm run --silent signer:admin-client >/dev/null \
   && npm run --silent db:web-role >/dev/null \
@@ -68,10 +69,24 @@ for unit in deploy/demo-server/pt-*.service deploy/demo-server/pt-*.timer; do
   fi
 done
 [ "$changed" = 1 ] && sudo systemctl daemon-reload
-BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding"
+BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding"
 sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
 # The signer reloads its keystore (new custodial wallets) and policies only on start.
 sudo systemctl restart $BACKEND_UNITS
+# Anchoring (ADR 0008): an Anvil stand-in for the public L2 on 127.0.0.1:8650 (chain 586650) and the
+# anchoring job. The key is created once in its own keystore (passphrase appended to the git-ignored
+# backend/.env.local, never printed); StateAnchor is deployed through DeployLib only when there is no
+# deployment yet. A failure here is reported and never stops the website deploy.
+anchor_setup() {
+  sudo systemctl enable --now pt-anchor-chain >/dev/null 2>&1 || return 1
+  for _ in $(seq 1 30); do python3 chain/anchor.py status 2>/dev/null | grep -q "^anchor stand-in: chain 586650" && break; sleep 1; done
+  (cd backend && npm run --silent anchor:setup >/dev/null) || return 1
+  if python3 chain/anchor.py status | grep -q "not deployed"; then python3 chain/anchor.py deploy >/dev/null || return 1; fi
+  python3 chain/anchor.py status | grep -q "NO CODE" && { echo "WARNING: StateAnchor has no code (anchor chain state lost); anchoring left stopped" >&2; return 1; }
+  sudo systemctl enable pt-anchor >/dev/null 2>&1 && sudo systemctl restart pt-anchor
+}
+anchor_setup || { echo "WARNING: anchoring setup did not complete; the website keeps running" >&2; sudo systemctl stop pt-anchor 2>/dev/null || true; }
+
 # Optional demo liquidity (a few persona trades every four hours): OFF unless the owner or lead
 # created the flag file /etc/pt/demo-market.enabled. Re-applied on every deploy, so it is idempotent.
 if [ -f /etc/pt/demo-market.enabled ]; then
@@ -118,9 +133,12 @@ for _ in $(seq 1 60); do
   sleep 5
 done
 (cd backend && npm run --silent seed:local && npm run --silent rent:book) || echo "WARNING: seed:local / rent:book did not complete; reconciliation will report it" >&2
+# Demo catalogue (T-045): two demo properties through the real S-01/S-02 workflows. It acts only under
+# officers already enrolled in PT Control and prints "skipped" (changing nothing) when they are missing.
+(cd backend && npm run --silent seed:catalog) || echo "WARNING: seed:catalog did not complete; the catalogue shows only the live token" >&2
 
 echo "== smoke test"
-for svc in http://127.0.0.1:4900/v1/health http://127.0.0.1:4910/v1/health; do
+for svc in http://127.0.0.1:4900/v1/health http://127.0.0.1:4910/v1/health http://127.0.0.1:4920/v1/health; do
   for _ in $(seq 1 30); do curl -sf -o /dev/null "$svc" && break; sleep 2; done
   curl -sf -o /dev/null "$svc" || { echo "service $svc is not answering" >&2; exit 8; }
 done

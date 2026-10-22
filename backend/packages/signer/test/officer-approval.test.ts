@@ -37,6 +37,7 @@ let svc: SignerService;
 let checker1: TestOfficer;
 let checker2: TestOfficer;
 let maker: TestOfficer;
+let trusteeOfficer: TestOfficer;
 let n = 0;
 
 const outboxClient: Client = { id: "outbox-worker", secret: randomBytes(32), scope: OUTBOX_SCOPE };
@@ -115,6 +116,7 @@ beforeAll(async () => {
   checker1 = await officer(admin, "ops.checker.one", "ops_checker");
   checker2 = await officer(admin, "ops.checker.two", "ops_checker");
   maker = await officer(admin, "ops.maker.one", "ops_maker");
+  trusteeOfficer = await officer(admin, "trustee.officer.one", "trustee_officer");
 }, 180_000);
 
 afterAll(async () => {
@@ -125,7 +127,7 @@ afterAll(async () => {
 }, 180_000);
 
 describe("officer decisions through the signing service (Step 6b)", () => {
-  it("a mint waits in the outbox, two checkers approve it via tickets, then the outbox proceeds and it is signed", async () => {
+  it("a mint waits in the outbox, two checkers and the trustee approve it via tickets, then the outbox proceeds and it is signed", async () => {
     const signer = new SignerClient(base, outboxClient);
     const decider = new SignerClient(base, adminClient);
     const worker = new OutboxWorker(pool, { workerId: "approval-test", executors: { "issuance.mint": executor(signer) }, waitMs: 50 });
@@ -182,16 +184,28 @@ describe("officer decisions through the signing service (Step 6b)", () => {
     // A payload other than the one shown: no ticket.
     expect((await ticket(checker2, req.id, "approve", "cd".repeat(32), callHash)).result).toMatchObject({ ok: false, error: expect.stringMatching(/differs/) as unknown });
 
-    // Second checker: approved; the outbox proceeds and the request is signed.
-    const t2 = await ticket(checker2, req.id, "approve", payloadHash, callHash, "trustee confirmed the subscription");
-    expect(await decider.decide({ requestId: req.id, decision: "approve", reason: "trustee confirmed the subscription", ticket: t2.token, callHash })).toEqual({ status: "approved" });
+    // Second checker: the platform approvals are complete, but a mint also needs the trustee (0023).
+    const t2 = await ticket(checker2, req.id, "approve", payloadHash, callHash, "second check of the subscription");
+    expect(await decider.decide({ requestId: req.id, decision: "approve", reason: "second check of the subscription", ticket: t2.token, callHash })).toEqual({ status: "pending_approval" });
+    // A trustee officer co-signs through its own ticket (capacity trustee), redeemed by the signing service.
+    const tt = randomBytes(32).toString("base64url");
+    const issued = await portal.query<{ r: { ok: boolean } }>("SELECT admin.issue_trustee_ticket($1, $2, 'approve', $3, $4, $5, $6) AS r", [
+      trusteeOfficer.sessionHash,
+      req.id,
+      "trustee confirmed the register entry",
+      Buffer.from(payloadHash, "hex"),
+      Buffer.from(callHash, "hex"),
+      sha(tt),
+    ]);
+    expect(issued.rows[0]?.r.ok).toBe(true);
+    expect(await decider.decide({ requestId: req.id, decision: "approve", reason: "trustee confirmed the register entry", ticket: tt, callHash })).toEqual({ status: "approved" });
     await admin.query("UPDATE outbox.commands SET available_at = now() - interval '1 second' WHERE id = $1", [id.toString()]);
     await worker.runOnce();
     expect((await getCommand(pool, id))?.status).toBe("confirmed");
     const after = await admin.query<{ status: string }>("SELECT status FROM signer.requests WHERE id = $1", [req.id]);
     expect(after.rows[0]?.status).toBe("signed");
     const approvals = await admin.query<{ operator: string }>("SELECT operator FROM signer.approvals WHERE request_id = $1 ORDER BY at", [req.id]);
-    expect(approvals.rows.map((r) => r.operator)).toEqual(["ops.checker.one", "ops.checker.two"]);
+    expect(approvals.rows.map((r) => r.operator)).toEqual(["ops.checker.one", "ops.checker.two", "trustee.officer.one"]);
 
     // Both audit chains hold the decisions and are intact.
     const actions = await admin.query<{ action: string }>("SELECT action FROM admin.audit WHERE action LIKE 'approval.%' ORDER BY id");
@@ -199,7 +213,8 @@ describe("officer decisions through the signing service (Step 6b)", () => {
     expect((await admin.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
     expect((await admin.query("SELECT * FROM signer.verify_audit()")).rows).toEqual([]);
     const signerAudit = await admin.query<{ actor: string; action: string }>("SELECT actor, action FROM signer.audit WHERE request_id = $1 AND action = 'request.approve'", [req.id]);
-    expect(signerAudit.rows.map((r) => r.actor).sort()).toEqual(["ops.checker.one", "ops.checker.two"]);
+    expect(signerAudit.rows.map((r) => r.actor).sort()).toEqual(["ops.checker.one", "ops.checker.two", "trustee.officer.one"]);
+    expect((await admin.query("SELECT * FROM trustee.verify_audit()")).rows).toEqual([]);
   });
 
   it("a rejection by one checker is final and the outbox command fails without sending", async () => {

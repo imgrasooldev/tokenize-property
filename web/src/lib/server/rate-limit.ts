@@ -8,7 +8,7 @@ import { headers } from "next/headers";
  * Signed-in actions are keyed by investor id (cannot be spoofed). Anonymous actions are keyed by
  * the client address the server sees; in this prototype the server binds to 127.0.0.1 only.
  */
-export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify" | "reserve" | "passkeyLogin" | "passkey";
+export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify" | "reserve" | "ask" | "payee" | "passkeyLogin" | "passkey";
 
 const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   login: { capacity: 10, perMinute: 10 },
@@ -27,6 +27,10 @@ const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   passkeyLogin: { capacity: 10, perMinute: 10 },
   // Passkey registration, step-up and revocation, keyed by investor id.
   passkey: { capacity: 20, perMinute: 20 },
+  // Property analyst questions (ADR 0015): keyed by investor id when signed in, else by client address.
+  ask: { capacity: 10, perMinute: 6 },
+  // Payout account registration (T-045), keyed by investor id: every attempt hits the bank title inquiry.
+  payee: { capacity: 5, perMinute: 2 },
 };
 
 const MAX_KEYS = 10_000;

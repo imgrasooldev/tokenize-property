@@ -3,7 +3,7 @@
 One Next.js app for operations, compliance, trustee and audit officers (product map items 5 to 7).
 Design: the v2 suite (`docs/design/v2-suite/ops-*.html`) with the density of `mockup-home-v7`.
 Decisions and rules: [ADR 0011](../docs/decisions/0011-admin-portal.md). Threats: section 4.11 of the
-[threat model](../docs/threat-model.md) (AD-1..AD-8).
+[threat model](../docs/threat-model.md) (AD-1..AD-11).
 
 ## Status
 
@@ -12,7 +12,7 @@ Decisions and rules: [ADR 0011](../docs/decisions/0011-admin-portal.md). Threats
 | 6a | Foundation: WebAuthn hardware keys, sessions and step-up, roles with segregation of duties in the database, hash-chained admin audit, operations overview, audit trails with evidence export, officer management (maker-checker) | Built |
 | 6b | Approvals (ADR 0011 section 10, migration 0016): inbox; signing requests shown as the exact call and decided by the signing service; payout batches; unfreeze requests; S-01 property and KYB requests; reason + step-up on every decision | Built (branch). Not yet: batch create/submit, statement import, suspense returns, outbox reviews |
 | 6c | Compliance (ADR 0011 section 11, migration 0019): dashboard (counts, SLA breaches, recent decisions); KYC review queue and cases (two officers for high risk, PEP via EDD); sanctions/PEP results and re-screening (run by `npm run kyc:rescreen` in backend); freeze/unfreeze maker-checker → outbox → signer; STR case log with recorded FMU export; compliance audit chain | Built (branch). Not yet: partial freezes, assisted payout-account changes, offboarding steps 2-3, e2e spec |
-| 6d | Trustee: register, co-signing, distribution review | Planned (placeholder page) |
+| 6d | Trustee (ADR 0011 section 12, migration 0023): overview; the trustee register next to the chain read model (pinned block, supply vs cap, differences highlighted, two-officer adjustments, export with SHA-256 evidence); co-signing of mints above the threshold (in addition to the platform approvals, through the signing service) and of S-02 requests needing the trustee (issuance batch, completion record, funding, register); rent distribution review in the 48 h window (a rejection blocks booking and payout in SQL); daily reconciliation report; recovery requests (S-06 hook); trustee audit chain | Built (branch `step-6d-trustee-portal`). Not yet: S-06 case files, trustee attestation feed, Safe-console actions |
 
 ## Run locally
 
@@ -53,15 +53,16 @@ index the local chain into it (`PG_DATABASE=pt_admin_dev INDEXER_DEPLOYMENT_FILE
 - **Database:** the portal's login is a member of `pt_admin_portal` only (no table grants, EXECUTE on `admin.*`); every function re-checks the session and permission; read-only towards the operational schemas.
 - **Audit:** every sign-in, step-up, page view, denial, officer change and export in the hash-chained `admin.audit`; exports carry a SHA-256 manifest naming their audit entry.
 - **Exposure:** binds 127.0.0.1:3300; production behind VPN + SSO + TLS; the demo server only through `ssh -L 3300:127.0.0.1:3300` (never nginx).
+- **Trustee (6d):** trustee officers hold no platform role. The database adds the trustee to the signer's maker-checker for mints that need approvals (requirement set on insert, capacity from the approver's role); the trustee co-signs through its own one-time ticket redeemed by the signing service. S-02 trustee votes, distribution reviews and register adjustments run `admin.*` functions with step-up and the digest of what was shown. Runbook: [docs/runbooks/trustee-operations.md](../docs/runbooks/trustee-operations.md).
 - **Approvals (6b):** the portal decides nothing itself. Payout, unfreeze and S-01 decisions run `admin.decide_*`, which check session, permission and step-up and then call the backend's own function (`bank.decide_payout_batch`, `recon.decide_unfreeze`, `property.decide_request`) under the officer's handle. Signing requests: the database issues a one-time ticket (2 minutes, hash only, bound to what was shown), the signing service recomputes the call, redeems the ticket and runs `signer.decide`. Every decision is bound to what the officer saw (payload + call hash, items digest, freeze event, request digest). Maker ≠ checker, the payout gate, expiry and duties are enforced by the backend; each page lists why a decision is unavailable. Officer handles cannot be used as operator names outside the portal.
 
 ## Tests
 
 ```bash
 npm run typecheck && npm run lint          # strict TypeScript, 0 warnings
-npm test                                   # unit + database rules + authorisation matrix + approvals and compliance rules (353)
-npm run build && npm run test:http         # HTTP authorisation matrix against the production build (438), with a real signing service
-npm run test:e2e                           # Edge + virtual FIDO2 keys: auth (3) + approvals (2: two checkers approve a mint; unfreeze)
+npm test                                   # unit + database rules + authorisation matrix + approvals, compliance and trustee rules (494)
+npm run build && npm run test:http         # HTTP authorisation matrix against the production build (601), with a real signing service
+npm run test:e2e                           # Edge + virtual FIDO2 keys: auth (3) + approvals (2: two checkers and the trustee approve a mint; unfreeze)
 ADMIN_E2E_DB=pt_admin_dev SCREENSHOTS=1 npm run test:e2e -- screens   # 1440 px screenshots with real data into screenshots/
 ```
 
@@ -72,11 +73,12 @@ build folder `.next-e2e` and database `pt_admin_e2e` (re-created each run). The 
 end-to-end run also start a real signing service (`backend/packages/signer/scripts/serve-test.ts`:
 temporary key, fixed chain facts, refuses any database but the portal's test databases) on 4998 /
 4997 with random client secrets (`.env.e2e`, git-ignored). The approvals e2e writes screenshots to
-`screenshots/6b-*.png` (git-ignored). Backend `npm install` is needed for these (tsx).
+`screenshots/6b-*.png` and `6d-*.png` (git-ignored). Backend `npm install` is needed for these (tsx).
 
 Migration note: `0016_admin_approvals.sql` follows S-02's `0015`, built in parallel. The portal's
 own runner applies files in order without a gap check, so the admin tests work on a branch without
-0015; the backend runner refuses the gap until 0015 is merged.
+0015; the backend runner refuses the gap until 0015 is merged. The same holds for
+`0023_trustee.sql` (0020-0022 are reserved for parallel work).
 
 ## Gotchas
 

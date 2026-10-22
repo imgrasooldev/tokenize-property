@@ -31,12 +31,31 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/compliance/str", label: "STR cases", icon: "✉", need: "compliance.read" },
     ],
   },
-  { title: "Trustee", items: [{ href: "/trustee", label: "Register", icon: "▦", need: "trustee.read", tag: "6d" }] },
+  { title: "Cases", items: [{ href: "/recovery", label: "Recovery & succession", icon: "⟲", need: "recovery.read" }] },
+  {
+    title: "Operations & tax",
+    items: [
+      { href: "/operations", label: "Property operations", icon: "₨", need: "operations.read" },
+      { href: "/tax", label: "Withholding tax", icon: "%", need: "tax.read" },
+      { href: "/tax/exports", label: "FBR filing exports", icon: "⇩", need: "tax.read" },
+    ],
+  },
+  {
+    title: "Trustee",
+    items: [
+      { href: "/trustee", label: "Overview", icon: "◈", need: "trustee.read" },
+      { href: "/trustee/register", label: "Register", icon: "▦", need: "trustee.read" },
+      { href: "/trustee/cosign", label: "Co-signing", icon: "✍", need: "trustee.read" },
+      { href: "/trustee/distributions", label: "Distributions", icon: "⧗", need: "trustee.read" },
+      { href: "/trustee/recon", label: "Reconciliation", icon: "≡", need: "trustee.read" },
+      { href: "/trustee/recoveries", label: "Recoveries", icon: "↺", need: "trustee.read" },
+    ],
+  },
   { title: "Administration", items: [{ href: "/officers", label: "Officers & roles", icon: "⚿", need: "officers.read" }] },
 ];
 
 function canSeeAudit(o: Officer): boolean {
-  return o.permissions.has("audit.read.ops") || o.permissions.has("audit.read.admin");
+  return o.permissions.has("audit.read.ops") || o.permissions.has("audit.read.admin") || o.permissions.has("trustee.read");
 }
 
 function initials(name: string): string {

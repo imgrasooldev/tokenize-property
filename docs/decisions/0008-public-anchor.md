@@ -75,7 +75,7 @@ The triggers apply to an administrator's UPDATE too. A session advisory lock all
 
 - The job signs through the signing service's `KeyProvider` interface (ADR 0005). Locally the anchor key lives in its **own** encrypted keystore (`backend/data/keystore-anchor/`, passphrase `ANCHOR_KEYSTORE_PASSPHRASE`), created by `npm run anchor:setup`, so the anchoring process never decrypts any other key. In production the key is generated inside the HSM/MPC provider.
 - Sending is refused on chain 586586, on the private chain's own ID, on the stand-in in production, and on **any other chain** unless it is named in `ANCHOR_ALLOW_CHAIN_ID` **and** the key is held by a production key provider. The local keystore can therefore never sign on a public chain. Any chain other than the stand-in must also set `ANCHOR_CONFIRMATIONS` explicitly.
-- Gas: legacy transactions with a fixed gas limit (`ANCHOR_GAS_LIMIT`, 150,000; `anchor` used 51,060 on the stand-in) and a price cap (`ANCHOR_MAX_GAS_PRICE_WEI`); above the cap nothing is sent.
+- Gas: legacy transactions with a fixed gas limit (`ANCHOR_GAS_LIMIT`, 150,000; `anchor` used 51,060 on the stand-in) and a price cap (`ANCHOR_MAX_GAS_PRICE_WEI`); above the cap nothing is sent. Amended 2026-10-22: the price is `2 x base fee of the latest block + tip`, the tip being the node's suggestion capped at `ANCHOR_MAX_PRIORITY_FEE_WEI` (2 gwei); `eth_gasPrice + 25 %` only on a chain without a base fee. The earlier `eth_gasPrice + 25 %` fed back into a node that suggests tips from recent transactions: on the quiet stand-in each anchor raised the next suggestion until the cap stopped anchoring (demo server, 2026-10-13 to 2026-10-22).
 
 ### 6. Verification (`npm run anchor:verify`)
 

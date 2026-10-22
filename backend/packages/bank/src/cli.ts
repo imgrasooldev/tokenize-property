@@ -2,15 +2,21 @@ import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { readEnvFile } from "@pt/config";
+import { secretFromEnv } from "@pt/http-auth";
 import { keyFromEnv, Peppers } from "@pt/kyc";
 import pg from "pg";
+import { DemoTitleFetch } from "./demo-titles.ts";
+import { createPayeeServer, WEB_BANK_SCOPE } from "./http.ts";
 import { BankService, verifyAudit, type TitleFetch } from "./service.ts";
 import { createWebhookServer, type WebhookKey } from "./webhook.ts";
 
 /**
  * Bank service command line (ADR 0009).
- *   npm run bank:setup     LOCAL DEV ONLY: generates the data key and a webhook secret in backend/.env.local
+ *   npm run bank:setup     LOCAL DEV ONLY: generates the data key, a webhook secret and the website's
+ *                          payee API secret (BANK_CLIENT_SECRET_WEB) in backend/.env.local
  *   npm run bank           serve the webhook endpoint on 127.0.0.1:4910 (POST /v1/bank/events)
+ *   npm run bank:payees    DEMO / LOCAL ONLY: the website's payout-account API on 127.0.0.1:4920
+ *                          (POST /v1/payees, HMAC client "web"; demo title fetch, refused in production)
  *   npm run bank:audit     verify the bank audit hash chain
  * Webhook keys: BANK_WEBHOOK_SECRET_<KID>=<64 hex> (two may be active during a rotation).
  */
@@ -54,6 +60,7 @@ async function setup(): Promise<void> {
   const add: string[] = [];
   if (!e.BANK_DATA_KEY) add.push(`BANK_DATA_KEY=${randomBytes(32).toString("hex")}`);
   if (!Object.keys(e).some((k) => k.startsWith("BANK_WEBHOOK_SECRET_"))) add.push(`BANK_WEBHOOK_SECRET_K1=${randomBytes(32).toString("hex")}`);
+  if (!e.BANK_CLIENT_SECRET_WEB) add.push(`BANK_CLIENT_SECRET_WEB=${randomBytes(32).toString("base64url")}`);
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside backend/
   if (add.length) await appendFile(ENV_FILE, `\n# bank service (local dev, generated)\n${add.join("\n")}\n`, { mode: 0o600 });
   console.log(add.length ? `added ${String(add.length)} bank secret(s) to backend/.env.local` : "bank secrets already present");
@@ -79,10 +86,49 @@ async function serve(): Promise<void> {
   process.on("SIGTERM", stop);
 }
 
+/**
+ * The website's payout-account API (task T-045) on 127.0.0.1:BANK_PAYEES_PORT (4920). There is no
+ * bank connection yet, so the title inquiry is the demo fetch (it answers the title the investor
+ * typed; the database still compares it with the KYC-verified name). Refuses to start in production.
+ */
+async function servePayees(): Promise<void> {
+  if (process.env.NODE_ENV === "production") throw new Error("bank:payees uses the demo title fetch and does not run in production");
+  const e = env();
+  const titles = new DemoTitleFetch();
+  const db = new pg.Pool({
+    host: e.PG_HOST ?? "127.0.0.1",
+    port: Number(e.PG_PORT ?? 5433),
+    user: e.BANK_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
+    password: e.BANK_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    database: e.PG_DATABASE ?? "property_token",
+    application_name: "bank-payees",
+    max: 4,
+    statement_timeout: 15_000,
+    connectionTimeoutMillis: 5_000,
+  });
+  // Fail fast when the database is unreachable or not migrated to 0009.
+  await db.query("SELECT 1 FROM bank.payees LIMIT 0");
+  const service = new BankService(db, Peppers.fromEnv(e), keyFromEnv(e, "BANK_DATA_KEY"), titles, {
+    escrowAccount: e.BANK_ESCROW_ACCOUNT ?? "TRUSTEE-ESCROW-01",
+    actor: "bank-payees",
+  });
+  const port = Number(e.BANK_PAYEES_PORT ?? 4920);
+  const server = createPayeeServer(service, [{ id: "web", secret: secretFromEnv(e, "BANK_CLIENT_SECRET_WEB"), scope: WEB_BANK_SCOPE }]);
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`bank payee API listening on 127.0.0.1:${String(port)} (demo title fetch)`);
+  });
+  const stop = (): void => {
+    server.close(() => void db.end());
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+}
+
 async function main(): Promise<void> {
   const [cmd] = process.argv.slice(2);
   if (cmd === "setup") return setup();
   if (cmd === "serve") return serve();
+  if (cmd === "serve-payees") return servePayees();
   if (cmd === "audit") {
     const db = pool();
     try {
@@ -95,7 +141,7 @@ async function main(): Promise<void> {
     }
     return;
   }
-  console.log("usage: bank setup | serve | audit");
+  console.log("usage: bank setup | serve | serve-payees | audit");
   process.exitCode = 2;
 }
 

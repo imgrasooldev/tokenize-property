@@ -308,6 +308,9 @@ describe.skipIf(!ready)("investor passkeys against PostgreSQL (T-030)", () => {
     expect(small).toMatch(/^\/subscriptions\?sub=/);
     const subId = small.split("sub=")[1] ?? "";
     expect(await offering.cancelReservationAction({}, form({ subscriptionId: subId }))).toEqual({ error: "stepup" });
+    // The payout bank account (T-045) always needs it too; refused before the bank service is asked.
+    const { registerPayeeAction } = await import("../src/app/actions/account");
+    expect(await registerPayeeAction({}, form({ iban: "PK36SCBL0000001123456702", title: "Step Up" }))).toEqual({ error: "stepup" });
     expect(await stepUp(auth)).toEqual({ ok: true });
     expect(await offering.cancelReservationAction({}, form({ subscriptionId: subId }))).toEqual({ ok: true });
     expect(await redirectOf(offering.reserveAction({}, reserveForm("20")))).toMatch(/^\/subscriptions\?sub=/);

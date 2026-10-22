@@ -84,6 +84,9 @@ export class FakeAnchorChain implements AnchorChain {
   loseBroadcast = false;
   loseResponse = false;
   gasPriceWei = 1_000_000_000n;
+  /** null = a pre-London chain (no base fee): the anchorer falls back to gasPrice. */
+  baseFeeWei: bigint | null = 100_000_000n;
+  priorityFeeWei = 1_000_000_000n;
   codeless = false;
   reverted = 0;
   readonly anchors = new Map<bigint, Hex>();
@@ -92,6 +95,8 @@ export class FakeAnchorChain implements AnchorChain {
   private readonly blocks: Hex[] = [keccak256(toBytes(`anchor-genesis-${randomBytes(4).toString("hex")}`))];
   private readonly nonces = new Map<Address, bigint>();
   private pool: PoolTx[] = [];
+  /** Every raw transaction handed to sendRaw, in order (tests read the price that was signed). */
+  readonly sentRaw: Hex[] = [];
   private readonly receipts = new Map<Hex, Receipt>();
   readonly successesBy = new Map<Address, number>();
 
@@ -121,6 +126,7 @@ export class FakeAnchorChain implements AnchorChain {
   lastAnchoredBlock = (): Promise<bigint> => this.call(() => this.last);
   anchorOf = (_c: Address, b: bigint): Promise<Hex> => this.call(() => this.anchors.get(b) ?? ZERO_HASH);
   gasPrice = (): Promise<bigint> => this.call(() => this.gasPriceWei);
+  fees = (): Promise<{ baseFee: bigint | null; priorityFee: bigint }> => this.call(() => ({ baseFee: this.baseFeeWei, priorityFee: this.priorityFeeWei }));
   receipt = (h: Hex): Promise<Receipt | null> => this.call(() => this.receipts.get(h.toLowerCase() as Hex) ?? null);
   inPool = (h: Hex): Promise<boolean> => this.call(() => this.pool.some((t) => t.hash === h.toLowerCase()));
 
@@ -145,7 +151,14 @@ export class FakeAnchorChain implements AnchorChain {
       return reason ? { ok: false as const, reason } : { ok: true as const };
     });
 
+  lastRaw(): Hex {
+    const raw = this.sentRaw.at(-1);
+    if (!raw) throw new Error("nothing was sent");
+    return raw;
+  }
+
   async sendRaw(raw: Hex): Promise<void> {
+    this.sentRaw.push(raw);
     this.rpc();
     const tx = parseTransaction(raw);
     if (tx.chainId !== this.id) throw new Error("wrong chain ID");

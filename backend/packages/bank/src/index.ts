@@ -1,3 +1,5 @@
+export { DemoTitleFetch } from "./demo-titles.ts";
+export { createPayeeServer, WEB_BANK_SCOPE, type PayeeApi } from "./http.ts";
 export { makeIban, parseIban, type Iban } from "./iban.ts";
 export { MockBank, type DeliveredEvent, type MockBankOptions } from "./mockbank.ts";
 export { fileSha256, formatPayoutFile, PAYOUT_FORMAT, parsePayoutFile, type PayoutFile, type PayoutLine } from "./payout-file.ts";

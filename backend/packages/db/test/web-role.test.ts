@@ -1,15 +1,15 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.ts";
-import { adminSettings, scratchDatabase } from "./helpers.ts";
+import { adminSettings, contiguousMigrations, scratchDatabase } from "./helpers.ts";
 
 /**
  * Migration 0012 W-5: the website's database role (pt_web) can do exactly what the website needs
  * and nothing that belongs to the ledger, the signer, operations, KYC, the bank or the indexer.
  */
-const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
+// contiguousMigrations(): identical to ../migrations once no numbering gap is left (0020/0021 reserved).
+const MIGRATIONS = contiguousMigrations();
 const role = `pt_web_test_${randomBytes(4).toString("hex")}`;
 const password = randomBytes(24).toString("base64url");
 let admin: pg.Client;

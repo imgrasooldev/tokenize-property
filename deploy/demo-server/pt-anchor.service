@@ -1,0 +1,24 @@
+[Unit]
+Description=Property Token demo: anchoring job (commits the ledger head and a Besu block to StateAnchor on the anchor chain, ADR 0008)
+After=pt-stack.service pt-anchor-chain.service
+Requires=pt-stack.service pt-anchor-chain.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Every 15 minutes on the demo so visitors see fresh anchors (production default: hourly).
+Environment=ANCHOR_INTERVAL_SECONDS=900
+Environment=NODE_OPTIONS=--max-old-space-size=128
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/anchor/src/cli.ts run
+Restart=always
+RestartSec=30
+# Exit 3 = AnchorAlarm: the contract and the database disagree. Fail closed; never restart blindly
+# and never "fix" it by deleting anchor records (see MEMORY gotchas, ADR 0008).
+RestartPreventExitStatus=3
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

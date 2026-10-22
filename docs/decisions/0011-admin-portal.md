@@ -1,6 +1,6 @@
 # ADR 0011: Internal portals, Step 6a foundation (officer authentication, roles, audit, exposure)
 
-- Status: Accepted (owner approved Step 6 on 2026-10-13; reviewed, tested (129 unit/db + 183 authorization-matrix) and deployed by the lead 2026-10-13) Section 10 added for Step 6b (2026-10-13, migration 0016; reviewed and merged by the lead 2026-10-13).
+- Status: Accepted (owner approved Step 6 on 2026-10-13; reviewed, tested (129 unit/db + 183 authorization-matrix) and deployed by the lead 2026-10-13) Section 10 added for Step 6b (2026-10-13, migration 0016; reviewed and merged by the lead 2026-10-13). Section 11 added for Step 6c (migration 0019, merged). Section 12 added for Step 6d (2026-10-13, migration 0023; on branch `step-6d-trustee-portal`, awaiting lead review).
 - Date: 2026-10-13
 - Builds on: ADR 0001 (one Next.js app for the internal portals), ADR 0005 (maker-checker in the signer), ADR 0007 (payout gate), ADR 0009 (KYC status views, two-officer reviews), product map items 5 to 7
 - Addresses: threats INF-2 (admin panel exposed), P-1 (single insider), P-3 (admin action without trace), K-5 (departing employee keeps access), API-1 (account takeover) for staff, and the new ones in the threat model section 4.11 (AD-1..AD-8)
@@ -189,6 +189,84 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
   officer 24 h, info requested 7 d; freeze 4 h; STR open 3 d, under review 7 d, close proposed 2 d;
   re-screening 1 h), oldest open items, recent decisions.
 
+### 12. Step 6d: trustee portal (addendum, 2026-10-13, task T-006, migration 0023)
+
+Numbered 0023, on top of 0020 (S-06), 0021 (S-03) and 0022 (T-045): it keeps 0020's `recovery`
+audit source and `legal_officer` role and 0021's `tax_officer` role in the shared registries and
+fixes the role-matrix digest after all of them.
+
+The trustee (e.g. CDC) is an independent regulated organisation. Its officers hold no platform role
+(0013 role conflicts, unchanged). Rules live in the new schema `trustee` and in amendments of the
+signer and offering rules (T-1..T-7 in the migration header); the portal reaches them only through
+`admin.*` functions that check the session, the permission, a step-up younger than five minutes for
+every decision, the digest of what the officer saw, and then bind the officer's handle (as in 6b).
+
+- **Co-signing in the signer (T-1, ADR 0005 amendment, spec S-02 §8 amendment).** The specs assign
+  the trustee to issuance: the Issuance Safe always includes a trustee signer (contract-spec §3,
+  S-02 §3). `signer.trustee_cosign_kinds` lists the kinds (today `issuance.mint`). A request of such
+  a kind that needs platform approvals (amount above the policy's `approvalAbove`) gets
+  `trustee_approvals_needed = 1` from a trigger on insert: the service cannot opt out (deny by
+  default), and the value never changes. An approval's `capacity` (platform | trustee) is set by a
+  trigger from the approver's role, never by the caller. `signer.decide` counts the two capacities
+  separately and approves only when both are complete; a trigger re-checks the
+  `pending_approval -> approved` transition, so even a direct UPDATE cannot skip the trustee. A
+  platform checker cannot add a third platform approval in place of the trustee, and a trustee
+  officer is refused on a request that needs no trustee. Requests already waiting when the
+  migration runs need the trustee as well.
+- **Trustee decisions through the 6b path (T-2).** A co-signature is a one-time ticket of capacity
+  `trustee` (`admin.issue_trustee_ticket`: `trustee.decide`, step-up, payload hash, blockers), redeemed
+  by the signing service exactly like a 6b ticket after it recomputed the call and compared the call
+  hash (call preview equal to the signed calldata). Redeeming a trustee ticket needs `trustee.decide`
+  again. The outcome is recorded in the signer, admin and trustee audit chains.
+- **Offering requests (T-2).** S-02 requests whose rule needs the `trustee` duty (L3, L7, L8,
+  L10..L16, SD, the issuance batch IB and the completion record CMP, which carries the registered
+  sale deed and the completion payment batch file hash) are voted by trustee officers in the portal:
+  `admin.decide_offering_request` runs `offering.decide` under the officer's handle. For a portal
+  officer the trustee duty is the `trustee_officer` role (active); a trustee officer holds no other
+  offering duty (OF-SOD-4, trigger on `offering.duties`); votes under an officer's handle need the
+  officer's session (binding trigger on `offering.request_votes`). Names that are not portal
+  officers keep the 0015 command-line duties (break-glass; open item 12).
+- **Distribution review (T-3, spec S-03 D4/D6 amendment).** While a distribution is `published` in the
+  read model and inside the 48-hour challenge window counted from its publish block's time (the
+  contract's `CHALLENGE_WINDOW`), a trustee officer approves, stating the Merkle root they recomputed
+  independently (it must equal the published root), or rejects with a reason. One decision per
+  distribution. **A rejection blocks finalisation in SQL**: triggers refuse a payout batch
+  (`bank.payout_batches`) and the `rent:distribution:<token>:<id>` ledger journal for it, whatever
+  the chain says; `trustee.distribution_blocked(token, id)` is the hook for any later finalise path.
+  The on-chain `reject(id, reason)` stays a Trustee Safe transaction (never sent by the portal); the
+  overview counts rejections not yet seen on chain.
+- **The trustee's register (T-4).** `trustee.register_entries` is the trustee's own append-only unit
+  register per wallet: written by a trigger when the trustee confirms an offering's register entries
+  (V18, subscription `active`, + units; `redeemed`, - units) and by two-officer adjustments (opening
+  balances, corrections) with the evidence's SHA-256 (proposer != decider, 72 hours, one open
+  adjustment per wallet, no balance below zero). Existing active subscriptions are backfilled.
+- **Reads (T-5).** The register next to the holders in the read model, both read in one database
+  snapshot and pinned to the indexer's cursor block (number, hash, halt state), supply against the
+  trustee cap and against the register total, differences first and highlighted; export (CSV,
+  manifest, SHA256SUMS) recorded with its SHA-256 and the pinned block in the trustee and admin audits
+  before release (pattern of the audit export). Co-signing queue (signing and offering), distributions
+  with their window, daily reconciliation report (runs per day in PKT, latest runs, findings, run
+  digest, payout gate), recovery requests (RecoveryGuard requests from the read model; S-06 case
+  files through the hook `trustee.recovery_cases_json()`, which S-06 replaces). The trustee audit
+  chain is a new audit source (`/audit/trustee`).
+- **S-03 duties (T-8, on 0021's operations path).** An expense or fee above `expense_ops_limit_paisa`
+  is approved by the trustee in the portal before the operations checker may approve it (OP-21, E1;
+  `ops.decide_charge` replaced: it now asks the trustee instead of refusing; a trigger guards the
+  approved state). A distribution calculation is approved by the operations checker only after the
+  trustee's pre-check (D4): an independent recomputation of the Merkle root equal to the attached
+  root, with the statement hash recorded (trigger on `ops.distributions`). A trustee rejection of the
+  on-chain distribution (T-3) also refuses S-03's `rent:wht:<token>:<id>` journal, so
+  `ops.book_distribution` cannot book a rejected distribution at all. Pages
+  `/trustee/cosign/charge/[id]`, `/trustee/cosign/calculation/[id]`; the operations pages show the
+  trustee's part (`admin.operations_charge`, `admin.operations_distribution` replaced).
+- **Recovery cases (T-9).** `trustee.recovery_cases_json()` returns 0020's wallet-recovery and
+  succession cases (kind, state, wallets, units, objection window, approvals by capacity, the
+  on-chain request) to the trustee read-only. A trustee approval capacity in 0020's case decisions
+  (S-06 C4) is not built (open item 16).
+- **Permissions (T-7, role matrix digest fixed again).** `trustee.decide` (trustee officers),
+  `trustee.export` (trustee officers and auditors), `trustee.read` (both, from 0013), `audit.export`
+  for trustee officers (only the trustee chain is readable to them).
+
 ## Consequences
 
 - Every later approval (6b to 6d) gets identity, segregation of duties, step-up and audit for free by calling `admin.require` and `admin.require_step_up` from its own database function.
@@ -241,6 +319,31 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
   flows (masked identifiers only; two-officer KYC approval with stale step-up refused; freeze
   approved and queued; STR export recorded before release and matching its record).
 
+## Tests (Step 6d)
+
+- Backend: `signer/test/trustee-cosign.test.ts` (4: requirement set by the database and immutable,
+  two checkers are not enough, trustee ticket redeemed by the signing service, changed call refused,
+  roles cannot stand in for each other, officer handle refused on the command line, trustee first or
+  last, trustee rejection final, kind without trustee, audit chains and a forged approval found);
+  `offering/test/trustee.test.ts` (2: funding, issuance batch, completion record and register
+  confirmed by portal trustee officers, the register follows V18 and equals the read model, duty
+  rules OF-SOD-4); existing 6b tests extended with the trustee step (`officer-approval`, `service`,
+  `e2e-chain`; web `invest`/`market` integration).
+- Admin database: matrix +19 functions × 7 callers (incl. audit source `trustee`); trustee rules (8:
+  no table/function access; distribution review permission, step-up, digest, recomputed root, one
+  decision, window and status; rejection blocks payout batch and ledger journal; adjustments four
+  eyes, digest, one open per wallet, no negative balance, expiry; register vs read model; export
+  record; audit chain incl. tamper detection).
+- HTTP matrix: 12 new pages and 7 new POST routes × 8 callers, CSRF/same-origin on each, plus 4 flows
+  (two checkers and the trustee co-sign a mint as shown, stale step-up and changed call refused;
+  distribution rejected and blocked; adjustment by a second trustee officer then the register
+  matches and the export matches its record; no personal data on trustee pages, chains intact).
+- End to end in Edge: the 6b mint flow now ends with a trustee officer co-signing in the trustee
+  portal with a virtual FIDO2 key (5/5 passed, before the merge of 0020-0022; not re-run after).
+- After merging 0020-0022 (2026-10-22): admin db +3 (OP-21 four steps, D4 pre-check rules, `rent:wht` block
+  and recovery cases) and matrix +4 functions; HTTP matrix +2 pages, +2 routes; backend tax tests extended
+  with the trustee steps. Totals: admin 893, HTTP 1048, backend 656 + 13 skipped.
+
 ## Open items
 
 1. AAGUID allow-list of approved hardware keys (FIDO MDS) and the SSO in front of the portal, before the pilot.
@@ -253,3 +356,26 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
 8. (6c) Investor-facing wording of `suspended`, `review` and the PEP reason (tipping-off): the website shows KYC reasons today; compliance to confirm the generic text (also T-028 item 4).
 9. (6c) Partial freezes (`freezePartial`), freezes of investors without a bound wallet, and assisted payout-account changes are not in the portal yet.
 10. (6c) Real PEP list provider and FMU goAML format (T-031); SLA values are working defaults for the owner to confirm.
+11. (S-06) Trustee-officer approval in the portal before `recovery.propose` (today the Trustee Safe's signature, OQ-3); no Playwright e2e for `/recovery` yet.
+12. (6d) Trustee co-signature threshold: the trustee co-signs exactly the mints that need platform
+    approvals (above `approvalAbove`); owner/trustee to confirm whether every mint (Issuance Safe
+    2-of-3 incl. trustee) should need it, and whether the off-chain rule should equal the Safe's
+    2-of-3 (today it is stricter: platform approvals plus the trustee).
+13. (6d) Command-line offering duties for names that are not portal officers still work for the
+    trustee duty (break-glass, server access needed); close before the pilot (trustee only through
+    the portal). Votes under a portal officer's handle are refused outside the portal (enforced).
+    `seed:catalog` (T-045) never casts a vote or decision under an officer's handle: it prepares everything up to the first vote (K4, investment committee, P8, L3), stops with outcome `waiting` and lists which votes officers must cast in PT Control (session + step-up), and writes nothing on a re-run while they are due. PT Control has screens for K4 (Approvals > Property & KYB) and the trustee's L3 vote (Trustee > Co-signing); investment committee votes, the P8 trustee acceptance and the non-trustee L3 votes have no screen yet, so the demo catalogue currently stops at the committee.
+14. (6d) The trustee register is the trustee's record inside our database; the trustee's own system
+    of record (e.g. CDC) and a signed attestation feed (S-07 Q-2, recon `supply.register_mismatch`)
+    are not wired yet.
+15. (6d) The distribution review is recorded in our database; the Trustee Safe's on-chain
+    `reject` and the Ops Safe's `finalize` are Safe-console actions (S-02 Q-8, T-039).
+16. (6d) S-06 recovery cases are shown to the trustee read-only; the trustee's own approval before
+    `recovery.propose` (S-06 C4, item 11) is not a capacity of 0020 yet; the Trustee Safe signs on chain.
+
+## Addendum 2026-10-13: S-06 recovery, succession and reversal cases (T-026, migration 0020)
+
+- New role `legal_officer` (conflicts with every other role). New permissions: `recovery.read` (operations makers and checkers, compliance, legal, auditors), `recovery.request` (operations makers: open cases, documents, heirs, the new wallet, refresh from chain), `recovery.decide` (operations checkers, compliance and legal officers: approve/reject in a capacity, cancel, release). The capacity must be one of the officer's roles and is checked again in SQL (`recovery.capacity_ok`). Role matrix digest re-fixed in 0020.
+- Pages `/recovery`, `/recovery/[id]`; routes `POST /api/recovery/cases`, `/api/recovery/cases/[id]/evidence|wallet|act`, `/api/recovery/sync`; audit source `recovery`. Opening, setting the new wallet and every decision need a step-up younger than five minutes; decisions are bound to the case digest; officer handles are bound to sessions (`compliance.bind_actor`). The wallet route checks the case and the step-up before asking the signing service for a wallet.
+- Landing page for an officer with `recovery.read` but no `ops.read` (legal officers): `/recovery`.
+- Tests: `test/db/recovery.test.ts` (5), read matrix +10 functions × 8 identities, HTTP matrix +4 pages, +6 routes, +3 behaviour tests (hex hashes are now stripped before the CNIC-pattern check: a random digest once held 15 decimal digits in a row).

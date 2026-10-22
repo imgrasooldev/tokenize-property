@@ -8,3 +8,4 @@ export function applyMigrations(client: import("pg").Client): Promise<string[]>;
 export function createMigratedDatabase(name: string, opts?: { recreate?: boolean }): Promise<string[]>;
 export function dropDatabase(name: string, existing?: import("pg").Client): Promise<void>;
 export function ensurePortalLogin(login: string): Promise<string>;
+export function dropPortalLogin(login: string): Promise<void>;

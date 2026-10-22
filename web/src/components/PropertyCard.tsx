@@ -1,94 +1,105 @@
 import Link from "next/link";
-import { formatNumber, formatPkr, loc, type Dict, type Lang } from "@/lib/i18n";
+import { formatNumber, loc, type Dict, type Lang } from "@/lib/i18n";
+import { fill } from "@/lib/i18n-verify";
+import { clabel, type CatalogDict } from "@/lib/i18n-catalog";
+import { label, type OfferingDict } from "@/lib/i18n-offering";
 import { MIN_TOKENS } from "@/lib/invest-rules";
-import type { Property } from "@/lib/properties";
+import { bpText, formatPaisa } from "@/lib/offering-rules";
 import { shortHash } from "@/lib/pulse-view";
-import { sampleScore } from "@/lib/sample-ai";
-import type { LiveToken } from "@/lib/server/readmodel";
+import type { CatalogEntry } from "@/lib/server/catalog";
 import { BuildingArt } from "./BuildingArt";
 
-export function PropertyCard({ p, live, lang, t }: { p: Property; live: LiveToken | null; lang: Lang; t: Dict }) {
-  const soldPct = live && live.cap > 0n ? Number((live.supply * 10_000n) / live.cap) / 100 : 0;
-  const ai = sampleScore(p.symbol);
+const TONE: Record<string, string> = { live: "ok", open: "ok", soon: "cy", closed: "gray", unavailable: "warn" };
+
+/** One catalogue property as a card: every figure from records (T-045). */
+export function PropertyCard({ e, lang, t, l, lo }: { e: CatalogEntry; lang: Lang; t: Dict; l: CatalogDict; lo: OfferingDict }) {
+  const tone = new Map(Object.entries(TONE)).get(e.status) ?? "gray";
+  const place = e.city ? loc(e.city, lang) : (e.district ?? "");
+  const token = e.token;
+  const issuedBp = token && token.cap > 0n ? Number((token.supply * 10_000n) / token.cap) : null;
+  const minPaisa = e.issuePricePaisa === null ? null : e.issuePricePaisa * (e.offering ? e.offering.minUnits : MIN_TOKENS);
   return (
     <article className="pcard glass">
       <div className="pcard-art">
-        <BuildingArt property={p} uid="card" />
+        <BuildingArt property={{ key: e.key, art: e.art, name: e.name }} uid="card" />
         <div className="tags">
-          {p.status === "live" && live ? (
-            <span className="chip ok solid">
-              <span className="dot" aria-hidden="true" />
-              {t.liveShort} · {loc(p.city, lang)}
-            </span>
-          ) : (
-            <span className="chip solid">
-              {t.comingSoon} · {loc(p.city, lang)}
-            </span>
-          )}
-          {ai && (
-            <span className="chip ai" title={t.aiSampleTip}>
-              ✦ AI {ai.score} · {t.sampleTag}
+          <span className={`chip ${tone} solid`}>
+            {(e.status === "live" || e.status === "open") && <span className="dot" aria-hidden="true" />}
+            {clabel(l, "status_", e.status)}
+            {place ? ` · ${place}` : ""}
+          </span>
+          {e.score.score !== null && (
+            <span className="chip cy" title={l.scoreNotAdvice}>
+              {l.scoreTitle} {e.score.score}
             </span>
           )}
         </div>
       </div>
       <div className="cb">
         <h3>
-          <Link href={`/properties/${p.symbol}`} className="stretch">
-            {loc(p.name, lang)}
+          <Link href={e.href} className="stretch">
+            {loc(e.name, lang)}
           </Link>
         </h3>
         <div className="loc">
-          {p.type === "office" ? t.office : t.retail} · {loc(p.tenant, lang)} · <span className="chip sample">{t.sample}</span>
+          {e.use ? label(lo, "use_", e.use) : l.notPublished}
+          {e.symbol ? ` · ${e.symbol}` : ""}
         </div>
         <div className="kv3">
           <div>
-            <small>{t.pricePerToken}</small>
-            <b>{formatPkr(p.navPkr, lang)}</b>
+            <small>{l.issuePrice}</small>
+            <b>{e.issuePricePaisa === null ? "—" : formatPaisa(e.issuePricePaisa, lang)}</b>
           </div>
           <div>
-            <small>{t.yield}</small>
-            <b className="up">{formatNumber(p.yieldPct, lang)}%</b>
+            <small>{l.trailingYield}</small>
+            <b className={e.yield?.yieldBp ? "up" : undefined}>{e.yield?.yieldBp ? `${bpText(e.yield.yieldBp)}%` : "—"}</b>
           </div>
           <div>
             <small>{t.minShort}</small>
-            <b>{formatPkr(p.navPkr * Number(MIN_TOKENS), lang)}</b>
+            <b>{minPaisa === null ? "—" : formatPaisa(minPaisa, lang)}</b>
           </div>
         </div>
-        {live ? (
+        {token ? (
           <>
             <div className="row-between meta">
               <span>
-                {formatNumber(soldPct, lang)}% {t.registerIssued}
+                {issuedBp === null ? "—" : `${bpText(issuedBp)}%`} {t.registerIssued}
               </span>
               <span>
-                {formatNumber(live.cap - live.supply, lang)} {t.left}
+                {formatNumber(token.cap - token.supply, lang)} {t.left}
               </span>
             </div>
             <div className="bar">
-              <i style={{ inlineSize: `${String(Math.min(soldPct, 100))}%` }} />
+              <i style={{ inlineSize: `${issuedBp === null ? "0" : bpText(Math.min(issuedBp, 10_000))}%` }} />
             </div>
             <div className="hash">
               <span>
-                {t.tokenShort} <span className="mono cy" dir="ltr">{shortHash(live.address)}</span>
+                {t.tokenShort}{" "}
+                <span className="mono cy" dir="ltr">
+                  {shortHash(token.address)}
+                </span>
               </span>
               <span className="up">{t.onChainCheck} ✓</span>
             </div>
           </>
-        ) : (
+        ) : e.offering ? (
           <>
             <div className="row-between meta">
-              <span>{p.status === "live" ? t.chainUnavailable : t.notOnChainYet}</span>
-              <span>{t.comingSoon}</span>
+              <span>{label(lo, "st_", e.offering.state)}</span>
+              <span>{fill(lo.unitsN, { n: formatNumber(e.offering.availableUnits, lang) })}</span>
             </div>
             <div className="bar">
-              <i style={{ inlineSize: "0%" }} />
+              <i style={{ inlineSize: `${e.offering.targetUnits > 0n ? bpText(Number((e.offering.paidUnits * 10_000n) / e.offering.targetUnits)) : "0"}%` }} />
             </div>
             <div className="hash">
-              <span>{t.trusteeReview}</span>
-              <span className="am">{t.pending}</span>
+              <span>{l.offeringPanel}</span>
+              <span className="mono di">{e.offering.closesAt ? e.offering.closesAt.slice(0, 10) : "—"}</span>
             </div>
           </>
+        ) : (
+          <div className="row-between meta">
+            <span>{t.chainUnavailable}</span>
+          </div>
         )}
       </div>
     </article>

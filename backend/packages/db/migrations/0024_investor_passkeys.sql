@@ -1,7 +1,7 @@
 -- Investor passkeys and database-enforced website sessions (task T-030, ADR 0010 section 8).
 --
--- Numbered 0024: 0020-0023 are reserved for parallel branches. Merge those first; until then the
--- runner refuses the gap (tests use contiguousMigrations()).
+-- Follows 0020 (recovery), 0021 (operations and tax), 0022 (website account, catalogue and status
+-- reads: its pt_web grants are untouched here) and 0023 (trustee).
 --
 -- Safety properties enforced by the database itself (rule IDs IP-n):
 --   IP-1  Sessions. The cookie holds a random 256-bit token; only its SHA-256 is stored here. 30
@@ -160,7 +160,7 @@ CREATE TABLE webauth.step_up_actions (
 INSERT INTO webauth.step_up_actions (action, min_amount_paisa, note) VALUES
   ('offering.reserve', 10000000, 'Reserving units worth PKR 100,000 or more (owner to confirm the threshold)'),
   ('offering.cancel', 0, 'Cancelling a reservation or a queue place'),
-  ('bank.payout_account', 0, 'Adding or changing the payout bank account (no website screen yet)');
+  ('bank.payout_account', 0, 'Adding or changing the payout bank account (website /account, before the bank service is asked)');
 
 CREATE FUNCTION webauth.audit_settings() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, webauth AS $$

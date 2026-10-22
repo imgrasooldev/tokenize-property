@@ -237,14 +237,99 @@ Numbered 0019 because 0018 is reserved for parallel work (no dependency on it); 
 
 Grants: `pt_admin_portal` EXECUTE on the 18 admin functions; `pt_signer` EXECUTE on `compliance.unfreeze_allowed`; `pt_kyc_service` on `claim_rescreens` / `complete_rescreen`; `pt_kyc_officer`, `pt_admin_auditor` on `compliance.verify_audit`. No table grants.
 
+### 0020 recovery (RV-1..RV-10; spec S-06 section 14, task T-026)
+
+Schema `recovery` (role `pt_recovery_worker` runs `recovery.tick`):
+
+| Table | Purpose / rules |
+|---|---|
+| `cases` | `wallet_recovery`, `succession`, `reversal`; `case_ref` = SHA-256 of `pt-case-v1:<uuid>` (caseId on chain); state machine in trigger `guard_case` (opened → approved → executed → closed; opened → rejected / cancelled → closed; reversal opened → closed); identity columns immutable; decisions written once; release proposer ≠ confirmer ≠ maker (CHECK); one live case per wallet / new wallet / journal (partial unique indexes) |
+| `approvals` | one per (case, capacity) and per (case, officer); capacities `operations`, `compliance`, `legal`; digest bound; append-only |
+| `documents` | metadata + SHA-256 only (death certificate, succession certificate, letters of administration, court order, family settlement, re-verification, other); free text refused with CNIC/IBAN/phone; append-only |
+| `heirs` | KYC subject, bound wallet, share numerator/denominator; append-only |
+| `proposals` | one RecoveryGuard request per case (recovery) or per heir with units (succession): outbox keys of propose/execute/cancel, on-chain request id and eta from the read model; enqueued → pending → executed / cancelled, enqueued → failed / cancelled |
+| `wallet_history` | old → new wallet of an executed recovery (the only change `kyc.wallets` accepts, via `rebind_context` and trigger `kyc.guard_wallet`) |
+| `reversal_reasons`, `reversible_kinds` | reference lists (append-only); reversible: `rent_received`, `cash_topup` |
+| `audit` | hash-chained (`pt-recovery-audit-v1`, UTC); `verify_audit()` also finds rows written around the functions |
+
+Functions: `open_case`, `open_reversal`, `set_new_wallet`, `add_document`, `add_heir`, `decide`, `cancel`, `release`, `tick`, `allocation` (floor + largest remainder with a family settlement), `shares_complete` (exact, lcm), `reversal_problem`, `command_allowed` and `pending_from` (signing service), views `recon_requests`, `recon_reversals` (reconciliation). Portal: `admin.recovery_cases|case|open|add_document|add_heir|set_wallet|act|sync`; `admin.audit_rows / verify_chains / record_export` know the source `recovery`. Notify kind `security.wallet_recovery_requested` (EN/UR SMS + e-mail). Admin role `legal_officer`, permissions `recovery.read|request|decide`. Changes `kyc.wallets` from strictly append-only to "append-only except the recovery rebinding" (0009 Y-5 amended).
+
+### 0021 operations and tax (OT-1..OT-11; spec S-03, tasks T-023/T-024, ADR 0014)
+
+Applies on top of 0020 (adds the `legal_officer` x `tax_officer` incompatibility and fixes the role-matrix digest again). Schemas `ops` and `tax`; advisory locks 586586210 (audit), 586586211 (rate versions), 586586212 (calculation per token/period), 586586213 (remittance per token/period), 586586214 (certificate).
+
+| Object | Purpose |
+|---|---|
+| `ops.settings` | `allow_placeholder_rates` (false; local dev only), `filer_check_max_age_days` 30, `expense_ops_limit_paisa` (placeholder Rs 1,000,000, Q-5), `export_valid_hours` 24, `export_ticket_seconds` 120, `wht_due_days` 15 (placeholder); every change audited |
+| `ops.collections` | rent from one recon bank line (used once): source `matched_credit` (bank service already booked it), `suspense_credit` (bank:suspense -> pool, OP-12) or `unbooked_line` (bank -> pool); period = month of the value date; maker-checker; journal `rent:collected:<token>:<period>-c<id>` (external_ref = bank reference) on approval |
+| `ops.charges` | expense / fee (`property_manager`, `trustee`, `platform`) / reserve contribution / reserve release, payee, description, amount, evidence SHA-256; maker-checker; journals `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>` (external_ref = evidence hex); expense/fee above the limit refused (trustee, 6d) |
+| `ops.period_totals()`, `ops.operating_statement()` | OP-30/OP-31 from approved records: net operating cash, distributable gross (never < 0) and shortfall |
+| `ops.distributions` | one live calculation per (token, period), which locks the period; operating statement snapshot, record date/block, income type, sums (CHECK gross = WHT + net = distributable), flagged and placeholder line counts, statement, statement hash, Merkle root, tax schedule and its hash, maker/attacher/checker (all different), on-chain id and journals; states `calculated -> attached -> approved -> booked`, `returned` |
+| `ops.distribution_lines` | wallet, subject (or none), units at the record block, gross (largest remainder), filer status with check id and ATL as-of date, flag, rate id and rate (ppm), WHT, net; CHECKs gross = net + WHT and WHT = floor((gross x ppm + 500,000) / 1,000,000); append-only |
+| `ops.calculate_distribution()`, `attach_statement()`, `decide_distribution()`, `book_distribution()` | calculation from `chain.transfers` up to the record block; statement v2 and tax schedule v1 checked line by line; approval refuses placeholder rates; booking needs the finalized on-chain distribution with the same root, record block, statement hash and total = sum of net, and posts `rent:wht:<token>:<id>` and `rent:distribution:<token>:<id>` together |
+| `tax.income_types`, `tax.rates` | versioned, dated rates per income type and status (`filer`, `non_filer`, `exempt`), rate in ppm, basis, placeholder flag; proposal -> approval by a different officer; effective today or later; seeded PLACEHOLDERS (LEGAL/TAX TO CONFIRM) for `reit_dividend` and `spv_dividend`; no seed for `rent` (slab-based) |
+| `tax.rate_for()`, `tax.withholding()`, `tax.filer_status()` | rate in force at a record date; the rounding rule; OP-41 status (latest ATL result <= 30 days, else non-filer, flagged) |
+| `tax.sealed_cnics`, `tax.filer_checks` | ADR 0014: AES-256-GCM ciphertext bound to subject + peppered CNIC hash (FK to `kyc.cnic_hashes`) + pepper version; ATL results (status, as-of, provider, evidence SHA-256); both append-only |
+| `tax.remittances` | token, period, amount (<= withheld - remitted), CPR, bank reference and account; maker-checker; journal `tax:remit:<token>:<cpr>` (payable -> bank) |
+| `tax.certificates`, `tax.certificate_data()`, `tax.issue_certificate()` | annual certificate data per investor and fiscal year (July-June, by closing year), content SHA-256, superseding chain |
+| `tax.filing_exports`, `tax.export_tickets` | ADR 0014 X-4: requested -> approved (different officer) -> generated once (file SHA-256 and rows recorded before release); tickets single use, at most 10 minutes (setting 2) |
+| `tax.reconcile(token)` | findings `tax.line_arithmetic`, `rent.wht_mismatch`, `tax.payable_mismatch` (per period and whole account), `tax.wht_unremitted` |
+| `ops.audit`, `ops.verify_audit()` | hash-chained (`pt-ops-audit-v1`, UTC) for ops and tax; finds rows without their audit entry |
+| `admin.roles`, `role_conflicts`, `role_permissions` | role `tax_officer`; permissions `operations.read/request/decide`, `tax.read/decide/export`; conflicts tax officer x admin, auditor, trustee, ops maker, compliance; digest fixed again |
+| `admin.operations_periods`, `operations_statement`, `operations_charge`, `operations_distribution`, `tax_overview`, `tax_exports`, `tax_export` | reads (no CNIC or name; investors as 8-character subject references) with blockers and digests |
+| `admin.propose_charge`, `decide_charge`, `decide_distribution`, `propose_tax_rate`, `decide_tax_rate`, `request_tax_export`, `decide_tax_export`, `issue_tax_export_ticket` | writes; step-up on every decision and on every tax action; refusals audited |
+
+Grants: `pt_ops_operator` (operations CLI), `pt_ops_reader`, `pt_tax_service` (only role that reads sealed CNICs or redeems tickets), `pt_recon_writer/reader` EXECUTE `tax.reconcile`, `pt_admin_portal` EXECUTE on the 15 admin functions.
+### 0022 web account and catalogue (WA-1..WA-5; task T-045)
+
+Applies on top of 0021. No tables. Four thin `SECURITY DEFINER` read functions for the website's role `pt_web`:
+
+| Function | Purpose |
+|---|---|
+| `bank.web_payees(p_subject uuid)` | one investor's payout accounts: id, last four digits, bank code, registered, `active_from` (end of the 72 h cooling-off), superseded. Never the IBAN hash or the sealed IBAN (WA-2). Registration stays with the bank service (`bank.register_payee` needs keys the website does not hold) |
+| `property.web_catalog()` | for offerings visible under WO-5 (`ready` and later): building name, province, district, use, covered area, built, occupancy, lease count, declared monthly rent, structure (kind, Shariah, planned units, holding limit), trustee acceptance time, sponsor KYB approved (boolean), valuations (count, lowest, highest, latest date). No floor/unit/plot/deed/address/GPS, sponsor identity, valuer or officer (WA-3) |
+| `property.web_documents(p_offering uuid)` | current (not superseded) documents of an allow-listed set of types (`property.web_public_doc_type`: title deed, land record, building plan, completion certificate, insurance, valuation, legal opinion, technical report, trust deed, SPV documents, Shariah certificate, audited financials) as SHA-256 hex, upload time and "verified at source"; never KYB documents, leases, rent rolls, tax receipts, utility bills, photos, court orders or minutes (WA-4) |
+| `recon.web_status()` | the latest finished run (passed/failed), its time, pinned block, blocking and warning counts, and `recon.payout_gate().allowed`; never findings (WA-5) |
+
+`pt_web` gets `USAGE` on schemas `bank`, `property`, `recon` and `EXECUTE` on these four functions only (tested: `db/test/web-account.test.ts` enumerates every function in the three schemas).
+### 0023 trustee (T-1..T-7; Step 6d, task T-006, ADR 0011 section 12)
+
+Applies on top of 0022 (after S-06's 0020 and S-03's 0021; the role-matrix digest is fixed again after all of them). Schema `trustee`; advisory locks 586586230 (audit), 586586231 (one review per distribution), 586586232 (register balance per token and wallet).
+
+| Object | Purpose |
+|---|---|
+| `signer.trustee_cosign_kinds` | kinds the specs assign to the trustee (`issuance.mint`); append-only |
+| `signer.requests.trustee_approvals_needed` (new column) | 1 when the kind is listed and the request needs platform approvals; set by trigger `requests_trustee_requirement` on insert, immutable (`requests_trustee_guard`), which also refuses `pending_approval -> approved` without both capacities |
+| `signer.approvals.capacity` (new column) | `platform` / `trustee`, set by trigger `approvals_capacity` from the approver's role (active `trustee_officer` officer = trustee) |
+| `signer.decide()` (replaced), `signer.approval_counts()` | counts platform and trustee approvals separately; refuses a platform approval once the platform part is complete and a trustee approval where none is needed |
+| `admin.signer_tickets.capacity` (new column), `admin.guard_signer_ticket()`, `redeem_signer_ticket()`, `complete_signer_ticket()`, `signer_blockers()`, `signer_request()` (replaced) | trustee tickets need `trustee.decide` at issue and redemption; the outcome also goes to `trustee.audit`; detail reads show both capacities |
+| `offering.has_duty()` (replaced), trigger `duties_officer_check`, trigger `request_votes_officer_binding` | for a portal officer the S-02 `trustee` duty is the active `trustee_officer` role and no other duty is allowed (OF-SOD-4); votes under an officer handle only through the portal |
+| `trustee.distribution_reviews` | one decision per (registry, distribution): approve (with the recomputed root, equal to the published root) or reject, reason, digest of what was shown, window end, decider; append-only |
+| `trustee.distribution_blocked()`, triggers `payout_batches_trustee_review` (bank) and `journal_trustee_review` (ledger, only keys `rent:distribution:%` and S-03's `rent:wht:%`) | a rejected distribution gets no payout batch and no booking |
+| `trustee.register_entries` | the trustee's own unit register per token and wallet: + units on V18 (`active`), - units on `redeemed` (trigger `subscription_events_trustee_register`), and approved adjustments; append-only, balance never below zero; backfilled from existing active subscriptions |
+| `trustee.adjustments` | two-officer register corrections with evidence SHA-256, 72 h, one open per wallet; decided once |
+| `trustee.register_lines()` | register next to `chain.holdings` for one token (full outer join on the wallet) |
+| `trustee.audit` | hash-chained (`pt-trustee-audit-v1`, UTC); `trustee.verify_audit()` also finds reviews, register entries, adjustments and trustee co-signatures without their audit entry |
+| `trustee.recovery_cases_json()` | 0020's wallet-recovery and succession cases for the trustee, read-only (no subject identifiers beyond a short reference) |
+| `trustee.charge_decisions`, `trustee.charge_problem()`, trigger `charges_trustee`, `ops.decide_charge()` (replaced) | OP-21: a charge above `expense_ops_limit_paisa` is approved only after the trustee approved it; a trustee rejection leaves only "reject" |
+| `trustee.calculation_checks`, `trustee.calculation_problem()`, trigger `distributions_trustee_precheck` | D4: `attached -> approved` of an `ops.distributions` row needs the trustee's pre-check with a recomputed root equal to the attached root (and the same statement hash) |
+| `admin.operations_charge`, `admin.operations_distribution` (replaced) | 0021 reads, now with the trustee's decision and blocker |
+| `admin.trustee_charge`, `trustee_calculation`, `decide_trustee_charge`, `precheck_distribution` | trustee reads (`trustee.read`) and decisions (`trustee.decide`, step-up, digest) |
+| triggers `*_officer_binding` | officer handles in trustee rows only with the admin function on the stack |
+| `admin.role_permissions` (+4) | `trustee.decide`, `trustee.export`, `audit.export` for trustee officers; `trustee.export` for auditors; digest fixed again |
+| `admin.trustee_dashboard`, `trustee_register`, `register_adjustment`, `trustee_cosign_queue`, `trustee_signer_request`, `trustee_offering_request`, `trustee_distributions`, `trustee_distribution`, `trustee_recon`, `trustee_recon_run`, `trustee_recoveries` | reads (`trustee.read`): chain numbers pinned to the indexer cursor (one snapshot), per-action blockers and digests |
+| `admin.issue_trustee_ticket`, `decide_offering_request`, `review_distribution`, `propose_register_adjustment`, `decide_register_adjustment`, `record_register_export` | writes (`trustee.decide`, export `trustee.export`); step-up on every decision; refusals audited as `approval.refused` |
+| `admin.audit_rows`, `verify_chains`, `record_export` (replaced) | new audit source `trustee` (0020's `recovery` kept) |
+
+Grants: `pt_admin_portal` EXECUTE on the 21 new admin functions; `pt_admin_auditor` EXECUTE on `trustee.verify_audit`. No role can read or write a `trustee` table directly.
 ### 0024 investor passkeys (IP-1..IP-9; task T-030, ADR 0010 section 8)
 
-Numbered 0024 because 0020-0023 are reserved for parallel branches; until those are merged the backend runner refuses the gap and tests use `contiguousMigrations()`. Schema `webauth`; advisory lock 586586240 (audit).
+Follows 0020-0023 (0022's `pt_web` grants are untouched). Schema `webauth`; advisory lock 586586240 (audit).
 
 | Object | Purpose |
 |---|---|
 | `webauth.settings` | one row: `require_passkey` (default off while the demo server is plain HTTP by IP). Changed by the database administrator only; every change audited (`settings.changed`) |
-| `webauth.step_up_actions` | action → `min_amount_paisa` for the passkey step-up: `offering.reserve` 10,000,000 (PKR 100,000), `offering.cancel` 0, `bank.payout_account` 0. An action not listed always needs a step-up (deny by default). Changes audited |
+| `webauth.step_up_actions` | action → `min_amount_paisa` for the passkey step-up: `offering.reserve` 10,000,000 (PKR 100,000), `offering.cancel` 0, `bank.payout_account` 0 (checked by the website through `web_require_recent_passkey` before it asks the bank service). An action not listed always needs a step-up (deny by default). Changes audited |
 | `webauth.passkeys` | credential ID (PK, base64url), random `ref` (what the website shows and revokes by), investor, label (`webauth.name_ok`: 1-40 chars, no markup, no 6-digit run), public key, counter (forward only), transports, AAGUID, format, `singleDevice`/`multiDevice`, backed up, created, last used, revoked once (`investor` or `clone_suspected`); never deleted |
 | `webauth.sessions` | SHA-256 of the cookie token, investor, method `passkey`/`persona`/`signup`, credential (passkey method), created, last seen (forward), `expires_at = created + 12 h`, `passkey_at` + credential of the last passkey assertion (forward), ended once (`logout`, `idle`, `absolute`, `superseded`, `passkey_revoked`); never deleted |
 | `webauth.challenges` | ceremony id hash, purpose `register`/`login`/`step_up`, challenge, session (register and step-up), created, expires (≤ 5 min), used, completed (once, ≤ 5 min after use); housekeeping removes rows a day after expiry |
@@ -298,13 +383,15 @@ All NOLOGIN, created idempotently:
 
 | 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
 | 0018 | no new role: `pt_web` (0012) may execute the six `offering.web_*` functions |
+| 0021 | `pt_ops_operator`, `pt_ops_reader`, `pt_tax_service` |
+| 0022 | no new role: `pt_web` may execute `bank.web_payees`, `property.web_catalog`, `property.web_documents`, `recon.web_status` |
 | 0024 | no new role: `pt_web` may execute the `webauth.web_*` functions; `offering.web_reserve` / `web_cancel` revoked from it |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
 ## 6. Ledger account conventions
 
-From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
+From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). S-03 (0021): `vendor:payable:<payee>`, `fees:payable:<payee>`, `reserve:<token>`, `tax:wht-payable:<token>`, `rent:payable:wallet:<wallet>` (holder without a KYC subject); journals `rent:collected:<token>:<period>-c<id>`, `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>`, `rent:wht:<token>:<id>`, `tax:remit:<token>:<cpr>`. The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
 
 ## 7. `webdemo` (runtime, prototype only)
 

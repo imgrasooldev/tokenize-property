@@ -8,8 +8,9 @@ import { connect, enrolAndSignIn, enrolLink, pageWithKey, warm } from "./helpers
 /**
  * Step 6b in a real browser (Edge) with virtual FIDO2 keys: two operations checkers approve a mint
  * that the signing service holds for maker-checker (each approval needs a fresh security-key
- * assertion; the second checker cannot be the first); an operations maker asks for an unfreeze and
- * a checker approves it once reconciliation passed. Screenshots go to screenshots/6b-*.png.
+ * assertion; the second checker cannot be the first), and since Step 6d (migration 0023) a trustee
+ * officer co-signs it in the trustee portal; an operations maker asks for an unfreeze and a checker
+ * approves it once reconciliation passed. Screenshots go to screenshots/6b-*.png and 6d-*.png.
  */
 test.skip(process.env.SCREENSHOTS === "1", "the screenshot run uses the development database");
 test.describe.configure({ mode: "serial" });
@@ -71,7 +72,7 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${OUT}/6b-${name}.png`, fullPage: true });
 }
 
-let links: { checker1: string; checker2: string; maker: string };
+let links: { checker1: string; checker2: string; maker: string; trustee: string };
 
 test.beforeAll(async () => {
   mkdirSync(OUT, { recursive: true });
@@ -85,13 +86,14 @@ test.beforeAll(async () => {
     checker1: await invite(a, b, "e2e.checker1", "Hina Checker", "ops_checker"),
     checker2: await invite(a, b, "e2e.checker2", "Omar Checker", "ops_checker"),
     maker: await invite(a, b, "e2e.maker2", "Sana Maker", "ops_maker"),
+    trustee: await invite(a, b, "e2e.trustee1", "Tariq Trustee", "trustee_officer"),
   };
 });
 test.afterAll(async () => {
   await db.end();
 });
 
-test("two checkers approve a mint with their security keys; the signing service decides", async ({ browser }) => {
+test("two checkers and the trustee approve a mint with their security keys; the signing service decides", async ({ browser }) => {
   const requestId = await pendingMint(signer, "25000");
   const c1 = await pageWithKey(browser);
   await enrolAndSignIn(c1.page, links.checker1, /\/$/);
@@ -121,20 +123,37 @@ test("two checkers approve a mint with their security keys; the signing service 
   const c2 = await pageWithKey(browser);
   await enrolAndSignIn(c2.page, links.checker2, /\/$/);
   await c2.page.goto(`/approvals/signer/${requestId}`);
-  await c2.page.getByPlaceholder("Reason (at least 10 characters)").fill("Trustee confirmed the subscription");
+  await c2.page.getByPlaceholder("Reason (at least 10 characters)").fill("Second check of the subscription");
   await c2.page.getByRole("button", { name: "Approve with security key" }).click();
-  await expect(c2.page.getByTestId("decision-ok")).toContainText("approved");
-  await expect(c2.page.getByTestId("signer-status")).toHaveText("approved");
-  await shot(c2.page, "04-approved");
+  // The platform approvals are complete; a mint also needs the trustee (migration 0023).
+  await expect(c2.page.getByTestId("decision-ok")).toContainText("pending_approval");
+  await expect(c2.page.getByTestId("decision-unavailable")).toContainText("trustee co-signs next");
+  await shot(c2.page, "04-platform-approved");
+
+  const t = await pageWithKey(browser);
+  await enrolAndSignIn(t.page, links.trustee, /\/trustee$/);
+  await t.page.goto("/trustee/cosign");
+  await expect(t.page.getByTestId("cosign-signer")).toContainText("Mint 25,000 tokens");
+  await t.page.goto(`/trustee/cosign/signer/${requestId}`);
+  await expect(t.page.getByTestId("call-function")).toHaveText("mint(address, uint256, bytes32)");
+  await expect(t.page.getByTestId("trustee-approvals")).toHaveText("trustee 0 of 1");
+  await t.page.screenshot({ path: `${OUT}/6d-01-trustee-cosign.png`, fullPage: true });
+  await t.page.getByPlaceholder("Reason (at least 10 characters)").fill("Register entry and subscription checked by the trustee");
+  await t.page.getByRole("button", { name: "Co-sign with security key" }).click();
+  await expect(t.page.getByTestId("decision-ok")).toContainText("approved");
+  await expect(t.page.getByTestId("signer-status")).toHaveText("approved");
+  await t.page.screenshot({ path: `${OUT}/6d-02-trustee-approved.png`, fullPage: true });
 
   const r = await db.su.query<{ status: string }>("SELECT status FROM signer.requests WHERE id = $1", [requestId]);
   expect(r.rows[0]?.status).toBe("approved");
-  const ops = await db.su.query<{ operator: string }>("SELECT operator FROM signer.approvals WHERE request_id = $1 ORDER BY at", [requestId]);
-  expect(ops.rows.map((x) => x.operator)).toEqual(["e2e.checker1", "e2e.checker2"]);
+  const ops = await db.su.query<{ operator: string; capacity: string }>("SELECT operator, capacity FROM signer.approvals WHERE request_id = $1 ORDER BY at", [requestId]);
+  expect(ops.rows.map((x) => `${x.operator}:${x.capacity}`)).toEqual(["e2e.checker1:platform", "e2e.checker2:platform", "e2e.trustee1:trustee"]);
   expect((await db.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   expect((await db.su.query("SELECT * FROM signer.verify_audit()")).rows).toEqual([]);
+  expect((await db.su.query("SELECT * FROM trustee.verify_audit()")).rows).toEqual([]);
   await c1.page.context().close();
   await c2.page.context().close();
+  await t.page.context().close();
 });
 
 test("a maker asks for an unfreeze; a checker approves it after a passed reconciliation run", async ({ browser }) => {

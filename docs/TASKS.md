@@ -46,6 +46,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 | 36 | T-042 | Sponsor self-service portal | low | L | feature | Opt (product-map "Later") |
 | 37 | T-043 | Tests for the Live Demo Console and pulse API | low | S | improvement | Opt |
 | 38 | T-044 | Investor offering screens on the website (S-02) | critical | M | feature | LE |
+| 39 | T-045 | Website: every element real (catalogue, payout accounts, documents, history, map, search, analyst, rule-based score) | high | L | feature | LE |
 
 ## 2. Bugs
 
@@ -92,6 +93,10 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Risk: PII exposure in logs or UI.
 
 ### T-006 Step 6d: trustee portal
+- Status (2026-10-13): **built on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; 0020-0022 are reserved for parallel work and must be merged first or the backend runner refuses the gap). Done: trustee overview; trustee register (entries from V18 confirmations and two-officer adjustments) next to the read-model holders pinned to the cursor block, supply vs cap vs register, differences highlighted, export with SHA-256 evidence recorded before release; trustee co-signature in the signer's maker-checker for `issuance.mint` above the threshold (database-set requirement, capacity from the approver's role, ticket of capacity trustee redeemed by the signing service, call preview equal to the signed calldata; ADR 0005 amendment); trustee votes on S-02 requests (IB, CMP incl. completion payment batch, L3, L7, L8, L10..L16, SD) through `admin.decide_offering_request`; distribution review in the 48 h window (approve with the recomputed root or reject; a rejection blocks payout batches and the `rent:distribution` booking in SQL; S-03 amendment); daily reconciliation report (runs per day, findings, digest, gate); recovery requests from the read model with the S-06 hook `trustee.recovery_cases_json()`; trustee audit chain in the audit viewer; runbook `docs/runbooks/trustee-operations.md`. Tests: backend +6 (signer 4, offering 2) and 6b/web tests extended with the trustee step (full backend suite 547 passed + 13 skipped of 560 (indexer C-7 NOTIFY timing failed once in the full run and passes alone) with temporary uncommitted placeholders 0020-0022); admin unit/db 494 (353 + 141), HTTP matrix 601 (438 + 163), e2e 5/5 in Edge (the mint flow now ends with a trustee co-signature).
+- 2026-10-22: main (0020 S-06, 0021 S-03, 0022 T-045, 1379147) merged into the branch; 0023 applies on top of 0022, shows S-06 cases read-only, wires S-03 OP-21 (charges above the limit) and D4 (pre-check) to the trustee, and blocks `rent:wht` of a rejected distribution. Lead-style check after merging main 1379147: backend typecheck/lint, `migrate -- --test` (0023 on top of 0022), vitest 656 passed + 13 skipped (chain not running); admin typecheck/lint, `npm test` 893/893, build, `test:http` 1048/1048; web typecheck/lint, 231 passed + 24 skipped.
+- Lead decision 2026-10-22: offering votes under an officer's handle stay bound to portal sessions; `seed:catalog` (T-045) never casts a vote or decision under an officer's handle: it prepares everything up to the first vote (K4, investment committee, P8, L3), stops with outcome `waiting` and lists which votes officers must cast in PT Control (session + step-up), and writes nothing on a re-run while they are due. PT Control has screens for K4 (Approvals > Property & KYB) and the trustee's L3 vote (Trustee > Co-signing); investment committee votes, the P8 trustee acceptance and the non-trustee L3 votes have no screen yet, so the demo catalogue currently stops at the committee.
+- Not yet: PT Control screens for investment committee votes, the P8 trustee acceptance and non-trustee L3 votes (the demo catalogue stops there); trustee capacity in S-06 case decisions; on-chain Trustee Safe actions (reject, recovery) stay in the Safe console (T-039); trustee attestation feed / recon `supply.register_mismatch` (S-07 Q-2); S-06 case files (hook only); command-line trustee duty for non-officer names (break-glass) still open; requiring a trustee approval (not only no rejection) before booking (S-03 Q-7).
 - Outcome: trustee register view, co-sign issuance, review/reject distributions in the 48 h window, recovery requests, daily recon report.
 - P critical, C L, Dep T-003, T-022, T-039.
 - Accept / Tests: trustee-only access; reject path reflected on chain and in the read model.
@@ -109,6 +114,11 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Remaining: browser check and a Playwright spec with a seeded live offering; withdrawal button for OF-22/OF-23 windows; supplementary disclosure acceptance; sophisticated-investor category (LEGAL TO CONFIRM); document download (T-038); trustee bank's real escrow IBAN/Raast alias (today the reconciliation account id is shown); a scheduler running `offering.tick` so reservations expire and the waitlist moves (T-034); notifications (`offering.reservation_expiring`, T-028).
 - Dep T-020 (merged), T-028.
 
+### T-045 Website: every element real
+- Status (2026-10-13): **Partial (built and unit/integration tested), on branch `t-045-web-functional`**, migration `0022_web_account.sql` (merge 0020/0021 first). Built: record-backed catalogue and property pages, filters/sort/map, price and rent history, documents, trust structure, rule-based score, payout accounts via `bank:payees`, `/search`, analyst (grounded; Claude optional, ADR 0015 Proposed), portfolio summary, market states, `seed:catalog`.
+- Remaining: browser check at 375 px EN/UR and Playwright specs for `/properties` filters, `/account` payout form, `/search`; enrol the 14 demo officers on the demo server so `seed:catalog` runs (list in the branch report; since 2026-10-22 it stops at every officer vote and needs PT Control screens for the investment committee, P8 and non-trustee L3 votes to reach `approved`); lease register (lease factor of the score has no data); `document.add` signer kind so offering documents are anchored by the platform; passkeys (T-030); Docs & Tax (S-03).
+- Dep T-020, T-021, T-044.
+
 ### T-021 Property owner onboarding (KYB), property submission, due diligence
 - Status (2026-10-13): **backend done on branch `t-021-property-onboarding`**, not merged: migration `0014_property.sql` and `@pt/property` (service, CLI, pure consistency checks, 48 tests). Remaining: portal screens (Step 6), DocumentRegistry anchoring after deployment (OB-41, signer kind `document.add`), wiring `documents.*` / `property.token_without_approval` into `@pt/recon`, notifications, SLA clocks, the encrypted document vault; LEGAL TO CONFIRM values in `property.settings`.
 - Outcome: sponsor/owner KYB, property record, document upload (hashes to DocumentRegistry), due-diligence states (title, valuation, legal, Shariah) with approvals.
@@ -123,11 +133,13 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Tests: Merkle root/statement equality with the web verifier; policy denials; e2e on Besu.
 
 ### T-023 Property operations
+- Status (2026-10-14): **Partial, on branch `s-03-operations-tax`** (migration 0021, `@pt/tax`, admin `/operations`): collections from bank lines, charges (expense, fees, reserve) with evidence hash and maker-checker, operating statement, calculation at the record block, statement v2, booking. Not built: leases, invoices and payment codes per invoice (OP-1..OP-16), arrears, budgets, fee formulas (fees are entered with evidence), vendor accounts and vendor payment batches, trustee approval above the limit (6d), D13 no-distribution record, record-block rule check (`rent.record_block_rule`), `ops.pool_residual`, `ops.expense_unapproved`, collections in the portal (CLI only), publish/finalize commands (T-022).
 - Outcome: leases, rent invoices, arrears, expenses, reserves, management fee, net distributable amount feeding T-022.
 - P high, C L, Dep T-022. Accept: net distributable = collected - expenses - reserves - fees, all in the ledger; maker-checker on expenses.
 - Tests: ledger balances per property, property tests on rounding (paisa).
 
 ### T-024 FBR withholding tax, statements and tax certificates
+- Status (2026-10-14): **Partial, on branch `s-03-operations-tax`** (migration 0021, ADR 0014 Proposed): versioned placeholder rates with two-officer changes, ATL filer checks (mock), WHT per line in integer paisa (round half up), Merkle leaf = net (format unchanged), WHT and remittance journals, certificate data, sealed CNIC + two-officer FBR filing export, `tax.reconcile` + recon `checkTax`. Not built: exemption certificates (OP-42), Zakat (OP-43), certificate PDF, investor statement pages, CNIC re-collection from investors (website), real ATL provider (T-031), remittance screens (CLI only), confirmed rates and FBR format (LEGAL/TAX).
 - Outcome: withholding per investor class on rent, investor statements, annual tax certificates.
 - P high, C M, Dep T-023; legal/tax input (rates are Unknown in repo).
 - Accept: tax journals reconcile; certificates match ledger. Tests: rate table edge cases, rounding.
@@ -136,9 +148,15 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Outcome: sale proceeds distribution, redemption with `IssuanceGuard.burn(from, amount, refId)` through a new signer kind, token closure, final reconciliation.
 - P high, C L, Dep T-022, T-006. Accept: burn only after payout recorded; supply reaches zero; recon passes. Tests: e2e on Besu, refId single use for burns.
 
-### T-026 Inheritance and succession
+### T-026 Inheritance and succession (S-06: recovery, succession, reversals)
 - Outcome: legal-heir workflow using `RecoveryGuard` forced transfer with evidence hash, trustee execution, KYC of heirs.
 - P medium, C M, Dep T-005, T-006. Tests: evidence required, 48 h delay respected, F-02 order (freeze, move, delete identity).
+- **Built on branch `s-06-recovery` (2026-10-13, not merged):** migration `0020_recovery.sql` (schema `recovery`, RV-1..RV-10), `@pt/recovery` (allocation twin, `recovery:tick`, `recovery:audit`), signer kinds `recovery.freeze|unfreeze|add_key|propose|execute|cancel` gated by `recovery.command_allowed`, KYC `reverify` + `POST /v1/reverify`, recon checks `recovery.*` and void reversal pairs in cash, portal `/recovery` with role `legal_officer`, spec S-06 section 14, runbook `recovery-succession.md`. Unit and DB tested; not run against Besu (48 h delay), no Playwright e2e.
+- Remaining: payable transfer of held distributions to heirs (S-06 §6) and retiring the deceased's payout account (S-03 OP-53); cash-out of remainder units (RC-14); identity deletion after zero balance (RC-16); bank recalls RC-20..RC-24 and `issuance.burn` for reversals; recon checks `compliance.freeze_unmatched`, `kyc.holder_unverified_unfrozen`, `issuance.reversed_not_resolved`; one RecoveryGuard per token (policies are single-token today); trustee-officer step in 6d; T-045.
+
+### T-045 Website follows the KYC wallet binding after a recovery
+- Outcome: the website maps an investor to `kyc.wallets` (or is updated by the recovery) instead of `webdemo.investors.wallet_address`, so a recovered investor sees their new wallet. Branch/video re-verification screen calling `POST /v1/reverify`.
+- P medium, C S, Dep T-026.
 
 ### T-027 Public verification page
 - Outcome: public page: supply vs trustee register, document hashes, anchors, Merkle self-check for anyone.
@@ -167,9 +185,9 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - P high, C M, Dep T-002. Files: `web/src/app/actions/auth.ts`, `web/src/lib/server/session.ts`.
 - Tests: forged/replayed assertions, session expiry, e2e.
 - Status (2026-10-13): **built on branch `t-030-investor-passkeys`, not merged** (migration `0024_investor_passkeys.sql`, ADR 0010 section 8). Passkey registration, listing and revocation on `/account`; discoverable passkey sign-in on `/login`; database sessions (30 min idle, 12 h, 10 live, logout) for every sign-in path; step-up `requireRecentPasskey()` wired to offering reserve (from PKR 100,000) and cancel through session-bound SQL wrappers; lockout, rate limits, clone detection, hash-chained audit. Tests: backend `db/test/webauth.test.ts` 22, web unit 6 + integration 10 (software authenticator, scratch database), e2e `passkey.spec.ts` 2/2 in Edge with a virtual authenticator (`npm run test:e2e:passkey`, http://localhost:3102, database `pt_web_e2e`).
-- **Merge order:** 0020-0023 first (no-gap rule). After merging, `npm run migrate` (and `-- --test`) before the website starts: every page reads the session from `webauth`.
+- **Merge order:** brought up to date with main (0020-0023) on 2026-10-22. After merging, `npm run migrate` (and `-- --test`) before the website starts: every page reads the session from `webauth`.
 - Owner actions: a domain + TLS for the website, then `WEB_ORIGIN=https://<domain>` in `pt-web.service` and drop `WEB_PLAIN_HTTP`; then `UPDATE webauth.settings SET require_passkey = true` (as the database admin) so investors without a passkey must add one before sensitive actions; confirm the PKR 100,000 reserve threshold (`webauth.step_up_actions`).
-- Not done (follow-ups): retire the demo personas (they still sign in without authentication); new-device sign-in notification (T-028 producer 7); account recovery without any passkey (S-06); an investor screen for active sessions; the payout bank account screen (step-up already listed as `bank.payout_account`); an alert consumer for `webauth_alert` (T-034/T-035); retention for ended sessions and old audit rows.
+- Not done (follow-ups): retire the demo personas (they still sign in without authentication); new-device sign-in notification (T-028 producer 7); account recovery without any passkey (S-06); an investor screen for active sessions; the bank service itself does not yet check the step-up (the website asks the database first; a step-up proof towards the bank service is a follow-up); an alert consumer for `webauth_alert` (T-034/T-035); retention for ended sessions and old audit rows.
 
 ### T-031 Real providers
 - Outcome: adapters for NADRA Verisys, liveness vendor, sanctions/PEP service, trustee bank Raast and payout API behind the existing interfaces (`kyc/src/providers.ts`, `bank/src/webhook.ts`, `BankGateway`).
