@@ -253,7 +253,7 @@ let checker2: Actor;
 let tok: TestToken;
 
 beforeAll(async () => {
-  w = await createWorld("pt_admin_testhttp");
+  w = await createWorld(`pt_admin_testhttp_${String(process.pid)}`);
   c = await cast(w);
   for (const [r, actor] of Object.entries(c)) tokens.set(r as Who, actor.token);
   // Step 6b items: a signing request through a real signing service, a payout batch, an unfreeze request.
@@ -778,7 +778,8 @@ describe("operations and tax over HTTP (S-03)", () => {
     const exp = await (await req(`/tax/exports/${resolve("{taxExport}")}`, { who: "tax_officer" })).text();
     expect(exp).toContain("generate-unavailable");
     for (const p of [tax, exp, await (await req(`/operations/distributions/${resolve("{distribution}")}`, { who: "auditor" })).text()]) {
-      expect(p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}/);
+      // Hex (wallets, digests) stripped first: a random hash can hold 13 decimal digits in a row.
+      expect(withoutHashes(p)).not.toMatch(/\d{5}-\d{7}-\d|\d{13}/);
     }
   });
 });

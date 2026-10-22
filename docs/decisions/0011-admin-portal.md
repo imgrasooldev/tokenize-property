@@ -339,7 +339,10 @@ every decision, the digest of what the officer saw, and then bind the officer's 
   distribution rejected and blocked; adjustment by a second trustee officer then the register
   matches and the export matches its record; no personal data on trustee pages, chains intact).
 - End to end in Edge: the 6b mint flow now ends with a trustee officer co-signing in the trustee
-  portal with a virtual FIDO2 key (5/5 passed).
+  portal with a virtual FIDO2 key (5/5 passed, before the merge of 0020-0022; not re-run after).
+- After merging 0020-0022 (2026-10-22): admin db +3 (OP-21 four steps, D4 pre-check rules, `rent:wht` block
+  and recovery cases) and matrix +4 functions; HTTP matrix +2 pages, +2 routes; backend tax tests extended
+  with the trustee steps. Totals: admin 893, HTTP 1048, backend 656 + 13 skipped.
 
 ## Open items
 

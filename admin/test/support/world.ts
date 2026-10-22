@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
-import { adminSettings, createMigratedDatabase, dropDatabase, ensurePortalLogin } from "../../scripts/lib-db.mjs";
+import { adminSettings, createMigratedDatabase, dropDatabase, dropPortalLogin, ensurePortalLogin } from "../../scripts/lib-db.mjs";
 import type { Role } from "../../src/lib/permissions";
 
 /**
@@ -33,7 +33,12 @@ export interface World {
 export const sha = (s: string): Buffer => createHash("sha256").update(s, "utf8").digest();
 export const token = (): string => randomBytes(32).toString("base64url");
 
-export async function createWorld(portalUser = "pt_admin_testdb"): Promise<World> {
+/**
+ * The portal login is a cluster-wide role, and createWorld resets its password. A fixed name let two
+ * test runs on one PostgreSQL (two worktrees, 2026-10-22) reset each other's password mid-run (28P01
+ * in hundreds of tests), so the default name is unique to this process and dropped with the world.
+ */
+export async function createWorld(portalUser = `pt_admin_testdb_${String(process.pid)}`): Promise<World> {
   const name = `pt_scratch_admin_${String(Date.now())}_${String(Math.floor(Math.random() * 1e6))}`;
   await createMigratedDatabase(name);
   const portalPassword = await ensurePortalLogin(portalUser);
@@ -56,6 +61,7 @@ export async function createWorld(portalUser = "pt_admin_testdb"): Promise<World
       await cli.end();
       await su.end();
       await dropDatabase(name);
+      if (/^pt_admin_test(db|http)_[0-9]+$/.test(portalUser)) await dropPortalLogin(portalUser);
     },
   };
 }
