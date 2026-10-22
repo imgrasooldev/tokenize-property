@@ -13,6 +13,7 @@ import { createPublicClient, http, type Hex } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
+import { trusteeCosign } from "../../db/test/officers.ts";
 import { demoAddresses, latestDeployment } from "../../demo-console/src/local.ts";
 import { signerExecutor } from "../src/executor.ts";
 import { createSignerServer, SignerClient, type Client } from "../src/http.ts";
@@ -93,7 +94,7 @@ describe.skipIf(!live)("outbox + signing service on the local chain", () => {
     expect(req.rows[0]).toMatchObject({ status: "broadcast", tx_hash: cmd?.tx?.hash });
   });
 
-  it("holds a large mint for two approvals without using attempts, then mints it", async () => {
+  it("holds a large mint for two approvals and the trustee without using attempts, then mints it", async () => {
     const before = await balance();
     const id = await enqueue(pool, { idempotencyKey: `e2e:${randomBytes(6).toString("hex")}`, kind: "issuance.mint", payload: mint("60"), createdBy: "test" });
     await worker.runOnce();
@@ -102,7 +103,9 @@ describe.skipIf(!live)("outbox + signing service on the local chain", () => {
     expect(cmd?.lastError).toMatch(/awaiting 2 approvals/);
     const { rows } = await admin.query<{ id: string }>("SELECT id FROM signer.requests WHERE status = 'pending_approval'");
     await admin.query("SELECT signer.decide($1, 'ops-ana', 'approve', 'KYC and payment checked')", [rows[0]?.id]);
-    await admin.query("SELECT signer.decide($1, 'trustee-bilal', 'approve', 'trustee co-sign')", [rows[0]?.id]);
+    await admin.query("SELECT signer.decide($1, 'ops-bilal', 'approve', 'second platform check')", [rows[0]?.id]);
+    // The trustee co-signs every mint above the threshold (migration 0023).
+    expect(await trusteeCosign(admin, rows[0]?.id ?? "")).toBe("approved");
     await admin.query("UPDATE outbox.commands SET available_at = now() WHERE id = $1", [id.toString()]);
     await worker.runOnce();
     cmd = await getCommand(pool, id);

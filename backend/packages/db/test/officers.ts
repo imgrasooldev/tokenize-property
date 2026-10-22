@@ -121,3 +121,38 @@ export async function officerForDuty(db: pg.ClientBase, handle: string, duty: st
   if (rows[0]?.exists) throw new Error(`test officer ${handle} exists without a role for the ${duty} duty`);
   await officer(db, handle, new Map(Object.entries(DUTY_ROLE)).get(duty) ?? "ops_checker");
 }
+
+/**
+ * Step 6d (migration 0023): the trustee's co-signature on a signing request, given the way the
+ * portal gives it: a signed-in trustee officer (fresh step-up) obtains a one-time ticket of capacity
+ * "trustee" and the ticket is redeemed through signer.decide_officer (the signing service's call).
+ * The call hash is a stand-in here (the service's recomputation is tested in signer/test). Returns
+ * the request's status after the decision.
+ */
+export async function trusteeCosign(
+  db: pg.ClientBase,
+  requestId: string,
+  opts: { handle?: string; decision?: "approve" | "reject"; reason?: string } = {},
+): Promise<string> {
+  const handle = opts.handle ?? "trustee.test.one";
+  const decision = opts.decision ?? "approve";
+  const reason = opts.reason ?? "trustee co-signature: register and subscription checked";
+  const o = await officer(db, handle, "trustee_officer");
+  const req = await db.query<{ payload_hash: Buffer }>("SELECT payload_hash FROM signer.requests WHERE id = $1", [requestId]);
+  const payloadHash = req.rows[0]?.payload_hash;
+  if (!payloadHash) throw new Error(`unknown signing request ${requestId}`);
+  const ticket = tok();
+  const call = randomBytes(32);
+  const issued = await db.query<{ r: { ok: boolean; error?: string } }>("SELECT admin.issue_trustee_ticket($1, $2, $3, $4, $5, $6, $7) AS r", [
+    o.sessionHash,
+    requestId,
+    decision,
+    reason,
+    payloadHash,
+    call,
+    sha(ticket),
+  ]);
+  if (!issued.rows[0]?.r.ok) throw new Error(`trustee ticket refused: ${issued.rows[0]?.r.error ?? "?"}`);
+  const out = await db.query<{ s: string }>("SELECT signer.decide_officer($1, $2, $3, $4, $5) AS s", [sha(ticket), requestId, decision, reason, call]);
+  return out.rows[0]?.s ?? "";
+}

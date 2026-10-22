@@ -134,7 +134,7 @@ Operations and tax (spec S-03, migration 0021, ADR 0014): `ops:statement -- <tok
 
 Step 6b (migration 0016): command-line operator names that are the handle of an admin-portal officer are refused for signer approvals, unfreeze requests and decisions, and payout batches created, decided or submitted (officers decide in the portal); an S-01 duty (`requestDuty`) needs an officer of the portal with a matching role (see ADR 0011 section 10).
 
-## 8. Internal portal (`admin/`, Step 6a and 6b)
+## 8. Internal portal (`admin/`, Steps 6a-6d)
 
 - Source: `admin/src/app`; every route and its access rule is listed in `admin/src/lib/routes.ts` (a unit test checks it equals the files, the HTTP matrix exercises each route for every role, anonymous visitors and an investor cookie). Bound to `127.0.0.1:3300`; officers use `http://localhost:3300` (SSH tunnel).
 - Every POST: same origin (or `Origin: null` with `Sec-Fetch-Site: same-origin`), session cookie `__Host-pt_admin`, CSRF token (form field `csrf` or header `x-csrf-token`); then the permission, checked again by the database. Form posts answer `303` back to the page with `?ok=` or `?error=`.
@@ -204,3 +204,27 @@ S-03 operations and tax routes (migration 0021; operations pages for ops makers/
 | `POST /api/tax/exports` | `tax.export` + step-up | form `token` (optional), `from`, `to`, `reason` → `admin.request_tax_export`; 303 to the export |
 | `POST /api/tax/exports/[id]/decide` | `tax.export` + step-up | form `decision`, `reason`, `digest` → `admin.decide_tax_export` |
 | `POST /api/tax/exports/[id]/generate` | `tax.export` + step-up | form `decision=generate` → `admin.issue_tax_export_ticket`, then the tax service; `200 application/zip` (CSV + manifest.json + SHA256SUMS, `no-store`) or 303 back with the reason |
+
+Step 6d trustee routes (migration 0023; pages for trustee officers and auditors, decisions for trustee officers only; "step-up" = checked by the database):
+
+| Route | Access | Contract |
+|---|---|---|
+| `GET /trustee` | `trustee.read` | overview: co-signatures waiting, distributions in the 48 h window, rejections not yet on chain, tokens with supply, cap and register total, latest reconciliation run and gate (`admin.trustee_dashboard`) |
+| `GET /trustee/register[?token=]` | `trustee.read` | register next to the read-model holders, pinned block (number, hash, halt), supply vs cap and vs register, differences first, adjustments (`admin.trustee_register`) |
+| `GET /trustee/register/adjustments/[id]` | `trustee.read` | adjustment with evidence hash, balances now, blockers, digest |
+| `GET /trustee/cosign` | `trustee.read` | signing requests and S-02 requests that need the trustee, recent trustee decisions |
+| `GET /trustee/cosign/signer/[id]` | `trustee.read` | request, platform and trustee approvals, the exact call from `POST /v1/requests/preview`, blockers |
+| `GET /trustee/cosign/offering/[id]` | `trustee.read` | S-02 request, detail (conditions, deed and batch file hashes), issuance batch lines, votes, problem, blockers, digest |
+| `GET /trustee/distributions`, `GET /trustee/distributions/[registry]/[id]` | `trustee.read` | distributions with window and review; one distribution with root, statement hash, window end, booking and payout batches, review, block reason, digest |
+| `GET /trustee/recon`, `GET /trustee/recon/[id]` | `trustee.read` | runs per day (PKT), latest runs, gate; one run with findings and its digest |
+| `GET /trustee/recoveries` | `trustee.read` | RecoveryGuard requests from the read model; S-06 cases once `trustee.recovery_cases_json()` returns them |
+| `GET /audit/trustee`, `POST /api/audit/trustee/export` | `trustee.read` (+ `audit.export`) | the trustee audit chain like the other sources |
+| `POST /api/trustee/cosign/signer/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `payloadHash`, `callHash` → `admin.issue_trustee_ticket` (capacity trustee) then `POST /v1/decide` |
+| `POST /api/trustee/cosign/offering/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_offering_request` → `offering.decide` |
+| `POST /api/trustee/distributions/[registry]/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest`, `root` (required to approve) → `admin.review_distribution` |
+| `POST /api/trustee/register/adjustments` | `trustee.decide` + step-up | form `token`, `wallet`, `units` (signed), `evidence` (SHA-256), `reason` → `admin.propose_register_adjustment`; 303 to the adjustment |
+| `POST /api/trustee/register/adjustments/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_register_adjustment` (a different trustee officer) |
+| `GET /trustee/cosign/charge/[id]`, `GET /trustee/cosign/calculation/[id]` | `trustee.read` | S-03: a charge above the operations limit with the trustee's decision; a calculation with totals, lines, attached root and statement hash, blockers, digest |
+| `POST /api/trustee/cosign/charge/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_trustee_charge` (OP-21; the operations checker approves afterwards) |
+| `POST /api/trustee/cosign/calculation/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest`, `root` (required to approve) → `admin.precheck_distribution` (D4) |
+| `POST /api/trustee/register/export` | `trustee.export` | form `token`, `decision=export` → ZIP (CSV, manifest.json with pinned block and audit entries, SHA256SUMS), recorded by `admin.record_register_export` before release; otherwise 303 back with the reason |

@@ -16,6 +16,7 @@ const LABEL = new Map<AuditSource, string>([
   ["admin", "Admin portal"],
   ["compliance", "Compliance"],
   ["recovery", "Recovery"],
+  ["trustee", "Trustee"],
 ]);
 const ABOUT = new Map<AuditSource, string>(Object.entries({
   signer: "Every signing request, policy evaluation, approval and signature (signer.audit, UTC digest v2).",
@@ -24,6 +25,7 @@ const ABOUT = new Map<AuditSource, string>(Object.entries({
   admin: "Every sign-in, step-up, page view of sensitive data, denial, officer change and export in this portal (admin.audit).",
   compliance: "Every KYC review case, freeze and unfreeze decision, STR case, note and FMU export, and every re-screening (compliance.audit).",
   recovery: "Every recovery, succession and reversal case: opening, documents, heirs, decisions, on-chain requests, wallet rebinding and release (recovery.audit).",
+  trustee: "Every trustee co-signature (signing and offering requests), distribution review, register entry and adjustment, and register export (trustee.audit).",
 }) as [AuditSource, string][]);
 
 function query(f: AuditFilters, before: string | null): string {

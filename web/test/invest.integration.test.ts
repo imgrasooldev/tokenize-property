@@ -7,7 +7,7 @@ import { stopFollower } from "../src/lib/server/follower";
 import { BANK, capitalAccount, investorAccount, placeOrder, subscriptionById } from "../src/lib/server/invest";
 import { balanceOf, chainProblems, openAccount, postJournal } from "../src/lib/server/ledger";
 import { holdingOf } from "../src/lib/server/readmodel";
-import { asAdmin, chainBalance, onboardInvestor, signerRequestFor, until } from "./helpers";
+import { asAdmin, chainBalance, onboardInvestor, signerRequestFor, trusteeCosign, until } from "./helpers";
 import { chainUp, prepare, start, type Stack } from "./stack";
 
 /**
@@ -147,10 +147,12 @@ describe.skipIf(!up)("invest through the outbox and the signing service", () => 
     await new Promise((res) => setTimeout(res, 3_000));
     expect(await statusOf(r.subscriptionId)).toBe("minting");
     expect(await chainBalance(investor.wallet_address)).toBe(before);
-    // The requester (the outbox worker) can never approve its own request; two distinct operators can.
+    // The requester (the outbox worker) can never approve its own request; two distinct operators and the trustee can.
     await expect(asAdmin("SELECT signer.decide($1, 'outbox-worker', 'approve', 'self')", [req.id])).rejects.toThrow(/maker-checker/);
     await asAdmin("SELECT signer.decide($1, 'ops-ana', 'approve', 'subscription and payment checked')", [req.id]);
-    await asAdmin("SELECT signer.decide($1, 'ops-bilal', 'approve', 'trustee confirmed')", [req.id]);
+    await asAdmin("SELECT signer.decide($1, 'ops-bilal', 'approve', 'second platform check')", [req.id]);
+    // A mint above the threshold also needs the trustee's co-signature (migration 0023).
+    expect(await trusteeCosign(req.id)).toBe("approved");
     await until("the approved mint to settle", async () => (await statusOf(r.subscriptionId)) === "done", 90_000);
     expect(await chainBalance(investor.wallet_address)).toBe(before + 10_001n);
   });

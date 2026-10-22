@@ -117,7 +117,7 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
           "refId is non-zero and single use (the guard refuses a reused refId)",
           `amount at most ${n(r.maxPerCommand)} tokens per command and ${n(r.maxPerDay)} per day (Pakistan time)`,
           "recipient verified in the identity registry; token not paused; supply stays within the trustee cap",
-          `above ${n(r.approvalAbove)} tokens: ${String(r.approvals)} approvals by different officers`,
+          `above ${n(r.approvalAbove)} tokens: ${String(r.approvals)} approvals by different officers plus a trustee officer's co-signature (database rule, migration 0023)`,
           "the call is simulated on chain just before signing",
         ],
       };

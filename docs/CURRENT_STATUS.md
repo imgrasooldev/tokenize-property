@@ -2,6 +2,13 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## Latest update (2026-10-13, Step 6d built on a branch)
+
+- **Step 6d (T-006) on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; merge the reserved 0020-0022 first, the backend runner refuses the gap). Trustee portal: register vs chain read model (pinned block, supply vs cap, differences, two-officer adjustments, SHA-256 export), co-signing (mints above the threshold now need a trustee officer in addition to the platform approvals, decided through the signing service; S-02 trustee votes), distribution review in the 48 h window (a rejection blocks booking and payout in SQL), daily reconciliation report, recovery requests (S-06 hook), trustee audit chain.
+- 2026-10-22: main merged into the branch (0023 now on top of 0022); S-03 charges above the operations limit and calculation approvals now need the trustee (OP-21, D4). Lead-style check after merging main 1379147: backend typecheck/lint, `migrate -- --test` (0023 on top of 0022), vitest 656 passed + 13 skipped (chain not running); admin typecheck/lint, `npm test` 893/893, build, `test:http` 1048/1048; web typecheck/lint, 231 passed + 24 skipped.
+- The demo catalogue seed (`seed:catalog`) now stops at every officer vote and lists it (K4 in PT Control; committee, P8 and non-trustee L3 votes have no screen yet).
+- **Behaviour change on merge:** website mints above 10,000 tokens wait for a trustee officer's co-signature in the portal as well (demo: enrol a trustee officer).
+- Owner to confirm: trustee co-signature threshold (above the platform threshold vs every mint), require a trustee approval before booking a distribution (S-03 Q-7), closing the command-line trustee duty.
 ## T-045 website functional (2026-10-22, branch `t-045-web-functional` merged up to main c55351d, not merged into main; migration 0022)
 
 - Website shows records only: catalogue, filters/sort, Pakistan map, price/rent history, documents with SHA-256, trust structure, rule-based property score, payout accounts (bank service `bank:payees`), search and the grounded analyst (Claude optional, owner adds the key). Still labelled: passkey sign-in (T-030), Docs & Tax (S-03), anchoring status in the rail (lead).

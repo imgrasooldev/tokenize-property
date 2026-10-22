@@ -1,8 +1,9 @@
 /**
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
  * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016, the Step 6c ones of 0019, the
- * S-06 role and permissions of 0020 and the S-03 role and permissions of 0021). The database is the
- * authority and checks every request itself; this copy only drives menus and early, friendly checks.
+ * S-06 role and permissions of 0020, the S-03 role and permissions of 0021 and the Step 6d ones of
+ * 0023). The database is the authority and checks every request itself; this copy only drives
+ * menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
 export const ROLES = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"] as const;
@@ -27,6 +28,8 @@ export const PERMISSIONS = [
   "recovery.request",
   "recovery.decide",
   "trustee.read",
+  "trustee.decide",
+  "trustee.export",
   "operations.read",
   "operations.request",
   "operations.decide",
@@ -53,7 +56,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "recovery.decide",
   ],
   legal_officer: ["recovery.read", "recovery.decide"],
-  trustee_officer: ["trustee.read", "operations.read"],
+  trustee_officer: ["audit.export", "trustee.read", "trustee.decide", "trustee.export", "operations.read"],
   tax_officer: ["operations.read", "tax.read", "tax.decide", "tax.export"],
   auditor: [
     "ops.read",
@@ -66,6 +69,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "compliance.read",
     "recovery.read",
     "trustee.read",
+    "trustee.export",
     "operations.read",
     "tax.read",
   ],

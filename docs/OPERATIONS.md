@@ -206,6 +206,7 @@ process (about 200–300 MB) once a day. None overlap by schedule.
 | [deploy-rollback.md](runbooks/deploy-rollback.md) | Deploys, failed deploys, rollback, migration rules |
 | [backup-restore.md](runbooks/backup-restore.md) | Backup key ceremony, drills, real restore, Besu snapshots, key custody |
 | [demo-vs-production.md](runbooks/demo-vs-production.md) | What differs on the demo server and why |
+| [trustee-operations.md](runbooks/trustee-operations.md) | Trustee co-signing, distribution review in the 48 h window, register differences (Step 6d) |
 
 ## 9. Demo-only today, and what production needs (gap list)
 

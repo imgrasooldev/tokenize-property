@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
 import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
+import { officer } from "../../db/test/officers.ts";
 import { KycService, mockProviders, Peppers } from "@pt/kyc";
 import { buildStatement, importStatement, registerBankAccount } from "@pt/recon";
 import { OpsService } from "../src/service.ts";
@@ -221,6 +222,7 @@ export async function allowPlaceholders(w: World, on: boolean): Promise<void> {
 /** Calculation -> statement attached -> approved -> finalized on chain (read model) -> booked. Returns the on-chain id. */
 export async function publishAndBook(w: World, t: TestToken, calcId: string, onchainId: number): Promise<{ statementHash: string; net: bigint; wht: bigint }> {
   const docs = await new OpsService(w.ops).attach(calcId, "operator:omar");
+  await trusteePrecheck(w, calcId);
   await w.ops.query("SELECT ops.decide_distribution($1, 'operator:sara', 'approve', 'recomputed and matches the statement')", [calcId]);
   const { rows } = await w.pool.query<{ record_block: string; sum_net: string; sum_wht: string }>(
     "SELECT record_block::text, sum_net::text, sum_wht::text FROM ops.distributions WHERE id = $1",
@@ -231,6 +233,31 @@ export async function publishAndBook(w: World, t: TestToken, calcId: string, onc
   await chainDistribution(w, t, onchainId, { recordBlock: Number(r.record_block), root: docs.root, total: BigInt(r.sum_net), statementHash: docs.statementHash, status: "finalized" });
   await w.ops.query("SELECT ops.book_distribution($1, $2, $3, 'operator:omar')", [calcId, t.registry, onchainId]);
   return { statementHash: docs.statementHash, net: BigInt(r.sum_net), wht: BigInt(r.sum_wht) };
+}
+
+/**
+ * Step 6d (migration 0023, S-03 D4): the trustee's pre-check of an attached calculation, given as the
+ * trustee portal gives it (a signed-in trustee officer, fresh step-up, digest, recomputed root).
+ */
+export async function trusteePrecheck(w: World, calcId: string, decision: "approve" | "reject" = "approve"): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const o = await officer(w.su, "trustee.tax.test", "trustee_officer");
+  const { rows } = await w.su.query<{ digest: Buffer; root: string }>("SELECT ops.distribution_digest(id) AS digest, merkle_root AS root FROM ops.distributions WHERE id = $1", [calcId]);
+  const r = await w.su.query<{ r: { ok: boolean; status?: string; error?: string } }>(
+    "SELECT admin.precheck_distribution($1, $2, $3, 'root recomputed from the record block and the statement', $4, $5) AS r",
+    [o.sessionHash, calcId, decision, rows[0]?.digest, decision === "approve" ? rows[0]?.root : null],
+  );
+  return r.rows[0]?.r ?? { ok: false };
+}
+
+/** Step 6d (OP-21): the trustee's decision on a charge above the operations limit, through the portal function. */
+export async function trusteeDecideCharge(w: World, chargeId: string, decision: "approve" | "reject" = "approve"): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const o = await officer(w.su, "trustee.tax.test", "trustee_officer");
+  const { rows } = await w.su.query<{ digest: Buffer }>("SELECT ops.charge_digest($1) AS digest", [chargeId]);
+  const r = await w.su.query<{ r: { ok: boolean; status?: string; error?: string } }>(
+    "SELECT admin.decide_trustee_charge($1, $2, $3, 'invoice and budget line checked by the trustee', $4) AS r",
+    [o.sessionHash, chargeId, decision, rows[0]?.digest],
+  );
+  return r.rows[0]?.r ?? { ok: false };
 }
 
 export async function code(p: Promise<unknown>): Promise<string | undefined> {

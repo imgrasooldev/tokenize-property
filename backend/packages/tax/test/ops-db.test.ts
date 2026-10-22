@@ -7,6 +7,8 @@ import { OpsService } from "../src/service.ts";
 import {
   address,
   allowPlaceholders,
+  trusteeDecideCharge,
+  trusteePrecheck,
   balance,
   bankLines,
   calculate,
@@ -123,7 +125,10 @@ describe("charges with evidence, maker-checker, operating statement (OT-2, OT-3)
     expect(await code(proposeCharge(w, t, PERIOD, "fee", 1n, { feeType: "platform", payee: "platform" }))).toBe("23505");
     const big = await proposeCharge(w, t, PERIOD, "expense", 100_000_001n, { payee: "roof-co" });
     expect(await message(w.ops.query("SELECT ops.decide_charge($1, 'operator:ali', 'approve', 'roof replacement invoice')", [big]))).toMatch(/maker-checker/);
-    expect(await message(w.ops.query("SELECT ops.decide_charge($1, 'operator:sara', 'approve', 'roof replacement invoice')", [big]))).toMatch(/trustee/);
+    expect(await message(w.ops.query("SELECT ops.decide_charge($1, 'operator:sara', 'approve', 'roof replacement invoice')", [big]))).toMatch(/trustee approves it first/);
+    // Step 6d (OP-21): the trustee rejects it; the operations checker can then only reject it.
+    expect(await trusteeDecideCharge(w, big, "reject")).toMatchObject({ ok: true, status: "rejected" });
+    expect(await message(w.ops.query("SELECT ops.decide_charge($1, 'operator:sara', 'approve', 'roof replacement invoice')", [big]))).toMatch(/trustee rejected it/);
     // While it is pending the period cannot be calculated.
     expect(await message(calculate(w, t, PERIOD, today, RECORD_BLOCK))).toMatch(/pending/);
     await w.ops.query("SELECT ops.decide_charge($1, 'operator:sara', 'reject', 'goes to the trustee as capital expense')", [big]);
@@ -203,6 +208,9 @@ describe("statement and tax schedule, approval (OT-5, OT-6)", () => {
     expect(await message(decide("operator:omar"))).toMatch(/maker-checker/);
     expect(await message(decide("operator:sara"))).toMatch(/PLACEHOLDER/);
     await allowPlaceholders(w, true);
+    // Step 6d (D4): the trustee's pre-check (recomputed root) comes first.
+    expect(await message(decide("operator:sara"))).toMatch(/not pre-checked/);
+    expect(await trusteePrecheck(w, calcId)).toMatchObject({ ok: true, status: "approved" });
     await decide("operator:sara");
     const a = await w.pool.query<{ action: string }>("SELECT action FROM ops.audit WHERE action = 'setting.changed'");
     expect(a.rowCount).toBeGreaterThan(0);
