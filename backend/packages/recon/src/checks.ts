@@ -1,3 +1,4 @@
+import { redemptionRefId } from "@pt/exit";
 import { verifyDocuments } from "@pt/tax";
 import {
   addDays,
@@ -128,8 +129,18 @@ export function checkIssuance(d: ReconData): Finding[] {
       }
     }
   }
+  // S-05: every burn is a line of an APPROVED exit redemption batch with exactly its wallet and units.
+  const lines = new Map((d.exit?.lines ?? []).map((l) => [l.refId, l]));
   for (const b of burns) {
-    out.push(f("issuance.burn_not_reconciled", `refId ${b.refId}`, "a redemption in the ledger (no convention yet)", `burned ${s(b.amount)} from ${b.account} at block ${s(b.blockNumber)}`, { tx: b.txHash }));
+    const l = lines.get(b.refId);
+    const burnedText = `burned ${s(b.amount)} from ${b.account} at block ${s(b.blockNumber)}`;
+    if (!l || l.redemptionStatus !== "approved") {
+      out.push(f("issuance.orphan_burn", `refId ${b.refId}`, "a line of an approved exit redemption batch", l ? `${burnedText}; batch ${l.redemptionStatus}` : burnedText, { tx: b.txHash }));
+      continue;
+    }
+    if (l.units !== b.amount || l.wallet !== b.account) {
+      out.push(f("issuance.burn_amount_mismatch", `refId ${b.refId}`, `${s(l.units)} units from ${l.wallet} (balance at the final record block)`, burnedText, { tx: b.txHash }));
+    }
   }
   return out;
 }
@@ -538,7 +549,62 @@ export function checkRecovery(d: ReconData): Finding[] {
   return out;
 }
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax] as const;
+// ------------------------------------------------------------------ exit, redemption and closure (S-05 §7, §14.3)
+
+/**
+ * Burns match the redemption batch and the payouts: refIds are the documented keccak derivation;
+ * under the after_payment rule no unit was burned before its line was paid (or released by checker +
+ * trustee); supply reaches 0 within the SLA once Redeeming; the exit pool is empty once the final
+ * distribution is booked (apart from the separate closure reserve); after Paid Out the trustee's
+ * register shows no units; and every final statement is consistent.
+ */
+export function checkExit(d: ReconData): Finding[] {
+  const x = d.exit;
+  if (!x) return [];
+  const out: Finding[] = [];
+  const burned = new Set(d.chain.issuances.filter((i) => i.kind === "burn").map((i) => i.refId));
+  for (const l of [...x.lines].sort((a, b) => a.refId.localeCompare(b.refId))) {
+    if (l.distributionId !== null && redemptionRefId(d.deployment.token, l.distributionId, l.wallet) !== l.refId) {
+      out.push(f("exit.ref_id_mismatch", `case ${s(l.caseId)} wallet ${l.wallet}`, `keccak256(property-token:redemption:${d.deployment.token}:${s(l.distributionId)}:${l.wallet})`, l.refId));
+    }
+    if (burned.has(l.refId) && l.burnRule === "after_payment" && !l.released && l.payment !== "paid" && l.payment !== "nothing_to_pay") {
+      out.push(f("exit.burn_before_payment", `case ${s(l.caseId)} wallet ${l.wallet}`, "burned only after the final line is paid or released (burn rule after_payment)",
+        `burned while the line is ${l.payment}`));
+    }
+  }
+  for (const c of x.cases) {
+    const subject = `exit case ${s(c.caseId)}`;
+    if (c.state === "redeeming" && d.chain.onChain.totalSupply > 0n) {
+      const finding = f("exit.supply_not_zero", subject, "supply 0 after the redemption burns", `${s(d.chain.onChain.totalSupply)} units outstanding at block ${s(d.pinnedBlock)}`);
+      if (c.redeemingAt && d.asOf.getTime() - c.redeemingAt.getTime() > x.redeemingSlaMs) finding.severity = "blocking";
+      out.push(finding);
+    }
+    if ((c.state === "paid_out" || c.state === "closed") && d.chain.onChain.totalSupply > 0n) {
+      out.push({ ...f("exit.supply_not_zero", subject, "supply 0", `${s(d.chain.onChain.totalSupply)} units while ${c.state}`), severity: "blocking" });
+    }
+    if (c.finalBooked && c.poolBalance !== 0n) {
+      out.push(f("exit.waterfall_mismatch", subject, "exit pool 0 once the final distribution is booked (closure reserve apart)", `${s(c.poolBalance)} paisa in exit:pool:${d.deployment.token}`));
+    }
+    if (c.state === "closed" && c.closureReserve !== 0n) {
+      out.push(f("exit.waterfall_mismatch", subject, "closure reserve 0 at closure", `${s(c.closureReserve)} paisa`));
+    }
+    if ((c.state === "paid_out" || c.state === "closed") && c.registerUnits !== 0n) {
+      out.push(f("exit.register_mismatch", subject, "trustee register 0 units after redemption", `${s(c.registerUnits)} units on the register`));
+    }
+  }
+  const onChain = new Map(d.chain.distributions.filter((y) => y.token === d.deployment.token).map((y) => [y.id, y]));
+  for (const doc of x.finals) {
+    const subject = `final distribution ${doc.id}`;
+    for (const p of verifyDocuments(doc)) out.push(f("exit.statement_totals", subject, "a statement consistent with its hashes, root and totals", p));
+    const c = doc.onchainId === null ? undefined : onChain.get(doc.onchainId);
+    if (doc.status === "booked" && c && c.statementHash !== doc.statementHash.toLowerCase()) {
+      out.push(f("exit.statement_totals", subject, `${doc.statementHash} (final calculation)`, `${c.statementHash} (distribution ${s(c.id)} on chain)`));
+    }
+  }
+  return out;
+}
+
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax, checkExit] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

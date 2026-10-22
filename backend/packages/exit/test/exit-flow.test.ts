@@ -1,4 +1,8 @@
+import pg from "pg";
+import type { Hex } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { checkExit, checkIssuance } from "../../recon/src/checks.ts";
+import { loadData } from "../../recon/src/load.ts";
 import { ExitService } from "../src/service.ts";
 import { redemptionRefId } from "../src/refid.ts";
 import { balance } from "../../tax/test/world.ts";
@@ -279,5 +283,25 @@ describe("S-05 exit end to end", () => {
     expect(await svc().verifyAudit()).toEqual([]);
     expect((await w.pool.query("SELECT * FROM ledger.verify_chain()")).rowCount).toBe(0);
     expect((await w.pool.query("SELECT * FROM exit.recon_lines WHERE payment NOT IN ('paid', 'nothing_to_pay')")).rowCount).toBe(0);
+  });
+
+  it("reconciliation loads the exit (as its reader role) and finds burns, supply, pool and register consistent", async () => {
+    const reader = new pg.Pool({ ...w.settings, max: 2, options: "-c role=pt_recon_reader" });
+    try {
+      expect((await reader.query("SELECT count(*)::int AS n FROM exit.recon_lines")).rows[0]).toEqual({ n: 3 });
+    } finally {
+      await reader.end();
+    }
+    const holdings = async (): Promise<Map<string, bigint>> =>
+      new Map((await w.pool.query<{ holder: string; balance: string }>("SELECT holder, balance::text FROM chain.holdings WHERE token = $1", [t.token])).rows.map((r) => [r.holder, BigInt(r.balance)]));
+    const loaded = await loadData(w.pool, {
+      deployment: { id: t.deployment, chainId: 586586, fromBlock: 0n, contracts: { token: t.token as Hex, issuance: t.issuance as Hex, distributions: t.registry as Hex } },
+      chain: { head: () => Promise.resolve(100n), totalSupply: () => Promise.resolve(0n), balances: () => holdings() },
+      slaMinutes: 60,
+      verifyIndexer: null,
+    });
+    expect(loaded.data.exit?.lines).toHaveLength(3);
+    const findings = [...checkExit(loaded.data), ...checkIssuance(loaded.data)].filter((x) => x.check.startsWith("exit.") || x.check.includes("burn"));
+    expect(findings).toEqual([]);
   });
 });

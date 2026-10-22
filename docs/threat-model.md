@@ -175,7 +175,7 @@ Status: **Planned** (designed, not built), **Spec** (in contract spec), **Built,
 | ID | Threat | Control | Status |
 |---|---|---|---|
 | T-1 | Forged or disputed title | Sub-Registrar, fard/PLRA and society verification; lawyer opinion | Planned |
-| T-2 | Property sold or mortgaged behind investors' backs | Charge registered in trustee's favour; sale only after investor vote | Planned |
+| T-2 | Property sold or mortgaged behind investors' backs | Charge registered in trustee's favour; sale only after investor vote | Partly built (S-05, migration 0027, branch `s-05-exit`): a sale proceeds only through recorded decisions (committee, counted vote with quorum/majority checked, trustee + legal, buyer checks) by different officers with evidence hashes; proceeds only from the trustee escrow; burns only for an approved redemption batch (`issuance.burn` deny by default, refId re-derived, after payment by default) and blocking reconciliation checks (`issuance.orphan_burn`, `exit.*`). Title registration and the charge remain legal steps outside the platform |
 | T-3 | Overvaluation at issuance | Two independent PBA-panel valuers | Planned |
 
 ## 5. Top risks to address first

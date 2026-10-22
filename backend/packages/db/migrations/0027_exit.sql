@@ -237,6 +237,18 @@ INSERT INTO tax.rates (income_type, status, rate_ppm, effective_from, version, b
   ('exit_distribution', 'filer',     150000, DATE '2025-07-01', 1, 'PLACEHOLDER - LEGAL/TAX TO CONFIRM: exit distribution, filer on the ATL (copy of the S-03 placeholder)', true, 'active', 'migration:0027', 'migration:0027:seed', 'placeholder seed, must be replaced by confirmed rates', clock_timestamp()),
   ('exit_distribution', 'non_filer', 300000, DATE '2025-07-01', 1, 'PLACEHOLDER - LEGAL/TAX TO CONFIRM: exit distribution, not on the ATL (copy of the S-03 placeholder)', true, 'active', 'migration:0027', 'migration:0027:seed', 'placeholder seed, must be replaced by confirmed rates', clock_timestamp()),
   ('exit_distribution', 'exempt',         0, DATE '2025-07-01', 1, 'PLACEHOLDER - LEGAL/TAX TO CONFIRM: exemption certificate holder (no exemption path is built yet)', true, 'active', 'migration:0027', 'migration:0027:seed', 'placeholder seed, must be replaced by confirmed rates', clock_timestamp());
+-- The seeded rates are in the operations audit like every other rate (ops.verify_audit, 0021 OT-11).
+DO $$
+DECLARE
+  r tax.rates;
+BEGIN
+  FOR r IN SELECT * FROM tax.rates WHERE income_type = 'exit_distribution' ORDER BY id LOOP
+    PERFORM ops.audit_append('migration:0027', 'rate.proposed', jsonb_build_object('rate', r.id, 'incomeType', r.income_type, 'status', r.status,
+      'ratePpm', r.rate_ppm, 'effectiveFrom', r.effective_from::text, 'placeholder', r.placeholder));
+    PERFORM ops.audit_append('migration:0027:seed', 'rate.decided', jsonb_build_object('rate', r.id, 'decision', 'approve', 'state', r.state,
+      'proposedBy', r.proposed_by));
+  END LOOP;
+END $$;
 
 -- ================================================================== the trustee register learns redemptions (0023 T-4)
 ALTER TABLE trustee.register_entries DROP CONSTRAINT register_entries_source_check;
@@ -1124,9 +1136,9 @@ BEGIN
       IF NOT EXISTS (SELECT 1 FROM exit.redemption_lines l WHERE l.redemption_id = r.id AND l.wallet = d->>'wallet') THEN RETURN 'the wallet is not in the redemption batch'; END IF;
       IF r.burn_rule <> 'after_payment' THEN RETURN 'the batch burns after finalization: nothing to release'; END IF;
       IF EXISTS (SELECT 1 FROM exit.releases x WHERE x.redemption_id = r.id AND x.wallet = d->>'wallet') THEN RETURN 'the line is already released'; END IF;
+      -- Only a line the bank could not pay (held in the submitted batch, or returned) is released.
       v_problem := exit.line_payment(r.id, d->>'wallet');
-      IF v_problem IN ('paid', 'nothing_to_pay') THEN RETURN 'the line is not held: it is ' || v_problem; END IF;
-      IF v_problem = 'in_payment' THEN RETURN 'the line is in a payout batch that is not submitted yet'; END IF;
+      IF v_problem NOT IN ('held', 'returned') THEN RETURN 'only a held or returned line is released; this one is ' || v_problem; END IF;
     ELSE
       NULL;
   END CASE;
@@ -2056,11 +2068,12 @@ BEGIN
   END IF;
   IF EXISTS (
        SELECT 1 FROM (SELECT e->>'wallet' AS wallet, (e->>'units')::numeric AS units FROM jsonb_array_elements(p_items) e) i
-       FULL JOIN exit.final_lines l ON l.final_id = f.id AND l.wallet = i.wallet
+       FULL JOIN (SELECT x.wallet, x.units FROM exit.final_lines x WHERE x.final_id = f.id) l ON l.wallet = i.wallet
        WHERE i.wallet IS NULL OR l.wallet IS NULL OR i.units <> l.units)
      OR EXISTS (
-       SELECT 1 FROM exit.final_lines l FULL JOIN exit.holders_at(c.token, f.record_block) h ON h.wallet = l.wallet
-       WHERE (l.final_id = f.id OR l.final_id IS NULL) AND (l.wallet IS NULL OR h.wallet IS NULL OR l.units <> h.units)) THEN
+       SELECT 1 FROM (SELECT x.wallet, x.units FROM exit.final_lines x WHERE x.final_id = f.id) l
+       FULL JOIN exit.holders_at(c.token, f.record_block) h ON h.wallet = l.wallet
+       WHERE l.wallet IS NULL OR h.wallet IS NULL OR l.units <> h.units) THEN
     PERFORM exit.fail('23514', 'the items are not exactly the holders and balances at the record block (EX-15)');
   END IF;
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_items) e
@@ -3265,7 +3278,7 @@ BEGIN
       SELECT t.token, jsonb_build_object(
         'token', t.token,
         'units', coalesce((SELECT h.balance FROM chain.holdings h WHERE h.token = t.token AND h.holder = v_wallet), 0)::text,
-        'paused', k.paused,
+        'paused', t.paused,
         -- An exit is shown once it left the committee (a proposal the committee rejected stays internal).
         'exit', (SELECT jsonb_build_object('case', c.id, 'state', c.state, 'recordDate', c.record_date, 'voteOpenedAt', webauth.utc(c.vote_opened_at),
                    'salePricePaisa', CASE WHEN c.state NOT IN ('proposed', 'vote_open', 'trustee_review', 'buyer_dd') THEN c.sale_price_paisa::text END,
@@ -3288,7 +3301,7 @@ BEGIN
                      'full', (SELECT coalesce(sum(r.units), 0) FROM exit.requests r WHERE r.window_id = w.id AND r.status = 'submitted') >= w.cap_units) ORDER BY w.opens_at)
                    FROM exit.windows w WHERE w.token = t.token AND w.status = 'approved' AND w.closes_at > clock_timestamp()), '[]'::jsonb)
       ) AS j
-      FROM chain.tokens t JOIN chain.tokens k ON k.token = t.token
+      FROM chain.tokens t
       WHERE EXISTS (SELECT 1 FROM chain.holdings h WHERE h.token = t.token AND h.holder = v_wallet AND h.balance > 0)
          OR EXISTS (SELECT 1 FROM exit.finals f JOIN exit.final_lines l ON l.final_id = f.id WHERE f.token = t.token AND l.wallet = v_wallet)
     ) x), '[]'::jsonb),
@@ -3396,7 +3409,7 @@ TO pt_exit_reader;
 -- The signing service checks every burn against the redemption batch (EX-DB-5).
 GRANT EXECUTE ON FUNCTION exit.burn_allowed(jsonb) TO pt_signer;
 -- Reconciliation reads the exit views (ADR 0007 amendment).
-GRANT SELECT ON exit.recon_lines, exit.recon_cases, exit.recon_finals TO pt_recon_writer, pt_recon_reader;
+GRANT SELECT ON exit.recon_lines, exit.recon_cases, exit.recon_finals, exit.settings TO pt_recon_writer, pt_recon_reader;
 -- Functions a view calls are checked against the view's user.
 GRANT EXECUTE ON FUNCTION exit.line_payment(bigint, text), exit.balance(text), exit.pool(text), exit.closure_reserve(text)
 TO pt_recon_writer, pt_recon_reader, pt_exit_reader, pt_exit_operator;

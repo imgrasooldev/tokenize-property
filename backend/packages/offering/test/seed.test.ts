@@ -164,6 +164,7 @@ describe("seed:catalog with the demo officers enrolled", () => {
       // No quorum yet: the chair cannot close.
       expect(await committeeClose(db.client, DEMO_ROLES.icChair.handle, m.id, fileSha(minutesFile(p)))).toMatchObject({ ok: false, state: "23514" });
       for (const k of ["icChair", "icMember", "icIndependent"] as const) {
+        // eslint-disable-next-line security/detect-object-injection -- k is one of three literal keys
         expect(await committeeVote(db.client, DEMO_ROLES[k].handle, m.id, "approve", "title, encumbrances, two valuations and the opinion are clean")).toMatchObject({ ok: true, status: "approve" });
       }
       // Only the chair closes.

@@ -222,3 +222,41 @@ The spec had no investor-initiated redemption. The trust is **closed-ended**: un
 - **EX-44** The investor may withdraw a submitted request while the window is open (step-up `exit.redemption_withdraw`).
 - **EX-45** After the window closes, an operations maker proposes the outcome and an operations checker approves it: every submitted request becomes `recorded` (carried to the trustee and the sponsor as demand evidence: secondary matching S-04, or an exit proposal), except requests of investors no longer KYC-verified, which become `declined` (the investor sees "under review", no tipping-off).
 - **EX-46** Not built in phase 0 (LEGAL / REGULATOR TO CONFIRM): binding redemption at NAV, payout and burn of redeemed units, gates and suspension rules, pro-rata scaling. A later phase would reuse the final-distribution and redemption-batch machinery above with a per-request refId.
+
+## 16. Implementation status (2026-10-22, branch `s-05-exit`, migration `0027_exit.sql`, task T-025)
+
+### 16.1 As built
+
+- **Database** (schema `exit`, rules EX-DB-1..EX-DB-8 in the migration header): cases with an append-only event log checked against `exit.transitions`; decisions X1-X12, X18 and HR with capacities from `exit.decision_kinds` (§14.2), votes only by active officers in their role, bound to their PT Control session, the digest of what they saw and a fresh step-up; conflicts (EX-SOD-2); proceeds, waterfall, waterfall payments, record-date announcement, final distribution (calculation, statement and tax schedule check, trustee pre-check, checker approval, booking), redemption batch (maker, checker, trustee; booking + X16 + burns in one transaction), burn eligibility under the burn rule, `exit.burn_allowed` for the signer, `exit.tick` (X13-X15, burns seen with V19 / register entries, X17), closure checks (X18), redemption windows and requests (§15), reconciliation views, hash-chained `exit.audit` with `exit.verify_audit()`.
+- **Signing service:** new kind `issuance.burn` (deny by default; `exit.burn_allowed` + refId re-derived + balance + daily count + reconciliation gate; listed in `signer.trustee_cosign_kinds`); preview shows the decoded `IssuanceGuard.burn` call; `signer:setup` activates a local policy.
+- **`@pt/exit`:** refId derivation, final statement / tax schedule / Merkle tree (`buildFinalDocuments`, verified with `@pt/tax` `verifyDocuments`), `ExitService` (calculate, attach, verify, createRedemption, tick, verifyAudit); CLI `npm run exit:tick [-- --loop]`, `exit:run -- calculate|attach|verify|redeem`, `exit:audit`.
+- **Reconciliation** (ADR 0007 amendment): `issuance.orphan_burn` and `issuance.burn_amount_mismatch` (blocking) replace the warning `issuance.burn_not_reconciled`; `exit.ref_id_mismatch`, `exit.burn_before_payment`, `exit.waterfall_mismatch`, `exit.register_mismatch`, `exit.statement_totals` (blocking), `exit.supply_not_zero` (warning, blocking after `redeeming_sla_hours` and after Paid Out).
+- **PT Control** (ADR 0011 section 14): permissions `exit.read`, `exit.request`, `exit.decide`; pages under `/exit`; audit source `exit`.
+- **Website:** `/exit` page (exit status, final entitlement, redemption windows and requests) through `webauth.web_exit_overview`, `webauth.web_redemption_request`, `webauth.web_redemption_withdraw` (step-up actions `exit.redemption_request`, `exit.redemption_withdraw`).
+
+### 16.2 Deviations from sections 1-13
+
+- The investment committee of X1-X3 is an operations checker plus a compliance officer recording the minutes' SHA-256, not the S-01 committee machinery (property schema); the investor vote is held off chain and only its counted result is recorded (no portal ballots, no `InvestorVote` anchoring: `document.add` signer kind is still missing).
+- Property state "Exit in Progress" is derived from the case (the S-01 property state machine has no Operating/Closed states).
+- No `exit_proceeds` payment code (bank change): proceeds are attributed from the trustee-escrow statement or a suspense credit.
+- Deposit forfeit/refund at a collapse is recorded (`deposit_treatment` with evidence); the refund payment itself and a forfeited deposit's special distribution are not built.
+- Waterfall payments are matched to escrow debits; the bank file for paying lenders and vendors is not built (paid outside, matched from the statement). The closure reserve may be spent in several debits; releasing an unspent reserve to former holders (final adjustment) is not built: closure needs it at 0.
+- `exit:<token>:capital-release` (asset derecognition) is not posted.
+- Partial exit (EX-16) is not built (it is an S-03 special distribution).
+- The final distribution is published and finalized on chain by the Ops Safe outside the platform (as S-03 today, T-022); `setTrusteeCap(0)` is a timelock action outside the platform; the tick only reads them.
+- The record-date rule is 14 calendar days; the record block must have no unit movement after it (stricter than S-03 OP-33, which is not built).
+- Register: burns move S-02 subscriptions to `redeemed` (V19) and enter any remainder as a `redemption` entry only if the register holds it; otherwise `exit.register_mismatch` blocks at Paid Out.
+
+### 16.3 Not verified
+
+- Not run on Besu (burn while paused and on frozen units is covered by the contract tests `PausedAgentActions.t.sol`); no Playwright e2e for `/exit` (website) or `/exit` (PT Control).
+
+### 16.4 Owner questions
+
+1. **Q-5 burn timing:** keep `after_payment` as the default (built), or allow `after_finalization` once legal confirms early cancellation (EX-14)? Who may choose the rule per case?
+2. **Unclaimed final lines:** closure (X18) needs every line paid. What happens to entitlements never claimed (legal period, transfer to a government fund)?
+3. **Vote thresholds and notice** (Q-1): 50 % quorum, 75 % of votes for vs against, 21 days; do abstentions count for the majority?
+4. **Income type** of an exit distribution (capital gain vs dividend) and its WHT rates (placeholders today).
+5. **Redemption requests (§15):** is a phase-0 request queue wanted at all (it creates expectations in a closed-ended trust)? Window cap 10 %, discount up to 20 %, maximum 31 days: confirm.
+6. **Investment committee for exits:** reuse the S-01 committee (property schema) instead of the checker + compliance stand-in?
+7. **Partial exit (EX-16)** and the special distribution of a forfeited deposit: needed for the pilot?

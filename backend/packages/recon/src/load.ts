@@ -8,6 +8,8 @@ import type {
   RecoveryData,
   ChainIssuance,
   DistributionStatus,
+  ExitData,
+  ExitLine,
   ExpectedMint,
   LedgerJournal,
   OfferingData,
@@ -178,6 +180,30 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       tax = { findings, documents };
     }
 
+    // S-05 exits of this token (migration 0027), read-only, when the schema exists.
+    let exit: ExitData | undefined;
+    const hasExit = (await q<{ ok: boolean }>("SELECT to_regclass('exit.recon_lines') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasExit) {
+      const token = lower(d.contracts.token);
+      const lines = (await q<{ case_id: string; case_state: string; redemption_status: string; burn_rule: ExitLine["burnRule"]; distribution_id: string | null;
+        wallet: string; units: string; ref_id: string; payment: string; released: boolean }>(
+        `SELECT case_id::text, case_state, redemption_status, burn_rule, distribution_id::text, wallet, units::text, ref_id, payment, released
+         FROM exit.recon_lines WHERE token = $1 ORDER BY case_id, wallet`, [token]))
+        .map((r) => ({ caseId: BigInt(r.case_id), caseState: r.case_state, redemptionStatus: r.redemption_status, burnRule: r.burn_rule,
+          distributionId: r.distribution_id === null ? null : BigInt(r.distribution_id), wallet: r.wallet, units: BigInt(r.units), refId: r.ref_id,
+          payment: r.payment, released: r.released }));
+      const cases = (await q<{ case_id: string; state: string; redeeming_at: Date | null; final_id: string | null; pool_balance: string; closure_reserve_balance: string; register_units: string }>(
+        "SELECT case_id::text, state, redeeming_at, final_id::text, pool_balance::text, closure_reserve_balance::text, register_units::text FROM exit.recon_cases WHERE token = $1 ORDER BY case_id",
+        [token])).map((r) => ({ caseId: BigInt(r.case_id), state: r.state, redeemingAt: r.redeeming_at, finalBooked: r.final_id !== null,
+          poolBalance: BigInt(r.pool_balance), closureReserve: BigInt(r.closure_reserve_balance), registerUnits: BigInt(r.register_units) }));
+      const finals = (await q<{ id: string; status: string; onchain_id: string | null; statement: string; statement_hash: string; tax_schedule: string; tax_schedule_hash: string; merkle_root: string }>(
+        "SELECT id::text, status, onchain_id::text, statement, statement_hash, tax_schedule, tax_schedule_hash, merkle_root FROM exit.recon_finals WHERE token = $1 ORDER BY id", [token]))
+        .map((r) => ({ id: r.id, status: r.status, onchainId: r.onchain_id === null ? null : BigInt(r.onchain_id), statement: r.statement, statementHash: r.statement_hash,
+          schedule: r.tax_schedule, scheduleHash: r.tax_schedule_hash, root: r.merkle_root }));
+      const sla = (await q<{ v: string }>("SELECT value #>> '{}' AS v FROM exit.settings WHERE key = 'redeeming_sla_hours'"))[0]?.v ?? "72";
+      exit = { lines, cases, finals, redeemingSlaMs: Number(sla) * 3_600_000 };
+    }
+
     const statements = new Map<string, BankStatement>();
     for (const r of await q<{ id: string; account: string; statement_date: string; opening_paisa: string; closing_paisa: string }>(
       "SELECT id, account, statement_date::text, opening_paisa::text, closing_paisa::text FROM recon.bank_statements ORDER BY account, statement_date")) {
@@ -217,6 +243,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       ...(offerings ? { offerings } : {}),
       ...(recovery ? { recovery } : {}),
       ...(tax ? { tax } : {}),
+      ...(exit ? { exit } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },
     };

@@ -145,8 +145,20 @@ export async function decide(w: World, o: TestOfficer, kind: string, refId: numb
   return rows[0]?.r ?? { ok: false };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the case JSON as the portal reads it
-export type CaseJson = Record<string, any>;
+/** The parts of admin.exit_case the tests read. */
+export interface CaseJson {
+  state: string;
+  caseDigest: string;
+  closeProblem: string | null;
+  proceedsApproved: string;
+  facts: Record<string, string | number | boolean | null>;
+  chain: { supply: string; cap: string; paused: boolean };
+  decisions: { id: number; code: string; status: string; digest: string }[];
+  proceeds: { id: number; digest: string; status: string }[];
+  waterfall: { id: number; status: string; digest: string; lines: { id: number; kind: string; amount: string; withdrawn: boolean; payments: { id: number; digest: string; status: string }[] }[] };
+  final: { id: number; status: string; digest: string };
+  redemption: { id: number; status: string; burnRule: string; digest: string; items: { wallet: string; payment: string; released: boolean }[] };
+}
 
 export async function caseJson(w: World, o: TestOfficer, id: number): Promise<CaseJson> {
   const { rows } = await w.portal.query<{ v: CaseJson }>("SELECT admin.exit_case($1, $2) AS v", [o.sessionHash, id]);
@@ -157,15 +169,12 @@ export async function caseJson(w: World, o: TestOfficer, id: number): Promise<Ca
 /** Proposes a decision (maker) and lets every capacity in `voters` approve it, each reading the digest first. */
 export async function decision(w: World, caseId: number, code: string, detail: object, voters: TestOfficer[]): Promise<PortalResult> {
   const p = await request(w, w.officers.maker, caseId, "propose", { code, detail }, `proposal ${code} with its evidence on file`);
-  if (!p.ok) {
-    if (process.env.EXIT_TEST_DEBUG) console.error(code, p);
-    return p;
-  }
+  if (!p.ok) return p;
   let last: PortalResult = p;
   for (const v of voters) {
     const c = await caseJson(w, v, caseId);
-    const d = (c.decisions as CaseJson[]).find((x) => x.id === p.id);
-    last = await decide(w, v, "vote", p.id ?? 0, "approve", String(d?.digest ?? ""));
+    const d = c.decisions.find((x) => x.id === p.id);
+    last = await decide(w, v, "vote", p.id ?? 0, "approve", d?.digest ?? "");
     if (!last.ok) return last;
   }
   return last;
@@ -179,6 +188,68 @@ export async function chainDistribution(w: World, t: TestToken, id: number, d: {
      ON CONFLICT (registry, id) DO UPDATE SET status = EXCLUDED.status, payout_batch_hash = CASE WHEN EXCLUDED.status = 'paid' THEN $9 ELSE chain.distributions.payout_batch_hash END`,
     [t.registry, id, t.token, d.recordBlock, d.root, d.total.toString(), d.statementHash, d.status, `0x${"ab".repeat(32)}`],
   );
+}
+
+/**
+ * Drives a fresh case on a fresh token all the way to Redeeming (no vote needed, one waterfall line)
+ * through the portal functions and the exit service. Returns the ids the caller needs.
+ */
+export async function toRedeeming(
+  w: World,
+  holdings: Holding[],
+  burnRule: "after_payment" | "after_finalization" = "after_payment",
+  onchainId = 1,
+): Promise<{ t: TestToken & { issuance: string }; caseId: number; finalId: string; redemptionId: number }> {
+  const { ExitService } = await import("../src/service.ts");
+  const svc = new ExitService(w.pool);
+  const t = await exitToken(w, holdings);
+  await refresh(w);
+  const o = await request(w, w.officers.maker, null, "open", {
+    token: t.token, offerPaisa: "500000000", valuationAPaisa: "500000000", valuationASha: sha(`va${t.token}`), valuationBPaisa: "510000000",
+    valuationBSha: sha(`vb${t.token}`), costsPaisa: "0", voteRequired: false,
+  }, "sale of the whole building to a cleared buyer at valuation");
+  const caseId = o.id ?? 0;
+  const must = (r: PortalResult, what: string): void => {
+    if (!r.ok) throw new Error(`${what}: ${r.error ?? "refused"}`);
+  };
+  must(await decision(w, caseId, "X3", { minutesSha: sha("ic") }, [w.officers.checker, w.officers.compliance]), "X3");
+  must(await decision(w, caseId, "X7", { legalAdviceSha: sha("legal"), conflictsCleared: true }, [w.officers.legal, w.officers.trustee]), "X7");
+  must(await decision(w, caseId, "X9", { buyerRef: `KYB-${t.token.slice(2, 10)}`, buyerChecksSha: sha("buyer"), agreementSha: sha("spa"), salePricePaisa: "500000000",
+    depositPaisa: "0", cpDeadline: "2099-01-01" }, [w.officers.compliance, w.officers.legal, w.officers.trustee]), "X9");
+  await refresh(w);
+  const st = await escrowStatement(w, [{ amount: 500_000_000n, reference: ref("PRC") }]);
+  const p = await request(w, w.officers.maker, caseId, "proceeds", { kind: "proceeds", statementId: st.toString(), lineNo: 1 }, "full sale price received");
+  must(p, "proceeds");
+  let c = await caseJson(w, w.officers.checker, caseId);
+  must(await decide(w, w.officers.checker, "proceeds", p.id ?? 0, "approve", c.proceeds.find((x) => x.id === p.id)?.digest ?? ""), "proceeds decide");
+  must(await decision(w, caseId, "X11", { deedSha: sha("deed") }, [w.officers.legal]), "X11");
+  await openGate(w);
+  must(await decision(w, caseId, "X12", {}, [w.officers.checker]), "X12");
+  await refresh(w);
+  must(await request(w, w.officers.maker, caseId, "line", { kind: "transaction_cost", payee: "broker-two", amountPaisa: "10000000", evidenceSha: sha("brokerage") }, "brokerage invoice"), "line");
+  must(await request(w, w.officers.maker, caseId, "submit_waterfall", {}, "waterfall ready"), "submit");
+  c = await caseJson(w, w.officers.checker, caseId);
+  must(await decide(w, w.officers.checker, "waterfall", c.waterfall.id, "approve", c.waterfall.digest), "check waterfall");
+  c = await caseJson(w, w.officers.trustee, caseId);
+  must(await decide(w, w.officers.trustee, "waterfall", c.waterfall.id, "approve", c.waterfall.digest), "approve waterfall");
+  const today = (await w.pool.query<{ d: string }>("SELECT exit.pkt_today()::text AS d")).rows[0]?.d ?? "";
+  must(await request(w, w.officers.maker, caseId, "announce", { recordDate: today, noticeSha: sha("notice") }, "record date"), "announce");
+  const finalId = await svc.calculate(String(caseId), 10n, "operator:ali");
+  const docs = await svc.attach(finalId, "operator:omar");
+  await refresh(w);
+  c = await caseJson(w, w.officers.trustee, caseId);
+  must(await decide(w, w.officers.trustee, "precheck", Number(finalId), "approve", c.final.digest, { root: docs.root }), "precheck");
+  c = await caseJson(w, w.officers.checker, caseId);
+  must(await decide(w, w.officers.checker, "final", Number(finalId), "approve", c.final.digest), "final");
+  const f = (await w.pool.query<{ net: string }>("SELECT sum_net::text AS net FROM exit.finals WHERE id = $1", [finalId])).rows[0];
+  await chainDistribution(w, t, onchainId, { recordBlock: 10, root: docs.root, total: BigInt(f?.net ?? "0"), statementHash: docs.statementHash, status: "finalized" });
+  await svc.tick("exit-worker");
+  const redemptionId = Number(await svc.createRedemption(String(caseId), "operator:ali", burnRule));
+  c = await caseJson(w, w.officers.checker, caseId);
+  must(await decide(w, w.officers.checker, "redemption", redemptionId, "approve", c.redemption.digest), "check redemption");
+  c = await caseJson(w, w.officers.trustee, caseId);
+  must(await decide(w, w.officers.trustee, "redemption", redemptionId, "approve", c.redemption.digest), "approve redemption");
+  return { t, caseId, finalId, redemptionId };
 }
 
 /** The read model learns of a Burned event (IssuanceGuard) and the burn Transfer. */
