@@ -22,6 +22,7 @@ export function ActionPanel({
   note,
   extra,
   reasonLabel = "Reason (recorded in the audit chains; at least 10 characters, never a CNIC, IBAN or phone number)",
+  reasonId = "action-reason",
 }: {
   csrf: string;
   action: string;
@@ -30,6 +31,8 @@ export function ActionPanel({
   note: string;
   extra?: ReactNode;
   reasonLabel?: string;
+  /** Element id of the reason field (unique when a page shows several panels). */
+  reasonId?: string;
 }) {
   const available = actions.filter((a) => a.blockers.length === 0);
   const unavailable = actions.filter((a) => a.blockers.length > 0);
@@ -41,10 +44,10 @@ export function ActionPanel({
             <input key={k} type="hidden" name={k} value={v} />
           ))}
           {extra}
-          <label className="small mu" htmlFor="action-reason">
+          <label className="small mu" htmlFor={reasonId}>
             {reasonLabel}
           </label>
-          <textarea id="action-reason" name="reason" required minLength={10} maxLength={500} placeholder="Reason (at least 10 characters)" />
+          <textarea id={reasonId} name="reason" required minLength={10} maxLength={500} placeholder="Reason (at least 10 characters)" />
           <div className="row" style={{ flexWrap: "wrap" }}>
             {available.map((a) => (
               <button key={a.action} className={a.tone === "ok" ? "btn ok" : a.tone === "no" ? "btn no" : "btn"} type="submit" name="decision" value={a.action}>

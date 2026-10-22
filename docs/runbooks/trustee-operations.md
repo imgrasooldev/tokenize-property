@@ -41,6 +41,14 @@ window, SEV1 for a register difference that shows units moved without the truste
 - On L14 approval the trustee's register in the database receives the units of every subscription
   (V18) in the same transaction; check `/trustee/register` afterwards (differences must be 0).
 
+## Accepting a property for the trust (S-01 P8)
+
+- Trustee > Property acceptance (`/trustee/properties`, migration 0026) lists Legal Approved
+  properties. Check the structure (planned register, holding limit, unit rights), the trust deed
+  SHA-256 against the deed the trustee holds and the committee's minutes hash, then accept (the
+  property becomes Tokenization Ready) or decline. A decision on a structure is final: after a
+  decline the legal head records a new structure. Steps and refusals: `portal-votes.md`.
+
 ## S-03: charges above the limit and the distribution pre-check
 
 - **Charges (OP-21):** `/trustee/cosign` lists expenses and fees above the operations limit

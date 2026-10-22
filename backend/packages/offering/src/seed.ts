@@ -35,9 +35,13 @@ import { OfferingError, runAction as runOffering, type ActionInput as OfferingIn
  *   - It NEVER casts a vote or decision under an officer's handle (lead decision 2026-10-22, ADR 0011
  *     open item 13): the K4 KYB decision, the investment committee votes and its close, the trustee's
  *     P8 acceptance and the L3 offering votes are the officers' own, in PT Control with a session and
- *     a security-key step-up. The seed prepares everything up to the first such vote, then stops and
- *     reports which votes are due and where ("waiting"); run it again after the officers decided.
- *     A run that finds the same votes still due writes nothing.
+ *     a security-key step-up (screens of migrations 0016, 0023 and 0026; the database refuses these
+ *     votes under an officer's handle anywhere else). The seed prepares everything up to the first
+ *     such vote (it opens the committee meeting for the chair, records the structure for the legal
+ *     head, creates and submits the offering for the offering maker), then stops and reports which
+ *     votes are due and on which PT Control page ("waiting"); run it again after the officers
+ *     decided. A run that finds the same votes still due writes nothing. A committee that did not
+ *     approve, or a structure the trustee declined, stops the seed ("blocked"): that is a decision.
  *   - With every vote cast, it ends at offering state `approved` (L3). `ready` needs a deployed, paused
  *     token with the trustee cap and the documents anchored (offering.mark_ready): only attempted
  *     with an explicit token.
@@ -323,7 +327,13 @@ class Waiting extends Error {
   }
 }
 
-const NO_SCREEN = "no PT Control screen for this vote yet (the seed never casts it under the officer's name)";
+/** The seed reached an officer's decision that ends this path (committee not approved, structure declined). */
+class Blocked extends Error {}
+
+const STEP_UP = "with a security-key step-up";
+
+/** The committee minutes of the demo (their SHA-256 is what the chair enters when closing). */
+export const minutesFile = (p: DemoProperty): string => `${p.slug}-ic-minutes.txt`;
 
 interface DemoFile {
   bytes: Buffer;
@@ -724,15 +734,27 @@ async function dueDiligence(c: Ctx, p: DemoProperty, propertyId: string, sponsor
 }
 
 async function committee(c: Ctx, p: DemoProperty, propertyId: string): Promise<void> {
-  const open = await c.one<{ id: string }>("SELECT id::text FROM property.ic_meetings WHERE property_id = $1 AND status = 'open'", [propertyId]);
-  const meetingId = open?.id ?? String(await c.p("openIc", { propertyId, chair: c.h.icChair }));
+  const latest = await c.one<{ id: string; status: string; chair: string }>(
+    "SELECT id::text, status, chair FROM property.ic_meetings WHERE property_id = $1 ORDER BY id DESC LIMIT 1",
+    [propertyId],
+  );
+  if (latest?.status === "not_approved") {
+    throw new Blocked(`the investment committee did not approve ${p.name} (meeting #${latest.id}); a new meeting is the committee's decision, not the seed's`);
+  }
+  // Opening the meeting is not a vote: the seed opens it for the chair (PT Control can open one as well).
+  const meetingId = latest?.status === "open" ? latest.id : String(await c.p("openIc", { propertyId, chair: c.h.icChair }));
+  const chair = latest?.status === "open" ? latest.chair : c.h.icChair;
+  const page = `PT Control, Operations > Investment committee (/committees/${meetingId})`;
   const due: string[] = [];
   for (const member of [c.h.icChair, c.h.icMember, c.h.icIndependent]) {
     if (!(await c.one("SELECT 1 FROM property.ic_votes WHERE meeting_id = $1 AND member = $2", [meetingId, member]))) {
-      due.push(`investment committee vote of ${member} (${p.name}, meeting #${meetingId}): ${NO_SCREEN}`);
+      due.push(`investment committee vote of ${member} on ${p.name} (meeting #${meetingId}): in ${page}, approve with a reason, ${STEP_UP}`);
     }
   }
-  due.push(`closing the investment committee by the chair ${c.h.icChair} (meeting #${meetingId}, minutes): ${NO_SCREEN}`);
+  const minutes = minutesFile(p);
+  due.push(
+    `closing of meeting #${meetingId} by the chair ${chair}${due.length ? " after the votes" : ""}: in ${page}, with the minutes' SHA-256 ${c.file(minutes).sha256} (demo file ${minutes}), ${STEP_UP}`,
+  );
   throw new Waiting(due);
 }
 
@@ -744,8 +766,11 @@ async function structureAndTrustee(c: Ctx, p: DemoProperty, propertyId: string, 
      FROM property.structures s WHERE s.property_id = $1 ORDER BY s.id DESC LIMIT 1`,
     [propertyId],
   );
+  if (latest?.declined) {
+    throw new Blocked(`the trustee declined structure #${latest.id} of ${p.name}; a new structure is the legal head's decision, not the seed's`);
+  }
   const structureId =
-    latest && !latest.declined && latest.planned === p.plannedUnits.toString() && latest.deed === deed
+    latest && latest.planned === p.plannedUnits.toString() && latest.deed === deed
       ? latest.id
       : String(
           await c.p("recordStructure", {
@@ -758,7 +783,9 @@ async function structureAndTrustee(c: Ctx, p: DemoProperty, propertyId: string, 
             trustDeedId: deed,
           }),
         );
-  throw new Waiting([`trustee acceptance (P8) of ${p.name} (structure #${structureId}) by ${c.h.trustee}: ${NO_SCREEN}`]);
+  throw new Waiting([
+    `trustee acceptance (P8) of ${p.name} (structure #${structureId}) by ${c.h.trustee}: in PT Control, Trustee > Property acceptance (/trustee/properties/${propertyId}), accept with a reason, ${STEP_UP}`,
+  ]);
 }
 
 async function seedProperty(c: Ctx, p: DemoProperty): Promise<{ propertyId: string | null; state: string; blocked?: string }> {
@@ -836,8 +863,9 @@ async function seedOffering(c: Ctx, p: DemoProperty, propertyId: string): Promis
         [row.id],
       );
       if (!q || q.expired) {
+        const last = q ?? (await c.one<{ id: string }>("SELECT id::text FROM offering.requests WHERE offering_id = $1 AND code = 'L3' ORDER BY id DESC LIMIT 1", [row.id]));
         throw new Waiting([
-          `the L3 approval request of ${p.name} ${q ? `(#${q.id}) expired` : "is missing"}: an offering checker closes it and returns the offering in PT Control; ${NO_SCREEN}`,
+          `the L3 approval request of ${p.name} ${q ? `(#${q.id}) expired` : "is no longer open"}: an offering checker (not ${c.h.offeringMaker}) returns the offering to draft in PT Control, Operations > Offering approvals${last ? ` (/approvals/offering/${last.id}, "Return to draft")` : ""}, ${STEP_UP}; the next run submits it again`,
         ]);
       }
       const due: string[] = [];
@@ -845,8 +873,8 @@ async function seedOffering(c: Ctx, p: DemoProperty, propertyId: string): Promis
         if (!(await c.one("SELECT 1 FROM offering.request_votes WHERE request_id = $1 AND officer = $2", [q.id, handle(c.h, k)]))) {
           due.push(
             k === "offeringTrustee"
-              ? `L3 vote of the trustee ${handle(c.h, k)} on request #${q.id} (${p.name}): in PT Control, Trustee > Co-signing (/trustee/cosign/offering/${q.id}), with a security-key step-up`
-              : `L3 vote of ${handle(c.h, k)} (${def(k).what}) on request #${q.id} (${p.name}): ${NO_SCREEN}`,
+              ? `L3 vote of the trustee ${handle(c.h, k)} on request #${q.id} (${p.name}): in PT Control, Trustee > Co-signing (/trustee/cosign/offering/${q.id}), ${STEP_UP}`
+              : `L3 vote of ${handle(c.h, k)} (${def(k).what}) on request #${q.id} (${p.name}): in PT Control, Operations > Offering approvals (/approvals/offering/${q.id}), ${STEP_UP}`,
           );
         }
       }
@@ -956,6 +984,24 @@ export async function seedCatalog(pool: pg.Pool, options: SeedOptions = {}): Pro
           };
           log(out.line);
           for (const v of e.votes) log(`  - ${v}`);
+          properties.push(out);
+          continue;
+        }
+        if (e instanceof Blocked) {
+          const off = row ? await offeringRow(c, row.id) : undefined;
+          out = {
+            slug: p.slug,
+            name: p.name,
+            outcome: "blocked",
+            votes: [],
+            propertyId: row?.id ?? null,
+            offeringId: off?.id ?? null,
+            propertyState: row?.state ?? null,
+            offeringState: off?.state ?? null,
+            writes: c.writes,
+            line: `${p.name}: blocked: ${e.message}`,
+          };
+          log(out.line);
           properties.push(out);
           continue;
         }

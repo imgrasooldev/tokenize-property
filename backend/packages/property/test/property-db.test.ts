@@ -13,6 +13,8 @@ import {
   draftSponsor,
   grant,
   hex,
+  icClose,
+  icVote,
   identifiers,
   makeWorld,
   next,
@@ -23,6 +25,7 @@ import {
   subject,
   submit,
   trusteeAccepts,
+  trusteeDecision,
   type Sponsor,
   type World,
 } from "./world.ts";
@@ -415,16 +418,21 @@ describe("property submission and review (S-01 §3.2)", () => {
     await completeDueDiligence(w, s, p);
     await refused(w.run("openIc", { propertyId: p, chair: O.legal1 }), "FORBIDDEN");
     const m = await w.run("openIc", { propertyId: p, chair: O.ic1 });
-    await w.run("castVote", { meetingId: m, member: O.ic1, vote: "approve" });
-    await w.run("castVote", { meetingId: m, member: O.ic2, vote: "approve" });
-    await w.run("castVote", { meetingId: m, member: O.ic4, conflictNote: "my brother-in-law is a director of the sponsor" });
-    await refused(w.run("castVote", { meetingId: m, member: O.ic2, vote: "reject" }), "DUPLICATE");
-    await refused(w.run("closeIc", { meetingId: m, chair: O.ic1, minutes: hex() }), "GUARD", /quorum/);
-    await refused(w.run("closeIc", { meetingId: m, chair: O.ic2, minutes: hex() }), "FORBIDDEN");
-    await w.run("castVote", { meetingId: m, member: O.ic3, vote: "reject" });
-    expect(await w.run("closeIc", { meetingId: m, chair: O.ic1, minutes: hex() })).toBe("not_approved");
+    // Migration 0026 (V-2): votes under an officer's handle are cast in the portal only.
+    await refused(w.run("castVote", { meetingId: m, member: O.ic1, vote: "approve" }), "FORBIDDEN", /officer of the admin portal/);
+    await icVote(w, O.ic1, m, "approve");
+    await icVote(w, O.ic2, m, "approve");
+    await icVote(w, O.ic4, m, "conflict", "my brother-in-law is a director of the sponsor");
+    await refused(icVote(w, O.ic2, m, "reject"), "DUPLICATE");
+    await refused(icVote(w, O.legal1, m, "approve"), "FORBIDDEN");
+    await refused(icClose(w, O.ic1, m), "GUARD", /quorum/);
+    await refused(icClose(w, O.ic2, m), "FORBIDDEN");
+    await icVote(w, O.ic3, m, "reject");
+    await refused(w.run("closeIc", { meetingId: m, chair: O.ic1, minutes: hex() }), "FORBIDDEN", /officer of the admin portal/);
+    expect(await icClose(w, O.ic1, m)).toBe("not_approved");
     expect(await stateOf(w, p)).toBe("under_review");
     expect(await committeeApproves(w, p)).toBe("legal_approved");
+    expect(await verifyAudit(w.pool)).toEqual([]);
   });
 
   it("P8: only a trustee officer accepts; a trustee holds no other duty; a Shariah structure needs its certificate", async () => {
@@ -442,8 +450,12 @@ describe("property submission and review (S-01 §3.2)", () => {
       plannedUnits: "1000000",
       trustDeedId: deed,
     });
-    await refused(w.run("trusteeDecide", { propertyId: p, trustee: O.trustee, structureId: sid, accept: true, reason: "accepting the Shariah REIT" }), "GUARD", /Shariah certificate/);
-    expect(await w.run("trusteeDecide", { propertyId: p, trustee: O.trustee, structureId: sid, accept: false, reason: "waiting for the Shariah adviser" })).toBe("legal_approved");
+    await refused(trusteeDecision(w, O.trustee, p, true, sid.toString(), "accepting the Shariah REIT"), "GUARD", /Shariah certificate/);
+    // Migration 0026 (V-2): the trustee decides in the portal only.
+    await refused(w.run("trusteeDecide", { propertyId: p, trustee: O.trustee, structureId: sid, accept: false, reason: "waiting for the Shariah adviser" }), "FORBIDDEN", /admin portal/);
+    expect(await trusteeDecision(w, O.trustee, p, false, sid.toString(), "waiting for the Shariah adviser")).toBe("legal_approved");
+    // V-4: a decision on a structure is final; a new structure decision is needed.
+    await refused(trusteeDecision(w, O.trustee, p, true, sid.toString(), "accepting after all"), "GUARD", /already decided/);
     const { rows } = await w.client.query<{ max_holding_units: string }>("SELECT max_holding_units::text FROM property.structures WHERE id = $1", [sid]);
     expect(rows[0]?.max_holding_units).toBe("100000");
     expect(await trusteeAccepts(w, s, p)).toBe("tokenization_ready");

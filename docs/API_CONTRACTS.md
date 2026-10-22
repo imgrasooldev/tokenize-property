@@ -242,3 +242,20 @@ Step 6d trustee routes (migration 0023; pages for trustee officers and auditors,
 | `POST /api/trustee/cosign/charge/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest` → `admin.decide_trustee_charge` (OP-21; the operations checker approves afterwards) |
 | `POST /api/trustee/cosign/calculation/[id]/decide` | `trustee.decide` + step-up | form `decision`, `reason`, `digest`, `root` (required to approve) → `admin.precheck_distribution` (D4) |
 | `POST /api/trustee/register/export` | `trustee.export` | form `token`, `decision=export` → ZIP (CSV, manifest.json with pinned block and audit entries, SHA256SUMS), recorded by `admin.record_register_export` before release; otherwise 303 back with the reason |
+
+T-046 vote routes (migration 0026, ADR 0011 section 13; every POST checks origin and CSRF, then the database checks session, permission, step-up and digest; outcome as a 303 back to the page with `?ok=` or `?error=`):
+
+| Route | Access | Contract |
+|---|---|---|
+| `GET /committees` | `property.read` | open meetings, files ready for a committee (with the "open" blockers), latest outcomes (`admin.committees`) |
+| `GET /committees/[id]` | `property.read` | the meeting's file (reviews, qualifications, valuations, current documents with SHA-256), votes with reasons, outcome so far, digest, vote and close blockers (`admin.committee`); unknown id 404 |
+| `POST /api/committees/open` | `committee.vote` + step-up | form `property` (uuid), `decision=open`, `reason` → `admin.open_committee` → `property.open_ic` (the officer chairs); 303 to the new meeting |
+| `POST /api/committees/[id]/vote` | `committee.vote` + step-up | form `decision` (`approve`, `reject`, `abstain`, `conflict`), `reason` (the conflict note for `conflict`), `digest` → `admin.committee_vote` → `property.cast_vote` |
+| `POST /api/committees/[id]/close` | `committee.vote` + step-up | form `decision=close`, `minutes` (SHA-256 hex of the signed minutes), `reason`, `digest` (with the votes) → `admin.close_committee` → `property.close_ic` (chair only, OB-33 quorum) |
+| `GET /trustee/properties` | `trustee.read` | Legal Approved properties with their latest structure and blockers, latest trustee decisions (`admin.trustee_properties`) |
+| `GET /trustee/properties/[id]` | `trustee.read` | structure (unit rights, planned register, holding limit, trust deed hash), approving committee and minutes hash, valuations, documents, earlier decisions, digest, blockers (`admin.trustee_property`); unknown uuid 404 |
+| `POST /api/trustee/properties/[id]/decide` | `trustee.decide` + step-up | form `decision` (`accept`, `decline`), `structure`, `reason`, optional `conditions` (10-1000), `digest` → `admin.decide_property_trustee` → `property.trustee_decide` (a structure is decided once) |
+| `GET /approvals/offering` | `offering.read` | open S-02 requests lacking a platform vote, offerings pending approval whose L3 lapsed, latest platform votes (`admin.offering_votes`) |
+| `GET /approvals/offering/[id]` | `offering.read` | request, offering terms and document hashes, property, votes, missing duties, digest, vote / approve / return blockers (`admin.offering_vote_request`); unknown id 404 |
+| `POST /api/approvals/offering/[id]/decide` | `offering.decide` + step-up | form `decision`, `reason`, `digest` → `admin.vote_offering_request` → `offering.decide` |
+| `POST /api/approvals/offering/[id]/return` | `offering.decide` + step-up | form `decision=return`, `reason`, `digest` → `admin.return_offering` → `offering.return_offering` (L2; never the maker) |

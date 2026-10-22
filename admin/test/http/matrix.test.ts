@@ -36,6 +36,10 @@ const TRUSTEE: Role[] = ["trustee_officer", "auditor"];
 const RECOVERY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"];
 const OPERATIONS: Role[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
 const TAX: Role[] = ["tax_officer", "auditor"];
+// T-046: offering approvals are read by operations, compliance and auditors; committee members are platform officers.
+const OFFERING: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+const COMMITTEE: Role[] = ["ops_maker", "ops_checker", "compliance_officer"];
+const NO_PROPERTY = "00000000-0000-4000-8000-000000000046";
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -97,6 +101,13 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/trustee/recon", allowed: TRUSTEE },
   { path: "/trustee/recon/{run}", allowed: TRUSTEE },
   { path: "/trustee/recoveries", allowed: TRUSTEE },
+  // T-046 (migration 0026): committees for property readers, offering approvals for offering readers, P8 for the trustee.
+  { path: "/committees", allowed: PROPERTY },
+  { path: "/committees/999999", allowed: PROPERTY, okStatus: 404 },
+  { path: "/approvals/offering", allowed: OFFERING },
+  { path: "/approvals/offering/999999", allowed: OFFERING, okStatus: 404 },
+  { path: "/trustee/properties", allowed: TRUSTEE },
+  { path: `/trustee/properties/${NO_PROPERTY}`, allowed: TRUSTEE, okStatus: 404 },
 ];
 
 /** Session-protected POST routes: who passes authorisation, and the status they then get. */
@@ -155,6 +166,13 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/trustee/distributions/{registry}/{dist}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/trustee/cosign/charge/{charge}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/trustee/cosign/calculation/{distribution}/decide", allowed: ["trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  // T-046: an incomplete vote (or a missing step-up) is answered with a 303 back (nothing decided).
+  { path: "/api/committees/open", allowed: COMMITTEE, okStatus: 303, form: { decision: "open", reason: "short" } },
+  { path: "/api/committees/1/vote", allowed: COMMITTEE, okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/committees/1/close", allowed: COMMITTEE, okStatus: 303, form: { decision: "close", reason: "short" } },
+  { path: "/api/approvals/offering/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/approvals/offering/1/return", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "return", reason: "short" } },
+  { path: `/api/trustee/properties/${NO_PROPERTY}/decide`, allowed: ["trustee_officer"], okStatus: 303, form: { decision: "accept", reason: "short" } },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
@@ -166,7 +184,7 @@ function userOf(path: string): Role {
   if (path.startsWith("/api/operations/") && path.endsWith("/decide")) return "ops_checker";
   if (path.includes("export")) return "auditor";
   if (path.startsWith("/api/recovery/") && path.endsWith("/act")) return "compliance_officer";
-  if (path.includes("/approvals/property/")) return "compliance_officer";
+  if (path.includes("/approvals/property/") || path.includes("/approvals/offering/")) return "compliance_officer";
   if (path.endsWith("/decide") && path.includes("/approvals/")) return "ops_checker";
   return "ops_maker";
 }
@@ -349,7 +367,9 @@ describe("route coverage", () => {
           .replace(/^\/trustee\/distributions\/\{\w+\}\/\{\w+\}$/, "/trustee/distributions/[registry]/[id]")
           .replace(/^\/trustee\/recon\/(\{\w+\}|\d+)$/, "/trustee/recon/[id]")
           .replace(/^\/trustee\/cosign\/(charge|calculation)\/(\{\w+\}|\d+)$/, "/trustee/cosign/$1/[id]")
-          .replace(/^\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
+          .replace(/^\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
+          .replace(/^\/committees\/\d+$/, "/committees/[id]")
+          .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
           .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
@@ -359,7 +379,10 @@ describe("route coverage", () => {
         a.path
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
-          .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
+          .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
+          .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
+          .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
+          .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
           .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")

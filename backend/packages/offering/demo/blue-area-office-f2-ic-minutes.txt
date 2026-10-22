@@ -1,0 +1,12 @@
+DEMO DOCUMENT – fictional property for the demo stack – not an offer
+
+Investment committee minutes
+Property: Blue Area Office, Floor 2, Islamabad (fictional)
+
+This is a demo file. The chair closes the committee meeting in PT Control with the SHA-256 of
+this file's exact bytes (seed:catalog prints it). A real file would record:
+- Members present, the independent member, and any conflict of interest declared.
+- The due-diligence findings reviewed: title, encumbrances, two valuations, legal opinion and its
+  qualifications, technical review.
+- Each member's vote and reason, the quorum (three, at least one independent) and the outcome.
+- Conditions the committee attaches to its approval, if any.

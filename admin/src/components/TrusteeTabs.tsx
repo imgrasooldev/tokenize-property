@@ -2,6 +2,7 @@ const TABS: [string, string][] = [
   ["/trustee", "Overview"],
   ["/trustee/register", "Register"],
   ["/trustee/cosign", "Co-signing"],
+  ["/trustee/properties", "Property acceptance"],
   ["/trustee/distributions", "Distributions"],
   ["/trustee/recon", "Reconciliation"],
   ["/trustee/recoveries", "Recoveries"],

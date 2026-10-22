@@ -3,9 +3,9 @@ import { mockProviders, KycService, Peppers } from "@pt/kyc";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
-import { officerForDuty } from "../../db/test/officers.ts";
+import { committeeClose, committeeVote, officerForDuty, trusteePropertyDecision, type PortalResult } from "../../db/test/officers.ts";
 import { SponsorSecrets } from "../src/crypto.ts";
-import { PropertyService, runAction, type ActionInput, type ActionName, type ActionResult, type Identifiers } from "../src/service.ts";
+import { mapError, PropertyService, runAction, type ActionInput, type ActionName, type ActionResult, type Identifiers } from "../src/service.ts";
 import { contiguousMigrations } from "./helpers.ts";
 
 /** A scratch database with every migration, KYC mocks and the S-01 officers, for the property tests. */
@@ -292,13 +292,46 @@ export async function completeDueDiligence(w: World, s: Sponsor, propertyId: str
   await review("valuation", O.val1, rows.map((r) => r.id));
 }
 
-/** IC with three approving votes (one independent): P7. */
+/**
+ * A portal decision (migration 0026) as the property service would report it: the status, or a
+ * PropertyError with the code of the backend's refusal (or FORBIDDEN when the portal refuses the
+ * session or permission).
+ */
+export async function viaPortal(p: Promise<PortalResult>): Promise<string> {
+  let r: PortalResult;
+  try {
+    r = await p;
+  } catch (e) {
+    throw mapError(e);
+  }
+  if (!r.ok) throw mapError({ code: r.state ?? "42501", message: r.error ?? "refused" });
+  return r.status ?? "";
+}
+
+/** A committee member's vote in the portal (votes under an officer's handle are portal-only since 0026). */
+export function icVote(w: World, member: string, meetingId: string | bigint, vote: "approve" | "reject" | "abstain" | "conflict", reason?: string): Promise<string> {
+  return viaPortal(committeeVote(w.client, member, String(meetingId), vote, reason));
+}
+
+/** The chair closes the meeting in the portal. */
+export function icClose(w: World, chair: string, meetingId: string | bigint): Promise<string> {
+  return viaPortal(committeeClose(w.client, chair, String(meetingId), hex()));
+}
+
+/** The trustee's P8 decision in the portal. */
+export function trusteeDecision(w: World, trustee: string, propertyId: string, accept: boolean, structureId?: string, reason?: string): Promise<string> {
+  return viaPortal(
+    trusteePropertyDecision(w.client, trustee, propertyId, accept ? "accept" : "decline", { ...(structureId ? { structureId } : {}), ...(reason ? { reason } : {}) }),
+  );
+}
+
+/** IC with three approving votes (one independent): P7. The chair opens; votes and the close are cast in the portal. */
 export async function committeeApproves(w: World, propertyId: string): Promise<string> {
   const m = await w.run("openIc", { propertyId, chair: O.ic1 });
-  await w.run("castVote", { meetingId: m, member: O.ic1, vote: "approve" });
-  await w.run("castVote", { meetingId: m, member: O.ic2, vote: "approve" });
-  await w.run("castVote", { meetingId: m, member: O.ic3, vote: "approve" });
-  return w.run("closeIc", { meetingId: m, chair: O.ic1, minutes: hex() });
+  await icVote(w, O.ic1, m, "approve");
+  await icVote(w, O.ic2, m, "approve");
+  await icVote(w, O.ic3, m, "approve");
+  return icClose(w, O.ic1, m);
 }
 
 /** Structure by the legal head and the trustee's acceptance: P8. */
@@ -313,7 +346,7 @@ export async function trusteeAccepts(w: World, s: Sponsor, propertyId: string, t
     plannedUnits: 1_000_000n,
     trustDeedId: deed,
   });
-  return w.run("trusteeDecide", { propertyId, trustee, structureId, accept: true, reason: "documents and structure accepted" });
+  return trusteeDecision(w, trustee, propertyId, true, structureId.toString(), "documents and structure accepted");
 }
 
 export async function stateOf(w: World, propertyId: string): Promise<string> {

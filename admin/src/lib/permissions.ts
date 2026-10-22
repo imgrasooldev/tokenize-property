@@ -1,8 +1,8 @@
 /**
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
  * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016, the Step 6c ones of 0019, the
- * S-06 role and permissions of 0020, the S-03 role and permissions of 0021 and the Step 6d ones of
- * 0023). The database is the authority and checks every request itself; this copy only drives
+ * S-06 role and permissions of 0020, the S-03 role and permissions of 0021, the Step 6d ones of
+ * 0023 and the committee and offering votes of 0026). The database is the authority and checks every request itself; this copy only drives
  * menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
@@ -21,6 +21,9 @@ export const PERMISSIONS = [
   "approvals.decide",
   "property.read",
   "property.decide",
+  "committee.vote",
+  "offering.read",
+  "offering.decide",
   "compliance.read",
   "compliance.decide",
   "compliance.export",
@@ -40,8 +43,34 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
-  ops_maker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.request", "property.read", "recovery.read", "recovery.request", "operations.read", "operations.request"],
-  ops_checker: ["ops.read", "audit.read.ops", "approvals.read", "approvals.decide", "property.read", "property.decide", "recovery.read", "recovery.decide", "operations.read", "operations.decide"],
+  ops_maker: [
+    "ops.read",
+    "audit.read.ops",
+    "approvals.read",
+    "approvals.request",
+    "property.read",
+    "committee.vote",
+    "offering.read",
+    "recovery.read",
+    "recovery.request",
+    "operations.read",
+    "operations.request",
+  ],
+  ops_checker: [
+    "ops.read",
+    "audit.read.ops",
+    "approvals.read",
+    "approvals.decide",
+    "property.read",
+    "property.decide",
+    "committee.vote",
+    "offering.read",
+    "offering.decide",
+    "recovery.read",
+    "recovery.decide",
+    "operations.read",
+    "operations.decide",
+  ],
   compliance_officer: [
     "ops.read",
     "audit.read.ops",
@@ -49,6 +78,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "audit.export",
     "property.read",
     "property.decide",
+    "committee.vote",
+    "offering.read",
+    "offering.decide",
     "compliance.read",
     "compliance.decide",
     "compliance.export",
@@ -66,6 +98,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "officers.read",
     "approvals.read",
     "property.read",
+    "offering.read",
     "compliance.read",
     "recovery.read",
     "trustee.read",

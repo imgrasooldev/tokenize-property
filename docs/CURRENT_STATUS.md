@@ -2,7 +2,13 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## T-047 public-anchoring status on the website (2026-10-22, branch `t-047-web-anchor-status`, not merged; migration 0025)
+## T-046 portal votes (2026-10-22, merged; migration 0026)
+
+- PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.
+- `seed:catalog` + these screens take DHA6 and BAO2 to approved offerings (walkthrough: `docs/runbooks/portal-votes.md`, `deploy/demo-server/README.md`). `ready` still needs the token (DeployLib), trustee cap and anchored documents.
+- **Merge 0025 first** (runner refuses the gap). Not seen in a browser; no Playwright spec yet.
+
+## T-047 public-anchoring status on the website (2026-10-22, merged; migration 0025)
 
 - Rail and `/verify#anchor` show real anchors through `anchor.web_status()` / `anchor.web_recent()` (pt_web may execute only these in schema `anchor`). Chain 586650 is labelled as the local stand-in everywhere.
 - After merging: `npm run migrate` (0025) on the demo server; `pt-web.service` now sets `ANCHOR_INTERVAL_SECONDS=900` (must match `pt-anchor.service`). Playwright e2e not run.
