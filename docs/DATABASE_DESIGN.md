@@ -344,6 +344,17 @@ Follows 0020-0023 (0022's `pt_web` grants are untouched). Schema `webauth`; advi
 
 Grants: `pt_web` gets `USAGE` on `webauth` and `EXECUTE` on the 18 `webauth.web_*` functions only (no table, no internal function), and **loses** `EXECUTE` on `offering.web_reserve` and `offering.web_cancel`.
 
+### 0025 web anchor status (WN-1..WN-4; task T-047, ADR 0008 and 0010)
+
+Applies on top of 0024 (0026 is reserved for a parallel branch). No tables. Two thin `SECURITY DEFINER` read functions for the website's role `pt_web`, scoped to the "current" anchor target = the anchor chain and contract of the newest `anchor.anchors` row (WN-3), so an earlier stand-in deployment never mixes in:
+
+| Function | Purpose |
+|---|---|
+| `anchor.web_status()` | one row (none before the first anchor): anchor chain ID, contract, and of the latest confirmed anchor the private chain ID and block, commitment, transaction hash, anchor-chain block and confirmation time; number of confirmed anchors; age in seconds; `open_state` `pending` (an anchor is recorded or sent) / `failed` (the newest anchor failed and none is open) / `none`, and `open_since` |
+| `anchor.web_recent(p_limit integer)` | the newest non-failed anchors with their commitment components (private chain ID, block, block hash, ledger journal id and head hash), commitment, status (`recorded`/`sent`/`confirmed`), transaction hash, anchor-chain block, confirmation time; at most 20 rows, NULL or below 1 means 12 (WN-4) |
+
+Never returned (WN-2): the signed raw transaction, nonce, sender, creator, history or failure reason (a failure is the coarse `failed` state only). `pt_web` gets `USAGE` on schema `anchor` and `EXECUTE` on these two functions only; tables stay unreadable (tested: `db/test/web-anchor.test.ts` enumerates every function in schema `anchor` and checks 42501 on both tables and the writer API).
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -386,6 +397,7 @@ All NOLOGIN, created idempotently:
 | 0021 | `pt_ops_operator`, `pt_ops_reader`, `pt_tax_service` |
 | 0022 | no new role: `pt_web` may execute `bank.web_payees`, `property.web_catalog`, `property.web_documents`, `recon.web_status` |
 | 0024 | no new role: `pt_web` may execute the `webauth.web_*` functions; `offering.web_reserve` / `web_cancel` revoked from it |
+| 0025 | no new role: `pt_web` may execute `anchor.web_status()` and `anchor.web_recent(integer)` (nothing else in schema `anchor`) |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 

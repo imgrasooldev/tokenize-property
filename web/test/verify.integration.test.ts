@@ -14,8 +14,9 @@ import { chainUp, prepare, start, type Stack } from "./stack";
 /**
  * S-07 public verification page against the real local chain and the TEST database: every figure
  * the page shows equals the contract views at the same block (T-027), the website's own role sees
- * no anchor or reconciliation records it has no grant for (shown as such, never guessed), the
- * on-chain proof check accepts a real entitlement and refuses 1 paisa more, and the view carries
+ * anchor and reconciliation status only through its narrow functions (migrations 0022, 0025; a
+ * database without them is shown as such, never guessed), the on-chain proof check accepts
+ * a real entitlement and refuses 1 paisa more, and the view carries
  * no holder wallet. Skipped without a chain (CI).
  */
 const up = await chainUp();
@@ -31,15 +32,14 @@ describe.skipIf(!up)("public verification view (read model vs chain)", () => {
     await stack?.stop();
   });
 
-  it("shows anchor and reconciliation records as not readable while the website's role has no grant", async () => {
-    const before = process.env.ANCHOR_CONTRACT;
-    process.env.ANCHOR_CONTRACT = "0x00000000000000000000000000000000000a0c40";
-    try {
-      const a = await anchorSection();
-      expect(a.state).toBe("no-access");
-    } finally {
-      if (before === undefined) delete process.env.ANCHOR_CONTRACT;
-      else process.env.ANCHOR_CONTRACT = before;
+  it("reads anchor and reconciliation status only through the website's narrow functions", async () => {
+    // Migration 0025 (WN-1) gives the website anchor.web_status/web_recent; a database without it says no-access.
+    const a = await anchorSection();
+    expect(["none", "ok", "no-access"]).toContain(a.state);
+    if (a.state === "ok") {
+      for (const x of a.anchors) expect(Object.keys(x).sort()).toEqual(
+        ["anchorBlock", "besuBlock", "besuBlockHash", "besuChainId", "confirmedAt", "id", "ledgerHeadHash", "ledgerJournalId", "publicValue", "recorded", "status", "txHash"],
+      );
     }
     // Migration 0022 (WA-5) gives the website recon.web_status(); a database without it says no-access.
     const recon = await latestReconciliation();

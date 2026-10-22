@@ -2,6 +2,11 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-047 public-anchoring status on the website (2026-10-22, branch `t-047-web-anchor-status`, not merged; migration 0025)
+
+- Rail and `/verify#anchor` show real anchors through `anchor.web_status()` / `anchor.web_recent()` (pt_web may execute only these in schema `anchor`). Chain 586650 is labelled as the local stand-in everywhere.
+- After merging: `npm run migrate` (0025) on the demo server; `pt-web.service` now sets `ANCHOR_INTERVAL_SECONDS=900` (must match `pt-anchor.service`). Playwright e2e not run.
+
 ## T-030 investor passkeys (2026-10-13, branch `t-030-investor-passkeys`, not merged; migration 0024)
 
 - Passkeys on the website (register/list/remove on `/account`, sign-in on `/login`), database-enforced sessions for every sign-in path, passkey step-up for offering reserve (from PKR 100,000) and cancel decided in SQL. ADR 0010 section 8.

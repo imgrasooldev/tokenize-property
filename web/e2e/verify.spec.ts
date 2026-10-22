@@ -89,9 +89,13 @@ test("public without sign-in: supply as of a block, documents, file hashes check
 test("anchors: honest state on this server, and the browser recomputes a commitment (match and tampered)", async ({ page }) => {
   await page.context().clearCookies();
   await page.goto("/verify");
-  // No public anchor chain on this machine, or no read grant: said so, never sample data.
+  // The real anchoring state (migration 0025), or said why not: never sample data.
   const state = page.locator("[data-anchor-state]");
-  if ((await state.count()) > 0) await expect(state).toHaveAttribute("data-anchor-state", /^(not-configured|no-access)$/);
+  await expect(state).toHaveCount(1);
+  await expect(state).toHaveAttribute("data-anchor-state", /^(none|ok|no-access|unavailable)$/);
+  // The status rail links to this section (T-047).
+  await expect(page.locator(".rail a[href='/verify#anchor']")).toHaveCount(1);
+  await expect(page.locator("section#anchor")).toHaveCount(1);
 
   // The fixed vector shared with contracts/test/AnchorDeployment.t.sol and @pt/anchor.
   const form = page.locator("#anchor-check");
@@ -100,7 +104,7 @@ test("anchors: honest state on this server, and the browser recomputes a commitm
   await form.getByLabel("besuBlockHash").fill(VECTOR.besuBlockHash);
   await form.getByLabel("ledgerJournalId").fill("42");
   await form.getByLabel("ledgerHeadHash").fill(sha(Buffer.from("ledger-head-42")));
-  await form.getByLabel("Value on the public chain").fill(VECTOR.commitment);
+  await form.getByLabel("Value on the anchor chain").fill(VECTOR.commitment);
   await form.getByRole("button", { name: "Recompute" }).click();
   await expect(form.locator("[data-result]")).toHaveAttribute("data-result", "match");
 

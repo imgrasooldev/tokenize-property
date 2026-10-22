@@ -247,6 +247,9 @@ ul, ol { margin: 0; }
 .rail b.up { color: var(--up); }
 .rail b.dn { color: var(--down); }
 .rail b.mu { color: var(--muted); }
+.rail b.am { color: var(--amber); }
+.rail a.rail-link { color: inherit; text-decoration: none; }
+.rail a.rail-link:hover b { text-decoration: underline; }
 .nodes { display: flex; gap: 4px; }
 .nodes i { inline-size: 7px; block-size: 7px; border-radius: 2px; background: var(--up); box-shadow: 0 0 8px var(--up); }
 
@@ -667,6 +670,7 @@ footer.pub { border-block-start: 1px solid var(--stroke); padding-block: 40px; m
 .verify-page .table { min-inline-size: 720px; }
 .verify-page .table td.mono, .verify-page .table td .mono { white-space: nowrap; }
 .vgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vpick { max-inline-size: 360px; }
 .vresult { display: grid; gap: 8px; min-inline-size: 0; }
 .vresult .alert { overflow-wrap: anywhere; }
 .vkv { max-inline-size: 760px; }
@@ -752,7 +756,8 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
 }
 @media (max-width: 700px) {
   :root { --gutter: 16px; }
-  .rail .wrap { gap: 16px; }
+  /* Phones: the rail scrolls sideways inside itself, so the anchor status at its end stays reachable. */
+  .rail .wrap { gap: 16px; overflow-x: auto; scrollbar-width: none; }
   .hide-sm { display: none !important; }
   .pubnav { gap: 10px; padding-block: 12px; flex-wrap: wrap; }
   .pubnav .sp { flex-basis: 0; }

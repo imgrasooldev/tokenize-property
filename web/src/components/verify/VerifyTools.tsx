@@ -124,6 +124,7 @@ export function AnchorList({ anchors, l }: { anchors: PublicAnchor[]; l: VerifyD
           <tr>
             <th>{l.besuBlock}</th>
             <th>{l.components}</th>
+            <th>{l.anchorCommitment}</th>
             <th>{l.recomputed}</th>
             <th>{l.publicValue}</th>
           </tr>
@@ -137,12 +138,21 @@ export function AnchorList({ anchors, l }: { anchors: PublicAnchor[]; l: VerifyD
                 <td className="mono">
                   #{a.besuBlock}
                   <div className="di small">{statusLabel[a.status]}</div>
+                  {a.anchorBlock !== null && <div className="di small">{fill(l.anchorBlockShort, { n: a.anchorBlock })}</div>}
                 </td>
                 <td className="mono small">
                   <div>besuChainId {a.besuChainId}</div>
                   <div>besuBlockHash {short(a.besuBlockHash)}</div>
                   <div>ledgerJournalId {a.ledgerJournalId}</div>
                   <div>ledgerHeadHash {short(a.ledgerHeadHash)}</div>
+                </td>
+                <td className="mono small cy" title={a.recorded} data-commitment={a.recorded}>
+                  {short(a.recorded)}
+                  {a.txHash && (
+                    <div className="di" title={a.txHash}>
+                      tx {short(a.txHash)}
+                    </div>
+                  )}
                 </td>
                 <td className="mono small">
                   {mine === null ? l.computing : c ? short(c) : "—"}
@@ -167,16 +177,57 @@ export function AnchorList({ anchors, l }: { anchors: PublicAnchor[]; l: VerifyD
 const DEC = /^[0-9]{1,20}$/;
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 
-export function AnchorSelfCheck({ l }: { l: VerifyDict }) {
-  const [out, setOut] = useState<{ kind: "ok" | "bad"; value: Hex } | { kind: "error"; msg: string } | null>(null);
+type SelfFields = Record<"besuChainId" | "besuBlock" | "besuBlockHash" | "ledgerJournalId" | "ledgerHeadHash" | "publicValue", string>;
+const EMPTY_FIELDS: SelfFields = { besuChainId: "", besuBlock: "", besuBlockHash: "", ledgerJournalId: "", ledgerHeadHash: "", publicValue: "" };
+
+/**
+ * PV-21 by hand: the visitor picks a listed anchor (its components and the anchor-chain value are
+ * filled in, every field stays editable) or types everything; the browser recomputes and compares.
+ */
+export function AnchorSelfCheck({ l, anchors = [] }: { l: VerifyDict; anchors?: PublicAnchor[] }) {
+  const [out, setOut] = useState<{ kind: "ok" | "bad"; value: Hex; vsRecorded: boolean } | { kind: "error"; msg: string } | null>(null);
+  const [form, setForm] = useState<SelfFields>(EMPTY_FIELDS);
+  const [picked, setPicked] = useState("");
+  const pickedAnchor = anchors.find((a) => a.id === picked);
+  const noPublic = (a: PublicAnchor) => a.publicValue === null || /^0x0{64}$/.test(a.publicValue);
+
+  function pick(id: string) {
+    setPicked(id);
+    setOut(null);
+    const a = anchors.find((x) => x.id === id);
+    if (!a) return;
+    // The anchor chain's value when this server could read it, otherwise the recorded commitment (said so).
+    const pub = a.publicValue !== null && !noPublic(a) ? a.publicValue : a.recorded;
+    setForm({ besuChainId: a.besuChainId, besuBlock: a.besuBlock, besuBlockHash: a.besuBlockHash, ledgerJournalId: a.ledgerJournalId, ledgerHeadHash: a.ledgerHeadHash, publicValue: pub });
+  }
+
+  const input = (name: keyof SelfFields, value: string, extra: { className?: string; inputMode?: "numeric" } = {}) => (
+    <input
+      name={name}
+      value={value}
+      onChange={(e) => {
+        const value = e.currentTarget.value;
+        setForm((f) => ({ ...f, [name]: value }));
+      }}
+      autoComplete="off"
+      spellCheck={false}
+      {...extra}
+    />
+  );
+
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const v = (k: string) => {
-      const x = f.get(k);
-      return typeof x === "string" ? x.trim() : "";
-    };
-    const fields = { chainId: v("besuChainId"), block: v("besuBlock"), blockHash: v("besuBlockHash"), journal: v("ledgerJournalId"), head: v("ledgerHeadHash"), pub: v("publicValue") };
+    check({
+      chainId: form.besuChainId.trim(),
+      block: form.besuBlock.trim(),
+      blockHash: form.besuBlockHash.trim(),
+      journal: form.ledgerJournalId.trim(),
+      head: form.ledgerHeadHash.trim(),
+      pub: form.publicValue.trim(),
+    });
+  }
+
+  function check(fields: { chainId: string; block: string; blockHash: string; journal: string; head: string; pub: string }) {
     if (!DEC.test(fields.chainId) || !DEC.test(fields.block) || !DEC.test(fields.journal)) {
       setOut({ kind: "error", msg: "besuChainId, besuBlock, ledgerJournalId" });
       return;
@@ -193,7 +244,9 @@ export function AnchorSelfCheck({ l }: { l: VerifyDict }) {
         ledgerJournalId: BigInt(fields.journal),
         ledgerHeadHash: fields.head as Hex,
       });
-      setOut({ kind: value === fields.pub.toLowerCase() ? "ok" : "bad", value });
+      // Compared with the recorded commitment (filled in because the anchor chain was unreadable), not the chain.
+      const vsRecorded = pickedAnchor !== undefined && noPublic(pickedAnchor) && fields.pub.toLowerCase() === pickedAnchor.recorded.toLowerCase();
+      setOut({ kind: value === fields.pub.toLowerCase() ? "ok" : "bad", value, vsRecorded });
     } catch (err) {
       setOut({ kind: "error", msg: err instanceof Error ? err.message : "?" });
     }
@@ -202,30 +255,54 @@ export function AnchorSelfCheck({ l }: { l: VerifyDict }) {
     <form className="form vcheck" onSubmit={onSubmit} id="anchor-check">
       <h3>{l.selfTitle}</h3>
       <p className="note">{l.selfNote}</p>
+      {anchors.length > 0 && (
+        <label className="vpick">
+          {l.selfPick}
+          <select
+            name="pick"
+            value={picked}
+            onChange={(e) => {
+              pick(e.currentTarget.value);
+            }}
+          >
+            <option value="">{l.selfPickManual}</option>
+            {anchors.map((a) => (
+              <option key={a.id} value={a.id}>
+                {fill(l.selfPickOption, { n: a.besuBlock })}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {pickedAnchor && noPublic(pickedAnchor) && (
+        <p className="note" data-testid="self-no-public">
+          {fill(l.selfPickNoPublic, { n: pickedAnchor.besuBlock })}
+        </p>
+      )}
       <div className="vgrid">
         <label>
           {l.selfChainId}
-          <input name="besuChainId" inputMode="numeric" autoComplete="off" />
+          {input("besuChainId", form.besuChainId, { inputMode: "numeric" })}
         </label>
         <label>
           {l.selfBlock}
-          <input name="besuBlock" inputMode="numeric" autoComplete="off" />
+          {input("besuBlock", form.besuBlock, { inputMode: "numeric" })}
         </label>
         <label>
           {l.selfJournal}
-          <input name="ledgerJournalId" inputMode="numeric" autoComplete="off" />
+          {input("ledgerJournalId", form.ledgerJournalId, { inputMode: "numeric" })}
         </label>
         <label>
           {l.selfBlockHash}
-          <input name="besuBlockHash" className="mono" autoComplete="off" spellCheck={false} />
+          {input("besuBlockHash", form.besuBlockHash, { className: "mono" })}
         </label>
         <label>
           {l.selfHead}
-          <input name="ledgerHeadHash" className="mono" autoComplete="off" spellCheck={false} />
+          {input("ledgerHeadHash", form.ledgerHeadHash, { className: "mono" })}
         </label>
         <label>
           {l.selfPublic}
-          <input name="publicValue" className="mono" autoComplete="off" spellCheck={false} />
+          {input("publicValue", form.publicValue, { className: "mono" })}
         </label>
       </div>
       <button type="submit" className="btn secondary small">
@@ -238,8 +315,8 @@ export function AnchorSelfCheck({ l }: { l: VerifyDict }) {
             <p className="fine">
               {l.recomputed}: <span className="mono cy">{out.value}</span>
             </p>
-            <p className={`alert ${out.kind === "ok" ? "ok" : ""}`} data-result={out.kind === "ok" ? "match" : "mismatch"}>
-              {out.kind === "ok" ? `✓ ${l.selfMatch}` : `✗ ${l.selfMismatch}`}
+            <p className={`alert ${out.kind === "ok" ? (out.vsRecorded ? "demo" : "ok") : ""}`} data-result={out.kind === "ok" ? "match" : "mismatch"}>
+              {out.kind === "ok" ? `✓ ${out.vsRecorded ? l.selfMatchRecorded : l.selfMatch}` : `✗ ${out.vsRecorded ? l.selfMismatchRecorded : l.selfMismatch}`}
             </p>
           </>
         )}

@@ -103,16 +103,16 @@ export default async function VerifyPage() {
           <p className="fine">{l.docPublic}</p>
         </section>
 
-        <section className="panel vsec" aria-labelledby="sec-anchor">
+        <section className="panel vsec" id="anchor" aria-labelledby="sec-anchor">
           <h2 id="sec-anchor">{l.anchorTitle}</h2>
           <p className="note">{l.anchorNote}</p>
-          <Anchors a={v.anchors} l={l} now={v.at} />
+          <Anchors a={v.anchors} l={l} now={v.at} lang={lang} />
           <p className="alert demo honesty">{l.anchorHonesty}</p>
           <dl className="kv vkv">
             <dt>{l.anchorVerifyRun}</dt>
             <dd>{l.anchorVerifyNotRecorded}</dd>
           </dl>
-          <AnchorSelfCheck l={l} />
+          <AnchorSelfCheck l={l} anchors={v.anchors.state === "ok" ? v.anchors.anchors : []} />
         </section>
 
         <section className="panel vsec" aria-labelledby="sec-dist">
@@ -246,14 +246,19 @@ function Supply({ token, v, l, lang }: { token: PublicToken; v: VerifyView; l: V
   );
 }
 
-function Anchors({ a, l, now }: { a: AnchorSection; l: VerifyDict; now: string }) {
-  if (a.state === "not-configured")
-    return (
-      <p className="alert demo" data-anchor-state="not-configured">
-        {l.anchorNotConfigured}
-      </p>
-    );
-  const head = (
+/** "12 min" / "3 h" in the page's language. */
+function ageText(ms: number, l: VerifyDict, lang: Lang): string {
+  const age = ageParts(ms);
+  return `${formatNumber(age.value, lang)} ${age.unit === "min" ? l.unitMin : l.unitHour}`;
+}
+
+function Anchors({ a, l, now, lang }: { a: AnchorSection; l: VerifyDict; now: string; lang: Lang }) {
+  const standIn = a.chainId === LOCAL_ANCHOR_CHAIN_ID && (
+    <p className="alert demo" data-anchor-standin={a.chainId}>
+      {fill(l.anchorStandIn, { n: String(a.chainId) })}
+    </p>
+  );
+  const head = a.contract && (
     <dl className="kv vkv">
       <dt>{l.anchorContract}</dt>
       <dd className="mono">
@@ -261,39 +266,62 @@ function Anchors({ a, l, now }: { a: AnchorSection; l: VerifyDict; now: string }
       </dd>
     </dl>
   );
-  if (a.state === "no-access")
+  if (a.state === "no-access" || a.state === "unavailable")
     return (
       <>
         {head}
-        <p className="alert demo" data-anchor-state="no-access">
-          {l.anchorNoAccess}
+        <p className={a.state === "no-access" ? "alert demo" : "alert"} data-anchor-state={a.state}>
+          {a.state === "no-access" ? l.anchorNoAccess : l.anchorUnavailable}
         </p>
       </>
     );
-  if (a.state === "unavailable")
+  if (a.state === "none")
     return (
       <>
         {head}
-        <p className="alert" data-anchor-state="unavailable">
-          {l.anchorUnavailable}
+        {standIn}
+        <p className="note" data-anchor-state="none">
+          {a.contract ? l.anchorNone : l.anchorNotConfigured}
         </p>
       </>
     );
-  const latest = a.anchors.find((x) => x.status === "confirmed");
-  const fresh = anchorFresh(latest?.confirmedAt ? new Date(latest.confirmedAt) : null, new Date(now));
-  const age = fresh.ageMs === null ? null : ageParts(fresh.ageMs);
+  const s = a.status;
+  const fresh = anchorFresh(s.confirmedAt ? new Date(s.confirmedAt) : null, new Date(now), a.maxAgeMs);
+  const openLabel = { none: l.anchorOpenNone, pending: l.anchorOpenPending, failed: l.anchorOpenFailed } as const;
+  const openChip = { none: "green", pending: "amber", failed: "red" } as const;
   return (
     <>
       {head}
-      {a.chainId === LOCAL_ANCHOR_CHAIN_ID && <p className="chip warn">{fill(l.anchorStandIn, { n: String(a.chainId) })}</p>}
+      {standIn}
       {!a.publicReachable && <p className="alert">{l.anchorUnreachable}</p>}
-      <dl className="kv vkv">
+      <dl className="kv vkv" data-anchor-state="ok" data-anchor-open={s.open}>
         <dt>{l.anchorLast}</dt>
-        <dd className="mono">{a.lastAnchoredBlock ?? "—"}</dd>
+        <dd className="mono">{s.besuBlock === null ? "—" : `#${s.besuBlock}`}</dd>
         <dt>{l.anchorAge}</dt>
         <dd>
-          {age === null ? "—" : `${String(age.value)} ${age.unit}`} {fresh.ageMs !== null && !fresh.fresh && <span className="chip warn">{l.anchorOld}</span>}
+          {fresh.ageMs === null ? "—" : ageText(fresh.ageMs, l, lang)}{" "}
+          {fresh.ageMs !== null && !fresh.fresh && (
+            <div className="am small" data-anchor-late="true">
+              {fill(l.anchorOld, { t: ageText(a.maxAgeMs, l, lang) })}
+            </div>
+          )}
         </dd>
+        <dt>{l.anchorCount}</dt>
+        <dd className="mono">{formatNumber(s.count, lang)}</dd>
+        <dt>{l.anchorNewest}</dt>
+        <dd>
+          <span className={`chip ${openChip[s.open]}`}>{openLabel[s.open]}</span>
+          {s.open !== "none" && <div className="di small">{s.open === "pending" ? l.anchorOpenPendingNote : l.anchorOpenFailedNote}</div>}
+        </dd>
+        {s.txHash && (
+          <>
+            <dt>{l.anchorLatestTx}</dt>
+            <dd className="mono small">
+              {s.txHash}
+              <div className="di">{fill(l.anchorLatestAt, { n: s.anchorBlock ?? "—", t: utc(s.confirmedAt) })}</div>
+            </dd>
+          </>
+        )}
       </dl>
       {a.anchors.length === 0 ? <p className="note">{l.anchorNone}</p> : <AnchorList anchors={a.anchors} l={l} />}
       <p className="fine">{fill(l.anchorServerRead, { h: a.contract })}</p>

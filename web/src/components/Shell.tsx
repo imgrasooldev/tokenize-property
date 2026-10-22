@@ -53,8 +53,20 @@ function railLabels(t: Dict): RailLabels {
     intact: t.intact,
     broken: t.broken,
     anchor: t.lastAnchor,
-    comingSoon: t.comingSoonTag,
     vsNav: t.vsNav,
+    anchorStandIn: t.anchorStandInLabel,
+    anchorStandInTitle: t.anchorStandInTitle,
+    anchored: t.anchorAnchored,
+    anchorBlockN: t.anchorBlockN,
+    ago: t.anchorAgo,
+    unitMin: t.unitMin,
+    unitHour: t.unitHour,
+    late: t.anchorLate,
+    failed: t.anchorFailed,
+    pending: t.anchorPending,
+    noneYet: t.anchorNoneYet,
+    notAvailable: t.anchorNotAvailable,
+    details: t.anchorDetails,
   };
 }
 

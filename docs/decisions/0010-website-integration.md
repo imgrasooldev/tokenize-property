@@ -90,6 +90,10 @@ Investors sign in with **passkeys** (WebAuthn, NIST SP 800-63B AAL2; `@simpleweb
 
 Not in this amendment: new-device sign-in notifications (T-028 producer 7), account recovery without any passkey (S-06), an investor screen listing sessions. The payout bank account (T-045, `/account`) is gated by the website through `webauth.web_require_recent_passkey(session, 'bank.payout_account')` before it calls the bank service; the bank service does not check the step-up itself yet (follow-up).
 
+### 9. Public-anchoring status (amendment, task T-047, 2026-10-22)
+
+The website reads anchoring the same way as the reconciliation status (0022): `pt_web` may execute `anchor.web_status()` and `anchor.web_recent(integer)` (migration 0025, WN-1..WN-4) and nothing else in schema `anchor`. The status rail (pulse field `anchor`, cached 15 s) and `/verify#anchor` (30 s) show the real state; the warning threshold is 2 x `ANCHOR_INTERVAL_SECONDS` of the website process, which must match the anchoring job's interval. The value on the anchor chain is still read by the server (CSP `connect-src 'self'` unchanged); the commitment is recomputed in the browser with the byte-identical copy of `@pt/anchor`'s `commitment.ts`.
+
 ## Consequences
 
 - **UX:** investing, trading and signing up are asynchronous. The pages show the honest state and refresh themselves while something is pending (typically 2–5 seconds; an approval waits for two operators: `npm run signer:decide`).
