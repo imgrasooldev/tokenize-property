@@ -15,9 +15,13 @@ import { bodyHash, type WebhookHandler } from "./webhook.ts";
 
 type Db = pg.Pool | pg.ClientBase;
 
-/** The bank's account-title inquiry (1LINK / Raast title fetch in production). */
+/**
+ * The bank's account-title inquiry (1LINK / Raast title fetch in production). `claimedTitle` is the
+ * title the investor typed; a real title fetch MUST ignore it and answer what the bank holds. Only
+ * the demo fetch (demo-titles.ts, refused in production) echoes it.
+ */
 export interface TitleFetch {
-  accountTitle(iban: string): Promise<string | null>;
+  accountTitle(iban: string, claimedTitle?: string): Promise<string | null>;
 }
 
 /** Where payout files and credit returns go (the bank's API in production, MockBank here). */
@@ -175,16 +179,17 @@ export class BankService implements WebhookHandler {
 
   /**
    * B-4: registers or changes the investor's payout account after a title inquiry. Usable 72 hours
-   * later; the database alerts on every change.
+   * later; the database alerts on every change. `claimedTitle` (the title the investor typed) is only
+   * handed to the title fetch; the database compares the keyed hash of the title the fetch returns.
    */
-  async registerPayee(subjectId: string, ibanInput: string): Promise<bigint> {
+  async registerPayee(subjectId: string, ibanInput: string, claimedTitle?: string): Promise<bigint> {
     let iban: ReturnType<typeof parseIban>;
     try {
       iban = parseIban(ibanInput);
     } catch (e) {
       throw new BankError("INVALID_INPUT", (e as Error).message);
     }
-    const title = await this.titles.accountTitle(iban.iban);
+    const title = await this.titles.accountTitle(iban.iban, claimedTitle);
     if (!title) throw new BankError("TITLE_NOT_FOUND", "the bank did not return a title for this account");
     const version = this.peppers.current.version;
     const { rows } = await this.db.query<{ id: string }>(

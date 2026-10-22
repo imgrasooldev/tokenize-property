@@ -8,7 +8,10 @@ import { OrderPanel } from "@/components/OrderPanel";
 import { PortalShell, PublicPage } from "@/components/Shell";
 import { formatNumber, formatPrice, loc } from "@/lib/i18n";
 import { priceBand } from "@/lib/market-rules";
-import { PROPERTIES } from "@/lib/properties";
+import { catalogDict, clabel } from "@/lib/i18n-catalog";
+import { label, offeringDict } from "@/lib/i18n-offering";
+import { fill } from "@/lib/i18n-verify";
+import { catalog, type CatalogEntry } from "@/lib/server/catalog";
 import { investorById } from "@/lib/server/db";
 import { nudgeFollower } from "@/lib/server/follower";
 import { getDict } from "@/lib/server/lang";
@@ -20,7 +23,12 @@ export const dynamic = "force-dynamic";
 
 export default async function MarketPage() {
   const { lang, t } = await getDict();
-  const p = PROPERTIES.find((x) => x.status === "live");
+  const l = catalogDict(lang);
+  const lo = offeringDict(lang);
+  const cat = await catalog();
+  const entry = cat.entries.find((e) => e.listed && e.token);
+  // Properties without a secondary market (offerings, or a token the chain index cannot show): their real state.
+  const others = cat.entries.filter((e) => e !== entry);
   const id = await currentInvestorId();
   const investor = id ? await investorById(id) : null;
   const frame = (title: ReactNode, body: ReactNode) =>
@@ -36,7 +44,30 @@ export default async function MarketPage() {
         </main>
       </PublicPage>
     );
-  if (!p) return frame(t.navMarket, <p className="note">{t.comingSoon}</p>);
+  const noMarket = (list: CatalogEntry[]) =>
+    list.length === 0 ? null : (
+      <section className="panel no-market" aria-labelledby="nomkt-h" style={{ marginBlockStart: 16 }}>
+        <h2 id="nomkt-h">{l.noMarketTitle}</h2>
+        <p className="note">{l.noMarketBody}</p>
+        <ul className="steps-list">
+          {list.map((e) => (
+            <li key={e.key}>
+              <Link href={e.href}>{loc(e.name, lang)}</Link> ·{" "}
+              {fill(l.noMarketState, { x: e.offering ? label(lo, "st_", e.offering.state) : clabel(l, "status_", e.status) })}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  const p = entry?.listed;
+  if (!entry || !p)
+    return frame(
+      t.navMarket,
+      <>
+        <p className="note">{l.noMarketListed}</p>
+        {noMarket(others)}
+      </>,
+    );
 
   // Picks up anything left crossing or held for review (e.g. after a restart); throttled, non-blocking.
   nudgeMatcher(p.symbol);
@@ -67,7 +98,7 @@ export default async function MarketPage() {
 
       <div className="market-layout">
         <div className="stack">
-          <MarketLive symbol={p.symbol} nav={p.navPkr} yieldPct={p.yieldPct} initial={view} t={t} lang={lang} />
+          <MarketLive symbol={p.symbol} nav={p.navPkr} yieldBp={entry.yield?.yieldBp ?? null} initial={view} t={t} lang={lang} />
 
           {investor && (
             <section className="panel">
@@ -188,6 +219,7 @@ export default async function MarketPage() {
           </section>
         </aside>
       </div>
+      {noMarket(others)}
     </>,
   );
 }

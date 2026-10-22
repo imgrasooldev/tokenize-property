@@ -10,7 +10,9 @@ export function InvestForm({
   lang,
   symbol,
   navPkr,
-  yieldPct,
+  yieldBp,
+  pastRentLabel,
+  pastRentNote,
   requestId,
   maxTokens,
 }: {
@@ -18,8 +20,10 @@ export function InvestForm({
   lang: Lang;
   symbol: string;
   navPkr: number;
-  /** Catalogue rent yield (sample property), for the illustrative monthly rent only. */
-  yieldPct: number;
+  /** Rent yield of the last 12 months from distributions on chain (basis points), or null when none. */
+  yieldBp: number | null;
+  pastRentLabel: string;
+  pastRentNote: string;
   requestId: string;
   maxTokens: number;
 }) {
@@ -73,8 +77,12 @@ export function InvestForm({
         <dd>
           <strong>{n > 0 ? formatPkr(n * navPkr, lang) : "—"}</strong>
         </dd>
-        <dt>{t.estMonthlyRent}</dt>
-        <dd className="up">{n > 0 ? formatPkr((n * navPkr * yieldPct) / 100 / 12, lang) : "—"}</dd>
+        {yieldBp !== null && (
+          <>
+            <dt>{pastRentLabel}</dt>
+            <dd className="up">{n > 0 ? formatPkr(Number((BigInt(n) * BigInt(navPkr) * 100n * BigInt(yieldBp)) / 10_000n) / 100, lang) : "—"}</dd>
+          </>
+        )}
       </dl>
       <div className="raast">
         <div className="raast-head">
@@ -89,7 +97,7 @@ export function InvestForm({
       <button type="submit" className="btn" disabled={pending || n === 0}>
         {pending ? t.investing : t.investNow}
       </button>
-      <p className="hint">{t.estRentNote}</p>
+      {yieldBp !== null && <p className="hint">{pastRentNote}</p>}
       <p className="hint">{t.trusteeNote}</p>
     </form>
   );

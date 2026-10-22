@@ -279,6 +279,18 @@ Applies on top of 0020 (adds the `legal_officer` x `tax_officer` incompatibility
 | `admin.propose_charge`, `decide_charge`, `decide_distribution`, `propose_tax_rate`, `decide_tax_rate`, `request_tax_export`, `decide_tax_export`, `issue_tax_export_ticket` | writes; step-up on every decision and on every tax action; refusals audited |
 
 Grants: `pt_ops_operator` (operations CLI), `pt_ops_reader`, `pt_tax_service` (only role that reads sealed CNICs or redeems tickets), `pt_recon_writer/reader` EXECUTE `tax.reconcile`, `pt_admin_portal` EXECUTE on the 15 admin functions.
+### 0022 web account and catalogue (WA-1..WA-5; task T-045)
+
+Applies on top of 0021. No tables. Four thin `SECURITY DEFINER` read functions for the website's role `pt_web`:
+
+| Function | Purpose |
+|---|---|
+| `bank.web_payees(p_subject uuid)` | one investor's payout accounts: id, last four digits, bank code, registered, `active_from` (end of the 72 h cooling-off), superseded. Never the IBAN hash or the sealed IBAN (WA-2). Registration stays with the bank service (`bank.register_payee` needs keys the website does not hold) |
+| `property.web_catalog()` | for offerings visible under WO-5 (`ready` and later): building name, province, district, use, covered area, built, occupancy, lease count, declared monthly rent, structure (kind, Shariah, planned units, holding limit), trustee acceptance time, sponsor KYB approved (boolean), valuations (count, lowest, highest, latest date). No floor/unit/plot/deed/address/GPS, sponsor identity, valuer or officer (WA-3) |
+| `property.web_documents(p_offering uuid)` | current (not superseded) documents of an allow-listed set of types (`property.web_public_doc_type`: title deed, land record, building plan, completion certificate, insurance, valuation, legal opinion, technical report, trust deed, SPV documents, Shariah certificate, audited financials) as SHA-256 hex, upload time and "verified at source"; never KYB documents, leases, rent rolls, tax receipts, utility bills, photos, court orders or minutes (WA-4) |
+| `recon.web_status()` | the latest finished run (passed/failed), its time, pinned block, blocking and warning counts, and `recon.payout_gate().allowed`; never findings (WA-5) |
+
+`pt_web` gets `USAGE` on schemas `bank`, `property`, `recon` and `EXECUTE` on these four functions only (tested: `db/test/web-account.test.ts` enumerates every function in the three schemas).
 
 ## 4. Append-only and hash-chain rules (summary)
 
@@ -319,6 +331,7 @@ All NOLOGIN, created idempotently:
 | 0017 | `pt_notify_producer` (enqueue only), `pt_notify_service`, `pt_notify_worker`, `pt_notify_operator`, `pt_notify_reader` |
 | 0018 | no new role: `pt_web` (0012) may execute the six `offering.web_*` functions |
 | 0021 | `pt_ops_operator`, `pt_ops_reader`, `pt_tax_service` |
+| 0022 | no new role: `pt_web` may execute `bank.web_payees`, `property.web_catalog`, `property.web_documents`, `recon.web_status` |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 

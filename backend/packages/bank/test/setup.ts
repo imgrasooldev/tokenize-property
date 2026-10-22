@@ -1,11 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { KycService, mockProviders, Peppers } from "@pt/kyc";
 import { openAccount, postJournal } from "@pt/ledger";
 import { checkCash, type LedgerJournal, type ReconData, type Statement } from "@pt/recon";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
 import { makeIban } from "../src/iban.ts";
 import { MockBank } from "../src/mockbank.ts";
 import { BankService } from "../src/service.ts";
@@ -15,7 +14,8 @@ import { verifyWebhook, type WebhookKey } from "../src/webhook.ts";
 
 export const ESCROW = "TRUSTEE-ESCROW-01";
 export const ESCROW_LEDGER = "bank:trustee-escrow";
-const MIGRATIONS = fileURLToPath(new URL("../../db/migrations", import.meta.url));
+// contiguousMigrations(): identical to db/migrations once no numbering gap is left (0020/0021 reserved).
+const MIGRATIONS = contiguousMigrations();
 
 export interface Investor {
   subjectId: string;

@@ -46,6 +46,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 | 36 | T-042 | Sponsor self-service portal | low | L | feature | Opt (product-map "Later") |
 | 37 | T-043 | Tests for the Live Demo Console and pulse API | low | S | improvement | Opt |
 | 38 | T-044 | Investor offering screens on the website (S-02) | critical | M | feature | LE |
+| 39 | T-045 | Website: every element real (catalogue, payout accounts, documents, history, map, search, analyst, rule-based score) | high | L | feature | LE |
 
 ## 2. Bugs
 
@@ -108,6 +109,11 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Status (2026-10-13): **Partial, on branch `t-021-offering-screens`** (named T-021 by the lead; T-021 is already the S-01 task, so the work is filed as T-044). Built: `/offerings`, `/offerings/[id]`, `/subscriptions`, server actions `reserveAction` / `cancelReservationAction`, migration `0018_web_offering.sql` (WO-1..WO-6). Tests: backend `offering/test/web.test.ts` (33: grants, KYC gate, actors, scoping, tipping-off, 29 denials), web `test/offering-rules.test.ts` (34 unit incl. EN/UR parity and the SQL message mapping) and `test/offering.integration.test.ts` (6, server actions against a scratch database; skipped without PostgreSQL).
 - Remaining: browser check and a Playwright spec with a seeded live offering; withdrawal button for OF-22/OF-23 windows; supplementary disclosure acceptance; sophisticated-investor category (LEGAL TO CONFIRM); document download (T-038); trustee bank's real escrow IBAN/Raast alias (today the reconciliation account id is shown); a scheduler running `offering.tick` so reservations expire and the waitlist moves (T-034); notifications (`offering.reservation_expiring`, T-028).
 - Dep T-020 (merged), T-028.
+
+### T-045 Website: every element real
+- Status (2026-10-13): **Partial (built and unit/integration tested), on branch `t-045-web-functional`**, migration `0022_web_account.sql` (merge 0020/0021 first). Built: record-backed catalogue and property pages, filters/sort/map, price and rent history, documents, trust structure, rule-based score, payout accounts via `bank:payees`, `/search`, analyst (grounded; Claude optional, ADR 0015 Proposed), portfolio summary, market states, `seed:catalog`.
+- Remaining: browser check at 375 px EN/UR and Playwright specs for `/properties` filters, `/account` payout form, `/search`; enrol the 14 demo officers on the demo server so `seed:catalog` runs (list in the branch report); lease register (lease factor of the score has no data); `document.add` signer kind so offering documents are anchored by the platform; passkeys (T-030); Docs & Tax (S-03).
+- Dep T-020, T-021, T-044.
 
 ### T-021 Property owner onboarding (KYB), property submission, due diligence
 - Status (2026-10-13): **backend done on branch `t-021-property-onboarding`**, not merged: migration `0014_property.sql` and `@pt/property` (service, CLI, pure consistency checks, 48 tests). Remaining: portal screens (Step 6), DocumentRegistry anchoring after deployment (OB-41, signer kind `document.add`), wiring `documents.*` / `property.token_without_approval` into `@pt/recon`, notifications, SLA clocks, the encrypted document vault; LEGAL TO CONFIRM values in `property.settings`.

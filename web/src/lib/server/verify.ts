@@ -83,20 +83,22 @@ let reconCache: { at: number; value: Promise<ReconStatus> } | null = null;
 
 /**
  * The latest finished reconciliation run: passed or failed with its time, never the findings (they
- * may name investors, S-07 section 5). Needs read access to schema `recon`, which the website's
- * role does not have yet: then the page says so.
+ * may name investors, S-07 section 5). Read through recon.web_status() (migration 0022 WA-5); on a
+ * database without that migration the call is refused (42501 or 42883) and the page says so.
  */
 export function latestReconciliation(): Promise<ReconStatus> {
   if (reconCache && Date.now() - reconCache.at < RECON_TTL_MS) return reconCache.value;
   const value = (async (): Promise<ReconStatus> => {
     try {
       const { rows } = await (await db()).query<{ status: "passed" | "failed"; finished_at: Date; pinned_block: string | null }>(
-        "SELECT status, finished_at, pinned_block::text FROM recon.runs WHERE status IN ('passed', 'failed') ORDER BY id DESC LIMIT 1",
+        // Migration 0022 WA-5: the website's narrow read of the latest finished run (never findings).
+        "SELECT status, finished_at, pinned_block::text FROM recon.web_status()",
       );
       const r = rows[0];
       return r ? { state: "ok", status: r.status, finishedAt: r.finished_at.toISOString(), pinnedBlock: r.pinned_block } : { state: "none" };
     } catch (e) {
-      return (e as { code?: string }).code === "42501" ? { state: "no-access" } : { state: "unavailable" };
+      const code = (e as { code?: string }).code;
+      return code === "42501" || code === "42883" || code === "3F000" ? { state: "no-access" } : { state: "unavailable" };
     }
   })();
   reconCache = { at: Date.now(), value };
@@ -115,8 +117,9 @@ function registerAttestation(): null {
 async function buildView(): Promise<VerifyView> {
   const d = latestDeployment();
   const contracts = { token: d?.get("token") ?? null, documents: d?.get("documents") ?? null, distributions: d?.get("distributions") ?? null };
-  const live = PROPERTIES.find((p) => p.status === "live");
-  const untokenized = PROPERTIES.filter((p) => p.status !== "live").map((p) => p.symbol);
+  const live = PROPERTIES.at(0);
+  // Every listed property has a token (T-045: sample catalogue entries removed).
+  const untokenized: string[] = [];
   const [status, anchors, recon] = await Promise.all([indexStatus(), anchorSection(), latestReconciliation()]);
   const gate = indexGate(status);
   const index = {

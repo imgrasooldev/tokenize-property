@@ -8,8 +8,9 @@
 | Route | Auth | Notes |
 |---|---|---|
 | `/` | public | home; live data from the pulse |
-| `/properties` | public | catalogue from `web/src/lib/properties.ts` (GPF3 live; DHA6, BAO2 coming soon) |
-| `/properties/[symbol]` | public; invest form needs a session | unknown symbol -> 404 |
+| `/properties` | public | catalogue (`web/src/lib/server/catalog.ts`): listed tokens + visible offerings (0018/0022). Query: `f` all/live/soon, `use`, `place` (province code or district), `occ`, `minYield` (percent, 2 decimals), `sort` score/yield/price/name; unknown values ignored. Inline SVG map |
+| `/properties/[key]` | public; invest form needs a session | key = listed symbol or visible offering uuid, else 404. Price history (settled trades, PKT days), rent per month, documents (DocumentRegistry + `property.web_documents`), trust structure (`property.web_catalog`), rule-based score, analyst box; offering-only properties link to `/offerings/[id]` |
+| `/search` | public | `?q=` (max 80 chars) ranked catalogue and page results; question-like queries also get a grounded analyst answer (ADR 0015) |
 | `/login` | public | `?e=rate` shows the rate-limit message |
 | `/signup` | public | sign-up form (`signUp` action) |
 | `/portfolio` | session, else redirect `/login` | `?sub=<subscriptionId>` highlights a subscription; rent at `#rent` |
@@ -55,6 +56,13 @@ All are POSTs through Next.js server actions (built-in origin check). Errors are
 
 | `reserveAction` | `offering.ts` | session, else redirect `/login`; rate `reserve` (10, 10/min) per investor; `kyc_status = verified` and a KYC subject, and the database gate (0018 WO-2) | `offeringId` uuid, `units` (1-13 digits), `requestId` uuid v4, `language` en/ur, `docSha`, `riskSha` (64 hex, the versions shown), `acceptDoc`=`on`, `acceptRisk`=`on` | redirect `/subscriptions?sub=<id>`, or `{error}`: `input`, `rate`, `kyc`, `notOpen`, `units`, `docs`, `already`, `paused`, `unknown`, `generic`. Acceptances and reservation in one transaction; actor `web:<investorId>`; idempotency key `web-<requestId>`; session and device stored only as keyed SHA-256 |
 | `cancelReservationAction` | `offering.ts` | session; rate `reserve` | `subscriptionId` uuid | `{ok: true}` or `{error}`: `input`, `rate`, `state` (already paid or ended), `unknown` (not the investor's), `generic` |
+
+| `registerPayeeAction` | `account.ts` | session, else redirect `/login`; rate `payee` (5, 2/min) per investor; KYC subject required | `iban` (PK IBAN, spaces allowed), `title` (letters, 2-140) | `{ok: true}` or `{error}`: `input`, `rate`, `noKyc`, `invalid_iban`, `title_not_found`, `title_mismatch`, `not_verified`, `in_use`, `unavailable`. Calls the bank service `POST /v1/payees`; nothing of the IBAN is stored by the website |
+| `askAction` | `analyst.ts` | none for site/property scope, session for portfolio; rate `ask` (10, 6/min) per investor or client | `question` (2-300), `scope` site/property/portfolio, optional `propertyKey` | `{answer}` (intent, cited facts, sources, data-as-of, provider, disclaimer; `refused` advice/prediction/personal/unknown/rate) or `{error: input, signin, failed}` |
+
+### Bank service website API (`npm run bank:payees`, 127.0.0.1:4920)
+
+- `GET /v1/health`; `POST /v1/payees` (client `web`, scope `/v1/payees`, same HMAC scheme as the KYC API), JSON `{subjectId, iban, title}`, max 2 KiB. 200 `{payeeId}`; 400 `invalid_iban`/`invalid`; 403 `not_verified`; 409 `in_use`; 422 `title_not_found`/`title_mismatch`; 500 `internal`. The title inquiry is a demo stand-in (`DemoTitleFetch`, refuses production); the database compares the keyed title hash with the KYC name and starts the 72 h cooling-off.
 
 Idempotency: `requestId` is unique per subscription, top-up and order (`webdemo` unique constraints), so a repeated submit returns the first result.
 

@@ -25,7 +25,7 @@ scp chain/tools/besu-26.9.0.zip ubuntu@51.79.144.40:property-token/chain/tools/
 cd property-token && (cd chain/tools && unzip -q besu-26.9.0.zip)
 sudo bash deploy/demo-server/provision.sh   # OS packages, firewall, swap, services, CI key
 bash deploy/demo-server/setup.sh            # build, chain, database, contracts, demo data
-sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-outbox pt-offboarding pt-anchor-chain pt-anchor pt-web pt-console pt-admin
+sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-anchor-chain pt-anchor pt-web pt-console pt-admin
 (cd backend && npm run seed:local && npm run rent:book)   # once the indexer has caught up
 ```
 
@@ -66,12 +66,13 @@ the chain does not match the read model; fail closed, find the cause, ADR 0006).
 | `pt-signer` | Signing service: dev keys and custodial wallets in `backend/data/keystore`, policies, maker-checker, audit | 4900 |
 | `pt-outbox` | Outbox worker: every chain command through the signing service | – |
 | `pt-kyc` | KYC API for the website's sign-up (mock providers) | 4910 |
+| `pt-bank-payees` | Bank payout-account API for the website (`bank:payees`; demo title fetch, refused in production; the database still checks the title against the KYC name and the 72-hour cooling-off) | 4920 |
 | `pt-offboarding` | Queues a freeze when an investor loses verification | – |
 | `pt-anchor-chain` | Anvil stand-in for the public anchor L2 (chain 586650, 127.0.0.1:8650, state in `chain/data/anchor/`) until the owner picks the L2 (ADR 0008) | – |
 | `pt-anchor` | Anchoring job: every 15 min commits the ledger head and a Besu block to `StateAnchor` (exit 3 = AnchorAlarm, not restarted: investigate, never delete anchor records) | `cd backend && npm run anchor:status` / `anchor:verify` |
 
-`update.sh` installs new or changed `pt-*.service` units, enables and restarts the five services
-and runs the setup steps, all idempotent: `kyc:setup` and `signer:setup` create secrets only when
+`update.sh` installs new or changed `pt-*.service` units, enables and restarts the six services
+and runs the setup steps, all idempotent: `kyc:setup`, `bank:setup` and `signer:setup` create secrets only when
 missing (appended to the git-ignored `backend/.env.local`, never printed), `signer:setup` proposes
 a policy only when it changed, `db:web-role` creates or re-asserts the website's database role
 `pt_web_app` (its password is generated once into `backend/.env.local`), and
@@ -79,7 +80,7 @@ a policy only when it changed, `db:web-role` creates or re-asserts the website's
 and deletes the website's copy. Migrations 0005–0012 are applied by the existing `npm run migrate`
 step. After the indexer has caught up it books the demo records for reconciliation
 (`seed:local`, `rent:book`; a failure there is reported, not fatal). The smoke test checks the
-signer and KYC health endpoints, that the indexer, outbox and offboarding units are active, and
+signer, KYC and bank payee health endpoints, that the indexer, outbox and offboarding units are active, and
 the website. Any failure before the web build leaves the previous website running (EXIT trap).
 
 ### Demo liquidity (optional, off by default)

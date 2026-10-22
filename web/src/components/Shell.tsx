@@ -2,15 +2,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import type { Dict, Lang } from "@/lib/i18n";
+import { analystDict } from "@/lib/i18n-analyst";
 import { offeringDict } from "@/lib/i18n-offering";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { currentInvestorId } from "@/lib/server/session";
+import { SearchShortcut } from "./analyst/SearchShortcut";
 import { LangToggle } from "./LangToggle";
 import { BlockHeight, ChainRail, type RailLabels } from "./live/Live";
 
-const LIVE_SYMBOL = PROPERTIES.find((p) => p.status === "live")?.symbol ?? "GPF3";
+const LIVE_SYMBOL = PROPERTIES[0]?.symbol ?? "GPF3";
 
 export function Logo({ id, size = 28 }: { id: string; size?: number }) {
   return (
@@ -56,14 +58,35 @@ function railLabels(t: Dict): RailLabels {
   };
 }
 
-/** "Ask AI or search" box from the design; not built yet, so shown disabled with a label. */
-function AskBox({ t, placeholder }: { t: Dict; placeholder?: string }) {
+/**
+ * "Ask or search" entry (ADR 0015): a plain GET form to /search, so it works without JavaScript.
+ * Questions get a grounded answer there; "/" or Ctrl/Cmd+K focuses the field. In the investor app
+ * the question is about the signed-in investor's own portfolio (scope=portfolio).
+ */
+function AskBox({ lang, t, placeholder, portal = false }: { lang: Lang; t: Dict; placeholder?: string; portal?: boolean }) {
+  const a = analystDict(lang);
+  const id = portal ? "ask-portal" : "ask-site";
   return (
-    <div className="cmdk" aria-disabled="true" title={t.comingSoonTag}>
+    <form role="search" action="/search" method="get" className="cmdk" aria-label={a.searchTitle}>
       <Spark />
-      <span className="cmdk-text">{placeholder ?? t.askOrSearch}</span>
-      <span className="chip sample soon">{t.comingSoonTag}</span>
-    </div>
+      <label htmlFor={id} className="sr-only">
+        {a.searchLabel}
+      </label>
+      <input
+        id={id}
+        name="q"
+        type="search"
+        className="cmdk-input"
+        placeholder={placeholder ?? t.askOrSearch}
+        maxLength={300}
+        autoComplete="off"
+        enterKeyHint="search"
+        aria-keyshortcuts="/ Control+K Meta+K"
+        data-search="header"
+      />
+      {portal && <input type="hidden" name="scope" value="portfolio" />}
+      <SearchShortcut hint={a.searchHint} />
+    </form>
   );
 }
 
@@ -109,7 +132,7 @@ export async function SiteHeader({ active, minimal = false }: { active: PublicKe
           </Link>
           {!minimal && <div className="links">{nav}</div>}
           <span className="sp" />
-          {!minimal && <AskBox t={t} />}
+          {!minimal && <AskBox lang={lang} t={t} />}
           <LangToggle lang={lang} />
           {investor ? (
             <div className="user">
@@ -140,7 +163,10 @@ export async function SiteHeader({ active, minimal = false }: { active: PublicKe
               <summary aria-label={t.menu}>
                 <span aria-hidden="true">☰</span>
               </summary>
-              <div className="menu-panel">{nav}</div>
+              <div className="menu-panel">
+                {nav}
+                <Link href="/search">{t.searchShort}</Link>
+              </div>
             </details>
           )}
         </nav>
@@ -304,7 +330,7 @@ export async function PortalShell({
             {t.block} <BlockHeight lang={lang} />
           </span>
           <span className="sp" />
-          <AskBox t={t} placeholder={t.askPortfolio} />
+          <AskBox lang={lang} t={t} placeholder={t.askPortfolio} portal />
           <LangToggle lang={lang} />
           <Link href={`/properties/${LIVE_SYMBOL}`} className="btn small hide-sm">
             {t.invest}

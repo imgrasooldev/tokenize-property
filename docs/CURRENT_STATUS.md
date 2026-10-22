@@ -2,6 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-045 website functional (2026-10-22, branch `t-045-web-functional` merged up to main c55351d, not merged into main; migration 0022)
+
+- Website shows records only: catalogue, filters/sort, Pakistan map, price/rent history, documents with SHA-256, trust structure, rule-based property score, payout accounts (bank service `bank:payees`), search and the grounded analyst (Claude optional, owner adds the key). Still labelled: passkey sign-in (T-030), Docs & Tax (S-03), anchoring status in the rail (lead).
+- 0022 applies on top of S-06 (0020) and S-03 (0021). Demo catalogue (`seed:catalog`) runs only after an administrator enrols the demo officers in PT Control; until then it skips. Not seen in a browser; Playwright not run (see branch report).
+
+
 ## Latest update (2026-10-22, S-03 on a branch, brought up to date with main)
 
 - **S-03 operations + FBR withholding (T-023/T-024) built on branch `s-03-operations-tax`, not merged** (migration `0021_operations_tax.sql`, applies on top of S-06's 0020; ADR 0014 Proposed: sealed CNIC for tax). Partial: see TASKS T-023/T-024 for what is not built. Tax rates are PLACEHOLDERS (LEGAL/TAX TO CONFIRM); approval of a distribution with them is refused unless `ops.settings.allow_placeholder_rates` (local dev only).
