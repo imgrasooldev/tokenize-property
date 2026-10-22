@@ -1,6 +1,6 @@
 # S-05: Sale, exit, redemption and closure
 
-- Status: Draft for owner review (functional specification; no code yet)
+- Status: Draft for owner review; build refinements §14-§15 and implementation status §16 (2026-10-22, branch `s-05-exit`, migration `0027_exit.sql`)
 - Date: 2026-10-13
 - Lifecycle stages: 15 (sale and exit), 16 (redemption, burn and closure)
 - Exceptions covered: sale collapses, partial exit, buyer default, investor without payout account at the final distribution
@@ -167,3 +167,58 @@ Sale proposal and rationale, vote notice (agenda, valuations, conflicts, how to 
 - Q-3 Keep the `rent:` journal family for final distributions (recommended, no recon change) or introduce `dist:` with a recon change.
 - Q-4 Should `issuance.burn` require the reconciliation gate like payout kinds? Recommended yes (signer change).
 - Q-5 Burn timing: after finalization (recommended) or per wallet after payment.
+
+## 14. Build refinements (2026-10-22, before code; migration `0027_exit.sql`, ADR 0005 / 0007 / 0011 amendments)
+
+The spec was silent or open on the points below. These refinements are the working rules for the build (owner may override; questions in §16.4).
+
+### 14.1 Decisions on the open questions
+
+- **Q-3 (journal family):** the final distribution keeps the `rent:` family (`rent:wht:<token>:<id>`, `rent:distribution:<token>:<id>`, `rent:payout:<token>:<id>`), debiting `exit:pool:<token>` instead of `rent:pool:<token>`. Reconciliation, the bank payout path and the trustee's 48-hour review (0023 T-3) work unchanged.
+- **Q-4 (gate on burns):** yes. `issuance.burn` needs the reconciliation gate (`recon.payout_gate()`) at request and at signing time, like the payout kinds.
+- **Q-5 (burn timing):** a per-case **burn rule** fixed when the redemption batch is created: `after_payment` (**default**, task T-025 acceptance and the safer reading of EX-14 while LEGAL has not confirmed early cancellation) or `after_finalization` (EX-14 recommendation; only when the maker selects it, and only after LEGAL confirms). Under `after_payment` a holder's units are burned only once the holder's final line is paid: the line is in a SUBMITTED payout batch (distribution or follow-up) of the final distribution, not held, and not returned. A line with nothing to pay (net 0) is burnable at once. A held line (no payout account, not verified, no KYC binding) is burned only after a **held-line release** decided by an operations checker and a trustee officer (§8 "units still burned"); the payable stays owed and provable.
+- **EX-3 thresholds** are settings (`exit.settings`: quorum 50 %, majority 75 % of votes cast, notice 21 days), LEGAL TO CONFIRM. The vote itself is held off chain (portal ballots are out of scope); the scrutineer's counted result is recorded and checked against the thresholds in SQL.
+- **EX-12 notice:** "10 business days" is enforced as at least 14 calendar days between the record-date announcement and the record date (`record_notice_days`; no business-day calendar yet).
+- **EX-13 income type:** a new income type `exit_distribution` with **PLACEHOLDER** rates (copies of the S-03 placeholders, LEGAL/TAX TO CONFIRM capital gain vs dividend). As in S-03, approval with placeholder rates is refused unless `ops.settings.allow_placeholder_rates` is on (local development only).
+
+### 14.2 Who decides what (capacities)
+
+Every transition that the table in §3 marks as maker-checker is a **decision**: one operations maker proposes it (with its evidence hashes) and every capacity listed below approves it, each a different officer, none the proposer (EX-SOD-1/3), none with a declared conflict on the case (EX-SOD-2). One rejection ends the decision; the case keeps its state. Votes are cast only in PT Control (officer session, security-key step-up, digest of what was shown).
+
+| Decision | Capacities (one officer each) |
+|---|---|
+| X1 / X2 / X3 investment committee | operations checker + compliance officer (committee stand-in; the S-01 committee screens are not reused) |
+| X4 / X5 vote result | operations checker (scrutineer's count checked) + trustee officer |
+| X6 / X7 trustee decision | legal officer (legal advice) + trustee officer |
+| X8 / X9 buyer checks and agreement | compliance officer + legal officer + trustee officer |
+| X10 collapse | legal officer + trustee officer |
+| X11 sale completed (deed) | legal officer |
+| X12 proceeds reconciled | operations checker |
+| X18 closure | operations checker + trustee officer |
+| HR held-line release (no state change) | operations checker + trustee officer |
+
+X13-X17 are system transitions taken by `exit.tick()` from the read model (publish, reject, finalize, supply 0 and payout recorded). Proceeds, waterfall payments, the waterfall, the final calculation and the redemption batch have their own maker-checker records (below).
+
+### 14.3 Money and units (as the database enforces them)
+
+- **Proceeds (EX-7, X9-X11):** recorded only from an imported bank statement credit line on the account registered for `bank:trustee-escrow` (or a credit the bank service sent to `bank:suspense`, re-attributed), once per line, maker-checker; journals `exit:<token>:deposit` (one) and `exit:<token>:proceeds:<n>` (Dr the bank or suspense account, Cr `exit:pool:<token>`, `external_ref` = bank reference). A payment code of purpose `exit_proceeds` (bank change) is not built: proceeds are attributed from the statement.
+- **Waterfall (EX-10/11):** lines in the fixed order (secured debt, transaction costs, sale taxes, payables, tenant deposits, closure reserve; inflows: reserve release from `reserve:<token>`, undistributed rent from `rent:pool:<token>`), each with an evidence SHA-256. Maker drafts, submits; an operations checker checks; a trustee officer approves (three different people). All line journals post in the trustee's approval transaction. Outflows may not exceed the pool plus inflows.
+- **Waterfall payments:** a bank statement DEBIT line on the trustee escrow pays exactly one approved outflow line (maker-checker), journal `exit:<token>:waterfall:<line>:paid` (Dr the payable, Cr `bank:trustee-escrow`, `external_ref` = bank reference), so the cash check matches it.
+- **Final distribution (EX-12/13):** calculated at the announced record date and an indexed record block while the token is paused, from the exit pool balance (= distributable gross), with the S-03 arithmetic (largest remainder, ties by wallet; WHT round half up per line; leaf = net). Every holder at the record block has a line (a holder whose gross rounds to 0 has a 0 line, so the redemption can still burn the units). Statement `pt-rent-statement-v2` with `distributionKind: "final"` and the exit case id; tax schedule `pt-tax-schedule-v1`; trustee pre-check (recomputed root) and operations checker approval; the Ops Safe publishes on chain (outside the platform, as S-03 today); the 48-hour trustee review of 0023 applies.
+- **Redemption batch (X16, EX-14/15):** one line per holder wallet at the record block, units = that wallet's balance at the record block, refId = keccak256(`property-token:redemption:<token>:<distributionId>:<wallet>`) computed by the service and re-derived by reconciliation and by the signing service; Σ units = supply at the record block. Created by an operations maker after the distribution is finalized, checked by an operations checker, approved by a trustee officer; the trustee's approval books `rent:wht` / `rent:distribution` from the exit pool (refused if the trustee rejected the distribution on chain) and moves the case to Redeeming in the same transaction. Burns are enqueued (`burn:<refId>`, kind `issuance.burn`) by the approval and by the tick as lines become eligible under the burn rule.
+- **Signing (new kind `issuance.burn`, deny by default):** allowed only for exactly the outbox command the batch enqueued (`exit.burn_allowed`: same jsonb payload, approved batch, case Redeeming, line eligible now, not yet burned), the refId re-derived in the signer from the token, on-chain distribution id and wallet, the approved IssuanceGuard, a balance covering the amount, the reconciliation gate and a daily count limit; trustee co-signature if the policy asks for approvals (0023 co-sign kinds).
+- **Register and subscriptions:** when the read model shows a burn, the tick moves the wallet's active S-02 subscriptions of that token to `redeemed` (V19, which removes their units from the trustee register, 0023 T-4) and enters any remainder as a `redemption` register entry.
+- **X17** needs supply 0 in the read model, every line burned, the final payout batch submitted and `recordPayout` seen on chain (status `paid`).
+- **X18** needs: no unpaid final line, exit pool 0, closure reserve 0, every approved waterfall outflow paid, supply 0, trustee cap 0 in the read model (timelock, outside the platform), the trustee register total 0, final accounts and wind-up evidence hashes.
+
+## 15. Investor redemption requests (phase 0)
+
+The spec had no investor-initiated redemption. The trust is **closed-ended**: units are cancelled only at exit (EX-14). Phase 0 therefore builds a **request queue only**; it moves no money and no units.
+
+- **EX-40** A redemption request is a non-binding expression of interest by a KYC-verified holder, lodged on the website in an open **redemption window** of the token, through a session-bound wrapper with a passkey step-up (action `exit.redemption_request`, always; the T-030 waiver applies while passkeys are not required on the plain-HTTP demo).
+- **EX-41 Window:** proposed by an operations maker (token, opening and closing time, NAV per unit with the SHA-256 of the valuation evidence, discount), approved by an operations checker. Refused for a token with a live exit case from Vote Open on.
+- **EX-42 Price rule:** indicative price per unit = floor(NAV per unit x (1,000,000 - discount ppm) / 1,000,000) paisa, discount 0-20 % (default 0 %), frozen in the window; indicative value = units x price. Shown as "indicative, not an offer".
+- **EX-43 Limits:** units between 1 and the holder's free balance in the read model (balance minus frozen units; an address-frozen wallet cannot request); one live request per investor per window; the window's total requested units at most a cap (default 10 % of the supply when the window was approved); a request beyond the cap is refused (first come, first served).
+- **EX-44** The investor may withdraw a submitted request while the window is open (step-up `exit.redemption_withdraw`).
+- **EX-45** After the window closes, an operations maker proposes the outcome and an operations checker approves it: every submitted request becomes `recorded` (carried to the trustee and the sponsor as demand evidence: secondary matching S-04, or an exit proposal), except requests of investors no longer KYC-verified, which become `declined` (the investor sees "under review", no tipping-off).
+- **EX-46** Not built in phase 0 (LEGAL / REGULATOR TO CONFIRM): binding redemption at NAV, payout and burn of redeemed units, gates and suspension rules, pro-rata scaling. A later phase would reuse the final-distribution and redemption-batch machinery above with a per-request refId.

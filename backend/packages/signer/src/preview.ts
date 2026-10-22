@@ -3,6 +3,8 @@ import { decodeFunctionData, encodeFunctionData, type Abi, type Hex } from "viem
 import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, recoveryGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
 import {
   addKeyPayload,
+  burnPayload,
+  type BurnRule,
   proposePayload,
   requestPayload,
   walletKey,
@@ -340,6 +342,25 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
               `checks again: recipient verified and within ${n(r.maxBalance)} units, balance, management key for a recovery`,
             ]
           : ["only a pending request of a cancelled case (objection or error)"],
+      };
+    }
+    case "issuance.burn": {
+      const r = rule as BurnRule;
+      const p = burnPayload.safeParse(payload);
+      if (!p.success) bad("redemption burn");
+      return {
+        to: r.issuance.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: issuanceGuardAbi, functionName: "burn", args: [p.data.from as Hex, BigInt(p.data.amount), p.data.refId as Hex] }),
+        abi: issuanceGuardAbi,
+        contract: "IssuanceGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved IssuanceGuard ${r.issuance.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the burn an approved exit redemption batch enqueued, eligible under its burn rule now (exit.burn_allowed)",
+          "refId = keccak256(property-token:redemption:<token>:<distributionId>:<wallet>), single use (the guard refuses a reused refId)",
+          `amount at most ${n(r.maxPerCommand)} units, the wallet holds them; at most ${String(r.maxPerDay)} burns per day; reconciliation gate open`,
+        ],
       };
     }
     default:
