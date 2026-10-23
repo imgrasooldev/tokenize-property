@@ -1,8 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { copyFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, serviceRole, type ServiceName } from "@pt/config";
 import pg from "pg";
 
 const local = readEnvFile(fileURLToPath(new URL("../../../.env.local", import.meta.url)));
@@ -17,6 +18,56 @@ export function adminSettings(database = "postgres"): pg.ClientConfig {
     user: process.env.PG_ADMIN_USER ?? local.PG_ADMIN_USER ?? "pt_admin",
     password,
     database,
+  };
+}
+
+/**
+ * A throw-away LOGIN role in one service's group role (T-012, migration 0029), named per process
+ * (`<login>_t<pid>_<random>`) because roles are cluster-wide and parallel runs share a cluster.
+ * Returns connection settings for `database` as that role; `drop()` removes the login (end its
+ * pools first).
+ */
+export async function serviceLogin(service: ServiceName, database: string): Promise<{
+  settings: pg.ClientConfig;
+  user: string;
+  drop: () => Promise<void>;
+}> {
+  const { group, login } = serviceRole(service);
+  const user = `${login}_t${String(process.pid)}_${randomBytes(3).toString("hex")}`;
+  const password = randomBytes(24).toString("base64url");
+  const root = new pg.Client(adminSettings());
+  await root.connect();
+  try {
+    await root.query(`CREATE ROLE ${user} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD ${root.escapeLiteral(password)}`);
+    await root.query(`GRANT ${group} TO ${user} WITH INHERIT TRUE, SET FALSE`);
+  } finally {
+    await root.end();
+  }
+  return {
+    settings: { ...adminSettings(database), user, password },
+    user,
+    drop: async () => {
+      const r = new pg.Client(adminSettings());
+      await r.connect();
+      try {
+        await r.query(`DROP ROLE IF EXISTS ${user}`);
+      } finally {
+        await r.end();
+      }
+    },
+  };
+}
+
+/** `serviceLogin` plus a pool on it; `drop()` ends the pool and removes the login. */
+export async function servicePool(service: ServiceName, database: string, max = 4): Promise<{ pool: pg.Pool; drop: () => Promise<void> }> {
+  const login = await serviceLogin(service, database);
+  const pool = new pg.Pool({ ...login.settings, max });
+  return {
+    pool,
+    drop: async () => {
+      await pool.end();
+      await login.drop();
+    },
   };
 }
 

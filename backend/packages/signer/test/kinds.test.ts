@@ -9,6 +9,7 @@ import { distributionRegistryAbi, freezeGuardAbi } from "@pt/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { decidePayoutBatch } from "../../bank/src/service.ts";
 import { finalizedDistribution, freezeRecon, investor, passRecon, rentOwed, token, world, type World } from "../../bank/test/setup.ts";
+import { servicePool } from "../../db/test/helpers.ts";
 import { FileKeystore, writeKeyFile } from "../src/keystore.ts";
 import { SignerService, type ChainReader } from "../src/service.ts";
 
@@ -35,7 +36,9 @@ const chain: ChainReader = {
   isFrozen: (_r, account) => Promise.resolve(state.frozen.has(account.toLowerCase())),
   distribution: () => Promise.resolve({ status: state.distStatus, token: tokenAddr }),
 };
-const svc = (): SignerService => new SignerService(w.pool, keys, chain);
+// The service connects as a login in pt_svc_signer (T-012, migration 0029), as in production.
+let signer: Awaited<ReturnType<typeof servicePool>>;
+const svc = (): SignerService => new SignerService(signer.pool, keys, chain);
 const ref = (): string => `cmd:kinds:${String(++n)}:${String(Date.now())}`;
 
 async function policy(kind: string, rule: object): Promise<void> {
@@ -45,6 +48,7 @@ async function policy(kind: string, rule: object): Promise<void> {
 
 beforeAll(async () => {
   w = await world();
+  signer = await servicePool("signer", String(w.settings.database), 8);
   tokenAddr = token();
   const dir = await mkdtemp(join(tmpdir(), "ks-"));
   await writeKeyFile(dir, "ops", generatePrivateKey(), PASS);
@@ -55,6 +59,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await signer.drop();
   await w.drop();
 });
 

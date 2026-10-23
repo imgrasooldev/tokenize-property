@@ -4,7 +4,7 @@ import pg from "pg";
 import { keccak256, toHex } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { Indexer, verify, type Deployment } from "../../indexer/src/index.ts";
 import { FakeChain, fakeDeployment } from "../../indexer/test/fake-chain.ts";
 import { payoutGateDenial } from "../../signer/src/service.ts";
@@ -28,6 +28,9 @@ const W2 = `0x${"b2".repeat(20)}`;
 
 let admin: pg.Client;
 let pool: pg.Pool;
+/** The run itself connects as a login in pt_svc_recon (T-012, migration 0029), as the daily job does; `pool` (admin) builds the fixtures. */
+let reconPool: pg.Pool;
+let reconLogin: Awaited<ReturnType<typeof serviceLogin>>;
 let drop: () => Promise<void>;
 const chain = new FakeChain();
 let d: Deployment;
@@ -75,12 +78,12 @@ async function importBankFromLedger(): Promise<void> {
 
 const run = async (opts: { verify?: boolean } = {}) => {
   await indexer.catchUp();
-  return reconcile(pool, {
+  return reconcile(reconPool, {
     deployment: d,
     chain: chainState,
     actor: "test-recon",
     verifyIndexer: opts.verify === false ? null : async () => {
-      const v = await verify(pool, chain, d, { state: null });
+      const v = await verify(reconPool, chain, d, { state: null });
       return { pinnedBlock: v.pinnedBlock, problems: v.problems };
     },
   });
@@ -91,6 +94,8 @@ beforeAll(async () => {
   ({ client: admin, settings, drop } = await scratchDatabase());
   await migrate(admin, MIGRATIONS);
   pool = new pg.Pool({ ...settings, max: 6 });
+  reconLogin = await serviceLogin("recon", String(settings.database));
+  reconPool = new pg.Pool({ ...reconLogin.settings, max: 4 });
   d = fakeDeployment(1n);
   indexer = new Indexer(pool, chain, d);
   await indexer.register();
@@ -101,7 +106,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.end();
+  await reconPool.end();
   await drop();
+  await reconLogin.drop();
 });
 
 describe("reconcile end to end (fake chain, real database)", () => {

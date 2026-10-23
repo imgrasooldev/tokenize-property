@@ -3,8 +3,16 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * End-to-end tests in a real browser (the installed Microsoft Edge, so no browser download).
  * They start their own dev server on port 3101 against the TEST database (property_token_test),
- * next to the demo server on 3100. Needs the local chain and PostgreSQL running; not run in CI.
+ * next to the demo server on 3100. Needs the local Besu chain (net.py + flow.py deployment) and
+ * PostgreSQL running; LOCAL ONLY (T-011: the four-validator chain, flow.py's timelock waits and the
+ * cold dev-server compiles do not fit a CI job; CI runs the chain-independent passkey e2e instead).
+ * PW_BROWSER=chromium uses Playwright's Chromium instead of the installed Edge.
  */
+const chromium = process.env.PW_BROWSER === "chromium";
+const browser = chromium
+  ? { name: "chromium", use: { ...devices["Desktop Chrome"] } }
+  : { name: "edge", use: { ...devices["Desktop Edge"], channel: "msedge" } };
+
 export default defineConfig({
   testDir: "e2e",
   // Passkeys need http://localhost (an IP address cannot be a WebAuthn RP ID): own run, playwright.passkey.config.ts.
@@ -17,11 +25,11 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: "http://127.0.0.1:3101",
-    channel: "msedge",
+    ...(chromium ? {} : { channel: "msedge" }),
     trace: "retain-on-failure",
     locale: "en-GB",
   },
-  projects: [{ name: "edge", use: { ...devices["Desktop Edge"], channel: "msedge" } }],
+  projects: [browser],
   webServer: [
     {
       // Indexer, signing service (4901), outbox worker and KYC service (4911) for the TEST database

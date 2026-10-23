@@ -16,6 +16,7 @@
     "test": "vitest run",
     "migrate": "tsx packages/db/src/cli.ts",
     "db:web-role": "tsx packages/db/src/web-role.ts",
+    "db:service-roles": "tsx packages/db/src/service-roles-cli.ts",
     "gen:abis": "tsx packages/contracts/scripts/gen-abis.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
     "demo": "tsx packages/demo-console/src/server.ts",

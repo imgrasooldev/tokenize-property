@@ -3,14 +3,17 @@ import fc from "fast-check";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { enqueue, getCommand, OutboxWorker, type Command } from "../src/index.ts";
 import { FakeChain, type Fault } from "./fake-chain.ts";
 
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations", import.meta.url));
 
 let admin: pg.Client;
+/** The workers connect as a login in pt_svc_outbox (T-012, migration 0029), as in production; commands are enqueued by the admin. */
 let pool: pg.Pool;
+let producer: pg.Pool;
+let login: Awaited<ReturnType<typeof serviceLogin>>;
 let drop: () => Promise<void>;
 let n = 0;
 const key = (label: string) => `w:${label}:${String(++n)}:${String(Date.now())}`;
@@ -19,12 +22,16 @@ beforeAll(async () => {
   let settings: pg.ClientConfig;
   ({ client: admin, settings, drop } = await scratchDatabase());
   await migrate(admin, MIGRATIONS);
-  pool = new pg.Pool({ ...settings, max: 20 });
+  login = await serviceLogin("outbox", String(settings.database));
+  pool = new pg.Pool({ ...login.settings, max: 20 });
+  producer = new pg.Pool({ ...settings, max: 4 });
 });
 
 afterAll(async () => {
   await pool.end();
+  await producer.end();
   await drop();
+  await login.drop();
 });
 
 function worker(chain: FakeChain, id: string, opts: { reviewAfterMs?: number } = {}): OutboxWorker {
@@ -40,7 +47,7 @@ function worker(chain: FakeChain, id: string, opts: { reviewAfterMs?: number } =
 async function add(chain: FakeChain, faults: Fault[], maxAttempts = 5): Promise<{ id: bigint; key: string }> {
   const k = key("cmd");
   chain.plan(k, faults);
-  const id = await enqueue(pool, { idempotencyKey: k, kind: "issuance.mint", payload: { amount: "1" }, createdBy: "test", maxAttempts });
+  const id = await enqueue(producer, { idempotencyKey: k, kind: "issuance.mint", payload: { amount: "1" }, createdBy: "test", maxAttempts });
   return { id, key: k };
 }
 

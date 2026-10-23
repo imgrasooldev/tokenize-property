@@ -7,7 +7,7 @@ import { recoverTransactionAddress } from "viem";
 import { generatePrivateKey } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { trusteeCosign } from "../../db/test/officers.ts";
 import { FileKeystore, writeKeyFile } from "../src/keystore.ts";
 import { SignerService, type ChainReader } from "../src/service.ts";
@@ -18,7 +18,9 @@ const PASS = "a-long-local-test-passphrase-0123456789";
 const A = (n: number) => `0x${n.toString(16).padStart(40, "0")}`;
 
 let admin: pg.Client;
+/** The service connects as a login in pt_svc_signer (T-012, migration 0029), as in production. */
 let pool: pg.Pool;
+let login: Awaited<ReturnType<typeof serviceLogin>>;
 let drop: () => Promise<void>;
 let keys: FileKeystore;
 let n = 0;
@@ -41,7 +43,8 @@ beforeAll(async () => {
   let settings: pg.ClientConfig;
   ({ client: admin, settings, drop } = await scratchDatabase());
   await migrate(admin, MIGRATIONS);
-  pool = new pg.Pool({ ...settings, max: 20 });
+  login = await serviceLogin("signer", String(settings.database));
+  pool = new pg.Pool({ ...login.settings, max: 20 });
   const dir = await mkdtemp(join(tmpdir(), "ks-"));
   await writeKeyFile(dir, "issuance", generatePrivateKey(), PASS);
   keys = await FileKeystore.open(dir, PASS);
@@ -54,6 +57,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool.end();
   await drop();
+  await login.drop();
 });
 
 const svc = () => new SignerService(pool, keys, chain);

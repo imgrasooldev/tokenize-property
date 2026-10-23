@@ -14,6 +14,12 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 - Sale or wind-up exit end to end in the database (cases X1-X18 with capacity decisions, proceeds from the trustee escrow, waterfall, final distribution, redemption batch, burns via the new signer kind `issuance.burn` after payment by default, tick, closure), recon burn/exit checks, PT Control `/exit`, website `/exit` with a phase-0 redemption request queue (no money moves). Spec S-05 §14-16 (owner questions §16.4), runbook `exit-redemption.md`.
 - Not run on Besu; no Playwright e2e. Merge after 0026 (no other migration reserved). After merging: `npm run migrate`, `npm run signer:setup` (burn policy), run `npm run exit:tick -- --loop` as a service.
 
+## T-012 service database roles + T-011 e2e in CI (2026-10-23, branch `t-012-service-roles`, not merged; migration 0029)
+
+- Every backend service now connects as its own login `pt_<service>_app` (group `pt_svc_<service>`) and refuses the admin outside local development (`PT_DB_ADMIN_FALLBACK=1`). ADR 0016 Proposed.
+- After merging: `npm run migrate` then `npm run db:service-roles` on every machine (the demo server's `update.sh` does both before restarting services). Rollback per unit: `deploy/demo-server/db-login.sh admin <unit>`.
+- CI gains `admin-e2e` and `web-e2e` (passkeys) on Chromium; the website's chain e2e stays local-only. Not yet run on GitHub.
+
 ## T-046 portal votes (2026-10-22, merged; migration 0026)
 
 - PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.

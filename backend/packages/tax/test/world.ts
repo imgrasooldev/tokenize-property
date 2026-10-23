@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
-import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
+import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { officer } from "../../db/test/officers.ts";
 import { KycService, mockProviders, Peppers } from "@pt/kyc";
 import { buildStatement, importStatement, registerBankAccount } from "@pt/recon";
@@ -21,7 +21,7 @@ export interface World {
   pool: pg.Pool;
   /** Logged in exactly with the rights of the operations service. */
   ops: pg.Pool;
-  /** Logged in exactly with the rights of the tax service. */
+  /** The tax service as in production: a login in pt_svc_tax (T-012, migration 0029). */
   taxdb: pg.Pool;
   peppers: Peppers;
   kyc: KycService;
@@ -33,7 +33,8 @@ export async function createWorld(): Promise<World> {
   await migrate(su, contiguousMigrations());
   const pool = new pg.Pool({ ...settings, max: 4 });
   const ops = new pg.Pool({ ...settings, max: 3, options: "-c role=pt_ops_operator" });
-  const taxdb = new pg.Pool({ ...settings, max: 3, options: "-c role=pt_tax_service" });
+  const taxLogin = await serviceLogin("tax", String(settings.database));
+  const taxdb = new pg.Pool({ ...taxLogin.settings, max: 3 });
   const peppers = Peppers.of([{ version: 1, key: randomBytes(32) }]);
   const kyc = new KycService(pool, mockProviders(), peppers, randomBytes(32));
   await registerBankAccount(pool, "TRUSTEE-ESCROW", "bank:trustee-escrow", "test:setup");
@@ -50,6 +51,7 @@ export async function createWorld(): Promise<World> {
       await taxdb.end();
       await pool.end();
       await drop();
+      await taxLogin.drop();
     },
   };
 }

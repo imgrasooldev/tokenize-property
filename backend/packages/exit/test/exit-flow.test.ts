@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { checkExit, checkIssuance } from "../../recon/src/checks.ts";
 import { loadData } from "../../recon/src/load.ts";
+import { servicePool } from "../../db/test/helpers.ts";
 import { ExitService } from "../src/service.ts";
 import { redemptionRefId } from "../src/refid.ts";
 import { balance } from "../../tax/test/world.ts";
@@ -44,12 +45,16 @@ let caseId = 0;
 let finalId = "";
 let redemptionId = 0;
 const svc = (): ExitService => new ExitService(w.pool);
+/** The tick runs as in production: a login in pt_svc_exit (T-012, migration 0029). */
+let exitLogin: Awaited<ReturnType<typeof servicePool>>;
+const ticker = (): ExitService => new ExitService(exitLogin.pool);
 
 const SALE = 1_000_000_000n; // PKR 10,000,000
 const DEPOSIT = 100_000_000n;
 
 beforeAll(async () => {
   w = await createWorld();
+  exitLogin = await servicePool("exit", String(w.settings.database), 2);
   A = await investor(w);
   B = await investor(w);
   C = await investor(w);
@@ -60,6 +65,7 @@ beforeAll(async () => {
 }, 240_000);
 
 afterAll(async () => {
+  await exitLogin.drop();
   await w.drop();
 }, 240_000);
 
@@ -180,10 +186,10 @@ describe("S-05 exit end to end", () => {
   it("publish and finalize on chain are followed by the tick (X13, X15)", async () => {
     const f = (await w.pool.query<{ root: string; net: string; hash: string }>("SELECT merkle_root AS root, sum_net::text AS net, statement_hash AS hash FROM exit.finals WHERE id = $1", [finalId])).rows[0];
     await chainDistribution(w, t, 7, { recordBlock: 10, root: f?.root ?? "", total: BigInt(f?.net ?? "0"), statementHash: f?.hash ?? "", status: "published" });
-    expect(await svc().tick("exit-worker")).toBeGreaterThan(0);
+    expect(await ticker().tick("exit-worker")).toBeGreaterThan(0);
     expect((await caseJson(w, w.officers.checker, caseId)).state).toBe("final_published");
     await chainDistribution(w, t, 7, { recordBlock: 10, root: f?.root ?? "", total: BigInt(f?.net ?? "0"), statementHash: f?.hash ?? "", status: "finalized" });
-    await svc().tick("exit-worker");
+    await ticker().tick("exit-worker");
     expect((await caseJson(w, w.officers.checker, caseId)).state).toBe("final_finalized");
   });
 
@@ -218,7 +224,7 @@ describe("S-05 exit end to end", () => {
     const batch = rows[0]?.id;
     await w.su.query("SELECT bank.decide_payout_batch($1, 'bank:checker', 'approve', 'lines checked against the statement')", [batch]);
     await w.su.query("SELECT bank.submit_payout_batch($1, 'bank:sender', $2)", [batch, Buffer.alloc(32, 7)]);
-    await svc().tick("exit-worker");
+    await ticker().tick("exit-worker");
     const cmds = (await w.pool.query<{ payload: { from: string; amount: string; refId: string; issuance: string } }>(
       "SELECT payload FROM outbox.commands WHERE kind = 'issuance.burn' ORDER BY id")).rows.map((r) => r.payload);
     expect(cmds.map((p) => p.from).sort()).toEqual([A.wallet, B.wallet].sort());
@@ -236,11 +242,11 @@ describe("S-05 exit end to end", () => {
   it("burns seen and the payout recorded take the case to Paid Out (X17)", async () => {
     const lines = (await w.pool.query<{ wallet: string; units: string; ref_id: string }>("SELECT wallet, units::text, ref_id FROM exit.redemption_lines WHERE redemption_id = $1", [redemptionId])).rows;
     for (const l of lines) await burned(w, t, l.wallet, BigInt(l.units), l.ref_id, 20);
-    await svc().tick("exit-worker");
+    await ticker().tick("exit-worker");
     expect((await caseJson(w, w.officers.checker, caseId)).state).toBe("redeeming");
     const f = (await w.pool.query<{ root: string; net: string; hash: string }>("SELECT merkle_root AS root, sum_net::text AS net, statement_hash AS hash FROM exit.finals WHERE id = $1", [finalId])).rows[0];
     await chainDistribution(w, t, 7, { recordBlock: 10, root: f?.root ?? "", total: BigInt(f?.net ?? "0"), statementHash: f?.hash ?? "", status: "paid" });
-    await svc().tick("exit-worker");
+    await ticker().tick("exit-worker");
     const c = await caseJson(w, w.officers.checker, caseId);
     expect(c.state).toBe("paid_out");
     expect(c.chain.supply).toBe("0");

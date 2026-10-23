@@ -10,7 +10,7 @@ import { decodeFunctionData, getAddress, keccak256, parseTransaction, toHex, typ
 import { generatePrivateKey } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
+import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { officer } from "../../db/test/officers.ts";
 import { Indexer, type Deployment, type Header } from "../../indexer/src/index.ts";
 import { FakeChain, fakeDeployment, type FakeEvent } from "../../indexer/test/fake-chain.ts";
@@ -32,6 +32,9 @@ const PASS = "a-long-local-test-passphrase-0123456789";
 const ZERO = "0x0000000000000000000000000000000000000000";
 let db: pg.Client;
 let pool: pg.Pool;
+let signerPool: pg.Pool;
+let tickPool: pg.Pool;
+const logins: Awaited<ReturnType<typeof serviceLogin>>[] = [];
 let drop: () => Promise<void>;
 let kyc: KycService;
 let keys: FileKeystore;
@@ -65,7 +68,8 @@ const reader: ChainReader = {
   recoveryRequest: (_g, id) => Promise.resolve(fake.requests.get(id) ?? { kind: "forced_transfer", status: "none", eta: 0n, from: ZERO, to: ZERO, onchainId: ZERO, amount: 0n }),
   chainTime: () => Promise.resolve(BigInt(Math.floor(Date.now() / 1000))),
 };
-const signer = (): SignerService => new SignerService(pool, keys, reader);
+// The signing service and the tick run as in production: logins in pt_svc_signer and pt_svc_recovery (T-012, migration 0029).
+const signer = (): SignerService => new SignerService(signerPool, keys, reader);
 
 const lc = (a: string): string => a.toLowerCase();
 const txOf = (h: Header, i = 0): Hex => keccak256(toHex(`tx:${h.hash}:${String(i)}`));
@@ -217,6 +221,9 @@ beforeAll(async () => {
   ({ client: db, settings, drop } = await scratchDatabase());
   await migrate(db, contiguousMigrations());
   pool = new pg.Pool({ ...settings, max: 8 });
+  for (const s of ["signer", "recovery"] as const) logins.push(await serviceLogin(s, String(settings.database)));
+  signerPool = new pg.Pool({ ...logins[0]?.settings, max: 4 });
+  tickPool = new pg.Pool({ ...logins[1]?.settings, max: 2 });
   kyc = new KycService(pool, mockProviders(), Peppers.of([{ version: 1, key: randomBytes(32) }]), randomBytes(32));
   const dir = await mkdtemp(join(tmpdir(), "ks-rec-"));
   for (const ref of ["ops", "trustee"]) await writeKeyFile(dir, ref, generatePrivateKey(), PASS);
@@ -230,7 +237,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.end();
+  await signerPool.end();
+  await tickPool.end();
   await drop();
+  for (const l of logins) await l.drop();
 }, 180_000);
 
 describe("allocation (RF-14)", () => {
@@ -393,13 +403,13 @@ describe("wallet recovery (RF-7..RF-11)", () => {
       evidenceHash: `0x${c.evidence_hash?.toString("hex") ?? ""}`, eta } }]);
     await settle(prop?.propose_key ?? "", "confirmed", txOf(h));
     fake.requests.set(1n, { kind: "wallet_recovery", status: "pending", eta, from: p.wallet, to: newWallet, onchainId: p.identity, amount: 0n });
-    expect(await tick(db, "recovery-worker")).toBeGreaterThanOrEqual(2);
+    expect(await tick(tickPool, "recovery-worker")).toBeGreaterThanOrEqual(2);
     const [pending] = await proposals(caseId);
     expect(pending).toMatchObject({ status: "pending", request_id: "1" });
     const exec = await command(pending?.execute_key ?? "");
     expect(exec.payload).toEqual({ recoveryGuard: lc(d.contracts.recovery ?? ""), requestId: "1", caseId: `0x${c.case_ref.toString("hex")}` });
     // The tick is idempotent.
-    expect(await tick(db, "recovery-worker")).toBe(0);
+    expect(await tick(tickPool, "recovery-worker")).toBe(0);
 
     // Execution re-checks the chain: without the management key it is refused.
     fake.keys.delete(`${p.identity}:${walletKey(newWallet)}`);
@@ -417,7 +427,7 @@ describe("wallet recovery (RF-7..RF-11)", () => {
       { role: "identityRegistry", name: "IdentityRemoved", args: { investorAddress: p.wallet, identity: p.identity } },
     ]);
     fake.frozen.add(newWallet);
-    expect(await tick(db, "recovery-worker")).toBeGreaterThanOrEqual(2);
+    expect(await tick(tickPool, "recovery-worker")).toBeGreaterThanOrEqual(2);
     expect((await caseRow(caseId)).status).toBe("executed");
     const bound = await db.query<{ wallet: string }>("SELECT wallet FROM kyc.wallets WHERE subject_id = $1", [p.subjectId]);
     expect(bound.rows.map((r) => r.wallet)).toEqual([newWallet]);
@@ -504,7 +514,7 @@ describe("succession (RF-12..RF-16)", () => {
     const h = await mine([{ role: "recovery", name: "RecoveryProposed", args: { id: 2n, kind: 1, from: deceased.wallet, to: heirs[0]?.wallet ?? ZERO, onchainId: ZERO, amount: 33n,
       evidenceHash: `0x${"cd".repeat(32)}`, eta: future } }]);
     await settle(ps[0]?.propose_key ?? "", "confirmed", txOf(h));
-    await tick(db, "recovery-worker");
+    await tick(tickPool, "recovery-worker");
     const [first] = await proposals(caseId);
     expect(first).toMatchObject({ status: "pending", request_id: "2", execute_key: null }); // the delay has not passed
     expect(await message(release(caseId, "comp:amna"))).toMatch(/only an executed, rejected or cancelled/);
@@ -521,7 +531,7 @@ describe("succession (RF-12..RF-16)", () => {
     expect(decodeFunctionData({ abi: recoveryGuardAbi, data: tx.data })).toMatchObject({ functionName: "cancel", args: [2n] });
     expect(await message(release(caseId, "comp:amna"))).toMatch(/still open/);
     await mine([{ role: "recovery", name: "RecoveryCancelled", args: { id: 2n, by: lc(keys.address("trustee")) } }]);
-    await tick(db, "recovery-worker");
+    await tick(tickPool, "recovery-worker");
     expect((await proposals(caseId)).map((x) => x.status)).toEqual(["cancelled", "cancelled", "cancelled"]);
     expect(await release(caseId, "comp:amna")).toBe("cancelled");
     expect(await release(caseId, "comp:bilal")).toBe("closed");
@@ -548,11 +558,11 @@ describe("succession (RF-12..RF-16)", () => {
         evidenceHash: `0x${"ef".repeat(32)}`, eta: past } }]);
       await settle(x.propose_key, "confirmed", txOf(h));
     }
-    await tick(db, "recovery-worker");
+    await tick(tickPool, "recovery-worker");
     const pending = await proposals(id);
     expect(pending.every((x) => x.status === "pending" && x.execute_key !== null)).toBe(true);
     await mine(pending.map((x) => ({ role: "recovery" as const, name: "RecoveryExecuted", args: { id: BigInt(x.request_id ?? "0") } })));
-    await tick(db, "recovery-worker");
+    await tick(tickPool, "recovery-worker");
     expect((await caseRow(id)).status).toBe("closed");
   });
 });

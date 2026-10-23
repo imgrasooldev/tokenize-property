@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { tick, verifyAudit } from "./service.ts";
 
@@ -8,7 +8,7 @@ import { tick, verifyAudit } from "./service.ts";
  *   npm run transfer:tick            one pass of transfer.tick (bank + chain read model -> cases -> outbox)
  *   npm run transfer:tick -- --loop  every TRANSFER_TICK_SECONDS (default 60) until stopped (service)
  *   npm run transfer:audit           verify the transfer audit hash chain (exit 3 on a problem)
- * Settings: PG_* (PG_DATABASE, default property_token); in production a login role in pt_transfer_worker.
+ * Settings: PG_* (PG_DATABASE, default property_token); the tick runs as TRANSFER_PG_USER (pt_svc_transfer).
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -16,13 +16,13 @@ function env(): Record<string, string> {
   return { ...readEnvFile(`${BACKEND}.env.local`), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/** The tick connects as its own login (TRANSFER_PG_USER, group pt_svc_transfer, migration 0029; fail closed); audit is an operator check (admin). */
+function pool(service = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.TRANSFER_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.TRANSFER_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...(service ? servicePgAuth(e, "transfer") : { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD }),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "transfer",
     max: 2,
@@ -35,7 +35,7 @@ function out(line: string): void {
 }
 
 async function runTick(loop: boolean): Promise<void> {
-  const db = pool();
+  const db = pool(true);
   const seconds = Math.max(5, Number(env().TRANSFER_TICK_SECONDS ?? 60));
   const state = { stop: !loop };
   process.once("SIGINT", () => (state.stop = true));

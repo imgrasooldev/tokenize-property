@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOCAL_DEV_CHAIN_ID, loadConfig } from "../src/index.ts";
+import { isLoopbackHost, LOCAL_DEV_CHAIN_ID, loadConfig, serviceDbLogin } from "../src/index.ts";
 
 const base = {
   PG_HOST: "127.0.0.1",
@@ -36,5 +36,32 @@ describe("loadConfig", () => {
 
   it("rejects injection-shaped database names", () => {
     expect(() => loadConfig({ ...base, PG_DATABASE: "x; DROP DATABASE y" })).toThrow(/PG_DATABASE/);
+  });
+});
+
+describe("serviceDbLogin (T-012: fail closed)", () => {
+  const admin = { PG_ADMIN_USER: "pt_admin", PG_ADMIN_PASSWORD: "admin-secret-value-0000" };
+  it("uses the service's own login when both settings are present", () => {
+    expect(serviceDbLogin({ ...admin, INDEXER_PG_USER: "pt_indexer_app", INDEXER_PG_PASSWORD: "p" }, "indexer")).toEqual({ user: "pt_indexer_app", password: "p", asAdmin: false });
+  });
+  it("refuses half a login and the admin's name as a service login", () => {
+    expect(() => serviceDbLogin({ ...admin, KYC_PG_USER: "pt_kyc_app" }, "kyc")).toThrow(/must be set together/);
+    expect(() => serviceDbLogin({ ...admin, KYC_PG_USER: "pt_admin", KYC_PG_PASSWORD: "x" }, "kyc")).toThrow(/not the admin/);
+  });
+  it("never falls back to the admin against a non-local database, nor in production, nor without the explicit flag", () => {
+    expect(() => serviceDbLogin({ ...admin, PG_HOST: "db.internal", PT_DB_ADMIN_FALLBACK: "1" }, "signer")).toThrow(/non-local database/);
+    expect(() => serviceDbLogin({ ...admin, NODE_ENV: "production", PT_DB_ADMIN_FALLBACK: "1" }, "signer")).toThrow(/production/);
+    expect(() => serviceDbLogin({ ...admin }, "signer")).toThrow(/npm run db:service-roles/);
+    // Blank values (a systemd rollback drop-in) count as unset.
+    expect(serviceDbLogin({ ...admin, SIGNER_PG_USER: "", SIGNER_PG_PASSWORD: "", PT_DB_ADMIN_FALLBACK: "1" }, "signer")).toMatchObject({ user: "pt_admin", asAdmin: true });
+  });
+  it("names settings, never values, in its errors", () => {
+    try {
+      serviceDbLogin({ ...admin, PG_HOST: "10.0.0.5" }, "outbox");
+    } catch (e) {
+      expect((e as Error).message).not.toContain(admin.PG_ADMIN_PASSWORD);
+    }
+    expect(isLoopbackHost("127.0.0.1") && isLoopbackHost("localhost") && isLoopbackHost("::1")).toBe(true);
+    expect(isLoopbackHost("127.0.0.1.example.com")).toBe(false);
   });
 });

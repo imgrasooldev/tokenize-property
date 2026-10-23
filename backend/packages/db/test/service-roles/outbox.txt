@@ -1,0 +1,13 @@
+function outbox.claim(p_worker text, p_batch integer, p_lease_seconds integer)
+function outbox.complete(p_id bigint, p_worker text, p_result jsonb)
+function outbox.defer(p_id bigint, p_worker text, p_reason text, p_seconds integer)
+function outbox.extend_lease(p_id bigint, p_worker text, p_seconds integer)
+function outbox.record_submission(p_id bigint, p_worker text, p_hash text, p_nonce bigint, p_from text)
+function outbox.release(p_id bigint, p_worker text, p_error text, p_retryable boolean)
+function outbox.resolve(p_id bigint, p_worker text, p_outcome text, p_detail text)
+function recon.payout_gate()
+function recon.payouts_allowed()
+schema outbox: USAGE
+schema public: USAGE
+schema recon: USAGE
+table outbox.commands: SELECT

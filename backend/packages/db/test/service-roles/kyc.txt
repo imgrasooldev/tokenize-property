@@ -1,0 +1,16 @@
+function compliance.claim_rescreens(p_worker text, p_limit integer)
+function compliance.complete_rescreen(p_id bigint, p_worker text, p_result_status text, p_check bigint, p_error text)
+function kyc.bind_wallet(p_subject uuid, p_wallet text, p_actor text)
+function kyc.enqueue_offboarding(p_freeze_guard text, p_actor text)
+function kyc.evaluate(p_subject uuid, p_actor text)
+function kyc.find_subject(p_hashes bytea[])
+function kyc.is_verified(p_wallet text)
+function kyc.record_check(p_subject uuid, p_kind text, p_outcome text, p_provider text, p_ref text, p_reason text, p_score smallint, p_list_version text, p_evidence bytea, p_actor text)
+function kyc.register_subject(p_hashes bytea[], p_versions smallint[], p_name_hash bytea, p_name_enc bytea, p_last4 text, p_actor text)
+function kyc.sealed_name(p_subject uuid)
+function kyc.subject_status(p_subject uuid)
+function kyc.underlying_status(p_subject uuid)
+schema compliance: USAGE
+schema kyc: USAGE
+schema public: USAGE
+view kyc.status: SELECT

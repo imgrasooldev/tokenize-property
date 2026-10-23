@@ -40,8 +40,8 @@ python3 chain/flow.py
 echo "== a rent distribution to verify on the website"
 python3 chain/rent.py 300000
 
-echo "== backend services' secrets, keys and the website's database role (idempotent, nothing printed)"
-(cd backend && npm run --silent kyc:setup >/dev/null && npm run --silent bank:setup >/dev/null && npm run --silent signer:setup >/dev/null && npm run --silent db:web-role >/dev/null)
+echo "== backend services' secrets, keys and database roles: website + one login per service, T-012 (idempotent, nothing printed)"
+(cd backend && npm run --silent kyc:setup >/dev/null && npm run --silent bank:setup >/dev/null && npm run --silent signer:setup >/dev/null && npm run --silent db:web-role >/dev/null && npm run --silent db:service-roles >/dev/null)
 
 echo "setup done; start the services with:"
 echo "  sudo systemctl start pt-stack pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-web pt-console"

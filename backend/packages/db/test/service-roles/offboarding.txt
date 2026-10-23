@@ -1,0 +1,3 @@
+function kyc.enqueue_offboarding(p_freeze_guard text, p_actor text)
+schema kyc: USAGE
+schema public: USAGE

@@ -21,7 +21,8 @@ let seq = 0;
 
 beforeAll(async () => {
   w = await world();
-  const bank = new BankService(w.pool, w.peppers, w.dataKey, new DemoTitleFetch(), { escrowAccount: ESCROW, actor: "bank-payees" });
+  // As the bank-payees process: a login in pt_svc_bank (T-012, migration 0029).
+  const bank = new BankService(w.servicePool, w.peppers, w.dataKey, new DemoTitleFetch(), { escrowAccount: ESCROW, actor: "bank-payees" });
   server = createPayeeServer(bank, [web]);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;

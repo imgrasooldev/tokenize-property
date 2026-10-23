@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import { secretFromEnv } from "@pt/http-auth";
 import { createLogger } from "@pt/logger";
 import { OutboxWorker, type Executor } from "@pt/outbox";
@@ -16,7 +16,7 @@ import { KINDS } from "./policy.ts";
  *   npm run outbox
  * Settings: PG_* (PG_DATABASE, default property_token), CHAIN_RPC_URL, SIGNER_URL
  * (http://127.0.0.1:4900), SIGNER_CLIENT_SECRET_OUTBOX, OUTBOX_APPROVAL_POLL_SECONDS (10).
- * Locally this connects as the admin; in production as a login role in pt_outbox_worker.
+ * Connects as its own login OUTBOX_PG_USER (group pt_svc_outbox, migration 0029); never the admin outside local dev.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -34,8 +34,8 @@ async function main(): Promise<void> {
   const pool = new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.OUTBOX_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.OUTBOX_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    // Its own login (OUTBOX_PG_USER, group pt_svc_outbox, migration 0029); fail closed.
+    ...servicePgAuth(e, "outbox"),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "outbox-worker",
     max: 6,
