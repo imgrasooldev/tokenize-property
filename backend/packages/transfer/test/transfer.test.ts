@@ -382,7 +382,21 @@ describe("a priced transfer through the website, the desk, compliance, trustee, 
   });
 
   it("T1 by the desk; T4 needs compliance AND trustee, never the maker, never twice, bound to the digest; checks run in SQL", async () => {
+    await sessionOf("compliance");
+    await sessionOf("trustee");
     expect(await act("desk", id, "complete")).toMatchObject({ ok: true, status: "checks" });
+    // Migration 0030 (T-028): the compliance and trustee officers are asked to decide; the desk is not.
+    const asked = async (handle: string): Promise<string[]> =>
+      (
+        await db.query<{ q: string }>(
+          `SELECT n.params->>'queue' AS q FROM notify.notifications n JOIN notify.recipients r ON r.id = n.recipient_id
+           WHERE r.subject_type = 'officer' AND r.subject_id = $1 AND n.idempotency_key LIKE $2`,
+          [handle, `transfer:${String(id)}:review:%`],
+        )
+      ).rows.map((x) => x.q);
+    expect(await asked("xfer.compliance")).toEqual(["transfer_review"]);
+    expect(await asked("xfer.trustee")).toEqual(["transfer_review"]);
+    expect(await asked("xfer.desk")).toEqual([]);
     expect(await message(act("desk", id, "approve", "compliance"))).toMatch(/permission transfer.decide/);
     const v = await view("compliance", id);
     expect(v.liveChecks?.every((c) => c.ok)).toBe(true);

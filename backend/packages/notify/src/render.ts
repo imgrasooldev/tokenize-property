@@ -34,13 +34,48 @@ export interface Rendered {
   sha256: Buffer;
 }
 
-const WORDS: Readonly<Record<string, Readonly<Record<Locale, string>>>> = {
+/** How each `word` placeholder value reads in English and Urdu (every catalogue choice has an entry; a test checks it). */
+export const WORDS: Readonly<Record<string, Readonly<Record<Locale, string>>>> = {
   verified: { en: "verified", ur: "تصدیق شدہ" },
   expired: { en: "expired", ur: "میعاد ختم" },
   action_required: { en: "action required", ur: "کارروائی درکار" },
   closed: { en: "closed", ur: "بند" },
   sms: { en: "phone number", ur: "فون نمبر" },
   email: { en: "e-mail address", ur: "ای میل ایڈریس" },
+  // officer.action_waiting queues and officer.alert topics (migration 0030).
+  signing: { en: "A signing approval", ur: "دستخط کی منظوری" },
+  trustee_cosign: { en: "A trustee co-signature", ur: "ٹرسٹی کی شریک منظوری" },
+  offering_request: { en: "An offering approval", ur: "آفرنگ کی منظوری" },
+  payout_release: { en: "A payout release request", ur: "ادائیگیاں بحال کرنے کی درخواست" },
+  kyc_review: { en: "A KYC review", ur: "کے وائی سی جائزہ" },
+  freeze_decision: { en: "An account hold decision", ur: "اکاؤنٹ روکنے کا فیصلہ" },
+  compliance_case: { en: "A compliance case", ur: "کمپلائنس کیس" },
+  distribution_approval: { en: "A rent distribution approval", ur: "کرایہ تقسیم کی منظوری" },
+  trustee_precheck: { en: "A trustee pre-check", ur: "ٹرسٹی کی پیشگی جانچ" },
+  distribution_review: { en: "A distribution review", ur: "تقسیم کا جائزہ" },
+  // transfer.status_changed (migration 0028).
+  accepted: { en: "accepted", ur: "قبول" },
+  under_review: { en: "under review", ur: "زیرِ جائزہ" },
+  not_approved: { en: "not approved", ur: "منظور نہیں ہوئی" },
+  approved: { en: "approved", ur: "منظور" },
+  payment_received: { en: "payment received", ur: "ادائیگی موصول" },
+  on_chain: { en: "being recorded on chain", ur: "آن چین درج ہو رہی ہے" },
+  transferred: { en: "transferred", ur: "منتقل ہو گئی" },
+  completed: { en: "completed", ur: "مکمل" },
+  being_cancelled: { en: "being cancelled", ur: "منسوخ کی جا رہی ہے" },
+  refund_pending: { en: "refund pending", ur: "رقم کی واپسی زیرِ عمل" },
+  refunded: { en: "refunded", ur: "رقم واپس" },
+  cancelled: { en: "cancelled", ur: "منسوخ" },
+  exit_decision: { en: "An exit decision", ur: "اخراج کا فیصلہ" },
+  transfer_review: { en: "A transfer review", ur: "منتقلی کا جائزہ" },
+  vote_open: { en: "a vote of the holders is open", ur: "ہولڈرز کی ووٹنگ کھل گئی ہے" },
+  sale_agreed: { en: "a sale agreement was signed", ur: "فروخت کا معاہدہ ہو گیا" },
+  sale_completed: { en: "the sale was completed", ur: "فروخت مکمل ہو گئی" },
+  sale_cancelled: { en: "the sale did not go ahead", ur: "فروخت نہیں ہو سکی" },
+  payouts_paused: { en: "payouts paused by reconciliation", ur: "مفاہمت نے ادائیگیاں روک دیں" },
+  payouts_resumed: { en: "payouts resumed", ur: "ادائیگیاں بحال" },
+  passkey_clone: { en: "possible copied investor passkey", ur: "سرمایہ کار کی پاس کی کی ممکنہ نقل" },
+  sla_breach: { en: "service level missed", ur: "مقررہ وقت گزر گیا" },
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -78,6 +113,9 @@ function formatValue(type: PlaceholderType, value: string, locale: Locale): stri
       return formatTime(value, locale);
     case "paisa":
       return formatPaisa(value, locale);
+    case "count":
+      if (!/^(0|[1-9][0-9]{0,17})$/.test(value)) throw new RenderError("invalid count");
+      return groupThousands(value);
     case "word": {
       // eslint-disable-next-line security/detect-object-injection -- checked with hasOwn
       const w = Object.hasOwn(WORDS, value) ? WORDS[value] : undefined;

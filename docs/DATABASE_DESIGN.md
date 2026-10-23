@@ -25,7 +25,7 @@
 | `offering` | 0015 | offerings, subscriptions, document acceptances, maker-checker requests, issuance batches, completion records, refunds (spec S-02) |
 
 | `property` | 0014 (branch `t-021-property-onboarding`, not on `main`) | sponsors (KYB), properties, documents, duplicate checks, reviews, valuations, committee, structure, trustee acceptance (spec S-01) |
-| `notify` | 0017 (branch, task T-028) | notification recipients, sealed contacts, preferences, templates, notifications, deliveries, attempts, rate limits, audit (ADR 0013) |
+| `notify` | 0017, 0030 (task T-028) | notification recipients, sealed contacts, preferences, marketing consents, templates, notifications, deliveries, attempts, rate limits, producer failures, inbox reads, audit (ADR 0013) |
 | `webauth` | 0024 (task T-030) | investor passkeys, website sessions, WebAuthn challenges, step-up settings, hash-chained audit |
 | `webdemo` | runtime DDL (web) | prototype investors, subscriptions, top-ups, orders, trades |
 
@@ -425,6 +425,18 @@ Functions: `open_desk`, `web_new_code`, `web_request`, `web_accept`, `web_withdr
 ### 0029 service roles (task T-012, ADR 0016)
 
 No tables. Fifteen NOLOGIN groups `pt_svc_<service>` (section 5), each a member (`WITH INHERIT TRUE, SET FALSE`) of existing domain roles, plus narrow direct grants: `SELECT outbox.commands` to `pt_svc_outbox` (the worker decides from the database after an executor error); column-level `SELECT` on `webdemo.subscriptions (investor_id, ref_id, tokens)`, `webdemo.investors (id, wallet_address)` and ten columns of `bank.payout_batches` to `pt_svc_recon` (what the run reads; no names, CNIC hashes, keys or payees); `kyc.enqueue_offboarding` alone to `pt_svc_offboarding`; `exit.tick` alone to `pt_svc_exit`. No existing role is widened. Logins are created by `npm run db:service-roles`, not by the migration.
+
+### 0030 notify producers (NP-1..NP-9; task T-028, ADR 0013 amendment 1)
+
+| Table | Key columns and constraints |
+|---|---|
+| `notify.consents` | recipient, channel `sms`/`email`, granted, `text_version` (consent text shown, e.g. `mkt-2026-10`), set at/by; append-only, latest row wins, none = no marketing |
+| `notify.producer_failures` | idempotency key, kind, subject type/id, params, actor, SQLSTATE, error (≤ 500); append-only; audited (`producer.failed`) |
+| `notify.inbox_reads` | notification (PK), recipient, read at; append-only (a notice is read once) |
+
+Changes to 0017 tables (named constraints): category `marketing` on `event_kinds`, `notifications`, `deliveries`, `rate_limits` (marketing 2 per hour per channel); `suppressed` allowed for transactional and marketing. Placeholder type `count`. 26 new kinds (offering, bank, rent, tax, exit, passkey, marketing, `officer.action_waiting`, `officer.alert`) with EN/UR SMS + e-mail templates; version 2 of `security.account_frozen`, `security.account_unfrozen` and the `security.transfer_requested` e-mails (generic wording). Trigger `templates_no_tipping_off` refuses new investor templates (kinds outside `officer.*`) with words such as sanctions, PEP, STR, suspicious, freeze/frozen, FMU, compliance (EN and Urdu).
+
+Producers are `DEFERRABLE INITIALLY DEFERRED` constraint triggers (SECURITY DEFINER functions in schema `notify`, run when the business transaction ends) on: `offering.subscription_events`, `offering.offering_events` (L5 marketing), `offering.requests`, `bank.payees`, `bank.credits` (suspense with a payment code), `bank.payout_batches` (submitted), `bank.payout_returns`, `ops.distributions` (attached, booked), `tax.certificates`, `chain.distributions` (published), `signer.requests` (pending approval), `recon.gate_events`, `recon.unfreeze_requests`, `kyc.decisions`, `compliance.kyc_case_events` (request_info), `compliance.kyc_cases`, `compliance.freeze_requests`, `compliance.str_cases`, `webauth.passkeys` (added, revoked), `webauth.sessions` (first passkey sign-in), `exit.case_events`, `exit.decisions`, `exit.finals` (booked), `exit.burns_seen`, `exit.requests` (recorded), `transfer.events` (checks). Functions: `notify.produce` (NP-3), `to_investor`, `to_officers`, `to_handles`, `officers_with`, label/code helpers, `notify.sweep(actor)` (reservation expiring, payout account active, KYC expired, compliance SLA breaches; granted to `pt_notify_worker` and `pt_notify_operator`), `set_marketing_consent` (`pt_notify_service`), `channel_allowed`, `marketing_allowed`, `tipping_off_word`; `enqueue_internal`, `params_problem` and `verify_audit` replaced (consents and producer failures included). Website (`pt_web`, EXECUTE only): `notify.web_inbox(session, locale, limit)`, `web_unread(session)`, `web_mark_read(session, ids|NULL)`, `web_settings(session)`, `web_set(session, what, channel, enabled, value)`.
 
 ## 4. Append-only and hash-chain rules (summary)
 

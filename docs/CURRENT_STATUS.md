@@ -2,6 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## T-028 notification producers (2026-10-23, branch `t-028-producers`, not merged; migration 0030)
+
+- Real events now raise notifications in the same transaction (deferred triggers; reminders via `notify.sweep`, run every minute by `notify:run`): offerings, bank, rent, tax, exit, transfers (officers), KYC/compliance (generic words only, no tipping-off), passkeys and new-device sign-in, officer queues and alerts. Marketing is opt-in. Investor notification centre `/notifications` (EN/UR). ADR 0013 amendment 1 proposes Accepted with documented defaults.
+- Main 418444d (0027-0029) merged into the branch; 0030 applies on top of 0029. `pt_svc_notify` gains only `notify.sweep`. Not seen in a browser; no Playwright spec; providers still mocks; contacts cannot be added yet (one-time codes).
+- Tests (scratch databases): backend typecheck/lint, vitest 851 passed + 13 skipped; web typecheck/lint, vitest 359 passed + 24 skipped, build. `migrate -- --test` on the shared database not run (lead).
+
 ## S-04 phase 0 transfers (2026-10-23, branch `s-04-transfers`, not merged; migration 0028)
 
 - Off-market transfers between verified investors: website request with the buyer's receive code, desk completion, compliance + trustee approval, payment into a per-case escrow, RecoveryGuard ForcedTransfer (48 h) through the signing service, execution only with the exact movement in the read model, register entries, maker-checker settlement or refund. Spec S-04 section 16; runbook `transfers.md`.

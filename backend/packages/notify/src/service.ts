@@ -143,6 +143,27 @@ export class NotifyService {
     }
   }
 
+  /**
+   * NP-5 (migration 0030): marketing needs an explicit opt-in per channel, recorded with the version
+   * of the consent text the investor saw. Opting out is the same call with granted = false.
+   */
+  async setMarketingConsent(recipientId: string, channel: ContactChannel, granted: boolean, textVersion: string, actor: string): Promise<void> {
+    try {
+      await this.db.query("SELECT notify.set_marketing_consent($1, $2, $3, $4, $5)", [
+        z.uuid().parse(recipientId),
+        channel,
+        granted,
+        z
+          .string()
+          .regex(/^[a-z][a-z0-9.-]{2,31}$/)
+          .parse(textVersion),
+        actorSchema.parse(actor),
+      ]);
+    } catch (err) {
+      mapDbError(err);
+    }
+  }
+
   async setLocale(recipientId: string, locale: Locale, actor: string): Promise<void> {
     try {
       await this.db.query("SELECT notify.set_locale($1, $2, $3)", [z.uuid().parse(recipientId), locale, actorSchema.parse(actor)]);
@@ -216,6 +237,32 @@ export async function operatorDecide(db: Db, deliveryId: bigint, operator: strin
   } catch (err) {
     mapDbError(err);
   }
+}
+
+export interface SweepResult {
+  reservationExpiring: number;
+  payoutAccountActive: number;
+  kycExpired: number;
+  slaBreaches: number;
+}
+
+/**
+ * Time-based reminders (migration 0030 notify.sweep): reservations expiring within 2 hours, payout
+ * accounts out of the cooling-off, expired KYC verifications, compliance items past their service
+ * level. Idempotent per key, so it may run as often as wanted (the worker runs it every minute).
+ */
+export async function sweep(db: Db, actor = "notify:sweep"): Promise<SweepResult> {
+  const { rows } = await db.query<{ r: SweepResult }>("SELECT notify.sweep($1) AS r", [actorSchema.parse(actor)]);
+  return rows[0]?.r ?? { reservationExpiring: 0, payoutAccountActive: 0, kycExpired: 0, slaBreaches: 0 };
+}
+
+/** NP-3: notifications a producer could not raise (the business change committed without them). */
+export async function producerFailures(db: Db, limit = 50): Promise<{ id: bigint; kind: string; key: string; sqlstate: string; error: string; at: Date }[]> {
+  const { rows } = await db.query<{ id: string; kind: string; idempotency_key: string; sqlstate: string; error: string; at: Date }>(
+    "SELECT id, kind, idempotency_key, sqlstate, error, at FROM notify.producer_failures ORDER BY id DESC LIMIT $1",
+    [limit],
+  );
+  return rows.map((r) => ({ id: BigInt(r.id), kind: r.kind, key: r.idempotency_key, sqlstate: r.sqlstate, error: r.error, at: r.at }));
 }
 
 export async function verifyAudit(db: Db): Promise<{ auditId: bigint | null; problem: string }[]> {

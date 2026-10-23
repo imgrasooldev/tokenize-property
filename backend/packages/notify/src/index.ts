@@ -2,6 +2,7 @@ export {
   EVENT_KINDS,
   EventError,
   isEventKind,
+  isOfficerKind,
   kindSpec,
   wireParams,
   type Category,
@@ -13,7 +14,7 @@ export {
   type PlaceholderType,
 } from "./events.ts";
 export { ContactError, ContactSecrets, normalizeContact, normalizeEmail, normalizePhone, type ContactChannel, type SealedContact } from "./crypto.ts";
-export { escapeHtml, formatPaisa, formatTime, render, RenderError, SMS_MAX_SEGMENTS, smsSegments, type Rendered, type TemplateInput } from "./render.ts";
+export { escapeHtml, formatPaisa, formatTime, render, RenderError, SMS_MAX_SEGMENTS, smsSegments, WORDS, type Rendered, type TemplateInput } from "./render.ts";
 export {
   MockProvider,
   ProviderRejected,
@@ -32,7 +33,9 @@ export {
   NotifyError,
   NotifyService,
   operatorDecide,
+  producerFailures,
   stats,
+  sweep,
   undeliverable,
   verifyAudit,
   type DeadLetter,
@@ -40,5 +43,6 @@ export {
   type NotifyErrorCode,
   type QueueStat,
   type RecipientRef,
+  type SweepResult,
 } from "./service.ts";
 export { NotifyWorker, redact, type NotifyWorkerOptions } from "./worker.ts";

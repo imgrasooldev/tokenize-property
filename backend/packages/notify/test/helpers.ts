@@ -79,7 +79,7 @@ export function longest(kind: EventKind, variant: number): Record<string, unknow
     const v =
       p.type === "utc"
         ? "2026-12-31T23:59:59.999999Z"
-        : p.type === "paisa"
+        : p.type === "paisa" || p.type === "count"
           ? "999999999999999999"
           : p.type === "last4"
             ? "9999"
@@ -92,5 +92,39 @@ export function longest(kind: EventKind, variant: number): Record<string, unknow
     out[name] = v;
   }
   return out;
+}
+
+export interface NoteRow {
+  id: string;
+  kind: string;
+  category: string;
+  status: string;
+  key: string;
+  params: Record<string, string>;
+}
+
+/**
+ * Notifications of one recipient (investor = KYC subject uuid, officer = handle), oldest first,
+ * optionally of one kind. Producers (migration 0030) write them when the business transaction ends.
+ */
+export async function notesOf(db: pg.ClientBase | pg.Pool, subjectType: "investor" | "officer", subjectId: string, kind?: string): Promise<NoteRow[]> {
+  const { rows } = await db.query<NoteRow>(
+    `SELECT n.id::text AS id, n.kind, n.category, n.status, n.idempotency_key AS key, n.params
+     FROM notify.notifications n JOIN notify.recipients r ON r.id = n.recipient_id
+     WHERE r.subject_type = $1 AND r.subject_id = $2 AND ($3::text IS NULL OR n.kind = $3) ORDER BY n.id`,
+    [subjectType, subjectId, kind ?? null],
+  );
+  return rows;
+}
+
+/** Kinds of the investor's notifications, oldest first. */
+export async function kindsOf(db: pg.ClientBase | pg.Pool, subjectId: string): Promise<string[]> {
+  return (await notesOf(db, "investor", subjectId)).map((n) => n.kind);
+}
+
+/** NP-3: how many producers failed (and were recorded) in this database. */
+export async function producerFailureCount(db: pg.ClientBase | pg.Pool): Promise<number> {
+  const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM notify.producer_failures");
+  return rows[0]?.n ?? 0;
 }
 

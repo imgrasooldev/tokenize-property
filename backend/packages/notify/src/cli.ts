@@ -6,7 +6,7 @@ import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { ContactSecrets } from "./crypto.ts";
 import { MockProvider, type MockRecord } from "./providers.ts";
-import { deadLetters, stats, undeliverable, verifyAudit } from "./service.ts";
+import { deadLetters, producerFailures, stats, sweep, undeliverable, verifyAudit, type SweepResult } from "./service.ts";
 import { NotifyWorker, redact } from "./worker.ts";
 
 /**
@@ -15,8 +15,11 @@ import { NotifyWorker, redact } from "./worker.ts";
  *                                   backend/.env.local once (never printed; production keys live in the KMS)
  *   npm run notify:run [-- --once]  the delivery worker with MOCK providers (records what would be
  *                                   sent; real SMS/e-mail providers are task T-031)
- *   npm run notify:status           queue health, dead letters, undeliverable security notices, audit check
- * Exit codes: 0 fine, 1 error, 2 usage, 3 status found dead letters, undeliverable notices or an audit problem.
+ *   npm run notify:sweep            time-based reminders once (reservation expiring, payout account active,
+ *                                   KYC expired, compliance SLA breaches); `run` also sweeps every minute
+ *   npm run notify:status           queue health, dead letters, undeliverable security notices, producer
+ *                                   failures, audit check
+ * Exit codes: 0 fine, 1 error, 2 usage, 3 status found dead letters, undeliverable notices, producer failures or an audit problem.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -78,6 +81,7 @@ async function run(once: boolean): Promise<void> {
   });
   if (once) {
     try {
+      printSweep(await sweep(db));
       const n = await worker.runOnce();
       console.log(`handled ${String(n)} deliver${n === 1 ? "y" : "ies"}`);
     } finally {
@@ -86,12 +90,38 @@ async function run(once: boolean): Promise<void> {
     return;
   }
   await worker.start();
-  console.log("notify worker running (mock SMS and e-mail providers; LISTEN notify + polling)");
+  console.log("notify worker running (mock SMS and e-mail providers; LISTEN notify + polling; reminders every minute)");
+  const sweeper = setInterval(() => {
+    sweep(db).then(printSweep, (err: unknown) => {
+      console.error(`sweep: ${redact((err as Error).message)}`);
+    });
+  }, 60_000);
   const stop = (): void => {
+    clearInterval(sweeper);
     void worker.stop().then(() => db.end());
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
+}
+
+function printSweep(r: SweepResult): void {
+  const total = r.reservationExpiring + r.payoutAccountActive + r.kycExpired + r.slaBreaches;
+  if (total > 0) {
+    console.log(
+      `sweep: ${String(r.reservationExpiring)} reservation(s) expiring, ${String(r.payoutAccountActive)} payout account(s) active, ${String(r.kycExpired)} KYC expired, ${String(r.slaBreaches)} SLA breach(es) (repeats are not sent twice)`,
+    );
+  }
+}
+
+async function sweepOnce(): Promise<void> {
+  const db = pool(2);
+  try {
+    const r = await sweep(db);
+    printSweep(r);
+    console.log("sweep done");
+  } finally {
+    await db.end();
+  }
 }
 
 async function status(): Promise<void> {
@@ -104,11 +134,13 @@ async function status(): Promise<void> {
     for (const d of dead) console.log(`dead #${d.id.toString()} ${d.kind} ${d.channel} attempts=${String(d.attempts)} ${d.lastError ?? ""}`);
     const lost = await undeliverable(db);
     for (const n of lost) console.log(`undeliverable #${n.id.toString()} ${n.kind} ${n.subjectType}:${n.subjectId} (no contact on file)`);
+    const failed = await producerFailures(db);
+    for (const f of failed) console.log(`producer failure #${f.id.toString()} ${f.kind} ${f.sqlstate} ${redact(f.error)}`);
     const problems = await verifyAudit(db);
     for (const p of problems) console.log(`audit ${p.auditId?.toString() ?? "-"}: ${p.problem}`);
     console.log(problems.length === 0 ? "notify audit chain intact" : `${String(problems.length)} audit problem(s)`);
-    console.log(`${String(dead.length)} dead letter(s), ${String(lost.length)} undeliverable security notice(s)`);
-    if (dead.length || lost.length || problems.length) process.exitCode = 3;
+    console.log(`${String(dead.length)} dead letter(s), ${String(lost.length)} undeliverable security notice(s), ${String(failed.length)} producer failure(s)`);
+    if (dead.length || lost.length || failed.length || problems.length) process.exitCode = 3;
   } finally {
     await db.end();
   }
@@ -119,7 +151,8 @@ async function main(): Promise<void> {
   if (cmd === "setup") return setup();
   if (cmd === "run") return run(rest.includes("--once"));
   if (cmd === "status") return status();
-  console.log("usage: notify setup | run [--once] | status");
+  if (cmd === "sweep") return sweepOnce();
+  console.log("usage: notify setup | run [--once] | sweep | status");
   process.exitCode = 2;
 }
 

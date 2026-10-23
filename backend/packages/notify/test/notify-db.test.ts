@@ -56,7 +56,8 @@ describe("catalogue and templates", () => {
 
   it("every kind has SMS and e-mail templates in English and Urdu that render with the longest values and fit the SMS limit", async () => {
     const { rows } = await db.query<{ kind: string; channel: Channel; locale: Locale; subject: string | null; body: string }>(
-      "SELECT kind, channel, locale, subject, body FROM notify.templates ORDER BY kind, channel, locale",
+      // The current version of each template (0030 adds version 2 of two security templates).
+      "SELECT DISTINCT ON (kind, channel, locale) kind, channel, locale, subject, body FROM notify.templates ORDER BY kind, channel, locale, version DESC",
     );
     const kinds = Object.keys(EVENT_KINDS);
     expect(rows.length).toBe(kinds.length * 4);

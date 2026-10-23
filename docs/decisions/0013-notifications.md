@@ -1,6 +1,6 @@
 # ADR 0013: Notifications (SMS, e-mail, push later)
 
-- Status: Proposed (task T-028, awaiting lead review)
+- Status: Proposed (task T-028); amendment 1 (2026-10-23, producers, migration 0030) proposes Accepted with the defaults documented there
 - Date: 2026-10-13
 - Builds on: ADR 0004 (outbox: lease, record before send, LISTEN/NOTIFY), ADR 0009 (sealed personal data, payout accounts with 72-hour cooling-off), ADR 0012 (PostgreSQL queues, `node:http` services, no Redis)
 - Addresses: threat M-1 (payout redirected: "an alert on every change"), API-2 (new device), the "Notifications" sections of specs S-01..S-06, product map ("alerts on every sensitive account change")
@@ -68,3 +68,30 @@ Producers call `notify.enqueue` **in the same transaction** as their business ch
 - Contact ownership (one-time code to the new number or address) must be proved by the caller before `register_contact`; the website and app flows for contacts and preferences do not exist yet.
 - Officer notifications (S-01 §9, S-02/S-03 operations and trustee notices) need their own kinds and templates in a later migration.
 - Keys: rotating `NOTIFY_DATA_KEY` needs a re-seal job (`key_version` is stored per contact); not built.
+
+## Amendment 1 (2026-10-23): producers, consent categories, notification centre (migration 0030)
+
+Migration `0030_notify_producers.sql` (rules NP-1..NP-9) wires the producers. No earlier migration and no producer function of another module is changed: every producer is a trigger on the table where the business change is recorded.
+
+| Rule | Decision |
+|---|---|
+| NP-1 | Producers are `DEFERRABLE INITIALLY DEFERRED` constraint triggers (outbox style): they run when the business transaction ends, so a rollback leaves nothing and a successful one always has the notification; notify's global audit lock is taken after every business lock (no lock-order deadlock). Time-based reminders come from `notify.sweep()` (idempotent; `notify:run` calls it every minute, `notify:sweep` once). |
+| NP-2 | Idempotency keys come from the row that records the event (event-log row, state-change row, sweep key): a retried call, a re-run job or a trigger firing twice returns the existing notification. |
+| NP-3 | `notify.produce()` never blocks the business change: a failure is kept in `notify.producer_failures` (append-only, audited, `notify_alert`, shown by `notify:status`); SQLSTATE classes 40, 53, 57 are re-raised so the caller retries. |
+| NP-4 | No tipping-off: no investor notice for KYC `review`/`rejected`/`revoked`, compliance holds, blocked/disputed subscriptions, credits in suspense because the investor is not verified, rent held for a KYC reason, declined exit requests. A manual KYC case's information request reaches the investor only as "action required". A trigger refuses any new investor template containing sanctions, PEP, STR, suspicious, freeze/frozen, FMU, laundering, terrorism, watch/black list, compliance (and the Urdu words). `security.account_frozen`/`_unfrozen` and the 0028 `security.transfer_requested` e-mails get version 2 with generic wording ("on hold", "the required checks"). |
+| NP-5 | Categories: `security` (always, every channel on file), `transactional` (per-channel switch, default on; always in the in-app centre), new `marketing` (explicit opt-in per channel with the consent text version, `notify.consents`; default off; never shown when suppressed). |
+| NP-6 | Marketing rate limit 2 per hour per channel (the counter is per recipient and channel across categories, so transactional traffic also holds marketing back). |
+| NP-7 | Officer notices go to every active officer of the responsible role (or S-02 duty), never to the officer who made the request: `officer.action_waiting` (queues: signing, trustee co-signature, offering request, payout release, KYC review, hold decision, compliance case, distribution approval, trustee pre-check, distribution review, exit decision, transfer review) and `officer.alert` (payouts paused/resumed by reconciliation, copied investor passkey, compliance SLA breach). |
+| NP-8 | In-app notification centre: `pt_web` may execute only `notify.web_inbox|web_unread|web_mark_read|web_settings|web_set`, each bound to the live website session (investor and KYC subject from `webauth`). Reads in `notify.inbox_reads` (append-only). |
+| NP-9 | Placeholder type `count`; every new kind has SMS and e-mail templates in English and Urdu (parity checked by tests). |
+
+Producers: S-02 subscription transitions (reserved, payment received, allocated, units issued, expired, cancelled, waitlisted, not accepted, refund pending, refunded), offering requests (officers by duty), L5 (marketing, opted-in investors only); bank payout account added/changed/active, unmatched credit, rent paid/held/returned, final exit payout; S-03 distribution attached (trustee pre-check, checker) and booked (rent credited), tax certificate; trustee review window (chain distribution published), signing requests waiting (checkers, trustee); reconciliation payout pause/resume and release request; KYC verified / action required / expired; compliance KYC case, hold request, compliance case (officers) and SLA breaches; website passkey added/removed/switched off (+ officer alert) and first sign-in with a passkey (new device); S-05 exit milestones to holders (vote open, sale agreed, completed, cancelled, closed), final distribution credited, units redeemed, phase-0 request recorded, exit decisions (officers by capacity); S-04 transfer checks (compliance + trustee officers; the investor notices are 0028's own). Recovery keeps its 0020 notice. The notify worker group `pt_svc_notify` gains only `notify.sweep` (producers run inside the business transactions as SECURITY DEFINER triggers; no service role gets a new grant).
+
+Defaults chosen for the open questions (owner to confirm; with them the ADR can be Accepted):
+- Rate limits: 0017's values plus marketing 2/2/2 per hour.
+- Reservation-expiring and rent paid stay transactional (switchable per channel, always in the app).
+- Shared phone numbers: not prevented (contacts are per recipient).
+- Quiet hours are not part of this ADR and are not built (owner/PTA question for marketing SMS).
+- The tipping-off mapping above answers the 6c wording question by default: generic words or nothing; compliance tells the investor by hand.
+
+Not built: contact capture with one-time codes (the centre shows only whether a contact is on file), real providers (T-031), an officer notification screen in PT Control (officers' notices are in `notify.notification_status`), investor `security.large_transaction_pending` (a signing request's amount is in token units, not paisa), the `notify:run` service on the demo server (T-034).
