@@ -4,7 +4,7 @@
 #   pt-job.sh <npm script> [-- args...]
 #
 # Allowed scripts (an allow-list, so a unit can never be pointed at anything else):
-#   recon             daily reconciliation; exit 1 = findings (blocking ones freeze payouts), 2 = error
+#   recon             daily reconciliation; exit 1 = blocking findings (payouts frozen), 2 = error; warnings exit 0
 #   anchor:verify     daily check of every public anchor against Besu and the ledger; 1 = mismatch
 #   indexer:verify    rebuild-and-compare of the read model; 1 = difference
 #   signer:audit kyc:audit bank:audit   audit hash chains; non-zero = problem
@@ -55,7 +55,7 @@ if ((rc == 0)); then
   exit 0
 fi
 case "$JOB:$rc" in
-recon:1) what="reconciliation found discrepancies; blocking findings FREEZE payouts (docs/runbooks/reconciliation-freeze.md)" ;;
+recon:1) what="reconciliation FAILED with blocking findings; payouts are FROZEN (docs/runbooks/reconciliation-freeze.md)" ;;
 recon:2) what="reconciliation could not complete (error); payouts stay blocked after 26 h (docs/runbooks/reconciliation-freeze.md)" ;;
 anchor:verify:1) what="public anchor MISMATCH: private chain or ledger differs from what was anchored (docs/runbooks/anchor-alarm.md)" ;;
 indexer:verify:1) what="read model differs from the chain (docs/runbooks/indexer-halt.md)" ;;

@@ -8,7 +8,7 @@ Nothing unfreezes by itself; an unfreeze needs two different operators, after a 
 
 ## Trigger
 
-- `pt-recon.service` failed (exit 1 = findings, 2 = error) → OnFailure alert with the last lines.
+- `pt-recon.service` failed (exit 1 = blocking findings: payouts frozen; 2 = error; a passed run with warnings exits 0) → OnFailure alert with the last lines.
 - `pt-health`: `recon: payouts FROZEN (...)`, `last run ended in error`, `last run N h old`.
 - A payout batch refused at approval or submission because the gate is closed (B-5).
 

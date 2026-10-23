@@ -98,7 +98,9 @@ async function run(args: string[]): Promise<number> {
       },
     });
     out(json ? reportJson(report) : formatReport(report));
-    return report.status === "error" ? 2 : report.findings.length > 0 ? 1 : 0;
+    // 1 only when payouts are frozen (a blocking finding fails the run); warnings are printed but
+    // exit 0, so the daily job does not raise a FREEZE alert for a passed run (demo server, 2026-10-23).
+    return report.status === "error" ? 2 : report.status === "failed" ? 1 : 0;
   } finally {
     await db.end();
   }
