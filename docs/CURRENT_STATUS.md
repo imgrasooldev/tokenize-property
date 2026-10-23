@@ -2,6 +2,12 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## S-04 phase 0 transfers (2026-10-23, branch `s-04-transfers`, not merged; migration 0028)
+
+- Off-market transfers between verified investors: website request with the buyer's receive code, desk completion, compliance + trustee approval, payment into a per-case escrow, RecoveryGuard ForcedTransfer (48 h) through the signing service, execution only with the exact movement in the read model, register entries, maker-checker settlement or refund. Spec S-04 section 16; runbook `transfers.md`.
+- **Merge S-05's 0027 first** (runner refuses the gap). Owner questions TQ-1..TQ-6 (spec 16.10). Not seen in a browser; no Playwright spec; `transfer:tick` is not a demo-server unit yet.
+- Tests: backend typecheck/lint, vitest 722 passed + 13 skipped (with a temporary uncommitted local 0027 placeholder; incl. `transfer/test/transfer.test.ts` 19, `signer/test/transfer-kinds.test.ts` 6, `recon/test/transfer-checks.test.ts` 3); admin typecheck/lint, `npm test` 1117/1117, build, `test:http` 1304/1304; web typecheck/lint, vitest 320 passed + 24 skipped (incl. transfer unit + integration 60), build.
+
 ## T-046 portal votes (2026-10-22, merged; migration 0026)
 
 - PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.

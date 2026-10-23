@@ -254,6 +254,11 @@ On completion the database evaluates `price_outside_band`, `round_trip` (opposit
 - Website `/transfers` (EN + Urdu, 375 px): my cases as seller or buyer, payment instructions with countdown for the buyer, receive code, request (seller), accept (buyer), withdraw; through session-bound `webauth.web_transfer_*` wrappers with step-up actions `transfer.request`, `transfer.accept`, `transfer.withdraw` (from PKR 0). Section 11 disclosures on the page.
 - PT Control `/transfers`: queue, case detail (checks, decisions, commands, settlement, refund, digest), reference prices, conflict declarations, party links. Permissions `transfer.read`, `transfer.request`, `transfer.decide`, `transfer.cash`, `transfer.price`.
 
+### 16.10a As built and deviations (2026-10-22)
+
+- Built as described in 16.1-16.9 (migration 0028, `@pt/transfer`, signer kinds, recon `checkTransfers`, PT Control and website screens). Deviations from sections 4-8: the seller's settlement and the buyer's refund are maker-checker records in `transfer.cash_ops` (not `bank.payout_batches`, which are bound to distributions); as for S-02 refunds, the bank service does not yet send these instructions itself (T14 is recorded when the refund is approved). Business days are calendar hours (TQ-2). `Approved` and `Cancelled_On_Chain` are named as in 16.2. Phase 1 and the use of `token.transfer` for phase 0 are not built (TR-B1).
+- Not built: an automatic sanctions screening at approval (the re-screen is queued, TQ-1); the trustee co-signature of `transfer.propose` in the approvals inbox (TQ-5); a scheduler unit for `transfer:tick` on the demo server (like `recovery:tick`, T-034); a Playwright e2e; a Besu run of the 48-hour path.
+
 ### 16.10 Owner questions raised by the build
 
 - **TQ-1** 24 h screening freshness, or should approval trigger a screening automatically?

@@ -408,7 +408,7 @@ describe("step-up for sensitive actions (IP-6) and revocation (IP-5)", () => {
     } finally {
       await admin.query("UPDATE webauth.settings SET require_passkey = false");
     }
-    const { rows } = await admin.query<{ actor: string; detail: { op: string } }>("SELECT actor, detail FROM webauth.audit WHERE action = 'settings.changed' ORDER BY id");
+    const { rows } = await admin.query<{ actor: string; detail: { op: string } }>("SELECT actor, detail FROM webauth.audit WHERE action = 'settings.changed' AND detail->>'table' = 'settings' ORDER BY id");
     expect(rows.length).toBe(2);
     expect(rows[0]?.actor).toMatch(/^db:/);
     expect(await status({ token: "", hash: sha(token()) }, "offering.cancel")).toBe("session");

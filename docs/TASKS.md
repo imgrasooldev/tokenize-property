@@ -49,6 +49,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 | 39 | T-045 | Website: every element real (catalogue, payout accounts, documents, history, map, search, analyst, rule-based score) | high | L | feature | LE |
 | 40 | T-047 | Website: real public-anchoring status (rail + `/verify#anchor`, migration 0025) | high | S | feature | LE |
 | 41 | T-046 | PT Control screens for the remaining officer votes (committee, P8, platform L3) | high | M | feature | LE |
+| 42 | T-048 | S-04 phase 0: permitted off-market transfers (desk, compliance + trustee, DvP, RecoveryGuard) | high | L | feature | LE (if SECP allows phase 0) |
 
 ## 2. Bugs
 
@@ -176,6 +177,12 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Outcome: the status rail and `/verify#anchor` show the real anchoring state instead of "Coming soon" / "not readable".
 - Status (2026-10-22): **Partial (built and tested, not merged), branch `t-047-web-anchor-status`**. Migration `0025_web_anchor.sql` (WN-1..WN-4: `anchor.web_status()`, `anchor.web_recent(n)` for `pt_web` only, public values only, at most 20 rows, never failed anchors or failure reasons); rail "Anchored · block #N · X min ago" (amber after 2 x `ANCHOR_INTERVAL_SECONDS`, red "Failed", "Anchor (local stand-in)" on 586650) linking to `/verify#anchor`; `/verify` status, recent anchors with commitment, self-check filled from a chosen anchor. Tests: backend `db/test/web-anchor.test.ts` (14), web `anchor-rail.test.ts` (9) and `anchor.integration.test.ts` (4, as `pt_web_app` on a scratch database). Checked in a browser (desktop, 375 px, Urdu) against a scratch database with seeded anchors; not on the demo server.
 - Remaining: Playwright `verify.spec.ts` run (updated, not run); explorer links once the public L2 is chosen (T-033); a stored `anchor:verify` result (T-034); a public JSON export of all anchor records.
+
+### T-048 S-04 phase 0: permitted off-market transfers
+- Status (2026-10-23): **Partial (built and tested, not merged), branch `s-04-transfers`**, migration `0028_transfers.sql` (0027 reserved for S-05: merge it first, the runner refuses the gap). Spec S-04 section 16 written first; ADR 0005/0007/0009/0010/0011 amendments; threat M-13; runbook `transfers.md`. Schema `transfer` (cases, checks, decisions, codes, prices, conflicts, links, alerts, blocks, cash operations, audit), signer kinds `transfer.propose|execute|cancel`, `@pt/transfer` (`transfer:tick`, `transfer:audit`), recon `transfer.*`, PT Control `/transfers`, website `/transfers` (EN + Urdu).
+- Tests: backend typecheck/lint, vitest 722 passed + 13 skipped (with a temporary uncommitted local 0027 placeholder; incl. `transfer/test/transfer.test.ts` 19, `signer/test/transfer-kinds.test.ts` 6, `recon/test/transfer-checks.test.ts` 3); admin typecheck/lint, `npm test` 1117/1117, build, `test:http` 1304/1304; web typecheck/lint, vitest 320 passed + 24 skipped (incl. transfer unit + integration 60), build.
+- Remaining: owner questions S-04 TQ-1..TQ-6 and Q-1..Q-4; a demo-server unit for `transfer:tick` (T-034); the bank service sending settlement/refund instructions; trustee inbox co-signature of proposals (TQ-5); Playwright e2e and a browser check at 375 px (not done); a Besu run of the 48-hour path; phase 1 (T-041).
+- Dep T-006, T-020, T-026, T-030; S-05 (0027) for the exit hook.
 
 ### T-028 Notifications
 - Status (2026-10-13): **backend done on a branch** (not merged), Partial overall: migration `0017_notify.sql` (schema `notify`, N-1..N-9) and `@pt/notify` (catalogue, sealed contacts, consent, EN/UR templates, rendering, worker with record-before-send and provider lookup, retries, dead letters, rate limits, mock providers, CLI `notify:setup|run|status`), ADR 0013 Proposed; 38 tests. Numbered 0017 after the S-02 (0015) and 6b (0016) branches: merge those first, or the runner refuses the gap (the notify tests use a renumbered copy).
