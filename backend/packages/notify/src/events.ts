@@ -140,6 +140,17 @@ export const EVENT_KINDS = {
   "security.passkey_added": { category: "security", placeholders: { at: { type: "utc" } } },
   "security.passkey_removed": { category: "security", placeholders: { at: { type: "utc" } } },
   "security.passkey_disabled": { category: "security", placeholders: { at: { type: "utc" } } },
+  "exit.update": {
+    category: "transactional",
+    placeholders: {
+      token: { type: "label" },
+      stage: { type: "word", choices: ["vote_open", "sale_agreed", "sale_completed", "sale_cancelled", "closed"] },
+    },
+  },
+  "exit.final_credited": { category: "transactional", placeholders: { token: { type: "label" }, amount_paisa: { type: "paisa" } } },
+  "exit.payout_paid": { category: "transactional", placeholders: { token: { type: "code" }, amount_paisa: { type: "paisa" } } },
+  "exit.units_redeemed": { category: "transactional", placeholders: { token: { type: "label" }, units: { type: "count" } } },
+  "exit.request_recorded": { category: "transactional", placeholders: { units: { type: "count" } } },
   "marketing.offering_open": { category: "marketing", placeholders: { offering: { type: "label" } } },
   "officer.action_waiting": {
     category: "transactional",
@@ -157,6 +168,8 @@ export const EVENT_KINDS = {
           "distribution_approval",
           "trustee_precheck",
           "distribution_review",
+          "exit_decision",
+          "transfer_review",
         ],
       },
       reference: { type: "code" },

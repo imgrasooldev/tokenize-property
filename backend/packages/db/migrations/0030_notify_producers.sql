@@ -331,11 +331,26 @@ INSERT INTO notify.event_kinds (kind, category, placeholders, description) VALUE
   ('security.passkey_disabled', 'security',
    '{"at": {"type": "utc"}}',
    'A passkey was switched off because its signature counter went backwards (possible copy, T-030 IP-4).'),
+  ('exit.update', 'transactional',
+   '{"token": {"type": "label"}, "stage": {"type": "word", "choices": ["vote_open", "sale_agreed", "sale_completed", "sale_cancelled", "closed"]}}',
+   'A property sale / wind-up of a token the investor holds reached a stage holders are told about (S-05).'),
+  ('exit.final_credited', 'transactional',
+   '{"token": {"type": "label"}, "amount_paisa": {"type": "paisa"}}',
+   'The final (exit) distribution was booked; the investor''s net share after withholding tax is credited (S-05 X15).'),
+  ('exit.payout_paid', 'transactional',
+   '{"token": {"type": "code"}, "amount_paisa": {"type": "paisa"}}',
+   'The investor''s share of the final (exit) distribution was sent to the payout account (S-05).'),
+  ('exit.units_redeemed', 'transactional',
+   '{"token": {"type": "label"}, "units": {"type": "count"}}',
+   'The investor''s units were redeemed (burned) at the end of the exit (S-05 X16/X17).'),
+  ('exit.request_recorded', 'transactional',
+   '{"units": {"type": "count"}}',
+   'A phase-0 redemption request was recorded at the window close (S-05 section 15). A declined request is not told (NP-4).'),
   ('marketing.offering_open', 'marketing',
    '{"offering": {"type": "label"}}',
    'A new offering opened (S-02 L5). Marketing: only to investors who opted in on that channel.'),
   ('officer.action_waiting', 'transactional',
-   '{"queue": {"type": "word", "choices": ["signing", "trustee_cosign", "offering_request", "payout_release", "kyc_review", "freeze_decision", "compliance_case", "distribution_approval", "trustee_precheck", "distribution_review"]}, "reference": {"type": "code"}}',
+   '{"queue": {"type": "word", "choices": ["signing", "trustee_cosign", "offering_request", "payout_release", "kyc_review", "freeze_decision", "compliance_case", "distribution_approval", "trustee_precheck", "distribution_review", "exit_decision", "transfer_review"]}, "reference": {"type": "code"}}',
    'An item waits in an officer''s queue in PT Control (approvals, reviews, decisions).'),
   ('officer.alert', 'security',
    '{"topic": {"type": "word", "choices": ["payouts_paused", "payouts_resumed", "passkey_clone", "sla_breach"]}, "reference": {"type": "code"}, "at": {"type": "utc"}}',
@@ -506,6 +521,51 @@ FROM (VALUES
    E'For your protection one of your passkeys was switched off at {{at}}, and the sessions signed in with it were ended: it answered in a way that suggests it may have been copied.\n\nSign in with another passkey, then open the Property Token app yourself and contact support.'),
   ('security.passkey_disabled', 'email', 'ur', 'آپ کی ایک پاس کی بند کر دی گئی',
    E'آپ کی حفاظت کے لیے {{at}} پر آپ کی ایک پاس کی بند کر دی گئی اور اس سے کھلے سیشن ختم کر دیے گئے: اس کے جواب سے لگتا ہے کہ اس کی نقل بنائی گئی ہو۔\n\nدوسری پاس کی سے لاگ اِن کریں، پھر پراپرٹی ٹوکن ایپ خود کھولیں اور سپورٹ سے رابطہ کریں۔'),
+  -- exit.update
+  ('exit.update', 'sms', 'en', NULL,
+   'Property Token: news about {{token}}: {{stage}}. Details and what it means for your units are in the app.'),
+  ('exit.update', 'sms', 'ur', NULL,
+   'پراپرٹی ٹوکن: {{token}} کے بارے میں خبر: {{stage}}۔ تفصیل اور آپ کے یونٹس پر اثر ایپ میں دیکھیں۔'),
+  ('exit.update', 'email', 'en', 'News about the sale of {{token}}',
+   E'News about the sale of the property behind {{token}}: {{stage}}.\n\nOpen the Property Token app yourself to read the notice, the documents and what it means for your units.'),
+  ('exit.update', 'email', 'ur', '{{token}} کی فروخت کے بارے میں خبر',
+   E'{{token}} کی جائیداد کی فروخت کے بارے میں خبر: {{stage}}۔\n\nنوٹس، دستاویزات اور آپ کے یونٹس پر اثر جاننے کے لیے پراپرٹی ٹوکن ایپ خود کھولیں۔'),
+  -- exit.final_credited
+  ('exit.final_credited', 'sms', 'en', NULL,
+   'Property Token: your final distribution of {{amount_paisa}} after tax for {{token}} was credited. It is paid to your bank account next.'),
+  ('exit.final_credited', 'sms', 'ur', NULL,
+   'پراپرٹی ٹوکن: {{token}} کی حتمی تقسیم میں آپ کا حصہ {{amount_paisa}} ٹیکس کے بعد آپ کے حساب میں جمع ہو گیا۔'),
+  ('exit.final_credited', 'email', 'en', 'Your final distribution was credited',
+   E'Your share of the final distribution for {{token}}, {{amount_paisa}} after withholding tax, was credited to you.\n\nIt is paid to your payout bank account with the next payout. The statement and the on-chain proof are in the Property Token app.'),
+  ('exit.final_credited', 'email', 'ur', 'آپ کی حتمی تقسیم جمع ہو گئی',
+   E'{{token}} کی حتمی تقسیم میں آپ کا حصہ، ودہولڈنگ ٹیکس کے بعد {{amount_paisa}}، آپ کے حساب میں جمع ہو گیا۔\n\nیہ اگلی ادائیگی کے ساتھ آپ کے بینک اکاؤنٹ میں بھیجا جائے گا۔ گوشوارہ اور آن چین ثبوت پراپرٹی ٹوکن ایپ میں ہیں۔'),
+  -- exit.payout_paid
+  ('exit.payout_paid', 'sms', 'en', NULL,
+   'Property Token: your final distribution of {{amount_paisa}} for {{token}} was sent to your bank account.'),
+  ('exit.payout_paid', 'sms', 'ur', NULL,
+   'پراپرٹی ٹوکن: {{token}} کی حتمی تقسیم کے {{amount_paisa}} آپ کے بینک اکاؤنٹ میں بھیج دیے گئے۔'),
+  ('exit.payout_paid', 'email', 'en', 'Your final distribution was paid',
+   E'Your final distribution of {{amount_paisa}} for {{token}} was sent to your payout bank account.\n\nThe statement and the on-chain proof are in the Property Token app.'),
+  ('exit.payout_paid', 'email', 'ur', 'آپ کی حتمی تقسیم ادا کر دی گئی',
+   E'{{token}} کی حتمی تقسیم کے {{amount_paisa}} آپ کے بینک اکاؤنٹ میں بھیج دیے گئے۔\n\nگوشوارہ اور آن چین ثبوت پراپرٹی ٹوکن ایپ میں ہیں۔'),
+  -- exit.units_redeemed
+  ('exit.units_redeemed', 'sms', 'en', NULL,
+   'Property Token: your {{units}} units of {{token}} were redeemed and cancelled at the end of the sale.'),
+  ('exit.units_redeemed', 'sms', 'ur', NULL,
+   'پراپرٹی ٹوکن: فروخت مکمل ہونے پر {{token}} کے آپ کے {{units}} یونٹ واپس لے کر منسوخ کر دیے گئے۔'),
+  ('exit.units_redeemed', 'email', 'en', 'Your units were redeemed',
+   E'Your {{units}} units of {{token}} were redeemed and cancelled on chain at the end of the sale.\n\nYour final statement and the on-chain proof are in the Property Token app.'),
+  ('exit.units_redeemed', 'email', 'ur', 'آپ کے یونٹ واپس لے لیے گئے',
+   E'فروخت مکمل ہونے پر {{token}} کے آپ کے {{units}} یونٹ واپس لے کر آن چین منسوخ کر دیے گئے۔\n\nآپ کا حتمی گوشوارہ اور آن چین ثبوت پراپرٹی ٹوکن ایپ میں ہیں۔'),
+  -- exit.request_recorded
+  ('exit.request_recorded', 'sms', 'en', NULL,
+   'Property Token: your redemption request for {{units}} units was recorded at the window close. Details are in the app.'),
+  ('exit.request_recorded', 'sms', 'ur', NULL,
+   'پراپرٹی ٹوکن: {{units}} یونٹس کی واپسی کی آپ کی درخواست ونڈو بند ہونے پر درج کر لی گئی۔ تفصیل ایپ میں ہے۔'),
+  ('exit.request_recorded', 'email', 'en', 'Your redemption request was recorded',
+   E'Your redemption request for {{units}} units was recorded when the window closed.\n\nNo units or money move yet; the app shows what happens next.'),
+  ('exit.request_recorded', 'email', 'ur', 'واپسی کی آپ کی درخواست درج ہو گئی',
+   E'{{units}} یونٹس کی واپسی کی آپ کی درخواست ونڈو بند ہونے پر درج کر لی گئی۔\n\nابھی کوئی یونٹ یا رقم منتقل نہیں ہوئی؛ آگے کیا ہوگا، یہ ایپ میں دیکھیں۔'),
   -- marketing.offering_open (opt-in only)
   ('marketing.offering_open', 'sms', 'en', NULL,
    'Property Token: a new offering is open: {{offering}}. Investing carries risk; read the offering document in the app. Switch offers off in the app.'),
@@ -533,6 +593,11 @@ FROM (VALUES
    E'Alert: {{topic}} at {{at}} (reference {{reference}}).\n\nOpen PT Control yourself and follow the runbook for this alert.'),
   ('officer.alert', 'email', 'ur', 'پی ٹی کنٹرول الرٹ',
    E'الرٹ: {{topic}}، وقت {{at}} (حوالہ {{reference}})۔\n\nپی ٹی کنٹرول خود کھولیں اور اس الرٹ کی رن بک پر عمل کریں۔'),
+  -- Version 2 of the 0028 e-mails: "the required checks" instead of naming compliance (NP-4).
+  ('security.transfer_requested', 'email', 'en', 'A transfer of your Property Token units was requested',
+   E'A transfer of your units was requested at {{at}}.\n\nIf you asked for it, no action is needed: nothing moves before the required checks, the trustee''s approval and the 48-hour on-chain delay.\nIf you did not, open the Property Token app yourself (do not use links in messages) and contact support.'),
+  ('security.transfer_requested', 'email', 'ur', 'آپ کے پراپرٹی ٹوکن یونٹس کی منتقلی کی درخواست',
+   E'{{at}} پر آپ کے یونٹس کی منتقلی کی درخواست دی گئی۔\n\nاگر یہ درخواست آپ نے دی ہے تو کچھ کرنے کی ضرورت نہیں: ضروری جانچ، ٹرسٹی کی منظوری اور 48 گھنٹے کے وقفے سے پہلے کچھ منتقل نہیں ہوگا۔\nاگر نہیں، تو پراپرٹی ٹوکن ایپ خود کھولیں (پیغامات میں دیے گئے لنک استعمال نہ کریں) اور سپورٹ سے رابطہ کریں۔'),
   -- Version 2 of two 0017 templates: generic wording without "freeze"/"frozen" (NP-4).
   ('security.account_frozen', 'sms', 'en', NULL,
    'Property Token: your account was put on hold at {{at}}. Contact support in the app for next steps.'),
@@ -841,9 +906,15 @@ DECLARE
   i record;
   v_token text := notify.token_code(NEW.token);
   v_period text := notify.period_code(NEW.token, NEW.distribution_id);
+  -- The final distribution of an exit (S-05) is paid through the same batches: told as such.
+  v_exit boolean := EXISTS (SELECT 1 FROM exit.final_links l JOIN exit.finals f ON f.id = l.final_id
+                            WHERE f.token = NEW.token AND l.onchain_id = NEW.distribution_id);
 BEGIN
   FOR i IN SELECT line_no, subject_id, amount_paisa, held, held_reason FROM bank.payout_items WHERE batch_id = NEW.id ORDER BY line_no LOOP
-    IF NOT i.held THEN
+    IF NOT i.held AND v_exit THEN
+      PERFORM notify.to_investor(format('bank:payout:%s:%s', NEW.id, i.line_no), 'exit.payout_paid', i.subject_id,
+        jsonb_build_object('token', v_token, 'amount_paisa', i.amount_paisa::text), 'producer:bank');
+    ELSIF NOT i.held THEN
       PERFORM notify.to_investor(format('bank:payout:%s:%s', NEW.id, i.line_no), 'rent.paid', i.subject_id,
         jsonb_build_object('token', v_token, 'amount_paisa', i.amount_paisa::text, 'period', v_period), 'producer:bank');
     ELSIF i.held_reason = 'no active payout account' THEN
@@ -907,6 +978,108 @@ BEGIN
 END $$;
 CREATE CONSTRAINT TRIGGER certificates_notify AFTER INSERT ON tax.certificates
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION notify.on_certificate();
+
+-- ================================================================== producers: exit (S-05, migration 0027)
+/** Holders of a token now (read model) with a KYC subject. */
+CREATE FUNCTION notify.token_holders(p_token text) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+  SELECT DISTINCT w.subject_id FROM chain.holdings h JOIN kyc.wallets w ON w.wallet = h.holder
+  WHERE h.token = lower(p_token) AND h.balance > 0 ORDER BY 1
+$$;
+
+/** The stages of an exit case that holders are told about; an IC rejection before any vote is never announced. */
+CREATE FUNCTION notify.on_exit_event() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+DECLARE
+  c exit.cases;
+  v_stage text;
+  v_label text;
+  h uuid;
+BEGIN
+  v_stage := CASE NEW.to_state WHEN 'vote_open' THEN 'vote_open' WHEN 'contracted' THEN 'sale_agreed' WHEN 'completed_sale' THEN 'sale_completed'
+                               WHEN 'sale_collapsed' THEN 'sale_cancelled' WHEN 'closed' THEN 'closed' END;
+  IF v_stage IS NULL THEN RETURN NULL; END IF;
+  SELECT * INTO c FROM exit.cases WHERE id = NEW.case_id;
+  v_label := notify.token_label(c.token);
+  FOR h IN SELECT notify.token_holders(c.token) LOOP
+    PERFORM notify.to_investor(format('exit:case-event:%s:%s', NEW.id, h), 'exit.update', h,
+      jsonb_build_object('token', v_label, 'stage', v_stage), 'producer:exit');
+  END LOOP;
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER case_events_notify AFTER INSERT ON exit.case_events
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION notify.on_exit_event();
+
+/** An exit decision waits for one officer of each capacity (never the proposer). */
+CREATE FUNCTION notify.on_exit_decision() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+DECLARE
+  v_roles text[];
+BEGIN
+  IF (SELECT status FROM exit.decisions WHERE id = NEW.id) IS DISTINCT FROM 'open' THEN RETURN NULL; END IF;
+  SELECT capacities INTO v_roles FROM exit.decision_kinds WHERE code = NEW.code;
+  PERFORM notify.to_officers(format('exit:decision:%s:waiting', NEW.id), 'officer.action_waiting', coalesce(v_roles, '{}'::text[]),
+    notify.waiting('exit_decision', notify.ref_code('EX', NEW.id::text)), 'producer:exit', NEW.proposed_by);
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER decisions_exit_notify AFTER INSERT ON exit.decisions
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.status = 'open') EXECUTE FUNCTION notify.on_exit_decision();
+
+/** The final distribution was booked: each holder's net share. */
+CREATE FUNCTION notify.on_exit_final() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+DECLARE
+  l record;
+  v_label text := notify.token_label(NEW.token);
+BEGIN
+  FOR l IN SELECT subject_id, net FROM exit.final_lines WHERE final_id = NEW.id AND subject_id IS NOT NULL AND net > 0 ORDER BY wallet LOOP
+    PERFORM notify.to_investor(format('exit:final:%s:%s', NEW.id, l.subject_id), 'exit.final_credited', l.subject_id,
+      jsonb_build_object('token', v_label, 'amount_paisa', l.net::text), 'producer:exit');
+  END LOOP;
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER finals_notify AFTER UPDATE OF status ON exit.finals
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.status = 'booked' AND OLD.status IS DISTINCT FROM 'booked') EXECUTE FUNCTION notify.on_exit_final();
+
+/** A redemption burn was seen on chain: the holder's units are cancelled. */
+CREATE FUNCTION notify.on_exit_burn() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+DECLARE
+  l record;
+BEGIN
+  SELECT rl.subject_id, rl.units, c.token INTO l
+  FROM exit.redemption_lines rl JOIN exit.redemptions r ON r.id = rl.redemption_id JOIN exit.cases c ON c.id = r.case_id
+  WHERE rl.ref_id = NEW.ref_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  PERFORM notify.to_investor(format('exit:burn:%s', NEW.ref_id), 'exit.units_redeemed', l.subject_id,
+    jsonb_build_object('token', notify.token_label(l.token), 'units', l.units::text), 'producer:exit');
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER burns_seen_notify AFTER INSERT ON exit.burns_seen
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION notify.on_exit_burn();
+
+/** A phase-0 redemption request recorded (a declined one is not told: it means the KYC status, NP-4). */
+CREATE FUNCTION notify.on_exit_request() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+BEGIN
+  PERFORM notify.to_investor(format('exit:request:%s:recorded', NEW.id), 'exit.request_recorded', NEW.subject_id,
+    jsonb_build_object('units', NEW.units::text), 'producer:exit');
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER requests_exit_notify AFTER UPDATE OF status ON exit.requests
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.status = 'recorded' AND OLD.status = 'submitted') EXECUTE FUNCTION notify.on_exit_request();
+
+-- ================================================================== producers: transfers (S-04; investor notices are 0028's own)
+/** A transfer case entered the checks: the compliance and the trustee officers each decide (XF-3). */
+CREATE FUNCTION notify.on_transfer_event() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, notify AS $$
+BEGIN
+  PERFORM notify.to_officers(format('transfer:%s:review:%s', NEW.case_id, NEW.id), 'officer.action_waiting', ARRAY['compliance_officer', 'trustee_officer'],
+    notify.waiting('transfer_review', notify.ref_code('TR', NEW.case_id::text)), 'producer:transfer', NEW.actor);
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER events_transfer_notify AFTER INSERT ON transfer.events
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.to_status = 'checks') EXECUTE FUNCTION notify.on_transfer_event();
 
 -- ================================================================== producers: trustee (6d)
 /** A distribution was published on chain: the trustee's 48-hour review window is open. */

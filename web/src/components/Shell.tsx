@@ -4,12 +4,14 @@ import { logout } from "@/app/actions/auth";
 import type { Dict, Lang } from "@/lib/i18n";
 import { analystDict } from "@/lib/i18n-analyst";
 import { exitDict } from "@/lib/i18n-exit";
+import { notifyDict } from "@/lib/i18n-notify";
 import { offeringDict } from "@/lib/i18n-offering";
 import { transferDict } from "@/lib/i18n-transfer";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
-import { currentInvestorId } from "@/lib/server/session";
+import { unreadCount } from "@/lib/server/notifications";
+import { currentInvestorId, currentSession } from "@/lib/server/session";
 import { SearchShortcut } from "./analyst/SearchShortcut";
 import { LangToggle } from "./LangToggle";
 import { BlockHeight, ChainRail, type RailLabels } from "./live/Live";
@@ -265,7 +267,7 @@ export function PublicPage({ active, children, minimal = false }: { active: Publ
   );
 }
 
-export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account";
+export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account" | "notifications";
 
 function initials(name: string): string {
   // Words that start with a letter only, so "Bob (demo)" gives "B", not "B(".
@@ -286,6 +288,8 @@ export async function PortalShell({
   children: ReactNode;
 }) {
   const { lang, t, investor } = await viewer();
+  const session = investor ? await currentSession() : null;
+  const unread = session ? await unreadCount(session.hash) : 0;
   const items: { key: PortalKey; href: string; icon: string; label: string }[] = [
     { key: "portfolio", href: "/portfolio", icon: "◧", label: t.navPortfolio },
     { key: "invest", href: `/properties/${LIVE_SYMBOL}`, icon: "⬡", label: t.invest },
@@ -313,6 +317,18 @@ export async function PortalShell({
           <div className="sect">{t.sectAccount}</div>
           <Link href="/account" className={`nav ${active === "account" ? "on" : ""}`} aria-current={active === "account" ? "page" : undefined}>
             <span aria-hidden="true">⚙</span> {t.navAccount}
+          </Link>
+          <Link
+            href="/notifications"
+            className={`nav ${active === "notifications" ? "on" : ""}`}
+            aria-current={active === "notifications" ? "page" : undefined}
+          >
+            <span aria-hidden="true">✉</span> {notifyDict(lang).nav}
+            {unread > 0 && (
+              <span className="chip amber" aria-label={notifyDict(lang).unreadLabel.replace("{n}", String(unread))}>
+                {unread > 99 ? "99+" : String(unread)}
+              </span>
+            )}
           </Link>
           <span className="nav off" aria-disabled="true">
             <span aria-hidden="true">▤</span> {t.docsTax} <span className="chip sample soon">{t.comingSoonTag}</span>
