@@ -49,6 +49,10 @@ echo "== backend dependencies and migrations"
 # the rest. Every step below is idempotent: secrets are created only when missing (appended to the
 # git-ignored backend/.env.local, never printed), policies are proposed only when they changed, and
 # a wallet moves into custody only once.
+# T-012 (migration 0029): db:service-roles gives every backend service its own database login (a
+# member of its pt_svc_* group only; passwords appended to backend/.env.local) and checks that each
+# login connects; the restarts below then switch the services to them. If it fails, nothing is
+# restarted. Per-service rollback to the admin login: deploy/demo-server/README.md.
 echo "== backend setup (idempotent, no secrets printed)"
 (cd backend \
   && npm run --silent kyc:setup >/dev/null \
@@ -56,6 +60,7 @@ echo "== backend setup (idempotent, no secrets printed)"
   && npm run --silent signer:setup >/dev/null \
   && npm run --silent signer:admin-client >/dev/null \
   && npm run --silent db:web-role >/dev/null \
+  && npm run --silent db:service-roles >/dev/null \
   && npm run --silent signer:import-web-wallets >/dev/null) \
   || { echo "backend setup failed; the website keeps running the previous build" >&2; exit 7; }
 
@@ -73,6 +78,10 @@ BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboardi
 sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
 # The signer reloads its keystore (new custodial wallets) and policies only on start.
 sudo systemctl restart $BACKEND_UNITS
+# A T-012 rollback drop-in (db-login.sh admin <unit>) survives deploys: say so on every deploy.
+if bash deploy/demo-server/db-login.sh status | grep "ADMIN login" >/dev/null; then
+  echo "WARNING: some units still use the admin database login (rollback); see: bash deploy/demo-server/db-login.sh status" >&2
+fi
 # Anchoring (ADR 0008): an Anvil stand-in for the public L2 on 127.0.0.1:8650 (chain 586650) and the
 # anchoring job. The key is created once in its own keystore (passphrase appended to the git-ignored
 # backend/.env.local, never printed); StateAnchor is deployed through DeployLib only when there is no

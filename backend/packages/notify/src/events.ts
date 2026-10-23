@@ -63,6 +63,26 @@ export const EVENT_KINDS = {
     category: "security",
     placeholders: { at: { type: "utc" }, objection_until: { type: "utc" } },
   },
+  // S-04 section 11 (migration 0028): the seller's contacts at every transfer request (account-takeover defence).
+  "security.transfer_requested": {
+    category: "security",
+    placeholders: { at: { type: "utc" } },
+  },
+  // S-04 section 11 (migration 0028): both parties when a transfer changes state; the buyer's payment instructions.
+  "transfer.status_changed": {
+    category: "transactional",
+    placeholders: {
+      status: {
+        type: "word",
+        choices: ["accepted", "under_review", "not_approved", "approved", "payment_received", "on_chain", "transferred", "completed", "being_cancelled",
+          "refund_pending", "refunded", "cancelled"],
+      },
+    },
+  },
+  "transfer.payment_due": {
+    category: "transactional",
+    placeholders: { amount_paisa: { type: "paisa" }, reference: { type: "code" }, expires_at: { type: "utc" } },
+  },
   "offering.reservation_expiring": {
     category: "transactional",
     placeholders: { offering: { type: "code" }, amount_paisa: { type: "paisa" }, expires_at: { type: "utc" } },

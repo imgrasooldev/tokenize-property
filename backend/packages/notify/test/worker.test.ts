@@ -6,24 +6,29 @@ import type { Locale } from "../src/events.ts";
 import { MockProvider, type LookupFault, type MockProviderOptions, type SendFault } from "../src/providers.ts";
 import { enqueue, NotifyService, operatorDecide, type EnqueueInput } from "../src/service.ts";
 import { NotifyWorker, type NotifyWorkerOptions } from "../src/worker.ts";
+import { servicePool } from "../../db/test/helpers.ts";
 import { contacts, fastForward, investor, makeNotifyDb, type NotifyDb } from "./helpers.ts";
 
 /** Delivery worker: record before send, retries, dead letters, rate limits, crash recovery (N-5..N-7). */
 
 let t: NotifyDb;
 let db: pg.Pool;
+/** The worker connects as a login in pt_svc_notify (T-012, migration 0029), as in production; `db` (admin) produces. */
+let workerDb: Awaited<ReturnType<typeof servicePool>>;
 let svc: NotifyService;
 const AT = "2026-10-13T09:00:00Z";
 
 beforeAll(async () => {
   t = await makeNotifyDb();
   db = t.pool;
+  workerDb = await servicePool("notify", String(t.settings.database), 8);
   svc = new NotifyService(db, t.secrets);
   // Most tests send many messages to few people; the rate-limit test sets its own cap.
   await db.query("UPDATE notify.rate_limits SET max_per_hour = 1000");
 }, 120_000);
 
 afterAll(async () => {
+  await workerDb.drop();
   await t.drop();
 }, 120_000);
 
@@ -44,7 +49,7 @@ async function person(locale: Locale = "en", channels: ("sms" | "email")[] = ["s
 }
 
 function worker(providers: NotifyWorkerOptions["providers"], extra: Partial<NotifyWorkerOptions> = {}): NotifyWorker {
-  return new NotifyWorker(db, {
+  return new NotifyWorker(workerDb.pool, {
     workerId: `w-${randomUUID().slice(0, 8)}`,
     providers,
     secrets: t.secrets,

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import { secretFromEnv } from "@pt/http-auth";
 import { Peppers } from "@pt/kyc";
 import pg from "pg";
@@ -34,13 +34,16 @@ function env(): Record<string, string> {
   return { ...readEnvFile(ENV_FILE), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/**
+ * The tax service (serve) connects as its own login (TAX_PG_USER, group pt_svc_tax, migration 0029;
+ * fail closed). The operator commands below keep the admin login until their portal screens exist.
+ */
+function pool(service = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.PG_ADMIN_PASSWORD,
+    ...(service ? servicePgAuth(e, "tax") : { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD }),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "tax",
     max: 4,
@@ -71,7 +74,7 @@ async function setup(): Promise<void> {
 
 function serve(): void {
   const e = env();
-  const db = pool();
+  const db = pool(true);
   const svc = new TaxService(db, CnicKeys.fromEnv(e));
   const server = createTaxServer(svc, [{ id: "admin-portal", secret: secretFromEnv(e, "TAX_CLIENT_SECRET_ADMIN"), scope: ADMIN_TAX_SCOPE }], {
     onError: (err) => {

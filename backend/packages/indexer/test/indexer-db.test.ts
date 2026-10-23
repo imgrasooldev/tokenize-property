@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Deployment } from "../src/deployment.ts";
 import { HaltedError, Indexer, InvariantViolationError, MAX_WINDOW, type IndexerOptions } from "../src/indexer.ts";
 import { FakeChain, fakeDeployment, type FakeEvent, type FakeRawEvent } from "./fake-chain.ts";
-import { actual, expected, migratedDatabase } from "./helpers.ts";
+import { actual, expected, indexerPool, migratedDatabase } from "./helpers.ts";
 import { scenario, type Op } from "./scenario.ts";
 
 /**
@@ -15,16 +15,17 @@ import { scenario, type Op } from "./scenario.ts";
 let admin: pg.Client;
 let settings: pg.ClientConfig;
 let pool: pg.Pool;
+let dropPool: () => Promise<void>;
 let drop: () => Promise<void>;
 const chain = new FakeChain();
 
 beforeAll(async () => {
   ({ admin, settings, drop } = await migratedDatabase());
-  pool = new pg.Pool({ ...settings, max: 12 });
+  ({ pool, drop: dropPool } = await indexerPool(settings, 12));
 });
 
 afterAll(async () => {
-  await pool.end();
+  await dropPool();
   await drop();
 });
 

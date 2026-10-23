@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { Peppers } from "../src/crypto.ts";
 import { MockSanctions, mockProviders, type ProviderResult } from "../src/providers.ts";
 import {
@@ -23,7 +23,9 @@ import {
 
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations", import.meta.url));
 let db: pg.Client;
+/** The KYC service runs as a login in pt_svc_kyc (T-012, migration 0029), as in production. */
 let pool: pg.Pool;
+let login: Awaited<ReturnType<typeof serviceLogin>>;
 let drop: () => Promise<void>;
 const peppers = Peppers.of([{ version: 1, key: randomBytes(32) }]);
 const dataKey = randomBytes(32);
@@ -39,13 +41,15 @@ beforeAll(async () => {
   const s = await scratchDatabase();
   ({ client: db, drop } = s);
   await migrate(db, MIGRATIONS);
-  pool = new pg.Pool({ ...s.settings, max: 4 });
+  login = await serviceLogin("kyc", String(s.settings.database));
+  pool = new pg.Pool({ ...login.settings, max: 4 });
   kyc = new KycService(pool, providers, peppers, dataKey);
 });
 
 afterAll(async () => {
   await pool.end();
   await drop();
+  await login.drop();
 });
 
 describe("onboarding", () => {

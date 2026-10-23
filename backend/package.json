@@ -1,7 +1,7 @@
 {
   "name": "property-token-backend",
   "private": true,
-  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications, recovery, operations and tax",
+  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications, recovery, operations and tax, secondary transfers",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -16,6 +16,7 @@
     "test": "vitest run",
     "migrate": "tsx packages/db/src/cli.ts",
     "db:web-role": "tsx packages/db/src/web-role.ts",
+    "db:service-roles": "tsx packages/db/src/service-roles-cli.ts",
     "gen:abis": "tsx packages/contracts/scripts/gen-abis.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
     "demo": "tsx packages/demo-console/src/server.ts",
@@ -76,6 +77,11 @@
     "notify:sweep": "tsx packages/notify/src/cli.ts sweep",
     "recovery:tick": "tsx packages/recovery/src/cli.ts tick",
     "recovery:audit": "tsx packages/recovery/src/cli.ts audit",
+    "transfer:tick": "tsx packages/transfer/src/cli.ts tick",
+    "transfer:audit": "tsx packages/transfer/src/cli.ts audit",
+    "exit:tick": "tsx packages/exit/src/cli.ts tick",
+    "exit:run": "tsx packages/exit/src/cli.ts run",
+    "exit:audit": "tsx packages/exit/src/cli.ts audit",
     "tax:setup": "tsx packages/tax/src/cli.ts setup",
     "tax:serve": "tsx packages/tax/src/cli.ts serve",
     "tax:atl": "tsx packages/tax/src/cli.ts atl",

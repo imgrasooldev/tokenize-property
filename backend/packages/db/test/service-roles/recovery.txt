@@ -1,0 +1,3 @@
+function recovery.tick(p_actor text)
+schema public: USAGE
+schema recovery: USAGE

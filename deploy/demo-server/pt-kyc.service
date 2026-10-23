@@ -7,6 +7,8 @@ Requires=pt-stack.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/property-token/backend
 EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Database login: KYC_PG_USER from backend/.env.local (T-012, group pt_svc_kyc; never the admin).
+# Rollback to the admin login: bash deploy/demo-server/db-login.sh admin pt-kyc
 Environment=NODE_OPTIONS=--max-old-space-size=160
 ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/kyc/src/cli.ts serve
 Restart=always

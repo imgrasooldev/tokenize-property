@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { isLoopbackHost, readEnvFile, servicePgAuth } from "@pt/config";
 import { createLogger } from "@pt/logger";
 import pg from "pg";
 import { rentCycle, runScript, tamperDemo } from "./actions.ts";
@@ -38,9 +38,12 @@ const adminSettings: pg.ClientConfig = {
   password: env.PG_ADMIN_PASSWORD ?? "",
 };
 
+// The ledger panel reads through the console's own read-only login (CONSOLE_PG_USER, group
+// pt_svc_console, migration 0029; fail closed: without it the panel is disabled). Only the tamper
+// demo uses the admin, on a scratch database it creates and drops, and only on a loopback host.
 let ledgerDb: pg.Pool | null = null;
 try {
-  ledgerDb = new pg.Pool({ ...adminSettings, database: "property_token", application_name: "demo-console", max: 4 });
+  ledgerDb = new pg.Pool({ ...adminSettings, ...servicePgAuth({ ...env, ...process.env }, "console"), database: "property_token", application_name: "demo-console", max: 4 });
   await ledgerDb.query("SELECT 1");
 } catch (e) {
   log.warn({ err: (e as Error).message }, "ledger database not reachable; ledger panel disabled");
@@ -105,6 +108,7 @@ async function runAction(action: string, node: number | undefined): Promise<void
         await rentCycle(ledgerDb, consoleLog);
         break;
       case "tamper-demo":
+        if (!isLoopbackHost(String(adminSettings.host))) throw new Error("the tamper demo uses the admin login and runs only against a local database");
         await tamperDemo(adminSettings, consoleLog);
         break;
       default:

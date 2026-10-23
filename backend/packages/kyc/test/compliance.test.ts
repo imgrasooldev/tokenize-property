@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
+import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { officer, type TestOfficer } from "../../db/test/officers.ts";
 import { Peppers } from "../src/crypto.ts";
 import { MockSanctions, mockProviders } from "../src/providers.ts";
@@ -27,6 +27,7 @@ let compB: TestOfficer;
 let opsChecker: TestOfficer;
 let seq = 5000;
 const peppers = Peppers.of([{ version: 1, key: randomBytes(32) }]);
+const kycDataKey = randomBytes(32);
 const cnic = (last = 1): string => `35202-${String(1_000_000 + ++seq).slice(-7)}-${String(last)}`;
 const wallet = (): string => `0x${randomBytes(20).toString("hex")}`;
 const liveness = (): string => `sess-comp-${String(++seq).padStart(6, "0")}`;
@@ -40,7 +41,7 @@ beforeAll(async () => {
   await portal.connect();
   // Exactly the rights of the portal's login (member of pt_admin_portal only).
   await portal.query("SET ROLE pt_admin_portal");
-  kyc = new KycService(pool, mockProviders(), peppers, randomBytes(32));
+  kyc = new KycService(pool, mockProviders(), peppers, kycDataKey);
   compA = await officer(db, "comp.amna", "compliance_officer");
   compB = await officer(db, "comp.bilal", "compliance_officer");
   opsChecker = await officer(db, "ops.checker.c", "ops_checker");
@@ -261,8 +262,16 @@ describe("re-screening through the KYC service (C-5)", () => {
     const ask = () => portal.query<{ r: { ok: boolean; id?: number; error?: string } }>("SELECT admin.request_rescreen($1, $2, 'list update 2026-10 weekly batch') AS r", [compA.sessionHash, a.subjectId]);
     expect((await ask()).rows[0]?.r.ok).toBe(true);
     expect((await ask()).rows[0]?.r).toMatchObject({ ok: false, error: expect.stringMatching(/already queued/) as unknown });
-    const worker = new RescreenWorker(pool, kyc, { worker: "kyc-rescreen-test" });
-    expect(await worker.runOnce()).toBe(1);
+    // The worker runs as in production: a login in pt_svc_kyc (T-012, migration 0029), never the admin.
+    const login = await serviceLogin("kyc", String(db.database));
+    const svcPool = new pg.Pool({ ...login.settings, max: 2 });
+    try {
+      const asService = new KycService(svcPool, mockProviders(), peppers, kycDataKey);
+      expect(await new RescreenWorker(svcPool, asService, { worker: "kyc-rescreen-test" }).runOnce()).toBe(1);
+    } finally {
+      await svcPool.end();
+      await login.drop();
+    }
     const { rows } = await db.query<{ status: string; result_status: string; check_id: string | null }>("SELECT status, result_status, check_id FROM compliance.rescreens WHERE subject_id = $1", [a.subjectId]);
     expect(rows[0]).toMatchObject({ status: "done", result_status: "verified" });
     expect(rows[0]?.check_id).not.toBeNull();

@@ -1,0 +1,14 @@
+function bank.active_payee(p_subject uuid)
+function bank.create_followup_batch(p_reference text, p_parent bigint, p_subjects jsonb, p_actor text)
+function bank.create_intent(p_code text, p_purpose text, p_subject uuid, p_amount bigint, p_ledger_key text, p_credit_account text, p_ttl_minutes integer, p_actor text)
+function bank.create_payout_batch(p_reference text, p_token text, p_distribution numeric, p_items jsonb, p_actor text)
+function bank.ingest_event(p_event_id text, p_type text, p_body_sha256 bytea, p_key_id text, p_payload jsonb, p_actor text)
+function bank.payout_file_rows(p_batch bigint)
+function bank.register_payee(p_subject uuid, p_iban_hash bytea, p_iban_enc bytea, p_last4 text, p_bank_code text, p_title_hash bytea, p_actor text)
+function bank.submit_payout_batch(p_batch bigint, p_actor text, p_file_sha256 bytea)
+function kyc.is_verified(p_wallet text)
+function kyc.subject_status(p_subject uuid)
+schema bank: USAGE
+schema kyc: USAGE
+schema public: USAGE
+view bank.payee_status: SELECT

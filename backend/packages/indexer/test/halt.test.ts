@@ -2,7 +2,7 @@ import pg from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChainMismatchError, HaltedError, Indexer } from "../src/indexer.ts";
 import { FakeChain, fakeDeployment } from "./fake-chain.ts";
-import { migratedDatabase } from "./helpers.ts";
+import { indexerPool, migratedDatabase } from "./helpers.ts";
 import { scenario } from "./scenario.ts";
 
 /**
@@ -12,18 +12,19 @@ import { scenario } from "./scenario.ts";
  */
 let admin: pg.Client;
 let pool: pg.Pool;
+let dropPool: () => Promise<void>;
 let drop: () => Promise<void>;
 let chain: FakeChain;
 
 beforeEach(async () => {
   let settings: pg.ClientConfig;
   ({ admin, settings, drop } = await migratedDatabase());
-  pool = new pg.Pool({ ...settings, max: 4 });
+  ({ pool, drop: dropPool } = await indexerPool(settings, 4));
   chain = new FakeChain();
 });
 
 afterEach(async () => {
-  await pool.end();
+  await dropPool();
   await drop();
 });
 

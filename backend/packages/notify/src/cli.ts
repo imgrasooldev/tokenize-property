@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { ContactSecrets } from "./crypto.ts";
 import { MockProvider, type MockRecord } from "./providers.ts";
@@ -34,13 +34,13 @@ function env(): Record<string, string> {
   return { ...readEnvFile(envFile()), ...(process.env as Record<string, string>) };
 }
 
-function pool(max: number, user?: string, password?: string): pg.Pool {
+/** The delivery worker connects as its own login (NOTIFY_PG_USER, group pt_svc_notify, migration 0029; fail closed); status is an operator command (admin). */
+function pool(max: number, service = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: user ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: password ?? e.PG_ADMIN_PASSWORD,
+    ...(service ? servicePgAuth(e, "notify") : { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD }),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "notify",
     max,
@@ -70,7 +70,7 @@ async function run(once: boolean): Promise<void> {
   if (process.env.NODE_ENV === "production") throw new Error("notify:run uses mock providers and does not run in production (real providers: task T-031)");
   const e = env();
   const secrets = ContactSecrets.fromEnv(e);
-  const db = pool(4, e.NOTIFY_PG_USER, e.NOTIFY_PG_PASSWORD);
+  const db = pool(4, true);
   const worker = new NotifyWorker(db, {
     workerId: `notify-${String(process.pid)}@${hostname().replace(/[^\w.-]/g, "").slice(0, 60) || "host"}`,
     providers: { sms: new MockProvider("sms", { onAccept: printAccepted }), email: new MockProvider("email", { onAccept: printAccepted }) },

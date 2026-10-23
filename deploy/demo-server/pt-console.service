@@ -7,6 +7,8 @@ Requires=pt-stack.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/property-token/backend
 EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Ledger panel login: CONSOLE_PG_USER from backend/.env.local (T-012, group pt_svc_console); the tamper demo alone uses the admin on a scratch database.
+# Rollback to the admin login: bash deploy/demo-server/db-login.sh admin pt-console
 ExecStart=/usr/bin/npm run demo
 Restart=always
 RestartSec=3

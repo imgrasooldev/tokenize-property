@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
-import type pg from "pg";
+import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { decodeLog } from "../src/decode.ts";
 import { rolesByAddress, type Address, type Deployment, type Hex } from "../src/deployment.ts";
 import { ReadModel, type Snapshot } from "../src/model.ts";
@@ -32,6 +32,19 @@ export async function expected(source: ChainSource, d: Deployment, to: bigint): 
     });
   }
   return model.snapshot();
+}
+
+/** A pool connected as a login in pt_svc_indexer (T-012, migration 0029): the indexer runs as in production. */
+export async function indexerPool(settings: pg.ClientConfig, max: number): Promise<{ pool: pg.Pool; drop: () => Promise<void> }> {
+  const login = await serviceLogin("indexer", String(settings.database));
+  const pool = new pg.Pool({ ...login.settings, max });
+  return {
+    pool,
+    drop: async () => {
+      await pool.end();
+      await login.drop();
+    },
+  };
 }
 
 export async function actual(db: pg.ClientBase, d: Deployment): Promise<Snapshot> {

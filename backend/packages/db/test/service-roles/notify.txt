@@ -1,0 +1,10 @@
+function notify.begin_attempt(p_id bigint, p_worker text, p_min_seconds integer)
+function notify.claim(p_worker text, p_batch integer, p_lease_seconds integer)
+function notify.delivery_material(p_id bigint, p_worker text)
+function notify.extend_lease(p_id bigint, p_worker text, p_seconds integer)
+function notify.open_attempt_started(p_id bigint)
+function notify.record_failure(p_id bigint, p_worker text, p_outcome text, p_error text)
+function notify.record_sent(p_id bigint, p_worker text, p_provider text, p_message_id text, p_body_sha256 bytea)
+function notify.stats()
+schema notify: USAGE
+schema public: USAGE

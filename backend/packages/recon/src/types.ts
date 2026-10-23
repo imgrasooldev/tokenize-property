@@ -23,7 +23,9 @@ export const CHECKS = {
   "issuance.command_without_payment": "blocking",
   "issuance.duplicate_command": "blocking",
   "issuance.unverified_amount": "warning",
-  "issuance.burn_not_reconciled": "warning",
+  // S-05 (migration 0027): replaces the former warning issuance.burn_not_reconciled.
+  "issuance.orphan_burn": "blocking",
+  "issuance.burn_amount_mismatch": "blocking",
   // Supply and holdings at the pinned block
   "supply.chain_vs_read_model": "blocking",
   "supply.holdings_sum": "blocking",
@@ -81,6 +83,13 @@ export const CHECKS = {
   // A cancelled request moved nothing; still worth a look (the local chain/flow.py scenario has one).
   "recovery.unmatched_cancelled": "warning",
   "recovery.reversal_unmatched": "blocking",
+  // Secondary transfers, phase 0 (spec S-04 section 16.8, migration 0028; rules in transfer.reconcile())
+  "transfer.unapproved": "blocking",
+  "transfer.settlement_mismatch": "blocking",
+  "transfer.register_mismatch": "blocking",
+  "transfer.escrow_residual": "blocking",
+  "transfer.paid_not_executed": "warning",
+  "transfer.paid_not_executed_overdue": "blocking",
   // Operations and FBR withholding (spec S-03 §8, migration 0021; rules in tax.reconcile())
   "rent.wht_mismatch": "blocking",
   "rent.statement_totals": "blocking",
@@ -88,6 +97,14 @@ export const CHECKS = {
   "tax.payable_mismatch": "blocking",
   // Warning only: freezing payouts would not make the remittance happen sooner (due date LEGAL/TAX TO CONFIRM).
   "tax.wht_unremitted": "warning",
+  // Exit, redemption and closure (spec S-05 section 7 and 14.3, migration 0027)
+  "exit.ref_id_mismatch": "blocking",
+  "exit.burn_before_payment": "blocking",
+  // Warning while Redeeming; reported as blocking once the redemption is older than its SLA.
+  "exit.supply_not_zero": "warning",
+  "exit.waterfall_mismatch": "blocking",
+  "exit.register_mismatch": "blocking",
+  "exit.statement_totals": "blocking",
 } as const satisfies Record<string, Severity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -245,12 +262,46 @@ export interface RecoveryData {
   reversals: { caseId: bigint; journalId: bigint; reversalJournalId: bigint }[];
 }
 
+/** S-04 phase 0 transfers of this token (migration 0028); absent where it is not applied. */
+export interface TransferData {
+  /** Rows of transfer.reconcile(token): the rules, evaluated in the database. */
+  findings: { check: string; subject: string; expected: string; actual: string }[];
+  /** On-chain request ids that are a transfer case's ForcedTransfer (transfer.recon_requests): not S-06 cases. */
+  caseRequestIds: bigint[];
+}
+
 /** S-03 operations and tax of this token (migration 0021); absent where it is not applied. */
 export interface TaxData {
   /** Rows of tax.reconcile(token): the consistency rules, evaluated in the database. */
   findings: { check: string; subject: string; expected: string; actual: string }[];
   /** Calculations with an attached statement, re-verified here independently (keccak, Merkle root, totals). */
   documents: { id: string; status: string; onchainId: bigint | null; statement: string; statementHash: string; schedule: string; scheduleHash: string; root: string }[];
+}
+
+/** One line of an exit redemption batch of this token (view exit.recon_lines, migration 0027). */
+export interface ExitLine {
+  caseId: bigint;
+  caseState: string;
+  redemptionStatus: string;
+  burnRule: "after_payment" | "after_finalization";
+  /** The final distribution's on-chain id (null before it was seen on chain). */
+  distributionId: bigint | null;
+  wallet: string;
+  units: bigint;
+  refId: string;
+  /** exit.line_payment: nothing_to_pay | paid | in_payment | held | returned | unpaid. */
+  payment: string;
+  released: boolean;
+}
+
+/** S-05 exit data of this token (migration 0027); absent where it is not applied (then no exit checks run). */
+export interface ExitData {
+  lines: ExitLine[];
+  cases: { caseId: bigint; state: string; redeemingAt: Date | null; finalBooked: boolean; poolBalance: bigint; closureReserve: bigint; registerUnits: bigint }[];
+  /** Final distributions with an attached statement, re-verified here (as the S-03 calculations). */
+  finals: { id: string; status: string; onchainId: bigint | null; statement: string; statementHash: string; schedule: string; scheduleHash: string; root: string }[];
+  /** exit.supply_not_zero turns blocking this long after Redeeming started. */
+  redeemingSlaMs: number;
 }
 
 export interface ReconData {
@@ -276,6 +327,10 @@ export interface ReconData {
   recovery?: RecoveryData;
   /** S-03 operations and FBR withholding of this token; absent where migration 0021 is not applied. */
   tax?: TaxData;
+  /** S-04 phase 0 transfers of this token; absent where migration 0028 is not applied. */
+  transfers?: TransferData;
+  /** S-05 exits of this token; absent where migration 0027 is not applied. */
+  exit?: ExitData;
   bank: {
     accounts: BankAccount[];
     statements: BankStatement[];

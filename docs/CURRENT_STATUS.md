@@ -2,6 +2,24 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## S-04 phase 0 transfers (2026-10-23, branch `s-04-transfers`, not merged; migration 0028)
+
+- Off-market transfers between verified investors: website request with the buyer's receive code, desk completion, compliance + trustee approval, payment into a per-case escrow, RecoveryGuard ForcedTransfer (48 h) through the signing service, execution only with the exact movement in the read model, register entries, maker-checker settlement or refund. Spec S-04 section 16; runbook `transfers.md`.
+- Main (S-05's 0027, Next.js 16.4.2) merged into the branch 2026-10-23; 0028 applies on top of 0027. Owner questions TQ-1..TQ-6 (spec 16.10). Not seen in a browser; no Playwright spec; `transfer:tick` is not a demo-server unit yet.
+- Tests: backend typecheck/lint, vitest 722 passed + 13 skipped (with a temporary uncommitted local 0027 placeholder; incl. `transfer/test/transfer.test.ts` 19, `signer/test/transfer-kinds.test.ts` 6, `recon/test/transfer-checks.test.ts` 3); admin typecheck/lint, `npm test` 1117/1117, build, `test:http` 1304/1304; web typecheck/lint, vitest 320 passed + 24 skipped (incl. transfer unit + integration 60), build.
+- After merging main 2337afa (S-05 0027, Next.js 16.4.2) on 2026-10-23, no placeholder: backend typecheck/lint, `migrate -- --test` (0028 on top of 0027), vitest 761 passed + 13 skipped; admin typecheck/lint, `npm test` 1203/1203, build, `test:http` 1433/1433; web typecheck/lint, vitest 350 passed + 24 skipped, build.
+
+## S-05 exit / redemption / burn (2026-10-22, branch `s-05-exit`, not merged; migration 0027)
+
+- Sale or wind-up exit end to end in the database (cases X1-X18 with capacity decisions, proceeds from the trustee escrow, waterfall, final distribution, redemption batch, burns via the new signer kind `issuance.burn` after payment by default, tick, closure), recon burn/exit checks, PT Control `/exit`, website `/exit` with a phase-0 redemption request queue (no money moves). Spec S-05 §14-16 (owner questions §16.4), runbook `exit-redemption.md`.
+- Not run on Besu; no Playwright e2e. Merge after 0026 (no other migration reserved). After merging: `npm run migrate`, `npm run signer:setup` (burn policy), run `npm run exit:tick -- --loop` as a service.
+
+## T-012 service database roles + T-011 e2e in CI (2026-10-23, branch `t-012-service-roles`, not merged; migration 0029)
+
+- Every backend service now connects as its own login `pt_<service>_app` (group `pt_svc_<service>`) and refuses the admin outside local development (`PT_DB_ADMIN_FALLBACK=1`). ADR 0016 Proposed.
+- After merging: `npm run migrate` then `npm run db:service-roles` on every machine (the demo server's `update.sh` does both before restarting services). Rollback per unit: `deploy/demo-server/db-login.sh admin <unit>`.
+- CI gains `admin-e2e` and `web-e2e` (passkeys) on Chromium; the website's chain e2e stays local-only. Not yet run on GitHub.
+
 ## T-046 portal votes (2026-10-22, merged; migration 0026)
 
 - PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.

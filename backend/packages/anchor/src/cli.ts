@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { LOCAL_DEV_CHAIN_ID, readEnvFile } from "@pt/config";
+import { LOCAL_DEV_CHAIN_ID, readEnvFile, servicePgAuth } from "@pt/config";
 import { createLogger } from "@pt/logger";
 import pg from "pg";
 import { z } from "zod";
@@ -21,8 +21,8 @@ import { verifyAnchors } from "./verify.ts";
  *   npm run anchor:verify    check every public anchor against the private chain and the ledger (exit 1 on any mismatch)
  *   npm run anchor:status    the anchor records in this database
  * Exit code 3 = alarm (fail closed): a human must look before anchoring continues.
- * Locally this connects as the admin; in production it runs as a login role in pt_anchor_writer
- * (verify needs only pt_anchor_reader).
+ * Connects as the anchoring job's own login (ANCHOR_PG_USER, group pt_svc_anchor, migration 0029;
+ * `npm run db:service-roles`); PT_DB_ADMIN_FALLBACK=1 lets local development use the admin.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
@@ -71,8 +71,7 @@ function pool(): pg.Pool {
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.ANCHOR_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.ANCHOR_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...servicePgAuth(e, "anchor"),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "anchor",
     max: 3,

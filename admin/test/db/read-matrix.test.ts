@@ -9,6 +9,8 @@ type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" 
 const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin", "nobody"];
 const OPERATIONS: Who[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
 
+const TRANSFER: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor"];
+
 const MATRIX_TOKEN = `0x${"6".repeat(40)}`;
 
 const EXPECT: Record<string, Who[]> = {
@@ -122,6 +124,29 @@ const EXPECT: Record<string, Who[]> = {
   offering_vote_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
   vote_offering_request: ["ops_checker", "compliance_officer"],
   return_offering: ["ops_checker", "compliance_officer"],
+  // S-04 (migration 0028): the desk (operations makers) opens, completes and refreshes; compliance and trustee officers
+  // decide and link (the compliance role for links is enforced inside: a refusal is still "allowed" here); operations
+  // makers and checkers run the cash leg; checkers record prices; every transfer reader declares conflicts.
+  transfer_cases: TRANSFER,
+  transfer_case: TRANSFER,
+  transfer_audit: TRANSFER,
+  transfer_declare_conflict: TRANSFER,
+  transfer_open: ["ops_maker"],
+  "transfer_act:complete": ["ops_maker"],
+  "transfer_act:approve": ["compliance_officer", "trustee_officer"],
+  transfer_cash: ["ops_maker", "ops_checker"],
+  transfer_sync: ["ops_maker"],
+  transfer_set_price: ["ops_checker"],
+  transfer_link_parties: ["compliance_officer", "trustee_officer"],
+  // S-05 (migration 0027): operations makers prepare, the four deciding roles decide in their capacity, auditors read.
+  "audit_rows:exit": ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  "record_export:exit": ["compliance_officer", "trustee_officer", "auditor"],
+  exit_overview: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  exit_case: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  exit_window: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  exit_request: ["ops_maker"],
+  exit_sync: ["ops_maker"],
+  exit_decide: ["ops_checker", "compliance_officer", "legal_officer", "trustee_officer"],
 };
 
 const CALLS: Record<string, string> = {
@@ -235,6 +260,27 @@ const CALLS: Record<string, string> = {
   decide_property_trustee: `SELECT admin.decide_property_trustee($1, gen_random_uuid(), 999999, 'accept', NULL, 'matrix permission probe', '\\x${"a".repeat(64)}')`,
   vote_offering_request: `SELECT admin.vote_offering_request($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
   return_offering: `SELECT admin.return_offering($1, 999999, 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  transfer_cases: "SELECT admin.transfer_cases($1, NULL)",
+  transfer_case: "SELECT admin.transfer_case($1, 999999)",
+  transfer_audit: "SELECT admin.transfer_audit($1, NULL, 5)",
+  transfer_sync: "SELECT admin.transfer_sync($1)",
+  // Unknown investors and cases, no signing policy: refusals are audited and returned, so only the permission (and step-up) decides.
+  transfer_declare_conflict: "SELECT admin.transfer_declare_conflict($1, gen_random_uuid(), 'matrix permission probe')",
+  transfer_open: `SELECT admin.transfer_open($1, gen_random_uuid(), gen_random_uuid(), '${MATRIX_TOKEN}', 10, 'sale', 100, NULL, '${"a".repeat(64)}', NULL, NULL)`,
+  "transfer_act:complete": `SELECT admin.transfer_act($1, 999999, 'complete', NULL, NULL, '\\x${"a".repeat(64)}')`,
+  "transfer_act:approve": `SELECT admin.transfer_act($1, 999999, 'approve', 'compliance', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  transfer_cash: `SELECT admin.transfer_cash($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
+  transfer_set_price: `SELECT admin.transfer_set_price($1, '${MATRIX_TOKEN}', 100, '${"a".repeat(64)}', 'matrix permission probe')`,
+  transfer_link_parties: "SELECT admin.transfer_link_parties($1, gen_random_uuid(), gen_random_uuid(), 'family', 'matrix permission probe')",
+  "audit_rows:exit": "SELECT * FROM admin.audit_rows($1, 'exit', NULL, NULL, NULL, NULL, NULL, 5)",
+  "record_export:exit": `SELECT * FROM admin.record_export($1, 'exit', '{}', 0, 'csv', '${"e".repeat(64)}')`,
+  exit_overview: "SELECT admin.exit_overview($1)",
+  exit_case: "SELECT admin.exit_case($1, 999999)",
+  exit_window: "SELECT admin.exit_window($1, 999999)",
+  // Unknown items and an invalid case: refusals are audited and returned, so only the permission (and step-up) decides.
+  exit_request: "SELECT admin.exit_request($1, NULL, 'open', '{}', 'matrix permission probe for exit')",
+  exit_sync: "SELECT admin.exit_sync($1)",
+  exit_decide: `SELECT admin.exit_decide($1, 'vote', 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}', '{}')`,
 };
 
 const DECISIONS = new Set([
@@ -270,6 +316,15 @@ const DECISIONS = new Set([
   "decide_property_trustee",
   "vote_offering_request",
   "return_offering",
+  "transfer_declare_conflict",
+  "transfer_open",
+  "transfer_act:complete",
+  "transfer_act:approve",
+  "transfer_cash",
+  "transfer_set_price",
+  "transfer_link_parties",
+  "exit_request",
+  "exit_decide",
 ]);
 let stepCounter = Date.now();
 let w: World;
@@ -318,12 +373,12 @@ describe("database authorisation matrix", () => {
   it("verify_chains returns only the chains the officer may read", async () => {
     const chains = async (who: Who) =>
       (await w.portal.query<{ source: string }>("SELECT source FROM admin.verify_chains($1, NULL)", [sessionOf(who)])).rows.map((r) => r.source).sort();
-    expect(await chains("auditor")).toEqual(["admin", "compliance", "ledger", "recon", "recovery", "signer", "trustee"]);
-    expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "ledger", "recon", "recovery", "signer"]);
-    expect(await chains("ops_maker")).toEqual(["ledger", "recon", "recovery", "signer"]);
-    expect(await chains("legal_officer")).toEqual(["recovery"]);
+    expect(await chains("auditor")).toEqual(["admin", "compliance", "exit", "ledger", "recon", "recovery", "signer", "trustee"]);
+    expect(await chains("compliance_officer")).toEqual(["admin", "compliance", "exit", "ledger", "recon", "recovery", "signer"]);
+    expect(await chains("ops_maker")).toEqual(["exit", "ledger", "recon", "recovery", "signer"]);
+    expect(await chains("legal_officer")).toEqual(["exit", "recovery"]);
     expect(await chains("admin")).toEqual(["admin"]);
-    expect(await chains("trustee_officer")).toEqual(["trustee"]);
+    expect(await chains("trustee_officer")).toEqual(["exit", "trustee"]);
     expect(await chains("tax_officer")).toEqual([]);
     const code = await w.portal.query("SELECT * FROM admin.verify_chains($1, NULL)", [sessionOf("nobody")]).then(
       () => "ok",

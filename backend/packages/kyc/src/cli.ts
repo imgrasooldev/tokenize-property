@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth, type ServiceName } from "@pt/config";
 import { secretFromEnv, type Client } from "@pt/http-auth";
 import pg from "pg";
 import { keyFromEnv, Peppers } from "./crypto.ts";
@@ -31,16 +31,21 @@ function env(): Record<string, string> {
   return { ...readEnvFile(ENV_FILE), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/**
+ * Fail closed: each process connects as its own login (migration 0029): the KYC API and re-screening
+ * as KYC_PG_USER, the offboarding worker as OFFBOARDING_PG_USER, status and audit as AUDIT_PG_USER.
+ */
+function pool(service: ServiceName, applicationName: string, max = 2): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.PG_ADMIN_PASSWORD,
+    ...servicePgAuth(e, service),
     database: e.PG_DATABASE ?? "property_token",
-    application_name: "kyc",
-    max: 2,
+    application_name: applicationName,
+    max,
+    statement_timeout: 15_000,
+    connectionTimeoutMillis: 5_000,
   });
 }
 
@@ -63,7 +68,7 @@ async function offboard(): Promise<void> {
     freezeGuard = latestDeployment()?.freezeGuard;
   }
   if (!freezeGuard) throw new Error("set KYC_FREEZE_GUARD or deploy the local chain first");
-  const db = pool();
+  const db = pool("offboarding", "kyc-offboarding");
   const worker = new OffboardingWorker(db, { freezeGuard, onError: (e) => { console.error(`offboarding pass failed: ${(e as Error).message}`); } });
   await worker.start();
   console.log(`offboarding worker running (FreezeGuard ${freezeGuard}); freezes go through the outbox and the signing service`);
@@ -83,17 +88,7 @@ function serve(): Promise<void> {
   if (process.env.NODE_ENV === "production") return Promise.reject(new Error("kyc:serve uses mock providers and does not run in production"));
   const peppers = Peppers.fromEnv(e);
   const dataKey = keyFromEnv(e, "KYC_DATA_KEY");
-  const db = new pg.Pool({
-    host: e.PG_HOST ?? "127.0.0.1",
-    port: Number(e.PG_PORT ?? 5433),
-    user: e.KYC_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.KYC_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
-    database: e.PG_DATABASE ?? "property_token",
-    application_name: "kyc-service",
-    max: 6,
-    statement_timeout: 15_000,
-    connectionTimeoutMillis: 5_000,
-  });
+  const db = pool("kyc", "kyc-service", 6);
   const service = new KycService(db, mockProviders(), peppers, dataKey, "kyc-service");
   const port = Number(e.KYC_PORT ?? 4910);
   const clients: Client[] = [{ id: "web", secret: secretFromEnv(e, "KYC_CLIENT_SECRET_WEB"), scope: WEB_KYC_SCOPE }];
@@ -116,7 +111,7 @@ function serve(): Promise<void> {
 async function rescreen(): Promise<void> {
   const e = env();
   if (process.env.NODE_ENV === "production") throw new Error("kyc:rescreen uses mock providers and does not run in production");
-  const db = pool();
+  const db = pool("kyc", "kyc-rescreen");
   const service = new KycService(db, mockProviders(), Peppers.fromEnv(e), keyFromEnv(e, "KYC_DATA_KEY"), "kyc-service");
   const worker = new RescreenWorker(db, service, {
     worker: "kyc-rescreen",
@@ -139,7 +134,7 @@ async function main(): Promise<void> {
   if (cmd === "offboard") return offboard();
   if (cmd === "serve") return serve();
   if (cmd === "rescreen") return rescreen();
-  const db = pool();
+  const db = pool("audit", "kyc-audit");
   try {
     if (cmd === "status" && arg) {
       const v = await statusOf(db, arg);

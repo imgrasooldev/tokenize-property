@@ -90,7 +90,7 @@ Session cookie (T-030, migration 0024): `pt_session` = a random 256-bit token (b
 | Method and path | Body | 200 response |
 |---|---|---|
 | `GET /v1/health` | none (no auth) | `{ok: true}` |
-| `POST /v1/sign` | `{commandRef (8-200), kind: issuance.mint, compliance.freeze or rent.record_payout, payload: object}` | one of `{status: denied, requestId?, reason}`, `{status: pending_approval, requestId, approvalsNeeded}`, `{status: signed, requestId, raw, hash, nonce, from}`, `{status: broadcast, requestId, hash, nonce, from}` (bigints as strings) |
+| `POST /v1/sign` | `{commandRef (8-200), kind: one of the policy kinds (issuance.mint, compliance.freeze, compliance.unfreeze, rent.record_payout, token.transfer, identity.*, recovery.*, issuance.burn), payload: object}` | one of `{status: denied, requestId?, reason}`, `{status: pending_approval, requestId, approvalsNeeded}`, `{status: signed, requestId, raw, hash, nonce, from}`, `{status: broadcast, requestId, hash, nonce, from}` (bigints as strings) |
 | `POST /v1/broadcast` | `{requestId: uuid}` | `{ok: boolean}` |
 | `POST /v1/release` | `{requestId: uuid}` | `{ok: boolean}` |
 | `POST /v1/custody/wallets` | `{}` | `{address}` (custodial wallet created inside the key provider, ADR 0010) |
@@ -145,6 +145,8 @@ Offering lifecycle (spec S-02, task T-020): `offering:run -- <action> '<json>'` 
 Operations and tax (spec S-03, migration 0021, ADR 0014): `ops:statement -- <token> <YYYY-MM>` (operating statement JSON), `ops:run -- <action> '<json>'` (`ops:run -- actions` lists them: `collect`, `decide-collection`, `charge`, `decide-charge`, `calculate`, `attach` (builds statement v2 + tax schedule + Merkle root and attaches them), `verify` (independent recomputation, exit 3 on a problem), `decide-distribution`, `book`, `statement-file` (writes the website's statement file with NET amounts and proofs to `chain/data/rent/`), `remit`, `decide-remit`, `certificate`). Actors are operator names; officer handles are refused. `tax:setup` (local dev: `TAX_CNIC_KEY_V1`, `TAX_CNIC_KEY_CURRENT`, `TAX_CLIENT_SECRET_ADMIN`, also into `admin/.env.local`; never printed), `tax:serve` (127.0.0.1:4940), `tax:atl -- <YYYY-MM-DD>` (mock ATL provider; refused in production), `tax:enrol-cnic -- <subject>` (CNIC from stdin only, never argv), `tax:audit`, `tax:reconcile -- <token>` (exit 3 on findings).
 
 **Tax service HTTP API** (`@pt/tax`, HMAC as the signing service; client `admin-portal`, scope one path): `POST /v1/filing-exports/generate` body `{exportId: "<id>", ticket: "<43 base64url chars>"}` → `200 {fileName, csv (base64), sha256, rows, record: {audit, auditHash, at, officer}}`; `409 {error}` for a refusal written for officers (invalid/used/expired ticket, export not approved, a line without a sealed CNIC); `401/403` authentication or scope; `500 {error: "internal"}` (nothing echoed). `GET /v1/health`.
+
+Exit (spec S-05, migration 0027): `exit:tick [-- --loop]` (one pass of `exit.tick`; `EXIT_TICK_SECONDS`, default 60), `exit:run -- calculate <case> <recordBlock>` (final distribution), `exit:run -- attach <final>` (statement + tax schedule + root), `exit:run -- verify <final>` (independent recomputation, exit 3 on a problem), `exit:run -- redeem <case> [after_payment|after_finalization]` (redemption batch with refIds), `exit:audit` (exit 3 on a problem). Actor `EXIT_ACTOR` (an operator name; officer handles are refused); database login `EXIT_PG_USER` / `EXIT_PG_PASSWORD` (a member of `pt_exit_operator` in production). Output one line per step; errors on stderr, exit 1.
 
 Step 6b (migration 0016): command-line operator names that are the handle of an admin-portal officer are refused for signer approvals, unfreeze requests and decisions, and payout batches created, decided or submitted (officers decide in the portal); an S-01 duty (`requestDuty`) needs an officer of the portal with a matching role (see ADR 0011 section 10).
 
@@ -259,3 +261,21 @@ T-046 vote routes (migration 0026, ADR 0011 section 13; every POST checks origin
 | `GET /approvals/offering/[id]` | `offering.read` | request, offering terms and document hashes, property, votes, missing duties, digest, vote / approve / return blockers (`admin.offering_vote_request`); unknown id 404 |
 | `POST /api/approvals/offering/[id]/decide` | `offering.decide` + step-up | form `decision`, `reason`, `digest` → `admin.vote_offering_request` → `offering.decide` |
 | `POST /api/approvals/offering/[id]/return` | `offering.decide` + step-up | form `decision=return`, `reason`, `digest` → `admin.return_offering` → `offering.return_offering` (L2; never the maker) |
+
+S-04 phase 0 transfer routes (migration 0028, ADR 0011 addendum; every POST checks origin and CSRF, then the database checks session, permission, step-up, role and the case digest; outcome as a 303 back with `?ok=` or `?error=`):
+
+| Route | Access | Contract |
+|---|---|---|
+| `GET /transfers[?status=]` | `transfer.read` | queue with counts, policies, open blocks, reference prices and settings; forms per role (`admin.transfer_cases`) |
+| `GET /transfers/[id]` | `transfer.read` | case: masked parties, terms, payment and escrow, on-chain request, live and recorded checks, decisions, events, commands, cash operations, alerts (compliance officers and auditors only), digest, blockers per action (`admin.transfer_case`); unknown id 404 |
+| `GET /transfers/audit` | `transfer.read` | the transfer audit chain with its verification (`admin.transfer_audit`) |
+| `POST /api/transfers/cases` | `transfer.request` + step-up | form `seller`, `buyer` (KYC subject ids), `token`, `units`, `consideration` (`sale`, `gift`, `family`, `court_order`), `price` (PKR per unit, sale) or `noPriceReason`, `agreement` (SHA-256 hex), optional `explanation`, `holdingReason` → `admin.transfer_open`; 303 to the case |
+| `POST /api/transfers/cases/[id]/desk` | `transfer.request` + step-up | `decision=complete` or `decision=withdraw` + `reason`; `digest` → `admin.transfer_act` |
+| `POST /api/transfers/cases/[id]/decide` | `transfer.decide` + step-up | `decision=approve|reject` + `capacity=compliance|trustee`, or `decision=cancel|dispute`; `reason`, `digest` → `admin.transfer_act` |
+| `POST /api/transfers/cases/[id]/cash` | `transfer.cash` + step-up | `decision=prepare_settlement|prepare_refund` (operations maker) or `approve|reject` + `reason` (operations checker); `digest` → `admin.transfer_cash` |
+| `POST /api/transfers/sync` | `transfer.request` | `decision=sync` runs `transfer.tick` |
+| `POST /api/transfers/prices` | `transfer.price` + step-up | `token`, `price` (PKR per unit), `evidence` (SHA-256 hex), `reason` → `admin.transfer_set_price` |
+| `POST /api/transfers/conflicts` | `transfer.read` + step-up | `subject`, `reason` → `admin.transfer_declare_conflict` (the officer's own declaration) |
+| `POST /api/transfers/links` | `transfer.decide` + step-up (compliance officer in SQL) | `a`, `b`, `relation`, `reason` → `admin.transfer_link_parties` |
+
+Website (S-04 phase 0): page `/transfers` (signed in); server actions in `web/src/app/actions/transfer.ts` (receive code, request, accept, withdraw) call `webauth.web_transfers`, `web_transfer_code`, `web_transfer_request`, `web_transfer_accept`, `web_transfer_withdraw` only; step-up actions `transfer.request|accept|withdraw`; rate limit `transfer` (20, 10 per minute, per investor). Signing service: kinds `transfer.propose|execute|cancel` (ADR 0005 amendment). CLI: `npm run transfer:tick [-- --loop]`, `npm run transfer:audit`.

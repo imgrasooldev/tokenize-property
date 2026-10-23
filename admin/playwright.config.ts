@@ -7,7 +7,7 @@ import { adminSettings, REPO_ROOT } from "./scripts/lib-db.mjs";
  * End-to-end tests in the installed Microsoft Edge (no browser download) with a Chrome DevTools
  * Protocol virtual FIDO2 authenticator (CTAP2, USB, resident keys, user verification). They start
  * their own dev server on 3301 (origin http://localhost:3301, own build folder .next-e2e) against
- * the database prepared by scripts/e2e-db.mjs. Needs PostgreSQL; not run in CI.
+ * the database prepared by scripts/e2e-db.mjs. Needs PostgreSQL; runs in CI (job admin-e2e, Chromium).
  *
  * Step 6b: on the e2e database a real signing service (backend serve-test: SignerService and its
  * HTTP API with a temporary key and fixed chain facts) runs on 4997 next to the portal, with the
@@ -20,6 +20,13 @@ for (const line of readFileSync(".env.e2e", "utf8").split(/\r?\n/)) {
 }
 const database = env.get("ADMIN_PG_DATABASE") ?? "";
 const E2E_SIGNER_PORT = 4997;
+// CI (T-011, Linux) runs Playwright's Chromium (PW_BROWSER=chromium); locally the installed Edge.
+// The virtual FIDO2 authenticator is the same CDP feature in both.
+const chromium = process.env.PW_BROWSER === "chromium";
+const viewport = { width: 1440, height: 900 };
+const browser = chromium
+  ? { name: "chromium", use: { ...devices["Desktop Chrome"], viewport } }
+  : { name: "edge", use: { ...devices["Desktop Edge"], channel: "msedge", viewport } };
 const pg = adminSettings(database);
 
 const portal = {
@@ -30,6 +37,9 @@ const portal = {
   env: {
     NEXT_DIST_DIR: ".next-e2e",
     ADMIN_ORIGIN: "http://localhost:3301",
+    // Each test officer's browser sends its own X-Forwarded-For (e2e/helpers.ts pageWithKey), so the
+    // per-address ceremony limits apply per officer as they would behind the real proxy.
+    ADMIN_TRUST_PROXY: "1",
     ADMIN_PG_DATABASE: database,
     ADMIN_PG_USER: env.get("ADMIN_PG_USER") ?? "",
     ADMIN_PG_PASSWORD: env.get("ADMIN_PG_PASSWORD") ?? "",
@@ -65,12 +75,12 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: "http://localhost:3301",
-    channel: "msedge",
+    ...(chromium ? {} : { channel: "msedge" }),
     trace: "retain-on-failure",
     locale: "en-GB",
     viewport: { width: 1440, height: 900 },
   },
-  projects: [{ name: "edge", use: { ...devices["Desktop Edge"], channel: "msedge", viewport: { width: 1440, height: 900 } } }],
+  projects: [browser],
   // The test signing service only runs on the throw-away e2e database (it refuses any other).
   webServer: database === "pt_admin_e2e" ? [portal, signer] : [portal],
 });

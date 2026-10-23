@@ -371,7 +371,7 @@ npm run gen:abis           # after `forge build` in contracts/
 npm run check              # typecheck + lint (0 warnings) + tests
 
 # services (Step 5h; each once set up with the idempotent setup commands)
-npm run kyc:setup && npm run signer:setup && npm run db:web-role   # secrets in .env.local, dev keys, policies, website role
+npm run kyc:setup && npm run signer:setup && npm run db:web-role && npm run db:service-roles   # secrets, dev keys, policies, website role, one login per service (T-012)
 npm run indexer            # read model
 npm run signer             # signing service, 127.0.0.1:4900
 npm run outbox             # outbox worker (every kind through the signer)

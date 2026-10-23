@@ -4,7 +4,7 @@ import { openAccount, postJournal } from "@pt/ledger";
 import { checkCash, type LedgerJournal, type ReconData, type Statement } from "@pt/recon";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
-import { contiguousMigrations, scratchDatabase } from "../../db/test/helpers.ts";
+import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { makeIban } from "../src/iban.ts";
 import { MockBank } from "../src/mockbank.ts";
 import { BankService } from "../src/service.ts";
@@ -28,7 +28,11 @@ export interface World {
   pool: pg.Pool;
   settings: pg.ClientConfig;
   kyc: KycService;
+  /** Operator and batch flows (admin pool). */
   bank: BankService;
+  /** The bank service process as in production: webhook ingest and payout-account registration run as a login in pt_svc_bank (T-012, migration 0029). */
+  service: BankService;
+  servicePool: pg.Pool;
   mock: MockBank;
   key: WebhookKey;
   peppers: Peppers;
@@ -55,10 +59,13 @@ export async function world(opts: { deliver?: (raw: string, sig: string) => Prom
       (async (raw, sig) => {
         const check = verifyWebhook([key], sig, raw);
         if (!check.ok) return 401;
-        return (await bank.handle(raw, check.keyId)).status;
+        return (await service.handle(raw, check.keyId)).status;
       }),
   });
   const bank: BankService = new BankService(pool, peppers, dataKey, mock, { escrowAccount: ESCROW });
+  const login = await serviceLogin("bank", String(s.settings.database));
+  const servicePool = new pg.Pool({ ...login.settings, max: 6 });
+  const service: BankService = new BankService(servicePool, peppers, dataKey, mock, { escrowAccount: ESCROW });
   await s.client.query("SELECT recon.register_bank_account($1, $2, 'operator:setup')", [ESCROW, ESCROW_LEDGER]);
   return {
     db: s.client,
@@ -66,13 +73,17 @@ export async function world(opts: { deliver?: (raw: string, sig: string) => Prom
     settings: s.settings,
     kyc,
     bank,
+    service,
+    servicePool,
     mock,
     key,
     peppers,
     dataKey,
     drop: async () => {
       await pool.end();
+      await servicePool.end();
       await s.drop();
+      await login.drop();
     },
   };
 }
@@ -83,7 +94,7 @@ export async function investor(w: World, name = `Investor ${randomUUID().slice(0
   const r = await w.kyc.onboard({ cnic, fullName: name, livenessSessionId: `sess-good-${String(accountSeq).padStart(4, "0")}` });
   if (r.status !== "verified") throw new Error(`test investor not verified: ${r.reason}`);
   const iban = newAccount(w, name);
-  await w.bank.registerPayee(r.subjectId, iban);
+  await w.service.registerPayee(r.subjectId, iban);
   await openAccount(w.db, { code: `rent:payable:${r.subjectId}`, kind: "liability", asset: "PKR" });
   await openAccount(w.db, { code: `investor:${r.subjectId}:subscriptions`, kind: "liability", asset: "PKR" });
   if (opts.active !== false) await ageCoolingOff(w, r.subjectId);

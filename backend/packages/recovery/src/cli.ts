@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { tick, verifyAudit } from "./service.ts";
 
@@ -8,7 +8,7 @@ import { tick, verifyAudit } from "./service.ts";
  *   npm run recovery:tick            one pass of recovery.tick (chain read model -> cases -> outbox)
  *   npm run recovery:tick -- --loop  every RECOVERY_TICK_SECONDS (default 60) until stopped (service)
  *   npm run recovery:audit           verify the recovery audit hash chain (exit 3 on a problem)
- * Settings: PG_* (PG_DATABASE, default property_token); in production a login role in pt_recovery_worker.
+ * Settings: PG_* (PG_DATABASE, default property_token); the tick runs as RECOVERY_PG_USER (pt_svc_recovery).
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -16,13 +16,13 @@ function env(): Record<string, string> {
   return { ...readEnvFile(`${BACKEND}.env.local`), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/** The tick connects as its own login (RECOVERY_PG_USER, group pt_svc_recovery, migration 0029; fail closed); audit is an operator check (admin). */
+function pool(asAdmin = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.RECOVERY_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.RECOVERY_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...(asAdmin ? { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD } : servicePgAuth(e, "recovery")),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "recovery",
     max: 2,
@@ -53,7 +53,7 @@ async function runTick(loop: boolean): Promise<void> {
 }
 
 async function audit(): Promise<void> {
-  const db = pool();
+  const db = pool(true);
   try {
     const problems = await verifyAudit(db);
     const n = await db.query<{ n: string }>("SELECT count(*) AS n FROM recovery.audit");

@@ -2,7 +2,7 @@ import { createDecipheriv, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { LOCAL_DEV_CHAIN_ID, readEnvFile } from "@pt/config";
+import { LOCAL_DEV_CHAIN_ID, readEnvFile, servicePgAuth, type ServiceName } from "@pt/config";
 import { secretFromEnv } from "@pt/http-auth";
 import pg from "pg";
 import { createPublicClient, http, type Hex } from "viem";
@@ -33,15 +33,19 @@ function env(): Record<string, string> {
 const rpc = (): string => env().CHAIN_RPC_URL ?? "http://127.0.0.1:8545";
 const keystoreDir = (): string => env().SIGNER_KEYSTORE_DIR ?? `${BACKEND}data/keystore`;
 
-function pool(): pg.Pool {
+/**
+ * serve connects as the signing service's own login (SIGNER_PG_USER, group pt_svc_signer) and audit
+ * as the audit login (AUDIT_PG_USER, read only), both fail closed (migration 0029). setup, decide and
+ * import-web-wallets are local-dev / break-glass operator commands and keep the admin login.
+ */
+function pool(login: ServiceName | "admin" = "admin"): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.PG_ADMIN_PASSWORD,
+    ...(login === "admin" ? { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD } : servicePgAuth(e, login)),
     database: e.PG_DATABASE ?? "property_token",
-    application_name: "signer",
+    application_name: login === "audit" ? "signer-audit" : "signer",
     max: 8,
     statement_timeout: 15_000,
     connectionTimeoutMillis: 5_000,
@@ -131,9 +135,13 @@ async function setup(): Promise<void> {
       ["recovery.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["recovery.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["recovery.add_key", { chainId: LOCAL_DEV_CHAIN_ID, identityRegistry: lc(d.ir), maxPerDay: 20 }],
-      ...(["recovery.propose", "recovery.execute", "recovery.cancel"] as const).map((kind): [string, object] => [kind, {
+      // S-04 phase 0 (migration 0028): every command also needs transfer.command_allowed (an approved case).
+      ...(["recovery.propose", "recovery.execute", "recovery.cancel", "transfer.propose", "transfer.execute", "transfer.cancel"] as const).map((kind): [string, object] => [kind, {
         chainId: LOCAL_DEV_CHAIN_ID, keyRef: "trustee", recoveryGuard: lc(d.recovery), token: lc(d.token), identityRegistry: lc(d.ir),
         maxBalance: MAX_BALANCE, maxPerDay: 50, approvals: 0 }]),
+      // S-05 (migration 0027): every burn also needs exit.burn_allowed (an approved redemption batch) and the reconciliation gate.
+      ["issuance.burn", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "issuance", issuance: lc(d.issuance), token: lc(d.token), maxPerCommand: "100000",
+        maxPerDay: 500, approvals: 0 }],
     ];
     for (const [kind, rule] of policies) {
       const active = await db.query<{ rule: unknown }>("SELECT rule FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL", [kind]);
@@ -176,7 +184,7 @@ async function serve(): Promise<void> {
   const e = env();
   if (!e.SIGNER_MASTER_KEY) throw new Error("run npm run signer:setup first");
   const keys = await FileKeystore.open(keystoreDir(), e.SIGNER_MASTER_KEY);
-  const service = new SignerService(pool(), keys, viemChainReader(rpc()));
+  const service = new SignerService(pool("signer"), keys, viemChainReader(rpc()));
   const clients: Client[] = [{ id: "outbox-worker", secret: secretFromEnv(e, "SIGNER_CLIENT_SECRET_OUTBOX"), scope: OUTBOX_SCOPE }];
   // The website may only create custodial wallets (ADR 0010); it can never ask for a signature.
   if (e.SIGNER_CLIENT_SECRET_WEB) clients.push({ id: "web", secret: secretFromEnv(e, "SIGNER_CLIENT_SECRET_WEB"), scope: WEB_SCOPE });
@@ -203,7 +211,7 @@ async function decide(args: string[]): Promise<void> {
 }
 
 async function audit(): Promise<void> {
-  const db = pool();
+  const db = pool("audit");
   try {
     const { rows } = await db.query<{ audit_id: string; problem: string }>("SELECT * FROM signer.verify_audit()");
     const n = await db.query<{ n: string }>("SELECT count(*) AS n FROM signer.audit");

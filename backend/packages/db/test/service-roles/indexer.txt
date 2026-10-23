@@ -1,0 +1,21 @@
+function chain.apply_batch(p_deployment text, p_expected_block bigint, p_to_block bigint, p_to_hash text, p_blocks jsonb, p_events jsonb)
+function chain.halt(p_deployment text, p_actor text, p_reason text)
+function chain.register_deployment(p_deployment text, p_chain_id bigint, p_from_block bigint, p_contracts jsonb, p_start_hash text)
+schema chain: USAGE
+schema public: USAGE
+table chain.blocks: SELECT
+table chain.contracts: SELECT
+table chain.cursors: SELECT
+table chain.deployments: SELECT
+table chain.distributions: SELECT
+table chain.documents: SELECT
+table chain.events: SELECT
+table chain.freeze_actions: SELECT
+table chain.freezes: SELECT
+table chain.halts: SELECT
+table chain.holdings: SELECT
+table chain.investors: SELECT
+table chain.issuances: SELECT
+table chain.recoveries: SELECT
+table chain.tokens: SELECT
+table chain.transfers: SELECT

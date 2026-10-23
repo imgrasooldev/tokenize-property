@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 import { Peppers } from "../src/crypto.ts";
 import { OffboardingWorker } from "../src/offboarding.ts";
 import { MockSanctions, mockProviders } from "../src/providers.ts";
@@ -13,7 +13,12 @@ import { KycService, revoke } from "../src/service.ts";
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations", import.meta.url));
 const FREEZE_GUARD = `0x${"f1".repeat(20)}`;
 let db: pg.Client;
+/** The KYC service runs as a login in pt_svc_kyc (T-012, migration 0029), as in production. */
 let pool: pg.Pool;
+let login: Awaited<ReturnType<typeof serviceLogin>>;
+/** The offboarding worker runs as a login in pt_svc_offboarding. */
+let offPool: pg.Pool;
+let offLogin: Awaited<ReturnType<typeof serviceLogin>>;
 let drop: () => Promise<void>;
 let kyc: KycService;
 let seq = 0;
@@ -24,13 +29,19 @@ beforeAll(async () => {
   const s = await scratchDatabase();
   ({ client: db, drop } = s);
   await migrate(db, MIGRATIONS);
-  pool = new pg.Pool({ ...s.settings, max: 4 });
+  login = await serviceLogin("kyc", String(s.settings.database));
+  pool = new pg.Pool({ ...login.settings, max: 4 });
   kyc = new KycService(pool, mockProviders(), peppers, dataKey);
+  offLogin = await serviceLogin("offboarding", String(s.settings.database));
+  offPool = new pg.Pool({ ...offLogin.settings, max: 4 });
 });
 
 afterAll(async () => {
   await pool.end();
+  await offPool.end();
   await drop();
+  await login.drop();
+  await offLogin.drop();
 });
 
 async function verified(name = "Offboard Candidate"): Promise<{ subjectId: string; wallet: string }> {
@@ -49,7 +60,7 @@ async function freezes(): Promise<{ key: string; account: string; caseId: string
 
 describe("offboarding (I-3)", () => {
   it("queues nothing for verified investors, one freeze per lost verification, never twice", async () => {
-    const worker = new OffboardingWorker(pool, { freezeGuard: FREEZE_GUARD });
+    const worker = new OffboardingWorker(offPool, { freezeGuard: FREEZE_GUARD });
     const a = await verified();
     const b = await verified();
     expect(await worker.runOnce()).toBe(0);
@@ -69,7 +80,7 @@ describe("offboarding (I-3)", () => {
   });
 
   it("an expired verification is offboarded too", async () => {
-    const worker = new OffboardingWorker(pool, { freezeGuard: FREEZE_GUARD });
+    const worker = new OffboardingWorker(offPool, { freezeGuard: FREEZE_GUARD });
     const c = await verified();
     await db.query("ALTER TABLE kyc.decisions DISABLE TRIGGER decisions_append_only");
     await db.query("UPDATE kyc.decisions SET valid_until = now() - interval '1 minute' WHERE subject_id = $1", [c.subjectId]);
@@ -82,7 +93,7 @@ describe("offboarding (I-3)", () => {
   });
 
   it("the worker reacts to kyc_alert at once and does not double a freeze under concurrent passes", async () => {
-    const worker = new OffboardingWorker(pool, { freezeGuard: FREEZE_GUARD, pollMs: 60_000 });
+    const worker = new OffboardingWorker(offPool, { freezeGuard: FREEZE_GUARD, pollMs: 60_000 });
     await worker.start();
     try {
       const d = await verified();
@@ -101,7 +112,7 @@ describe("offboarding (I-3)", () => {
   });
 
   it("refuses a bad FreezeGuard address and keeps the KYC audit chain intact", async () => {
-    expect(() => new OffboardingWorker(pool, { freezeGuard: "0x123" })).toThrow();
+    expect(() => new OffboardingWorker(offPool, { freezeGuard: "0x123" })).toThrow();
     await expect(db.query("SELECT kyc.enqueue_offboarding('nonsense', 'x')")).rejects.toThrow(/FreezeGuard/);
     // The only problem allowed is the decision this file aged by hand (expiry test).
     const { rows } = await db.query<{ problem: string }>("SELECT problem FROM kyc.verify_audit()");
