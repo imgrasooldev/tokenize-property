@@ -73,6 +73,7 @@
     "notify:setup": "tsx packages/notify/src/cli.ts setup",
     "notify:run": "tsx packages/notify/src/cli.ts run",
     "notify:status": "tsx packages/notify/src/cli.ts status",
+    "notify:sweep": "tsx packages/notify/src/cli.ts sweep",
     "recovery:tick": "tsx packages/recovery/src/cli.ts tick",
     "recovery:audit": "tsx packages/recovery/src/cli.ts audit",
     "tax:setup": "tsx packages/tax/src/cli.ts setup",

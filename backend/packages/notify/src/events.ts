@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 /**
- * Event catalogue (ADR 0013, rule N-2). Mirrors `notify.event_kinds` in migrations 0017 and 0020; a test
+ * Event catalogue (ADR 0013, rule N-2). Mirrors `notify.event_kinds` in migrations 0017, 0020 and 0030; a test
  * keeps the two identical. Every value a message can carry is one of these typed placeholders, so
  * no personal data (names, phone numbers, CNICs, IBANs, e-mail addresses) can reach a template.
  */
 
 export type Channel = "sms" | "email" | "push";
 export type Locale = "en" | "ur";
-export type Category = "security" | "transactional";
-export type PlaceholderType = "utc" | "paisa" | "last4" | "code" | "label" | "word";
+export type Category = "security" | "transactional" | "marketing";
+export type PlaceholderType = "utc" | "paisa" | "count" | "last4" | "code" | "label" | "word";
 
 interface PlaceholderSpec {
   readonly type: PlaceholderType;
@@ -71,7 +71,91 @@ export const EVENT_KINDS = {
     category: "transactional",
     placeholders: { token: { type: "code" }, amount_paisa: { type: "paisa" }, period: { type: "code" } },
   },
+  // Migration 0030 (producers, ADR 0013 amendment 1).
+  "offering.reserved": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, amount_paisa: { type: "paisa" }, expires_at: { type: "utc" } },
+  },
+  "offering.payment_received": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, amount_paisa: { type: "paisa" } },
+  },
+  "offering.allocated": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, units: { type: "count" } },
+  },
+  "offering.units_issued": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, units: { type: "count" } },
+  },
+  "offering.reservation_expired": { category: "transactional", placeholders: { offering: { type: "label" } } },
+  "offering.reservation_cancelled": { category: "transactional", placeholders: { offering: { type: "label" } } },
+  "offering.waitlisted": { category: "transactional", placeholders: { offering: { type: "label" } } },
+  "offering.not_accepted": { category: "transactional", placeholders: { offering: { type: "label" } } },
+  "offering.refund_pending": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, amount_paisa: { type: "paisa" } },
+  },
+  "offering.refunded": {
+    category: "transactional",
+    placeholders: { offering: { type: "label" }, amount_paisa: { type: "paisa" } },
+  },
+  "bank.payment_unmatched": {
+    category: "transactional",
+    placeholders: { amount_paisa: { type: "paisa" }, at: { type: "utc" } },
+  },
+  "rent.distributed": {
+    category: "transactional",
+    placeholders: { token: { type: "label" }, amount_paisa: { type: "paisa" }, period: { type: "code" } },
+  },
+  "rent.held": {
+    category: "transactional",
+    placeholders: { token: { type: "code" }, amount_paisa: { type: "paisa" }, period: { type: "code" } },
+  },
+  "rent.payout_returned": {
+    category: "transactional",
+    placeholders: { token: { type: "code" }, amount_paisa: { type: "paisa" } },
+  },
+  "tax.certificate_available": { category: "transactional", placeholders: { fiscal_year: { type: "code" } } },
+  "security.passkey_added": { category: "security", placeholders: { at: { type: "utc" } } },
+  "security.passkey_removed": { category: "security", placeholders: { at: { type: "utc" } } },
+  "security.passkey_disabled": { category: "security", placeholders: { at: { type: "utc" } } },
+  "marketing.offering_open": { category: "marketing", placeholders: { offering: { type: "label" } } },
+  "officer.action_waiting": {
+    category: "transactional",
+    placeholders: {
+      queue: {
+        type: "word",
+        choices: [
+          "signing",
+          "trustee_cosign",
+          "offering_request",
+          "payout_release",
+          "kyc_review",
+          "freeze_decision",
+          "compliance_case",
+          "distribution_approval",
+          "trustee_precheck",
+          "distribution_review",
+        ],
+      },
+      reference: { type: "code" },
+    },
+  },
+  "officer.alert": {
+    category: "security",
+    placeholders: {
+      topic: { type: "word", choices: ["payouts_paused", "payouts_resumed", "passkey_clone", "sla_breach"] },
+      reference: { type: "code" },
+      at: { type: "utc" },
+    },
+  },
 } as const satisfies Record<string, KindSpec>;
+
+/** Kinds addressed to officers (PT Control); every other kind reaches investors and must not tip off (NP-4). */
+export function isOfficerKind(kind: string): boolean {
+  return kind.startsWith("officer.");
+}
 
 export type EventKind = keyof typeof EVENT_KINDS;
 
@@ -79,7 +163,7 @@ type ValueOf<S> = S extends { type: "word"; choices: readonly (infer C)[] }
   ? C
   : S extends { type: "utc" }
     ? Date | string
-    : S extends { type: "paisa" }
+    : S extends { type: "paisa" | "count" }
       ? bigint
       : string;
 
@@ -111,6 +195,8 @@ export function valueSchema(spec: PlaceholderSpec): z.ZodType<string> {
       return z.string().regex(UTC, "a UTC time like 2026-10-13T09:00:00Z").refine((s) => !Number.isNaN(Date.parse(s)), "a valid time");
     case "paisa":
       return z.string().regex(/^(0|[1-9][0-9]{0,17})$/, "a whole number of paisa");
+    case "count":
+      return z.string().regex(/^(0|[1-9][0-9]{0,17})$/, "a whole number");
     case "last4":
       return z.string().regex(/^[0-9]{4}$/, "exactly four digits");
     case "code":
@@ -138,7 +224,7 @@ function toWire(spec: PlaceholderSpec, value: unknown): unknown {
     if (Number.isNaN(value.getTime())) return "invalid";
     return value.toISOString();
   }
-  if (spec.type === "paisa" && typeof value === "bigint") return value.toString();
+  if ((spec.type === "paisa" || spec.type === "count") && typeof value === "bigint") return value.toString();
   return value;
 }
 
