@@ -42,12 +42,16 @@ export async function enrolLink(cli: pg.Client, handle: string): Promise<string>
   return `/enrol#token=${t}`;
 }
 
+let clients = 0;
 /**
  * A page with its own virtual FIDO2 security key (Chrome DevTools Protocol WebAuthn domain):
  * CTAP2 over USB, resident keys, user verification (PIN) always succeeds, presence automatic.
  */
 export async function pageWithKey(browser: Browser): Promise<{ page: Page; credentials: () => Promise<number> }> {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  // Each officer's browser is its own client for the per-address ceremony limits (10 enrolments a
+  // minute): the e2e server trusts X-Forwarded-For (ADMIN_TRUST_PROXY=1, playwright.config.ts), so a
+  // fast run (warm CI cache) does not trip the limit with several officers enrolling from one address.
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-forwarded-for": `198.51.100.${String(++clients)}` } });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");

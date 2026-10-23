@@ -37,6 +37,9 @@ const portal = {
   env: {
     NEXT_DIST_DIR: ".next-e2e",
     ADMIN_ORIGIN: "http://localhost:3301",
+    // Each test officer's browser sends its own X-Forwarded-For (e2e/helpers.ts pageWithKey), so the
+    // per-address ceremony limits apply per officer as they would behind the real proxy.
+    ADMIN_TRUST_PROXY: "1",
     ADMIN_PG_DATABASE: database,
     ADMIN_PG_USER: env.get("ADMIN_PG_USER") ?? "",
     ADMIN_PG_PASSWORD: env.get("ADMIN_PG_PASSWORD") ?? "",
