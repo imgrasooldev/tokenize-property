@@ -5,6 +5,7 @@ import type { Dict, Lang } from "@/lib/i18n";
 import { analystDict } from "@/lib/i18n-analyst";
 import { exitDict } from "@/lib/i18n-exit";
 import { offeringDict } from "@/lib/i18n-offering";
+import { transferDict } from "@/lib/i18n-transfer";
 import { PROPERTIES } from "@/lib/properties";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
@@ -264,7 +265,7 @@ export function PublicPage({ active, children, minimal = false }: { active: Publ
   );
 }
 
-export type PortalKey = "portfolio" | "invest" | "subscriptions" | "exit" | "market" | "rent" | "properties" | "account";
+export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account";
 
 function initials(name: string): string {
   // Words that start with a letter only, so "Bob (demo)" gives "B", not "B(".
@@ -289,6 +290,7 @@ export async function PortalShell({
     { key: "portfolio", href: "/portfolio", icon: "◧", label: t.navPortfolio },
     { key: "invest", href: `/properties/${LIVE_SYMBOL}`, icon: "⬡", label: t.invest },
     { key: "subscriptions", href: "/subscriptions", icon: "◫", label: offeringDict(lang).navMySubs },
+    { key: "transfers", href: "/transfers", icon: "↔", label: transferDict(lang).navTransfers },
     { key: "exit", href: "/exit", icon: "⇲", label: exitDict(lang).navExit },
     { key: "market", href: "/market", icon: "⇄", label: t.navMarket },
     { key: "rent", href: "/portfolio#rent", icon: "₨", label: t.rentAndProofs },

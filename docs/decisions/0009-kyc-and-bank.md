@@ -132,3 +132,8 @@ Not built yet (S-02 §8): batch kinds `completion` (OF-45) and `refund` (OF-52, 
 - New derived status `suspended`: a verified (or expired) subject under an approved compliance freeze (`compliance.holds`). `kyc.underlying_status()` keeps the 0009 derivation; every gate comparing with `verified` treats a suspended investor as not verified (payouts held, no mints or transfers). The offboarding list does not include `suspended` (the compliance freeze already queued its own command).
 - Officer names in `kyc.clearances` and `kyc.decisions` are bound to officer sessions (as ADR 0011 section 10): officers decide in the portal; non-officer operator names keep working on the command line.
 - Re-screening requested by officers is queued in `compliance.rescreens` and executed by the KYC service (`npm run kyc:rescreen`).
+
+## Amendment 2026-10-22: payment codes for transfers (S-04 section 16.4, migration 0028)
+
+- `bank.payment_intents` gains the purpose `transfer`: a buyer's subject, ledger key `xfer:<caseUuid>:paid`, credit account `transfer:<caseUuid>:escrow` (named constraints replace the 0009 purpose checks). Every B-2 rule applies unchanged (exact amount, registered account of the buyer, KYC-verified, cancelled or expired codes to suspense).
+- The seller's settlement and the buyer's refund are maker-checker in the transfer schema (`transfer.cash_ops`): operations maker prepares, operations checker approves (never the preparer, the case's opener or completer), `bank.require_gate()` at approval, journals posted and the SHA-256 of the canonical bank instruction recorded before anything is sent. As for S-02 refunds, the bank service does not yet send these instructions itself.

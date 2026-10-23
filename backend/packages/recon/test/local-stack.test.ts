@@ -144,7 +144,9 @@ describe("a freshly set-up local stack reconciles", () => {
   let file: StatementFile;
 
   it("chain/flow.py alone: its scenario mint and its distribution; seed:local books the mint", async () => {
-    // flow.py: 60,000 to Alice (refId 0xa1…a1), 10,000 to Bob, distribution 1 published (not finalized).
+    // flow.py: go-live (the Admin Safe unpauses the token, so the demo market can trade), then 60,000 to
+    // Alice (refId 0xa1…a1), 10,000 to Bob, distribution 1 published (not finalized).
+    chain.mine(d, [{ role: "token", name: "Unpaused", args: { _userAddress: `0x${"ad".repeat(20)}` } }]);
     mint(FLOW_REF_ID, ALICE, 60_000n);
     transfer(ALICE, BOB, 10_000n);
     statement.token = d.contracts.token;

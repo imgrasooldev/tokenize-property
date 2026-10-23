@@ -11,6 +11,7 @@ import { caseOf, freezePolicies, investor } from "../support/compliance";
 import { reversalCase, walletCase } from "../support/recovery";
 import { exitCaseFixture, exitToken, exitWindowFixture, sha64 } from "../support/exit";
 import { operationsWorld } from "../support/operations";
+import { party as transferParty, PRICE as TRANSFER_PRICE, TRANSFER_TOKEN, transferWorld } from "../support/transfers";
 import { distribution, holding, readModelToken, type TestToken } from "../support/trustee";
 import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
 
@@ -41,6 +42,8 @@ const TAX: Role[] = ["tax_officer", "auditor"];
 const OFFERING: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 const COMMITTEE: Role[] = ["ops_maker", "ops_checker", "compliance_officer"];
 const NO_PROPERTY = "00000000-0000-4000-8000-000000000046";
+// S-04 (migration 0028): transfers are read by the desk, checkers, compliance, the trustee and auditors (never legal, tax or administrators).
+const TRANSFER: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor"];
 // S-05: operations, compliance, legal and trustee officers and auditors read exits; the four deciding roles decide.
 const EXIT: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"];
 const EXIT_DECIDE: Role[] = ["ops_checker", "compliance_officer", "legal_officer", "trustee_officer"];
@@ -112,6 +115,11 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/approvals/offering/999999", allowed: OFFERING, okStatus: 404 },
   { path: "/trustee/properties", allowed: TRUSTEE },
   { path: `/trustee/properties/${NO_PROPERTY}`, allowed: TRUSTEE, okStatus: 404 },
+  // S-04 (migration 0028): transfer cases, their audit chain; unknown cases are "not found".
+  { path: "/transfers", allowed: TRANSFER },
+  { path: "/transfers/audit", allowed: TRANSFER },
+  { path: "/transfers/{transferCase}", allowed: TRANSFER },
+  { path: "/transfers/999999", allowed: TRANSFER, okStatus: 404 },
   // S-05 (migration 0027): every role that works on exits reads them (never tax officers or administrators).
   { path: "/exit", allowed: EXIT },
   { path: "/exit/{exitCase}", allowed: EXIT },
@@ -184,6 +192,15 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/approvals/offering/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/offering/1/return", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "return", reason: "short" } },
   { path: `/api/trustee/properties/${NO_PROPERTY}/decide`, allowed: ["trustee_officer"], okStatus: 303, form: { decision: "accept", reason: "short" } },
+  // S-04: an incomplete form (no digest, short reason, no action) is answered with a 303 back (nothing done).
+  { path: "/api/transfers/cases", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/transfers/cases/{transferCase}/desk", allowed: ["ops_maker"], okStatus: 303, form: { decision: "complete" } },
+  { path: "/api/transfers/cases/{transferCase}/decide", allowed: ["compliance_officer", "trustee_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/transfers/cases/{transferCase}/cash", allowed: ["ops_maker", "ops_checker"], okStatus: 303, form: {} },
+  { path: "/api/transfers/sync", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/transfers/prices", allowed: ["ops_checker"], okStatus: 303, form: {} },
+  { path: "/api/transfers/conflicts", allowed: TRANSFER, okStatus: 303, form: {} },
+  { path: "/api/transfers/links", allowed: ["compliance_officer", "trustee_officer"], okStatus: 303, form: {} },
   // S-05: an incomplete form (or a missing step-up, or no sync button) is answered with a 303 back (nothing done).
   { path: "/api/audit/exit/export", allowed: ["compliance_officer", "trustee_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
   { path: "/api/exit/cases", allowed: ["ops_maker"], okStatus: 303, form: { rationale: "short" } },
@@ -196,6 +213,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
 function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
+  if (path.startsWith("/api/transfers/") && (path.endsWith("/decide") || path.endsWith("/links"))) return "compliance_officer";
+  if (path === "/api/transfers/prices") return "ops_checker";
   if (path.startsWith("/api/trustee/")) return "trustee_officer";
   if (path.startsWith("/api/compliance/")) return "compliance_officer";
   if (path.startsWith("/api/tax/")) return "tax_officer";
@@ -338,6 +357,18 @@ beforeAll(async () => {
   if (!adj.rows[0]?.r.ok) throw new Error(`adjustment: ${adj.rows[0]?.r.error ?? "?"}`);
   ids.set("adjustment", String(adj.rows[0].r.id));
   ids.set("run", (await w.su.query<{ id: string }>("SELECT max(id)::text AS id FROM recon.runs")).rows[0]?.id ?? "");
+  // S-04 item: a desk sale opened through the portal function by the operations maker (step-up), still requested.
+  await transferWorld(w.su);
+  const xSeller = await transferParty(w.su, 400n);
+  const xBuyer = await transferParty(w.su);
+  // A small signature counter: the describe blocks below count up from Date.now() for this key.
+  await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [c.ops_maker.sessionHash, c.ops_maker.credentialId, 500]);
+  const xf = await w.portal.query<{ r: { ok: boolean; id: number; error?: string } }>(
+    "SELECT admin.transfer_open($1, $2, $3, $4, 40, 'sale', $5, NULL, $6, NULL, NULL) AS r",
+    [c.ops_maker.sessionHash, xSeller.subjectId, xBuyer.subjectId, TRANSFER_TOKEN, TRANSFER_PRICE.toString(), "cd".repeat(32)],
+  );
+  if (!xf.rows[0]?.r.ok) throw new Error(`transfer: ${xf.rows[0]?.r.error ?? "?"}`);
+  ids.set("transferCase", String(xf.rows[0].r.id));
   // S-05 items: a token of its own with two holders, an exit case and a redemption window (command-line names).
   const exitTok = await exitToken(w.su, [
     { wallet: `0x${"e1".repeat(20)}`, units: 600n },
@@ -403,7 +434,8 @@ describe("route coverage", () => {
           .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
-          .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]"),
+          .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
+          .replace(/^\/transfers\/(\{\w+\}|\d+)$/, "/transfers/[id]"),
       ),
       ...APIS.map((a) =>
         a.path
@@ -421,7 +453,8 @@ describe("route coverage", () => {
           .replace(/^\/api\/trustee\/register\/adjustments\/\{\w+\}\/decide$/, "/api/trustee/register/adjustments/[id]/decide")
           .replace(/^\/api\/trustee\/cosign\/(signer|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/trustee/cosign/$1/[id]/decide")
           .replace(/^\/api\/trustee\/distributions\/\{\w+\}\/\{\w+\}\/decide$/, "/api/trustee/distributions/[registry]/[id]/decide")
-          .replace(/^\/api\/trustee\/cosign\/(charge|calculation)\/(\{\w+\}|\d+)\/decide$/, "/api/trustee/cosign/$1/[id]/decide"),
+          .replace(/^\/api\/trustee\/cosign\/(charge|calculation)\/(\{\w+\}|\d+)\/decide$/, "/api/trustee/cosign/$1/[id]/decide")
+          .replace(/^\/api\/transfers\/cases\/\{\w+\}\/(desk|decide|cash)$/, "/api/transfers/cases/[id]/$1"),
       ),
       ...ANONYMOUS_POSTS,
       "/login",
@@ -806,6 +839,51 @@ describe("recovery over HTTP (S-06)", () => {
     const j = await w.su.query<{ kind: string }>("SELECT j.kind FROM recovery.cases c JOIN ledger.journal j ON j.id = c.reversal_journal_id WHERE c.id = $1", [resolve("{reversalCase}")]);
     expect(j.rows[0]?.kind).toBe("reversal");
     expect((await w.su.query("SELECT * FROM recovery.verify_audit()")).rows).toEqual([]);
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("transfers over HTTP (S-04)", () => {
+  let counter = Date.now() + 8_000_000;
+  const location = (res: Response): string => decodeURIComponent(res.headers.get("location") ?? "");
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  async function fresh(a: Actor, stale = false): Promise<void> {
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+  const page = (who: Role) => req(`/transfers/${resolve("{transferCase}")}`, { who }).then((r) => r.text());
+
+  it("transfer pages show masked identifiers only; alerts only for compliance officers and auditors", async () => {
+    for (const p of ["/transfers", `/transfers/${resolve("{transferCase}")}`, "/transfers/audit"]) {
+      const html = withoutHashes(await (await req(p, { who: "compliance_officer" })).text());
+      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}|PK\d{2}[A-Z]{4}/);
+    }
+    expect(await page("auditor")).toMatch(/\*{5}-\*{4}\d{3}-\d/);
+    expect(await page("compliance_officer")).toMatch(/Surveillance alerts/);
+    for (const who of ["ops_maker", "ops_checker", "trustee_officer"] as const) expect(await page(who)).not.toMatch(/Surveillance alerts/);
+  });
+
+  it("the desk completes the request as shown (fresh step-up, digest); compliance then approves in its capacity", async () => {
+    const id = resolve("{transferCase}");
+    const desk = (form: Record<string, string>) => req(`/api/transfers/cases/${id}/desk`, { method: "POST", who: "ops_maker", form });
+    await fresh(c.ops_maker, true);
+    expect(location(await desk({ decision: "complete", digest: digestOf(await page("ops_maker")) }))).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.ops_maker);
+    expect(location(await desk({ decision: "complete", digest: "ab".repeat(32) }))).toMatch(/error=the case differs from what you reviewed/);
+    expect(location(await desk({ decision: "complete", digest: digestOf(await page("ops_maker")) }))).toMatch(/ok=Recorded: the case is now checks/);
+    await fresh(c.compliance_officer);
+    const digest = digestOf(await page("compliance_officer"));
+    const decide = (capacity: string) =>
+      req(`/api/transfers/cases/${id}/decide`, { method: "POST", who: "compliance_officer", form: { decision: "approve", capacity, reason: "all checks reviewed against the file", digest } });
+    expect(location(await decide("trustee"))).toMatch(/error=.*trustee_officer/);
+    expect(location(await decide("compliance"))).toMatch(/ok=Recorded: the case is now checks/);
+    const row = await w.su.query<{ officer: string }>("SELECT officer FROM transfer.decisions WHERE case_id = $1", [id]);
+    expect(row.rows.map((r) => r.officer)).toEqual([c.compliance_officer.handle]);
+    expect((await w.su.query("SELECT * FROM transfer.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });

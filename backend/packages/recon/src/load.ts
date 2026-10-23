@@ -18,6 +18,7 @@ import type {
   PayoutBatch,
   ReconData,
   TaxData,
+  TransferData,
 } from "./types.ts";
 
 export interface LoadOptions {
@@ -180,6 +181,20 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       tax = { findings, documents };
     }
 
+    // S-04 phase 0 transfers of this token (migration 0028), read-only, when the schema exists.
+    let transfers: TransferData | undefined;
+    const hasTransfers = (await q<{ ok: boolean }>("SELECT to_regprocedure('transfer.reconcile(text)') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasTransfers) {
+      const token = lower(d.contracts.token);
+      const guard = d.contracts.recovery ? lower(d.contracts.recovery) : null;
+      const findings = (await q<{ check_name: string; subject: string; expected: string; actual: string }>("SELECT check_name, subject, expected, actual FROM transfer.reconcile($1)", [token]))
+        .map((r) => ({ check: r.check_name, subject: r.subject, expected: r.expected, actual: r.actual }));
+      const caseRequestIds = guard
+        ? (await q<{ request_id: string }>("SELECT request_id::text FROM transfer.recon_requests WHERE guard = $1 ORDER BY request_id", [guard])).map((r) => BigInt(r.request_id))
+        : [];
+      transfers = { findings, caseRequestIds };
+    }
+
     // S-05 exits of this token (migration 0027), read-only, when the schema exists.
     let exit: ExitData | undefined;
     const hasExit = (await q<{ ok: boolean }>("SELECT to_regclass('exit.recon_lines') IS NOT NULL AS ok"))[0]?.ok ?? false;
@@ -243,6 +258,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       ...(offerings ? { offerings } : {}),
       ...(recovery ? { recovery } : {}),
       ...(tax ? { tax } : {}),
+      ...(transfers ? { transfers } : {}),
       ...(exit ? { exit } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },

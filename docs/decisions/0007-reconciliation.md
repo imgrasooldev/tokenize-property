@@ -166,3 +166,18 @@ The warning `issuance.burn_not_reconciled` is replaced by blocking burn checks. 
 | `exit.statement_totals` | blocking | a final statement inconsistent with its hashes, root or totals, or a booked one whose hash differs from the chain |
 
 The final distribution keeps the `rent:` journal family (S-05 Q-3), so `checkRent` and the cash check match it unchanged; proceeds and waterfall payments carry the bank reference as `external_ref` and match the trustee-escrow statement lines.
+
+## Amendment 2026-10-22: secondary transfers, phase 0 (S-04 section 16.8, migration 0028)
+
+The rules are evaluated in the database (`transfer.reconcile(token)`) and mapped to findings by `checkTransfers`; loaded only where the transfer schema exists.
+
+| Check | Severity | Meaning |
+|---|---|---|
+| `transfer.unapproved` | blocking | evaluated while the token is paused in the read model (phase 0; the demo network keeps its token unpaused for the demo market): a holder-to-holder `Transfer` from block `unapproved_from_block` on (the read model's head when 0028 was applied) that is neither in the transaction of an executed RecoveryGuard request linked to a transfer or recovery case, nor of a confirmed `token.transfer` command or settled demo-market trade |
+| `transfer.settlement_mismatch` | blocking | an executed case without its exact movement, a settled case without its approved settlement (net = gross − fee − tax), or an `xfer:<id>:settled` journal without an executed case |
+| `transfer.register_mismatch` | blocking | an executed case without its two trustee register entries |
+| `transfer.escrow_residual` | blocking | a settled, cancelled or rejected sale with money left in its escrow, or an executed sale not settled within `escrow_residual_hours` |
+| `transfer.paid_not_executed` | warning | a paid case neither executed nor refunded |
+| `transfer.paid_not_executed_overdue` | blocking | the same after `paid_not_executed_hours` |
+
+`recovery.unmatched` no longer reports a RecoveryGuard request that belongs to a transfer case (`transfer.recon_requests`). Ledger conventions: `xfer:<caseUuid>:paid` (bank → `transfer:<caseUuid>:escrow`, external reference = the buyer's Raast reference), `:fee`, `:tax`, `:settled` (external reference = the settlement reference `PTXFER-…`), `:refunded` (external reference = the buyer's original Raast reference).

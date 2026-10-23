@@ -8,6 +8,8 @@ export interface FakeEvent {
   role: Role;
   name: string;
   args: Record<string, unknown>;
+  /** Transaction index inside the block; events with the same value share one transaction (default: one each). */
+  tx?: number;
 }
 
 /** A log that matches no ABI (kept raw by the indexer). */
@@ -77,7 +79,7 @@ export class FakeChain implements ChainSource {
     const encoded = events.map((e) => {
       const address = d.contracts[e.role];
       if (!address) throw new Error(`deployment has no ${e.role}`);
-      return { address, ...("raw" in e ? e.raw : encode(e)) };
+      return { address, ...("raw" in e ? e.raw : encode(e)), ...(!("raw" in e) && e.tx !== undefined ? { tx: e.tx } : {}) };
     });
     return this.push(encoded);
   }
@@ -96,7 +98,7 @@ export class FakeChain implements ChainSource {
     }
   }
 
-  private push(logs: { address: Address; topics: Hex[]; data: Hex }[]): Header {
+  private push(logs: { address: Address; topics: Hex[]; data: Hex; tx?: number }[]): Header {
     const number = BigInt(this.blocks.length);
     const parentHash: Hex = this.blocks.at(-1)?.hash ?? `0x${"0".repeat(64)}`;
     const hash = keccak256(toHex(`${this.salt}:${number.toString()}:${parentHash}`));
@@ -106,8 +108,8 @@ export class FakeChain implements ChainSource {
       address: l.address,
       blockNumber: number,
       blockHash: hash,
-      transactionHash: keccak256(toHex(`tx:${hash}:${String(i)}`)),
-      transactionIndex: i,
+      transactionHash: keccak256(toHex(`tx:${hash}:${String(l.tx ?? i)}`)),
+      transactionIndex: l.tx ?? i,
       logIndex: i,
       topics: l.topics,
       data: l.data,

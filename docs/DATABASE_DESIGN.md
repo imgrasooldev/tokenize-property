@@ -401,6 +401,27 @@ Schema `exit`. Additive changes elsewhere: income type `exit_distribution` with 
 
 Roles: `pt_exit_operator` (exit service / operator command line: maker steps, statement, redemption items, checker steps as S-03, tick, windows), `pt_exit_reader`.
 
+### 0028 transfers (XF-1..XF-10; spec S-04 section 16, ADR 0005/0007/0009/0010/0011 amendments)
+
+Applies on top of 0027 (S-05 exit): uses `exit.exit_underway()` and `exit.requests` in its checks and keeps 0027's register source `redemption`. Schema `transfer` (role `pt_transfer_worker` runs `transfer.tick`):
+
+| Table | Rules |
+|---|---|
+| `cases` | one case per transfer; `case_ref` = SHA-256 of `pt-transfer-v1:<uuid>` (caseId in the signing payloads); origin `desk` or `investor`; consideration `sale` (price, total = units × price) or `gift` / `family` / `court_order` (no price, a reason); agreement SHA-256; state machine in trigger `guard_case` (requested → checks → rejected / awaiting_cash / proposed; awaiting_cash → proposed / cancelled / refunding; proposed → executed / cancelling / failed; cancelling / failed → executed / refunding / cancelled; refunding → cancelled; executed → settled / disputed; settled → disputed); parties, units, price, agreement immutable; decision facts written once; command attempts only forward |
+| `events` | append-only state history of every case |
+| `decisions` | one per capacity (`compliance`, `trustee`) and per officer per case, with the reviewed digest |
+| `checks` | recorded runs of `transfer.check_results(case, stage)` (stages complete, approve, payment, execute) when the result changes |
+| `receive_codes` | the buyer's single-use code `TR-XXXX-XXXX` (7 days), used once by a website request |
+| `reference_prices` | valuation per unit with the evidence SHA-256 (operations checker); the latest one, else the offering price, is the price-band reference |
+| `conflicts`, `party_links` | officers' declared conflicts with an investor (TR-SOD-2); declared links between investors (surveillance) |
+| `alerts` | surveillance alerts (price outside the band, round trip, frequent, linked parties), each with its 6c STR case |
+| `blocks` | per-token blocks (S-05 exit hook, incidents), closed once |
+| `cash_ops` | seller settlement (gross, fee, withholding at a `tax.rates` row, net, payee) or buyer refund (credit reference): prepared by an operations maker, decided once by an operations checker (≠ preparer, opener, completer); journals and the instruction SHA-256 on approval |
+| `settings` | lock-up, price band, payment hours, screening age, fee, SLAs, surveillance limits, allowed countries, `unapproved_from_block`; changed by the administrator only, audited |
+| `audit` | hash-chained (`pt-transfer-audit-v1`, UTC); `verify_audit()` also finds rows written around the functions |
+
+Functions: `open_desk`, `web_new_code`, `web_request`, `web_accept`, `web_withdraw`, `withdraw`, `complete`, `decide`, `cancel`, `dispute`, `tick` / `tick_case`, `prepare_cash`, `decide_cash`, `set_reference_price`, `declare_conflict`, `link_parties`, `open_block` / `close_block`, `check_results`, `command_allowed` (signing service), `reconcile(token)` and view `recon_requests` (reconciliation), `web_list`. Portal: `admin.transfer_cases|case|open|act|cash|sync|set_price|declare_conflict|link_parties|audit`; website: `webauth.web_transfers|web_transfer_code|web_transfer_request|web_transfer_accept|web_transfer_withdraw` and step-up actions `transfer.request|accept|withdraw`. Amendments of other schemas (additive): bank purpose `transfer` on `bank.payment_intents` (named constraints), register source `transfer` on `trustee.register_entries`, income type `unit_disposal` with PLACEHOLDER rates in `tax.rates` (audited in `ops.audit`), notify kinds `security.transfer_requested`, `transfer.status_changed`, `transfer.payment_due` (EN/UR SMS + e-mail), permissions `transfer.read|request|decide|cash|price` (role matrix digest fixed again).
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -446,12 +467,13 @@ All NOLOGIN, created idempotently:
 | 0024 | no new role: `pt_web` may execute the `webauth.web_*` functions; `offering.web_reserve` / `web_cancel` revoked from it |
 | 0025 | no new role: `pt_web` may execute `anchor.web_status()` and `anchor.web_recent(integer)` (nothing else in schema `anchor`) |
 | 0027 | `pt_exit_operator`, `pt_exit_reader`; `pt_signer` may execute `exit.burn_allowed`; `pt_web` may execute `webauth.web_exit_overview`, `web_redemption_request`, `web_redemption_withdraw` |
+| 0028 | `pt_transfer_worker` (`transfer.tick`); `pt_signer` may execute `transfer.command_allowed`; `pt_web` the five `webauth.web_transfer*` functions (no grant on schema `transfer`) |
 
 The website does not use these roles; it connects as the admin user (task T-012).
 
 ## 6. Ledger account conventions
 
-From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). S-03 (0021): `vendor:payable:<payee>`, `fees:payable:<payee>`, `reserve:<token>`, `tax:wht-payable:<token>`, `rent:payable:wallet:<wallet>` (holder without a KYC subject); S-05 (0027): `exit:pool:<token>`, `reserve:<token>:closure`, `debt:payable:<payee>`, `deposit:payable:<payee>`, `tax:payable:<token>`, journals `exit:<token>:deposit`, `exit:<token>:proceeds:<n>`, `exit:<token>:waterfall:<line>[:paid[:<payment>]]`, `exit:<token>:reserve-release:<line>`, `exit:<token>:rent-transfer:<line>` (the final distribution keeps `rent:wht` / `rent:distribution` / `rent:payout`); journals `rent:collected:<token>:<period>-c<id>`, `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>`, `rent:wht:<token>:<id>`, `tax:remit:<token>:<cpr>`. The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
+From `backend/packages/recon/src/conventions.ts` and the `0009` checks: `web:sub:<uuid>:paid|settled|refunded`, `sub:<refId>:...`, `rent:collected:<token>:<id>`, `rent:pool:<token>`, `rent:distribution:<token>:<id>` (external_ref = statement hash), `rent:payable:<subjectId>`, `rent:payout:<token>:<id>` and `...:followup:<batch>`, `investor:<subjectId>:subscriptions`, `bank:trustee-escrow`, `bank:suspense`, `property:<token>:capital` (equity; credited by `sub:<refId>:settled` at completion, 0015). S-03 (0021): `vendor:payable:<payee>`, `fees:payable:<payee>`, `reserve:<token>`, `tax:wht-payable:<token>`, `rent:payable:wallet:<wallet>` (holder without a KYC subject); S-05 (0027): `exit:pool:<token>`, `reserve:<token>:closure`, `debt:payable:<payee>`, `deposit:payable:<payee>`, `tax:payable:<token>`, journals `exit:<token>:deposit`, `exit:<token>:proceeds:<n>`, `exit:<token>:waterfall:<line>[:paid[:<payment>]]`, `exit:<token>:reserve-release:<line>`, `exit:<token>:rent-transfer:<line>` (the final distribution keeps `rent:wht` / `rent:distribution` / `rent:payout`); journals `rent:collected:<token>:<period>-c<id>`, `expense:<token>:<id>:approved`, `fee:<token>:<period>:<type>`, `reserve:<token>:<period>`, `reserve:<token>:release:<id>`, `rent:wht:<token>:<id>`, `tax:remit:<token>:<cpr>`. S-04 (0028): account `transfer:<caseUuid>:escrow` (liability, one per priced case), `fees:payable:platform`, `tax:cgt-payable:<token>`; journals `xfer:<caseUuid>:paid` (by `bank.book_credit`), `:fee`, `:tax`, `:settled`, `:refunded`. The web prototype uses accounts `web:bank:subscriptions`, `web:bank:client-money`, `web:investor:<id>:subscription`, `web:investor:<id>:cash`, `web:property:<symbol lower-case>:capital`, `web:order:<id>:escrow`, and journal keys such as `web:sub:<id>:paid|settled|refunded`, `web:topup:<id>`, `web:trade:<id>:settle|release`, `web:order:<id>:reserve|release` (grep of `web/src/lib/server/*.ts`).
 
 ## 7. `webdemo` (runtime, prototype only)
 

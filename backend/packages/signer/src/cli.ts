@@ -131,7 +131,8 @@ async function setup(): Promise<void> {
       ["recovery.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["recovery.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["recovery.add_key", { chainId: LOCAL_DEV_CHAIN_ID, identityRegistry: lc(d.ir), maxPerDay: 20 }],
-      ...(["recovery.propose", "recovery.execute", "recovery.cancel"] as const).map((kind): [string, object] => [kind, {
+      // S-04 phase 0 (migration 0028): every command also needs transfer.command_allowed (an approved case).
+      ...(["recovery.propose", "recovery.execute", "recovery.cancel", "transfer.propose", "transfer.execute", "transfer.cancel"] as const).map((kind): [string, object] => [kind, {
         chainId: LOCAL_DEV_CHAIN_ID, keyRef: "trustee", recoveryGuard: lc(d.recovery), token: lc(d.token), identityRegistry: lc(d.ir),
         maxBalance: MAX_BALANCE, maxPerDay: 50, approvals: 0 }]),
       // S-05 (migration 0027): every burn also needs exit.burn_allowed (an approved redemption batch) and the reconciliation gate.

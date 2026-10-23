@@ -2,7 +2,7 @@
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
  * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016, the Step 6c ones of 0019, the
  * S-06 role and permissions of 0020, the S-03 role and permissions of 0021, the Step 6d ones of
- * 0023, the committee and offering votes of 0026 and the S-05 exit permissions of 0027). The database is the authority and checks every request itself; this copy only drives
+ * 0023, the committee and offering votes of 0026, the S-05 exit permissions of 0027 and the S-04 transfers of 0028). The database is the authority and checks every request itself; this copy only drives
  * menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
@@ -42,6 +42,11 @@ export const PERMISSIONS = [
   "exit.read",
   "exit.request",
   "exit.decide",
+  "transfer.read",
+  "transfer.request",
+  "transfer.decide",
+  "transfer.cash",
+  "transfer.price",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -60,6 +65,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "operations.request",
     "exit.read",
     "exit.request",
+    "transfer.read",
+    "transfer.request",
+    "transfer.cash",
   ],
   ops_checker: [
     "ops.read",
@@ -77,6 +85,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "operations.decide",
     "exit.read",
     "exit.decide",
+    "transfer.read",
+    "transfer.cash",
+    "transfer.price",
   ],
   compliance_officer: [
     "ops.read",
@@ -95,9 +106,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "recovery.decide",
     "exit.read",
     "exit.decide",
+    "transfer.read",
+    "transfer.decide",
   ],
   legal_officer: ["recovery.read", "recovery.decide", "exit.read", "exit.decide"],
-  trustee_officer: ["audit.export", "trustee.read", "trustee.decide", "trustee.export", "operations.read", "exit.read", "exit.decide"],
+  trustee_officer: ["audit.export", "trustee.read", "trustee.decide", "trustee.export", "operations.read", "exit.read", "exit.decide", "transfer.read", "transfer.decide"],
   tax_officer: ["operations.read", "tax.read", "tax.decide", "tax.export"],
   auditor: [
     "ops.read",
@@ -115,6 +128,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "operations.read",
     "tax.read",
     "exit.read",
+    "transfer.read",
   ],
   admin: ["audit.read.admin", "officers.read", "officers.manage"],
 };

@@ -61,8 +61,10 @@ describe("roles", () => {
   it("administrators cannot read operations data; trustee officers see the trustee view and (S-03) the operating statements only", () => {
     expect(permissionsOf(["admin"]).has("ops.read")).toBe(false);
     // Step 6d: the trustee view, its decisions and exports, the export of the trustee audit chain only, and (S-03) the operating statements.
-    // S-05 (0027): plus reading exit cases and deciding in the trustee capacity.
-    expect([...permissionsOf(["trustee_officer"])].sort()).toEqual(["audit.export", "exit.decide", "exit.read", "operations.read", "trustee.decide", "trustee.export", "trustee.read"]);
+    // S-05 (0027): plus reading exit cases and deciding in the trustee capacity; S-04 (0028): reading and deciding transfers.
+    expect([...permissionsOf(["trustee_officer"])].sort()).toEqual([
+      "audit.export", "exit.decide", "exit.read", "operations.read", "transfer.decide", "transfer.read", "trustee.decide", "trustee.export", "trustee.read",
+    ]);
     expect(permissionsOf(["trustee_officer"]).has("exit.request")).toBe(false);
     expect(permissionsOf(["auditor"]).has("exit.decide")).toBe(false);
     expect(permissionsOf(["tax_officer"]).has("exit.read")).toBe(false);

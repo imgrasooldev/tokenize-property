@@ -83,6 +83,13 @@ export const CHECKS = {
   // A cancelled request moved nothing; still worth a look (the local chain/flow.py scenario has one).
   "recovery.unmatched_cancelled": "warning",
   "recovery.reversal_unmatched": "blocking",
+  // Secondary transfers, phase 0 (spec S-04 section 16.8, migration 0028; rules in transfer.reconcile())
+  "transfer.unapproved": "blocking",
+  "transfer.settlement_mismatch": "blocking",
+  "transfer.register_mismatch": "blocking",
+  "transfer.escrow_residual": "blocking",
+  "transfer.paid_not_executed": "warning",
+  "transfer.paid_not_executed_overdue": "blocking",
   // Operations and FBR withholding (spec S-03 §8, migration 0021; rules in tax.reconcile())
   "rent.wht_mismatch": "blocking",
   "rent.statement_totals": "blocking",
@@ -255,6 +262,14 @@ export interface RecoveryData {
   reversals: { caseId: bigint; journalId: bigint; reversalJournalId: bigint }[];
 }
 
+/** S-04 phase 0 transfers of this token (migration 0028); absent where it is not applied. */
+export interface TransferData {
+  /** Rows of transfer.reconcile(token): the rules, evaluated in the database. */
+  findings: { check: string; subject: string; expected: string; actual: string }[];
+  /** On-chain request ids that are a transfer case's ForcedTransfer (transfer.recon_requests): not S-06 cases. */
+  caseRequestIds: bigint[];
+}
+
 /** S-03 operations and tax of this token (migration 0021); absent where it is not applied. */
 export interface TaxData {
   /** Rows of tax.reconcile(token): the consistency rules, evaluated in the database. */
@@ -312,6 +327,8 @@ export interface ReconData {
   recovery?: RecoveryData;
   /** S-03 operations and FBR withholding of this token; absent where migration 0021 is not applied. */
   tax?: TaxData;
+  /** S-04 phase 0 transfers of this token; absent where migration 0028 is not applied. */
+  transfers?: TransferData;
   /** S-05 exits of this token; absent where migration 0027 is not applied. */
   exit?: ExitData;
   bank: {
