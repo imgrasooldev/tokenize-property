@@ -918,3 +918,21 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
   .srch-item { flex-wrap: wrap; }
 }
 /* ================================================================ analyst + search (ADR 0015, END) */
+
+/* ---------------------------------------------------------------- transfers (S-04 phase 0) */
+.xfer-disc { margin-block: 14px; }
+.xfer-disc .steps-list li { display: list-item; list-style: disc; margin-inline-start: 18px; color: var(--text2); }
+.xfer-section { margin-block-start: 18px; }
+.xfer-h { font-size: 16px; margin: 0 0 6px; }
+.xfer-sub { font-size: 14px; margin: 10px 0 6px; }
+.xfer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; margin-block-start: 18px; align-items: start; }
+.xfer-panel { display: grid; gap: 10px; min-inline-size: 0; }
+.xfer-codes { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.xfer-codes li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-inline-size: 0; }
+.xfer-codes .mono { color: var(--cyan); letter-spacing: 1px; }
+.xfer-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.xfer-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.xfer-accept { border-block-start: 1px solid var(--stroke); padding-block-start: 10px; }
+.xfer-optional { display: grid; gap: 10px; font-size: 13px; color: var(--muted); }
+.xfer-optional summary { cursor: pointer; margin-block-end: 8px; }
+.xfer-optional label { margin-block-end: 8px; }
