@@ -1,0 +1,31 @@
+function bank.active_payee(p_subject uuid)
+function bank.distribution_file_hash(p_token text, p_distribution numeric)
+function bank.verify_audit()
+function kyc.is_verified(p_wallet text)
+function kyc.subject_status(p_subject uuid)
+function kyc.underlying_status(p_subject uuid)
+function kyc.verify_audit()
+function signer.verify_audit()
+schema bank: USAGE
+schema kyc: USAGE
+schema public: USAGE
+schema signer: USAGE
+table bank.audit: SELECT
+table bank.credit_refunds: SELECT
+table bank.credit_returns: SELECT
+table bank.credits: SELECT
+table bank.events: SELECT
+table bank.intent_cancellations: SELECT
+table bank.payment_intents: SELECT
+table bank.payout_batches: SELECT
+table bank.payout_items: SELECT
+table bank.payout_returns: SELECT
+table signer.approvals: SELECT
+table signer.audit: SELECT
+table signer.custodial_wallets: SELECT
+table signer.keys: SELECT
+table signer.nonces: SELECT
+table signer.policies: SELECT
+table signer.requests: SELECT
+view bank.payee_status: SELECT
+view kyc.status: SELECT

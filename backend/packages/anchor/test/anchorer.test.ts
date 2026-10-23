@@ -46,12 +46,14 @@ async function expectAlarm(p: Promise<unknown>, pattern: RegExp): Promise<void> 
 }
 
 describe("anchoring job on a fake public chain", () => {
+  /** The anchoring job's own login (pt_svc_anchor); `ledger` (admin) only posts fixture journals. */
   let pool: pg.Pool;
+  let ledger: pg.Pool;
   let drop: () => Promise<void>;
 
   beforeAll(async () => {
-    ({ pool, drop } = await migratedDatabase());
-    await postJournals(pool, 3);
+    ({ anchor: pool, pool: ledger, drop } = await migratedDatabase());
+    await postJournals(ledger, 3);
   });
 
   afterAll(async () => {
@@ -64,7 +66,7 @@ describe("anchoring job on a fake public chain", () => {
     expect(first).toMatchObject({ action: "anchored", besuBlock: 100n });
     expect(await w.job().runOnce()).toMatchObject({ action: "skipped" });
     w.besu.height = 160n;
-    await postJournals(pool, 2);
+    await postJournals(ledger, 2);
     expect(await w.job().runOnce()).toMatchObject({ action: "anchored", besuBlock: 160n });
     expect(w.chain.events.map((e) => e.besuBlock)).toEqual([100n, 160n]);
     const records = await anchorsOf(pool, { anchorChainId: w.chain.id, contract: w.chain.contract });
@@ -231,7 +233,7 @@ describe("anchoring job on a fake public chain", () => {
         for (const s of steps) {
           if (s.kind === "advance") {
             w.besu.height += BigInt(s.blocks);
-            if (s.journals) await postJournals(pool, s.journals);
+            if (s.journals) await postJournals(ledger, s.journals);
           } else if (s.kind === "mine") {
             w.chain.mine();
           } else {
@@ -279,21 +281,23 @@ describe("anchoring job on a fake public chain", () => {
 });
 
 describe("verify detects tampering (threats CH-1 and D-1)", () => {
+  /** The anchoring job's own login (pt_svc_anchor); `ledger` (admin) only posts fixture journals. */
   let pool: pg.Pool;
+  let ledger: pg.Pool;
   let admin: pg.Client;
   let drop: () => Promise<void>;
   let w: World;
   let anchoredJournal: bigint;
 
   beforeAll(async () => {
-    ({ pool, admin, drop } = await migratedDatabase());
-    await postJournals(pool, 4);
+    ({ anchor: pool, pool: ledger, admin, drop } = await migratedDatabase());
+    await postJournals(ledger, 4);
     w = world(pool);
     await w.job().runOnce();
     w.besu.height = 130n;
-    anchoredJournal = await postJournals(pool, 2);
+    anchoredJournal = await postJournals(ledger, 2);
     await w.job().runOnce();
-    await postJournals(pool, 1); // not anchored yet
+    await postJournals(ledger, 1); // not anchored yet
     expect((await w.verify()).ok).toBe(true);
   });
 

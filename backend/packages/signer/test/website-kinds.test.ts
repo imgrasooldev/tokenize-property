@@ -10,6 +10,7 @@ import { decodeFunctionData, parseTransaction, recoverMessageAddress, recoverTra
 import { generatePrivateKey } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { world, type World } from "../../bank/test/setup.ts";
+import { servicePool } from "../../db/test/helpers.ts";
 import { custodialRef, FileKeystore, writeKeyFile } from "../src/keystore.ts";
 import { claimHash, claimId } from "../src/policy.ts";
 import { SignerService, type ChainReader } from "../src/service.ts";
@@ -60,7 +61,9 @@ const chain: ChainReader = {
   isRegistered: (_r, wallet) => Promise.resolve(chainState.registered.has(wallet)),
   claimIssuerOf: (identity, id) => Promise.resolve(chainState.claims.get(`${identity}:${id}`) ?? ZERO),
 };
-const svc = (): SignerService => new SignerService(w.pool, keys, chain);
+// The service connects as a login in pt_svc_signer (T-012, migration 0029), as in production.
+let signer: Awaited<ReturnType<typeof servicePool>>;
+const svc = (): SignerService => new SignerService(signer.pool, keys, chain);
 const ref = (): string => `cmd:web:${String(++n)}:${String(Date.now())}`;
 
 async function policy(kind: string, rule: object): Promise<void> {
@@ -70,6 +73,7 @@ async function policy(kind: string, rule: object): Promise<void> {
 
 beforeAll(async () => {
   w = await world();
+  signer = await servicePool("signer", String(w.settings.database), 8);
   keyDir = await mkdtemp(join(tmpdir(), "ks-"));
   for (const r of ["identity", "registrar", "claims"]) await writeKeyFile(keyDir, r, generatePrivateKey(), PASS);
   keys = await FileKeystore.open(keyDir, PASS);
@@ -86,6 +90,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await signer.drop();
   await w.drop();
 });
 

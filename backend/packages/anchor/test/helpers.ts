@@ -2,22 +2,31 @@ import { fileURLToPath } from "node:url";
 import { openAccount, postJournal } from "@pt/ledger";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
-import { scratchDatabase } from "../../db/test/helpers.ts";
+import { scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
 
 export const MIGRATIONS = fileURLToPath(new URL("../../db/migrations", import.meta.url));
 
-/** A migrated throw-away database with a pool on it. */
-export async function migratedDatabase(): Promise<{ admin: pg.Client; pool: pg.Pool; settings: pg.ClientConfig; drop: () => Promise<void> }> {
+/**
+ * A migrated throw-away database with an admin pool (`pool`, for fixtures such as ledger journals)
+ * and `anchor`, a pool connected as a login in pt_svc_anchor (T-012, migration 0029): the anchoring
+ * job and verify run as in production.
+ */
+export async function migratedDatabase(): Promise<{ admin: pg.Client; pool: pg.Pool; anchor: pg.Pool; settings: pg.ClientConfig; drop: () => Promise<void> }> {
   const { client, settings, drop } = await scratchDatabase();
   await migrate(client, MIGRATIONS);
   const pool = new pg.Pool({ ...settings, max: 8 });
+  const login = await serviceLogin("anchor", String(settings.database));
+  const anchor = new pg.Pool({ ...login.settings, max: 4 });
   return {
     admin: client,
     pool,
+    anchor,
     settings,
     drop: async () => {
       await pool.end();
+      await anchor.end();
       await drop();
+      await login.drop();
     },
   };
 }

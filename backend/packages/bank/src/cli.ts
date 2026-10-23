@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth, type ServiceName } from "@pt/config";
 import { secretFromEnv } from "@pt/http-auth";
 import { keyFromEnv, Peppers } from "@pt/kyc";
 import pg from "pg";
@@ -28,17 +28,18 @@ function env(): Record<string, string> {
   return { ...readEnvFile(ENV_FILE), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/** Fail closed: the bank service's own login (BANK_PG_USER) or, for audit, the audit login (migration 0029). */
+function pool(service: ServiceName = "bank", applicationName = "bank"): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.PG_ADMIN_PASSWORD,
+    ...servicePgAuth(e, service),
     database: e.PG_DATABASE ?? "property_token",
-    application_name: "bank",
+    application_name: applicationName,
     max: 8,
     statement_timeout: 15_000,
+    connectionTimeoutMillis: 5_000,
   });
 }
 
@@ -72,8 +73,9 @@ const noTitles: TitleFetch = { accountTitle: () => Promise.resolve(null) };
 async function serve(): Promise<void> {
   const e = env();
   const db = pool();
-  // Fail fast when the database is unreachable or not migrated to 0009.
-  await db.query("SELECT 1 FROM bank.events LIMIT 0");
+  // Fail fast when the database is unreachable, not migrated to 0009 or the login lacks the bank grants
+  // (bank.payee_status is the one bank relation the service role may read).
+  await db.query("SELECT 1 FROM bank.payee_status LIMIT 0");
   const service = new BankService(db, Peppers.fromEnv(e), keyFromEnv(e, "BANK_DATA_KEY"), noTitles, { escrowAccount: e.BANK_ESCROW_ACCOUNT ?? "TRUSTEE-ESCROW-01" });
   const server = createWebhookServer(service, webhookKeys(e), { onError: (err) => { console.error(`webhook error: ${(err as Error).name}`); } });
   server.listen(PORT, "127.0.0.1", () => {
@@ -95,19 +97,9 @@ async function servePayees(): Promise<void> {
   if (process.env.NODE_ENV === "production") throw new Error("bank:payees uses the demo title fetch and does not run in production");
   const e = env();
   const titles = new DemoTitleFetch();
-  const db = new pg.Pool({
-    host: e.PG_HOST ?? "127.0.0.1",
-    port: Number(e.PG_PORT ?? 5433),
-    user: e.BANK_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.BANK_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
-    database: e.PG_DATABASE ?? "property_token",
-    application_name: "bank-payees",
-    max: 4,
-    statement_timeout: 15_000,
-    connectionTimeoutMillis: 5_000,
-  });
-  // Fail fast when the database is unreachable or not migrated to 0009.
-  await db.query("SELECT 1 FROM bank.payees LIMIT 0");
+  const db = pool("bank", "bank-payees");
+  // Fail fast when the database is unreachable, not migrated to 0009 or the login lacks the bank grants.
+  await db.query("SELECT 1 FROM bank.payee_status LIMIT 0");
   const service = new BankService(db, Peppers.fromEnv(e), keyFromEnv(e, "BANK_DATA_KEY"), titles, {
     escrowAccount: e.BANK_ESCROW_ACCOUNT ?? "TRUSTEE-ESCROW-01",
     actor: "bank-payees",
@@ -130,7 +122,7 @@ async function main(): Promise<void> {
   if (cmd === "serve") return serve();
   if (cmd === "serve-payees") return servePayees();
   if (cmd === "audit") {
-    const db = pool();
+    const db = pool("audit", "bank-audit");
     try {
       const problems = await verifyAudit(db);
       for (const p of problems) console.log(`audit ${p.auditId ?? "-"}: ${p.problem}`);

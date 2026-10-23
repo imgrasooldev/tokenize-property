@@ -8,6 +8,8 @@ Wants=pt-signer.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/property-token/backend
 EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Database login: OUTBOX_PG_USER from backend/.env.local (T-012, group pt_svc_outbox; never the admin).
+# Rollback to the admin login: bash deploy/demo-server/db-login.sh admin pt-outbox
 Environment=NODE_OPTIONS=--max-old-space-size=160
 ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/signer/src/outbox-worker.ts
 # Safe to restart at any moment: after a crash the outbox decides from the database and the chain

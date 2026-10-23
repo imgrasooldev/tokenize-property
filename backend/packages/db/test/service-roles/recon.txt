@@ -1,0 +1,70 @@
+function ledger.balance_guard()
+function ledger.chain_head()
+function ledger.escrow_held(p_account text)
+function ledger.verify_balances()
+function ledger.verify_chain()
+function outbox.stats()
+function recon.complete_run(p_run bigint, p_actor text, p_pinned_block bigint, p_findings jsonb, p_summary jsonb)
+function recon.fail_run(p_run bigint, p_actor text, p_error text)
+function recon.import_bank_statement(p_actor text, p_account text, p_date date, p_opening bigint, p_closing bigint, p_lines jsonb)
+function recon.payout_gate()
+function recon.payouts_allowed()
+function recon.start_run(p_actor text, p_deployment text, p_params jsonb)
+function recon.verify_audit()
+function recovery.verify_audit()
+function signer.verify_audit()
+function tax.reconcile(p_token text)
+schema chain: USAGE
+schema ledger: USAGE
+schema offering: USAGE
+schema ops: USAGE
+schema outbox: USAGE
+schema public: USAGE
+schema recon: USAGE
+schema recovery: USAGE
+schema signer: USAGE
+schema tax: USAGE
+table chain.blocks: SELECT
+table chain.contracts: SELECT
+table chain.cursors: SELECT
+table chain.deployments: SELECT
+table chain.distributions: SELECT
+table chain.documents: SELECT
+table chain.events: SELECT
+table chain.freeze_actions: SELECT
+table chain.freezes: SELECT
+table chain.halts: SELECT
+table chain.holdings: SELECT
+table chain.investors: SELECT
+table chain.issuances: SELECT
+table chain.recoveries: SELECT
+table chain.tokens: SELECT
+table chain.transfers: SELECT
+table ledger.account_balances: SELECT
+table ledger.accounts: SELECT
+table ledger.journal: SELECT
+table ledger.postings: SELECT
+table offering.payment_anomalies: SELECT
+table offering.settings: SELECT
+table ops.distributions: SELECT
+table outbox.command_events: SELECT
+table outbox.commands: SELECT
+table recon.audit: SELECT
+table recon.bank_accounts: SELECT
+table recon.bank_lines: SELECT
+table recon.bank_statements: SELECT
+table recon.findings: SELECT
+table recon.gate_events: SELECT
+table recon.runs: SELECT
+table recon.unfreeze_requests: SELECT
+table signer.approvals: SELECT
+table signer.audit: SELECT
+table signer.custodial_wallets: SELECT
+table signer.keys: SELECT
+table signer.nonces: SELECT
+table signer.policies: SELECT
+table signer.requests: SELECT
+view ledger.balances: SELECT
+view offering.recon_subscriptions: SELECT
+view recovery.recon_requests: SELECT
+view recovery.recon_reversals: SELECT

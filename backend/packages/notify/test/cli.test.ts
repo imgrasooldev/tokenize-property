@@ -7,6 +7,7 @@ import { readEnvFile } from "@pt/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ContactSecrets } from "../src/crypto.ts";
 import { enqueue, NotifyService } from "../src/service.ts";
+import { serviceLogin } from "../../db/test/helpers.ts";
 import { contacts, investor, makeNotifyDb, type NotifyDb } from "./helpers.ts";
 
 /** Smoke test of the operator CLI (npm run notify:*) against a scratch database and a temporary env file. */
@@ -16,19 +17,23 @@ const CLI = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 let t: NotifyDb;
 let dir: string;
 let envFile: string;
+/** The delivery worker runs as a login in pt_svc_notify (T-012, migration 0029), as in production. */
+let worker: Awaited<ReturnType<typeof serviceLogin>>;
 
 beforeAll(async () => {
   t = await makeNotifyDb();
   dir = mkdtempSync(join(tmpdir(), "pt-notify-cli-"));
   envFile = join(dir, "env.local");
+  worker = await serviceLogin("notify", String(t.settings.database));
 }, 120_000);
 
 afterAll(async () => {
   await t.drop();
+  await worker.drop();
   rmSync(dir, { recursive: true, force: true });
 }, 120_000);
 
-function cli(...args: string[]): { code: number | null; out: string; err: string } {
+function cliWith(extra: Record<string, string>, ...args: string[]): { code: number | null; out: string; err: string } {
   const s = t.settings;
   const r = spawnSync(process.execPath, [TSX, CLI, ...args], {
     encoding: "utf8",
@@ -42,10 +47,15 @@ function cli(...args: string[]): { code: number | null; out: string; err: string
       PG_ADMIN_USER: String(s.user),
       PG_ADMIN_PASSWORD: String(s.password),
       PG_DATABASE: String(s.database),
+      ...extra,
     },
   });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
+
+const cli = (...args: string[]) => cliWith({}, ...args);
+/** The worker as in production: its own login, never the admin. */
+const asWorker = (...args: string[]) => cliWith({ NOTIFY_PG_USER: worker.user, NOTIFY_PG_PASSWORD: String(worker.settings.password) }, ...args);
 
 describe("notify CLI", () => {
   it("creates the keys once without printing them, runs the worker once and reports status", async () => {
@@ -76,7 +86,12 @@ describe("notify CLI", () => {
     await svc.registerContact(id, "email", c.email, "web");
     await enqueue(t.pool, { key: `cli:${ref.id}`, event: { kind: "security.new_device_sign_in", params: { device: "Chrome on Windows", at: "2026-10-13T09:00:00Z" } }, recipient: ref, actor: "web" });
 
-    const run = cli("run", "--once");
+    // Fail closed (T-012): without its own login the worker refuses to run as the admin.
+    const refused = cli("run", "--once");
+    expect(refused.code).toBe(1);
+    expect(refused.err).toMatch(/no NOTIFY_PG_USER for the notify service: run `npm run db:service-roles`/);
+
+    const run = asWorker("run", "--once");
     expect(run.code, run.err).toBe(0);
     expect(run.out).toMatch(/handled 2 deliveries/);
     expect(run.out.match(/\[mock\] accepted/g)).toHaveLength(2);

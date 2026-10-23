@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
-import { LOCAL_DEV_CHAIN_ID, readEnvFile } from "@pt/config";
+import { LOCAL_DEV_CHAIN_ID, readEnvFile, servicePgAuth } from "@pt/config";
 import { deploymentFromBroadcast, LOCAL_BROADCAST, rpcSource, verify, type Deployment } from "@pt/indexer";
 import pg from "pg";
 import { importStatement, parseStatement } from "./bank.ts";
@@ -19,9 +19,8 @@ import { decideUnfreeze, payoutGate, registerBankAccount, requestUnfreeze } from
  *   npm run recon:unfreeze -- --request <operator> "<reason>"         maker
  *   npm run recon:unfreeze -- --approve|--reject <requestId> <operator> "<reason>"   checker (a different operator)
  * Settings: CHAIN_RPC_URL, CHAIN_ID, INDEXER_DEPLOYMENT_FILE (default: the local DeployLib broadcast),
- * PG_* from backend/.env.local. Locally this connects as the admin; in production the run uses a
- * login role in pt_recon_writer (+ pt_ledger_reader, pt_chain_reader, pt_signer_auditor,
- * pt_outbox_reader), and unfreezing happens in the operations portal as pt_recon_operator.
+ * PG_* from backend/.env.local. run and status use the login RECON_PG_USER (group pt_svc_recon,
+ * migration 0029); unfreezing belongs in the operations portal as pt_recon_operator.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -29,13 +28,17 @@ function env(): Record<string, string | undefined> {
   return { ...readEnvFile(`${BACKEND}.env.local`), ...process.env };
 }
 
-function pool(): pg.Pool {
+/**
+ * run and status connect as the reconciliation job's own login (RECON_PG_USER, group pt_svc_recon,
+ * migration 0029; fail closed). The operator commands (import-bank, register-account, unfreeze) are
+ * break-glass tools until their portal screens exist and keep the admin login (`asAdmin`).
+ */
+function pool(asAdmin = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.RECON_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.RECON_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...(asAdmin ? { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD } : servicePgAuth(e, "recon")),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "recon",
     max: 4,
@@ -111,7 +114,7 @@ async function importBank(args: string[]): Promise<number> {
   // The operator names the file to import on the command line; it is parsed strictly before use.
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const st = parseStatement(readFileSync(file, "utf8"));
-  const db = pool();
+  const db = pool(true);
   try {
     const id = await importStatement(db, st, by);
     out(`statement ${id.toString()}: ${st.account} ${st.date}, ${String(st.lines.length)} lines, opening ${st.openingPaisa.toString()}, closing ${st.closingPaisa.toString()} paisa`);
@@ -124,7 +127,7 @@ async function importBank(args: string[]): Promise<number> {
 async function registerAccount(args: string[]): Promise<number> {
   const [account, ledgerAccount, operator, ...rest] = args;
   if (!account || !ledgerAccount || !operator || rest.length) throw new UsageError("usage: register-account <BANK-ACCOUNT> <ledger account code> <operator>");
-  const db = pool();
+  const db = pool(true);
   try {
     const created = await registerBankAccount(db, account, ledgerAccount, operator);
     out(created ? `registered ${account} -> ${ledgerAccount}` : `${account} was already registered for ${ledgerAccount}`);
@@ -158,7 +161,7 @@ async function status(args: string[]): Promise<number> {
 
 async function unfreeze(args: string[]): Promise<number> {
   const [mode, ...rest] = args;
-  const db = pool();
+  const db = pool(true);
   try {
     if (mode === "--request") {
       const [operator, reason, ...extra] = rest;

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { LOCAL_DEV_CHAIN_ID, readEnvFile } from "@pt/config";
+import { LOCAL_DEV_CHAIN_ID, readEnvFile, servicePgAuth } from "@pt/config";
 import { createLogger } from "@pt/logger";
 import pg from "pg";
 import { deploymentFromBroadcast, LOCAL_BROADCAST, type Deployment } from "./deployment.ts";
@@ -15,8 +15,8 @@ import { verify } from "./verify.ts";
  *   npm run indexer:reset-local -- --yes   LOCAL DEV ONLY: empty the read model after `python chain/net.py reset`
  * Settings: CHAIN_RPC_URL (default http://127.0.0.1:8545), CHAIN_ID (default 586586),
  * INDEXER_DEPLOYMENT_FILE (default: the local DeployLib broadcast), PG_* from backend/.env.local.
- * Locally this connects as the admin; in production it runs as a login role in pt_chain_writer
- * (verify and status need only pt_chain_reader).
+ * run, verify and status connect as the indexer's own login (INDEXER_PG_USER, group pt_svc_indexer,
+ * migration 0029, `npm run db:service-roles`); reset-local (dev only) needs the admin.
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -24,13 +24,13 @@ function env(): Record<string, string | undefined> {
   return { ...readEnvFile(`${BACKEND}.env.local`), ...process.env };
 }
 
-function pool(): pg.Pool {
+/** The indexer's own login (fail closed, @pt/config serviceDbLogin); the admin only for reset-local. */
+function pool(asAdmin = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.INDEXER_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.INDEXER_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...(asAdmin ? { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD } : servicePgAuth(e, "indexer")),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "indexer",
     max: 4,
@@ -137,7 +137,7 @@ async function resetLocal(args: string[]): Promise<void> {
     throw new Error("reset-local is only for the local dev chain (586586) outside production");
   }
   if (!args.includes("--yes")) throw new Error("this deletes the local read model; add --yes");
-  const db = pool();
+  const db = pool(true);
   const client = await db.connect();
   try {
     const { rows } = await client.query<{ chain_id: string }>("SELECT DISTINCT chain_id FROM chain.deployments");

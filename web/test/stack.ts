@@ -66,6 +66,8 @@ function runOnce(label: string, args: string[]): void {
 export function prepare(): void {
   runOnce("migrate (test database)", tsx("packages/db/src/cli.ts", ["--test"]));
   runOnce("db:web-role", tsx("packages/db/src/web-role.ts", ["--test"]));
+  // T-012: the indexer, signer, outbox worker and KYC service connect as their own logins (never the admin).
+  runOnce("db:service-roles", tsx("packages/db/src/service-roles-cli.ts", ["--test"]));
   runOnce("kyc:setup", tsx("packages/kyc/src/cli.ts", ["setup"]));
   runOnce("signer:setup (test database)", tsx("packages/signer/src/cli.ts", ["setup"]));
 }
