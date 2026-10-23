@@ -422,6 +422,10 @@ Applies on top of 0027 (S-05 exit): uses `exit.exit_underway()` and `exit.reques
 
 Functions: `open_desk`, `web_new_code`, `web_request`, `web_accept`, `web_withdraw`, `withdraw`, `complete`, `decide`, `cancel`, `dispute`, `tick` / `tick_case`, `prepare_cash`, `decide_cash`, `set_reference_price`, `declare_conflict`, `link_parties`, `open_block` / `close_block`, `check_results`, `command_allowed` (signing service), `reconcile(token)` and view `recon_requests` (reconciliation), `web_list`. Portal: `admin.transfer_cases|case|open|act|cash|sync|set_price|declare_conflict|link_parties|audit`; website: `webauth.web_transfers|web_transfer_code|web_transfer_request|web_transfer_accept|web_transfer_withdraw` and step-up actions `transfer.request|accept|withdraw`. Amendments of other schemas (additive): bank purpose `transfer` on `bank.payment_intents` (named constraints), register source `transfer` on `trustee.register_entries`, income type `unit_disposal` with PLACEHOLDER rates in `tax.rates` (audited in `ops.audit`), notify kinds `security.transfer_requested`, `transfer.status_changed`, `transfer.payment_due` (EN/UR SMS + e-mail), permissions `transfer.read|request|decide|cash|price` (role matrix digest fixed again).
 
+### 0029 service roles (task T-012, ADR 0016)
+
+No tables. Fifteen NOLOGIN groups `pt_svc_<service>` (section 5), each a member (`WITH INHERIT TRUE, SET FALSE`) of existing domain roles, plus narrow direct grants: `SELECT outbox.commands` to `pt_svc_outbox` (the worker decides from the database after an executor error); column-level `SELECT` on `webdemo.subscriptions (investor_id, ref_id, tokens)`, `webdemo.investors (id, wallet_address)` and ten columns of `bank.payout_batches` to `pt_svc_recon` (what the run reads; no names, CNIC hashes, keys or payees); `kyc.enqueue_offboarding` alone to `pt_svc_offboarding`; `exit.tick` alone to `pt_svc_exit`. No existing role is widened. Logins are created by `npm run db:service-roles`, not by the migration.
+
 ## 4. Append-only and hash-chain rules (summary)
 
 | Area | Append-only | Hash chain / verify |
@@ -468,8 +472,9 @@ All NOLOGIN, created idempotently:
 | 0025 | no new role: `pt_web` may execute `anchor.web_status()` and `anchor.web_recent(integer)` (nothing else in schema `anchor`) |
 | 0027 | `pt_exit_operator`, `pt_exit_reader`; `pt_signer` may execute `exit.burn_allowed`; `pt_web` may execute `webauth.web_exit_overview`, `web_redemption_request`, `web_redemption_withdraw` |
 | 0028 | `pt_transfer_worker` (`transfer.tick`); `pt_signer` may execute `transfer.command_allowed`; `pt_web` the five `webauth.web_transfer*` functions (no grant on schema `transfer`) |
+| 0029 | one group per backend service process, composed from the roles above (T-012, ADR 0016): `pt_svc_indexer`, `pt_svc_signer`, `pt_svc_outbox`, `pt_svc_kyc`, `pt_svc_offboarding`, `pt_svc_bank`, `pt_svc_anchor`, `pt_svc_recon`, `pt_svc_recovery`, `pt_svc_tax`, `pt_svc_notify`, `pt_svc_exit`, `pt_svc_transfer`, `pt_svc_audit`, `pt_svc_console` |
 
-The website does not use these roles; it connects as the admin user (task T-012).
+Logins (`LOGIN`, member of exactly one group, `SET FALSE`): the website `pt_web_app` (`npm run db:web-role`, group `pt_web`), the portal (`admin/scripts/setup-server.mjs`, group `pt_admin_portal`) and one `pt_<service>_app` per backend service (`npm run db:service-roles`, group `pt_svc_<service>`; credentials in the git-ignored `backend/.env.local`). Services refuse to run as the admin except on a loopback database with `PT_DB_ADMIN_FALLBACK=1` (development). Migrations, setup and break-glass operator commands use the admin. The reviewed privilege inventory of every service group is `backend/packages/db/test/service-roles/<service>.txt`.
 
 ## 6. Ledger account conventions
 

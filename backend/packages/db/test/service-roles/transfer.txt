@@ -1,0 +1,3 @@
+function transfer.tick(p_actor text)
+schema public: USAGE
+schema transfer: USAGE

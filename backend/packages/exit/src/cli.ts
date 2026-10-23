@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { readEnvFile } from "@pt/config";
+import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { ExitService } from "./service.ts";
 
@@ -14,7 +14,7 @@ import { ExitService } from "./service.ts";
  *   npm run exit:run -- verify <final>        independent recomputation of the stored documents (exit 3 on a problem)
  *   npm run exit:run -- redeem <case> [after_payment|after_finalization]   the redemption batch (refIds)
  *   npm run exit:audit                        verify the exit audit hash chain (exit 3 on a problem)
- * Settings: PG_* (PG_DATABASE, default property_token); in production a login role in pt_exit_operator.
+ * Settings: PG_* (PG_DATABASE, default property_token); the tick runs as EXIT_PG_USER (pt_svc_exit).
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -22,13 +22,16 @@ function env(): Record<string, string> {
   return { ...readEnvFile(`${BACKEND}.env.local`), ...(process.env as Record<string, string>) };
 }
 
-function pool(): pg.Pool {
+/**
+ * The tick connects as its own login (EXIT_PG_USER, group pt_svc_exit: exit.tick only; migration
+ * 0029, fail closed). run and audit are operator commands until their portal screens exist (admin).
+ */
+function pool(service = false): pg.Pool {
   const e = env();
   return new pg.Pool({
     host: e.PG_HOST ?? "127.0.0.1",
     port: Number(e.PG_PORT ?? 5433),
-    user: e.EXIT_PG_USER ?? e.PG_ADMIN_USER ?? "pt_admin",
-    password: e.EXIT_PG_PASSWORD ?? e.PG_ADMIN_PASSWORD,
+    ...(service ? servicePgAuth(e, "exit") : { user: e.PG_ADMIN_USER ?? "pt_admin", password: e.PG_ADMIN_PASSWORD }),
     database: e.PG_DATABASE ?? "property_token",
     application_name: "exit",
     max: 2,
@@ -52,7 +55,7 @@ function id(v: string | undefined, what: string): string {
 }
 
 async function tick(loop: boolean): Promise<void> {
-  const db = pool();
+  const db = pool(true);
   const seconds = Math.max(5, Number(env().EXIT_TICK_SECONDS ?? 60));
   const state = { stop: !loop };
   process.once("SIGINT", () => (state.stop = true));

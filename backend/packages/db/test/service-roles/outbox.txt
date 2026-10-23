@@ -10,3 +10,4 @@ function recon.payouts_allowed()
 schema outbox: USAGE
 schema public: USAGE
 schema recon: USAGE
+table outbox.commands: SELECT

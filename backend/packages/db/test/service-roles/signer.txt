@@ -1,5 +1,6 @@
 function bank.distribution_file_hash(p_token text, p_distribution numeric)
 function compliance.unfreeze_allowed(p_account text, p_case_id text)
+function exit.burn_allowed(p_payload jsonb)
 function kyc.is_verified(p_wallet text)
 function kyc.subject_status(p_subject uuid)
 function ledger.balance_guard()
@@ -14,8 +15,10 @@ function signer.decide_officer(p_ticket_hash bytea, p_request uuid, p_decision t
 function signer.register_custodial_wallet(p_address text, p_origin text, p_actor text)
 function signer.reserve_nonce(p_address text, p_chain_next bigint, p_request uuid)
 function signer.settle_nonce(p_address text, p_nonce bigint, p_status text)
+function transfer.command_allowed(p_kind text, p_payload jsonb)
 schema bank: USAGE
 schema compliance: USAGE
+schema exit: USAGE
 schema kyc: USAGE
 schema ledger: USAGE
 schema offering: USAGE
@@ -23,6 +26,7 @@ schema public: USAGE
 schema recon: USAGE
 schema recovery: USAGE
 schema signer: USAGE
+schema transfer: USAGE
 table signer.approvals: SELECT
 table signer.custodial_wallets: SELECT
 table signer.keys: INSERT, SELECT

@@ -20,6 +20,7 @@ Index of architecture decision records and other recorded decisions, as of `main
 | [0012](decisions/0012-server-stack-as-built.md) | Server stack as built (supersedes parts of 0001) | Accepted | 2026-10-13 | Yes |
 | [0014](decisions/0014-sealed-cnic-for-tax.md) | Sealed CNIC for tax: tax-only key, ATL checks by the tax service, two-officer one-time FBR filing export | Proposed (S-03) | 2026-10-14 | On branch `s-03-operations-tax`; legal basis and FBR format to confirm |
 | [0013](decisions/0013-notifications.md) | Notifications: sealed contacts, consent, record-before-send delivery with provider lookup | Proposed (T-028) | 2026-10-13 | On a branch, mock providers only; producers not wired |
+| [0016](decisions/0016-service-database-roles.md) | One database role per backend service (pt_svc_* groups, pt_<service>_app logins, fail closed) | Proposed (T-012) | 2026-10-23 | On branch `t-012-service-roles` (migration 0029) |
 
 ## 2. ADR 0001 drift (resolved 2026-10-13 by [ADR 0012](decisions/0012-server-stack-as-built.md); kept for history)
 

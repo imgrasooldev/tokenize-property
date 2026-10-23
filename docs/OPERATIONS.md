@@ -163,6 +163,19 @@ Memory on the 4 GB server: the health check is shell + one `psql` session (a few
 including a 6 s block sample); the backup is `pg_dump` + `gpg` (tens of MB); `recon` starts a Node
 process (about 200–300 MB) once a day. None overlap by schedule.
 
+## 5a. Database logins per service (T-012, ADR 0016, migration 0029)
+
+- Every backend service connects as its own login `pt_<service>_app` (group `pt_svc_<service>`), created by `npm run db:service-roles` in `backend/` (idempotent; passwords appended to `backend/.env.local` once, never printed; every login is test-connected). `update.sh` and `setup.sh` run it; the ops jobs (`pt-recon`, `pt-anchor-verify`, `pt-audit-chains`) read the same file (`RECON_`, `ANCHOR_`, `AUDIT_PG_USER`).
+- A service without its login refuses to start ("no `<PREFIX>_PG_USER` ... run `npm run db:service-roles`"). Only on a loopback database outside production may `PT_DB_ADMIN_FALLBACK=1` make it use the admin (local development).
+- Symptom of a missing grant: the service logs `permission denied` (SQLSTATE 42501). Restore service with the per-unit rollback `bash deploy/demo-server/db-login.sh admin <unit>` (drop-in survives deploys; `update.sh` warns while one exists; `db-login.sh status` lists them), then fix the grant in a new migration and `db-login.sh own <unit>`.
+- Rotate a service password: delete its two lines from `backend/.env.local`, run `npm run db:service-roles`, restart the unit.
+- Operator, setup and seed commands still use the admin (ADR 0016 point 4).
+
+## 5b. End-to-end tests in CI (T-011)
+
+- CI jobs `admin-e2e` (PT Control: auth, approvals, screens; virtual FIDO2 keys; test signing service) and `web-e2e` (website passkeys; virtual authenticator) run Playwright's Chromium (`PW_BROWSER=chromium`) on Ubuntu with a PostgreSQL 18 service container; browsers are cached per lockfile; traces of failed tests are uploaded (`*-e2e-traces`, 7 days).
+- **Local only:** the website's main e2e (`npm run test:e2e`: sign-up/invest, market, verify, layout, security) needs the four-validator Besu chain and `chain/flow.py`'s deployment (timelock waits, a validator outage check) and cold dev-server compiles; it does not fit a CI job. Run it locally after chain-affecting changes.
+
 ## 6. Secrets and keys: what is backed up where
 
 | Item | In the DB backup? | Custody |

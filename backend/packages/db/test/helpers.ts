@@ -3,7 +3,7 @@ import { copyFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readEnvFile, SERVICE_DB_ROLES, type ServiceName } from "@pt/config";
+import { readEnvFile, serviceRole, type ServiceName } from "@pt/config";
 import pg from "pg";
 
 const local = readEnvFile(fileURLToPath(new URL("../../../.env.local", import.meta.url)));
@@ -32,7 +32,7 @@ export async function serviceLogin(service: ServiceName, database: string): Prom
   user: string;
   drop: () => Promise<void>;
 }> {
-  const { group, login } = SERVICE_DB_ROLES[service];
+  const { group, login } = serviceRole(service);
   const user = `${login}_t${String(process.pid)}_${randomBytes(3).toString("hex")}`;
   const password = randomBytes(24).toString("base64url");
   const root = new pg.Client(adminSettings());

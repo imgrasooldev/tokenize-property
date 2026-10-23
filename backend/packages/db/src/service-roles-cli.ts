@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { readEnvFile, SERVICE_DB_ROLES, type ServiceName } from "@pt/config";
+import { envValue, readEnvFile, serviceRoles, type ServiceName } from "@pt/config";
 import pg from "pg";
 import { ensureServiceRoles } from "./service-roles.ts";
 
@@ -16,20 +16,19 @@ const NAME = /^[a-z][a-z0-9_]{2,40}$/;
 async function main(): Promise<void> {
   const local = readEnvFile(ENV_FILE);
   const admin = process.env.PG_ADMIN_USER ?? local.PG_ADMIN_USER ?? "pt_admin";
-  const logins = {} as Record<ServiceName, { user: string; password: string }>;
+  const logins = new Map<ServiceName, { user: string; password: string }>();
   const lines: string[] = [];
   const taken = new Set<string>([admin, "postgres", local.WEB_PG_USER ?? "pt_web_app"]);
-  for (const service of Object.keys(SERVICE_DB_ROLES) as ServiceName[]) {
-    const { prefix, login } = SERVICE_DB_ROLES[service];
-    const user = local[`${prefix}_PG_USER`] ?? login;
+  for (const [service, { prefix, login }] of serviceRoles()) {
+    const user = envValue(local, `${prefix}_PG_USER`) ?? login;
     if (!NAME.test(user) || taken.has(user)) throw new Error(`${prefix}_PG_USER must be a separate lower-case role name`);
     taken.add(user);
-    let password = local[`${prefix}_PG_PASSWORD`];
+    let password = envValue(local, `${prefix}_PG_PASSWORD`);
     if (!password) {
       password = randomBytes(24).toString("base64url");
       lines.push(`${prefix}_PG_USER=${user}`, `${prefix}_PG_PASSWORD=${password}`);
     }
-    logins[service] = { user, password };
+    logins.set(service, { user, password });
   }
   if (lines.length) {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside backend/
@@ -51,8 +50,8 @@ async function main(): Promise<void> {
   }
   // Every login must actually connect with the password the services will read (pg_hba, password),
   // so a deploy stops here instead of restarting services that cannot reach their database.
-  for (const service of Object.keys(SERVICE_DB_ROLES) as ServiceName[]) {
-    const c = new pg.Client({ ...target, ...logins[service], connectionTimeoutMillis: 5_000 });
+  for (const [service, login] of logins) {
+    const c = new pg.Client({ ...target, ...login, connectionTimeoutMillis: 5_000 });
     try {
       await c.connect();
       await c.query("SELECT 1");

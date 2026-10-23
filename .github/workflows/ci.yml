@@ -144,6 +144,142 @@ jobs:
       - name: HTTP authorisation matrix against the production build
         run: npm run test:http
 
+  # T-011: Playwright end-to-end tests on Linux with Playwright's Chromium (PW_BROWSER=chromium; the
+  # configs use the installed Edge locally) and the Chrome DevTools Protocol virtual authenticator.
+  # Only the chain-independent suites run here: the website's main e2e (sign-up/invest, market,
+  # verify, layout, security) needs the four-validator Besu chain and flow.py's deployment and stays
+  # local-only (docs/OPERATIONS.md). Traces of failed tests are uploaded as artefacts.
+  admin-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pt_admin
+          # Throw-away CI container only; not a real credential.
+          POSTGRES_PASSWORD: ci_only_not_a_secret_0000
+          POSTGRES_DB: property_token_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pt_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_ADMIN_USER: pt_admin
+      PG_ADMIN_PASSWORD: ci_only_not_a_secret_0000
+      PW_BROWSER: chromium
+      NEXT_TELEMETRY_DISABLED: 1
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            admin/package-lock.json
+            backend/package-lock.json
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Backend install (the e2e run starts the test signing service from backend/)
+        working-directory: backend
+        run: npm ci --ignore-scripts
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('admin/package-lock.json') }}
+      - name: Chromium (download only on a cache miss) and its system libraries
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then npx playwright install chromium; fi
+          npx playwright install-deps chromium
+      - name: End-to-end (pt_admin_e2e re-created; virtual FIDO2 keys; test signing service)
+        run: npm run test:e2e
+      - name: Traces of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-e2e-traces
+          path: admin/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pt_admin
+          # Throw-away CI container only; not a real credential.
+          POSTGRES_PASSWORD: ci_only_not_a_secret_0000
+          POSTGRES_DB: property_token_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pt_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_ADMIN_USER: pt_admin
+      PG_ADMIN_PASSWORD: ci_only_not_a_secret_0000
+      PW_BROWSER: chromium
+      NEXT_TELEMETRY_DISABLED: 1
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            backend/package-lock.json
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Backend install (migrations and the website's database role come from backend/)
+        working-directory: backend
+        run: npm ci --ignore-scripts
+      - name: Throw-away settings for this job (CI-only values, never real secrets)
+        run: |
+          printf 'PG_HOST=%s\nPG_PORT=%s\nPG_ADMIN_USER=%s\nPG_ADMIN_PASSWORD=%s\n' "$PG_HOST" "$PG_PORT" "$PG_ADMIN_USER" "$PG_ADMIN_PASSWORD" > ../backend/.env.local
+          npm run setup:demo
+      - name: Website database login (pt_web_app, member of pt_web only)
+        working-directory: backend
+        run: |
+          npm run migrate -- --test
+          npm run db:web-role -- --test
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+      - name: Chromium (download only on a cache miss) and its system libraries
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then npx playwright install chromium; fi
+          npx playwright install-deps chromium
+      - name: Passkey end-to-end (pt_web_e2e re-created; virtual authenticator; no chain needed)
+        run: npm run test:e2e:passkey
+      - name: Traces of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-traces
+          path: web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   backend:
     runs-on: ubuntu-latest
     services:

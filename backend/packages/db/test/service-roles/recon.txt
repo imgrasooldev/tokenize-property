@@ -1,3 +1,8 @@
+function exit.balance(p_code text)
+function exit.closure_reserve(p_token text)
+function exit.line_payment(p_redemption bigint, p_wallet text)
+function exit.pool(p_token text)
+function exit.verify_audit()
 function ledger.balance_guard()
 function ledger.chain_head()
 function ledger.escrow_held(p_account text)
@@ -14,7 +19,11 @@ function recon.verify_audit()
 function recovery.verify_audit()
 function signer.verify_audit()
 function tax.reconcile(p_token text)
+function transfer.reconcile(p_token text)
+function transfer.verify_audit()
+schema bank: USAGE
 schema chain: USAGE
+schema exit: USAGE
 schema ledger: USAGE
 schema offering: USAGE
 schema ops: USAGE
@@ -24,6 +33,9 @@ schema recon: USAGE
 schema recovery: USAGE
 schema signer: USAGE
 schema tax: USAGE
+schema transfer: USAGE
+schema webdemo: USAGE
+table bank.payout_batches: SELECT (some columns)
 table chain.blocks: SELECT
 table chain.contracts: SELECT
 table chain.cursors: SELECT
@@ -40,6 +52,7 @@ table chain.issuances: SELECT
 table chain.recoveries: SELECT
 table chain.tokens: SELECT
 table chain.transfers: SELECT
+table exit.settings: SELECT
 table ledger.account_balances: SELECT
 table ledger.accounts: SELECT
 table ledger.journal: SELECT
@@ -64,7 +77,13 @@ table signer.keys: SELECT
 table signer.nonces: SELECT
 table signer.policies: SELECT
 table signer.requests: SELECT
+table webdemo.investors: SELECT (some columns)
+table webdemo.subscriptions: SELECT (some columns)
+view exit.recon_cases: SELECT
+view exit.recon_finals: SELECT
+view exit.recon_lines: SELECT
 view ledger.balances: SELECT
 view offering.recon_subscriptions: SELECT
 view recovery.recon_requests: SELECT
 view recovery.recon_reversals: SELECT
+view transfer.recon_requests: SELECT

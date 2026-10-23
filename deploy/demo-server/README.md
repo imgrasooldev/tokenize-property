@@ -130,6 +130,29 @@ Notes:
 - Large investments or trades (over 10,000 tokens) now wait for two operators:
   `npm run signer:decide -- <requestId> <operator> approve "<reason>"` (twice, by different names).
 
+### Per-service database logins (T-012, migration 0029, ADR 0016)
+
+Rollout is automatic on the next deploy of a commit with migration 0029: `update.sh` runs `npm run migrate` (creates the `pt_svc_*` groups), then `npm run db:service-roles` (creates one login per service, appends `<PREFIX>_PG_USER/_PASSWORD` to `backend/.env.local`, checks that each login connects) and only then restarts `pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding`, `pt-anchor` and `pt-console`; the ops timers pick the logins up on their next run. If `db:service-roles` fails the deploy stops before any restart and the running services keep their admin connections. No unit file needs new settings (the services read `backend/.env.local`); the units only gained a comment.
+
+Check after the deploy (as `ubuntu`):
+
+```bash
+cd ~/property-token
+python3 backend/scripts/pg.py psql property_token -c "SELECT usename, application_name FROM pg_stat_activity WHERE usename LIKE 'pt_%_app' ORDER BY 1"
+journalctl -u pt-indexer -u pt-signer -u pt-outbox -u pt-kyc -u pt-offboarding -u pt-bank-payees -u pt-anchor --since "10 min ago" | grep -i "permission denied" || echo "no permission errors"
+bash deploy/demo-server/db-login.sh status
+```
+
+Rollback (per unit, no code rollback: the migration runner refuses a missing applied migration):
+
+```bash
+bash deploy/demo-server/db-login.sh admin pt-outbox      # that unit back on the admin login (drop-in), restarted
+bash deploy/demo-server/db-login.sh status               # update.sh warns on every deploy while a drop-in exists
+bash deploy/demo-server/db-login.sh own pt-outbox        # after the missing grant is fixed by a new migration
+```
+
+The drop-in blanks the unit's `<PREFIX>_PG_USER/_PASSWORD` and sets `PT_DB_ADMIN_FALLBACK=1`, which the services honour only on this loopback database outside production. Units: `pt-indexer pt-signer pt-outbox pt-kyc pt-offboarding pt-bank-payees pt-anchor pt-console pt-recon pt-anchor-verify pt-audit-chains`.
+
 ## Internal portals (PT Control, Step 6)
 
 `pt-admin.service` runs the officers' portal (`admin/`, ADR 0011) on **127.0.0.1:3300 only**. It

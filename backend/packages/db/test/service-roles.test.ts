@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { SERVICE_DB_ROLES, type ServiceName } from "@pt/config";
+import { serviceRole, serviceRoles, type ServiceName } from "@pt/config";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.ts";
@@ -15,7 +15,7 @@ import { adminSettings, contiguousMigrations, scratchDatabase, serviceLogin } fr
  * The services' own suites also run under these roles (see the `serviceLogin` users in
  * indexer, outbox, kyc, bank, anchor, recon, recovery, tax, notify and signer tests).
  */
-const SERVICES = Object.keys(SERVICE_DB_ROLES) as ServiceName[];
+const SERVICES = serviceRoles().map(([s]) => s);
 let admin: pg.Client;
 let settings: pg.ClientConfig;
 let drop: () => Promise<void>;
@@ -85,25 +85,27 @@ describe("service group roles (migration 0029)", () => {
               (SELECT array_agg(g.rolname::text ORDER BY g.rolname) FROM pg_auth_members m JOIN pg_roles g ON g.oid = m.roleid
                WHERE m.member = r.oid) AS member_of
        FROM pg_roles r WHERE r.rolname LIKE 'pt\\_svc\\_%' ORDER BY r.rolname`);
-    expect(rows.map((r) => r.rolname)).toEqual(SERVICES.map((s) => SERVICE_DB_ROLES[s].group).sort());
+    expect(rows.map((r) => r.rolname)).toEqual(SERVICES.map((s) => serviceRole(s).group).sort());
     expect(rows.every((r) => r.ok)).toBe(true);
     const sql = readFileSync(fileURLToPath(new URL("../migrations/0029_service_roles.sql", import.meta.url)), "utf8");
     for (const r of rows) {
       // Every membership is spelled out in a GRANT ... TO <group> line of the migration.
-      for (const m of r.member_of ?? []) expect(sql, `${r.rolname} member of ${m}`).toMatch(new RegExp(`GRANT [a-z_, ]*\\b${m}\\b[a-z_, ]* TO ${r.rolname} WITH INHERIT TRUE, SET FALSE;`));
+      const grants = sql.split("\n").filter((l) => l.startsWith("GRANT ") && l.endsWith(` TO ${r.rolname} WITH INHERIT TRUE, SET FALSE;`));
+      const listed = grants.flatMap((l) => l.slice(6, l.indexOf(" TO ")).split(",").map((x) => x.trim()));
+      for (const m of r.member_of ?? []) expect(listed, `${r.rolname} member of ${m}`).toContain(m);
     }
   });
 
   it("can never SET ROLE to their group or to a member role", async () => {
     for (const s of SERVICES) {
-      await expect(as(s).query(`SET ROLE ${SERVICE_DB_ROLES[s].group}`), s).rejects.toMatchObject({ code: "42501" });
+      await expect(as(s).query(`SET ROLE ${serviceRole(s).group}`), s).rejects.toMatchObject({ code: "42501" });
     }
     await expect(as("signer").query("SET ROLE pt_signer"), "signer").rejects.toMatchObject({ code: "42501" });
     await expect(as("indexer").query("SET ROLE pt_chain_writer"), "indexer").rejects.toMatchObject({ code: "42501" });
   });
 
   it.each(SERVICES)("%s: privilege inventory matches the reviewed list", async (s) => {
-    await expect(await inventory(SERVICE_DB_ROLES[s].group)).toMatchFileSnapshot(`./service-roles/${s}.txt`);
+    await expect(await inventory(serviceRole(s).group)).toMatchFileSnapshot(`./service-roles/${s}.txt`);
   });
 
   it.each(SERVICES)("%s: cannot create objects, roles or databases, or touch the migration record", async (s) => {
@@ -206,6 +208,22 @@ describe("what each service may not do (42501)", () => {
       "SELECT * FROM signer.requests",
       "SELECT ledger.post_journal('x', 'x', NULL, NULL, 'notify', '[]'::jsonb)",
     ],
+    exit: [
+      "SELECT * FROM exit.cases",
+      "SELECT * FROM exit.audit",
+      "SELECT * FROM exit.verify_audit()",
+      "SELECT exit.decide_final(1, 'exit', 'approve', 'checkers only')",
+      "SELECT outbox.enqueue('x', 'issuance.burn', '{}'::jsonb, NULL, 'exit')",
+      "SELECT ledger.post_journal('x', 'x', NULL, NULL, 'exit', '[]'::jsonb)",
+    ],
+    transfer: [
+      "SELECT * FROM transfer.audit",
+      "SELECT * FROM transfer.verify_audit()",
+      "SELECT transfer.command_allowed('transfer.execute', '{}'::jsonb)",
+      "SELECT outbox.enqueue('x', 'transfer.execute', '{}'::jsonb, NULL, 'transfer')",
+      "SELECT * FROM kyc.subjects",
+      "SELECT * FROM signer.requests",
+    ],
     audit: [
       "UPDATE signer.requests SET status = 'signed'",
       "SELECT signer.decide('00000000-0000-0000-0000-000000000000', 'audit', 'approve', 'read only')",
@@ -224,21 +242,22 @@ describe("what each service may not do (42501)", () => {
     ],
   };
   it.each(SERVICES)("%s", async (s) => {
-    for (const sql of forbidden[s]) await denied(s, sql);
+    for (const sql of new Map(Object.entries(forbidden)).get(s) ?? []) await denied(s, sql);
   });
 });
 
 describe("db:service-roles (ensureServiceRoles)", () => {
   it("creates one login per service in its group only, keeps it idempotent and removes extra memberships", async () => {
     const tag = randomBytes(3).toString("hex");
-    const creds = Object.fromEntries(SERVICES.map((s) => [s, { user: `${SERVICE_DB_ROLES[s].login}_e${tag}`, password: randomBytes(24).toString("base64url") }])) as Record<ServiceName, { user: string; password: string }>;
+    const creds = new Map(SERVICES.map((s) => [s, { user: `${serviceRole(s).login}_e${tag}`, password: randomBytes(24).toString("base64url") }]));
+    const cred = (s: ServiceName): { user: string; password: string } => creds.get(s) ?? { user: "missing", password: "missing" };
     const root = new pg.Client(adminSettings(String(settings.database)));
     await root.connect();
     try {
       const first = await ensureServiceRoles(root, creds);
       expect(first.every((r) => r.created)).toBe(true);
       // A stray membership (e.g. granted by hand) is removed on the next run.
-      await root.query(`GRANT pt_ledger_writer TO ${creds.indexer.user}`);
+      await root.query(`GRANT pt_ledger_writer TO ${cred("indexer").user}`);
       const again = await ensureServiceRoles(root, creds);
       expect(again.some((r) => r.created)).toBe(false);
       const { rows } = await root.query<{ u: string; groups: string[]; ok: boolean }>(
@@ -247,9 +266,9 @@ describe("db:service-roles (ensureServiceRoles)", () => {
          FROM pg_roles u JOIN pg_auth_members m ON m.member = u.oid JOIN pg_roles g ON g.oid = m.roleid
          WHERE u.rolname LIKE $1 GROUP BY u.rolname`, [`%\\_e${tag}`]);
       expect(rows).toHaveLength(SERVICES.length);
-      for (const s of SERVICES) expect(rows.find((r) => r.u === creds[s].user)).toMatchObject({ groups: [SERVICE_DB_ROLES[s].group], ok: true });
+      for (const s of SERVICES) expect(rows.find((r) => r.u === cred(s).user)).toMatchObject({ groups: [serviceRole(s).group], ok: true });
       // The login works with its password and is limited to its group.
-      const c = new pg.Client({ ...settings, user: creds.recovery.user, password: creds.recovery.password });
+      const c = new pg.Client({ ...settings, user: cred("recovery").user, password: cred("recovery").password });
       await c.connect();
       try {
         await expect(c.query("SELECT * FROM ledger.journal")).rejects.toMatchObject({ code: "42501" });
@@ -257,7 +276,7 @@ describe("db:service-roles (ensureServiceRoles)", () => {
         await c.end();
       }
     } finally {
-      for (const s of SERVICES) await root.query(`DROP ROLE IF EXISTS ${creds[s].user}`);
+      for (const s of SERVICES) await root.query(`DROP ROLE IF EXISTS ${cred(s).user}`);
       await root.end();
     }
   });

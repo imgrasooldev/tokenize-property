@@ -8,7 +8,7 @@ import { decodeFunctionData, getAddress, keccak256, parseTransaction, toHex, typ
 import { generatePrivateKey } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ageCoolingOff, newAccount, passRecon, world, type World } from "../../bank/test/setup.ts";
-import { adminSettings } from "../../db/test/helpers.ts";
+import { adminSettings, servicePool } from "../../db/test/helpers.ts";
 import { officer } from "../../db/test/officers.ts";
 import { Indexer, type Deployment, type Header } from "../../indexer/src/index.ts";
 import { FakeChain, fakeDeployment, type FakeEvent } from "../../indexer/test/fake-chain.ts";
@@ -40,6 +40,8 @@ let guard = "";
 const webRole = `pt_web_xf_${randomBytes(4).toString("hex")}`;
 const webPassword = randomBytes(24).toString("base64url");
 let web: pg.Client;
+/** The tick runs as in production: a login in pt_svc_transfer (T-012, migration 0029). */
+let ticker: Awaited<ReturnType<typeof servicePool>>;
 
 const fake = {
   frozen: new Set<string>(),
@@ -309,11 +311,14 @@ beforeAll(async () => {
   await db.query(`GRANT pt_web TO ${webRole} WITH INHERIT TRUE, SET FALSE`);
   web = new pg.Client({ ...w.settings, user: webRole, password: webPassword });
   await web.connect();
+  ticker = await servicePool("transfer", String(w.settings.database), 2);
 }, 240_000);
 
 afterAll(async () => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- undefined when beforeAll failed early
   await web?.end();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- undefined when beforeAll failed early
+  await ticker?.drop();
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- undefined when beforeAll failed early
   await w?.drop();
   const root = new pg.Client(adminSettings());
@@ -405,14 +410,14 @@ describe("a priced transfer through the website, the desk, compliance, trustee, 
   it("T7: a wrong amount goes to suspense; the exact credit from the buyer's registered account books the escrow and enqueues the proposal", async () => {
     const r = await row(id);
     await pay(buyer, r.intent_code, 100n * PRICE - 1n);
-    expect(await tick(db, "transfer-worker")).toBe(0);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(0);
     expect((await row(id)).status).toBe("awaiting_cash");
     // From an account that is not the buyer's: suspense too (B-2).
     const stranger = newAccount(w, "Someone Unrelated");
     await pay(buyer, r.intent_code, 100n * PRICE, stranger);
-    expect(await tick(db, "transfer-worker")).toBe(0);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(0);
     await pay(buyer, r.intent_code, 100n * PRICE);
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     const paid = await row(id);
     expect(paid.status).toBe("proposed");
     expect(paid.paid_ref).toMatch(/^RAAST-/);
@@ -444,12 +449,12 @@ describe("a priced transfer through the website, the desk, compliance, trustee, 
   it("the tick links the proposal, re-checks after the delay (TR-11), executes, follows the exact movement and writes the register", async () => {
     const r = await row(id);
     const requestId = await proposeOnChain(r, seller.wallet, buyer.wallet, 100n);
-    expect(await tick(db, "transfer-worker")).toBeGreaterThanOrEqual(2);
+    expect(await tick(ticker.pool, "transfer-worker")).toBeGreaterThanOrEqual(2);
     const pending = await row(id);
     expect(pending).toMatchObject({ status: "proposed", request_id: requestId.toString() });
     const exec = await command(pending.execute_key ?? "");
     expect(exec.payload).toEqual({ recoveryGuard: guard, requestId: requestId.toString(), caseId: `0x${pending.case_ref.toString("hex")}` });
-    expect(await tick(db, "transfer-worker")).toBe(0);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(0);
     const tx = await sign("transfer.execute", pending.execute_key ?? "");
     expect(decodeFunctionData({ abi: recoveryGuardAbi, data: tx.data })).toMatchObject({ functionName: "execute", args: [requestId] });
     // Refund or settlement are impossible before execution.
@@ -457,7 +462,7 @@ describe("a priced transfer through the website, the desk, compliance, trustee, 
     expect((await cash("desk", id, "prepare_refund")).error).toMatch(/only a case in refunding/);
     // An execution that moved something else is not accepted.
     await executeOnChain(requestId, seller.wallet, buyer.wallet, 100n);
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     expect((await row(id)).status).toBe("executed");
     const reg = await db.query<{ wallet: string; units: string }>("SELECT wallet, units::text FROM trustee.register_entries WHERE source = 'transfer' AND source_ref LIKE $1 ORDER BY id",
       [`transfer:${caseUuid}:%`]);
@@ -511,7 +516,7 @@ describe("refunds only when nothing can execute (TR-B9, TR-B12)", () => {
     await db.query("ALTER TABLE transfer.cases DISABLE TRIGGER cases_guard");
     await db.query("UPDATE transfer.cases SET pay_until = now() - interval '1 minute' WHERE id = $1", [id]);
     await db.query("ALTER TABLE transfer.cases ENABLE TRIGGER cases_guard");
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     expect((await row(id)).status).toBe("cancelled");
     expect((await db.query("SELECT 1 FROM bank.intent_cancellations WHERE code = $1", [r.intent_code])).rowCount).toBe(1);
     await pay(buyer, r.intent_code, 5n * PRICE);
@@ -523,7 +528,7 @@ describe("refunds only when nothing can execute (TR-B9, TR-B12)", () => {
     const { id, seller, buyer, r } = await approvedSale(5n);
     await mine([{ role: "token", name: "AddressFrozen", args: { _userAddress: seller.wallet, _isFrozen: true, _owner: lc(d.contracts.freezeGuard ?? "") } }]);
     await pay(buyer, r.intent_code, 5n * PRICE);
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     const c = await row(id);
     expect(c).toMatchObject({ status: "refunding", propose_key: null });
     expect(await cash("desk", id, "prepare_refund")).toMatchObject({ ok: true });
@@ -537,11 +542,11 @@ describe("refunds only when nothing can execute (TR-B9, TR-B12)", () => {
   it("TR-11 before execution: the request is cancelled on chain first; no refund while it can still execute", async () => {
     const { id, seller, buyer, r } = await approvedSale(7n);
     await pay(buyer, r.intent_code, 7n * PRICE);
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     const requestId = await proposeOnChain(await row(id), seller.wallet, buyer.wallet, 7n);
     // The buyer loses KYC verification (compliance hold) during the delay.
     await db.query("SELECT kyc.revoke($1, 'kyc:officer', 'documents found to be forged in review')", [buyer.subjectId]);
-    expect(await tick(db, "transfer-worker")).toBeGreaterThanOrEqual(2);
+    expect(await tick(ticker.pool, "transfer-worker")).toBeGreaterThanOrEqual(2);
     const c = await row(id);
     expect(c.status).toBe("cancelling");
     expect(c.execute_key).toBeNull();
@@ -551,25 +556,25 @@ describe("refunds only when nothing can execute (TR-B9, TR-B12)", () => {
     const tx = await sign("transfer.cancel", c.cancel_key ?? "");
     expect(decodeFunctionData({ abi: recoveryGuardAbi, data: tx.data })).toMatchObject({ functionName: "cancel", args: [requestId] });
     // Still pending on chain: nothing is refunded.
-    expect(await tick(db, "transfer-worker")).toBe(0);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(0);
     expect((await cash("desk", id, "prepare_refund")).error).toMatch(/only a case in refunding/);
     await mine([{ role: "recovery", name: "RecoveryCancelled", args: { id: requestId, by: lc(keys.address("trustee")) } }]);
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     expect((await row(id)).status).toBe("refunding");
   });
 
   it("an execution that fails three times fails the case and cancels the request before any refund", async () => {
     const { id, seller, buyer, r } = await approvedSale(3n);
     await pay(buyer, r.intent_code, 3n * PRICE);
-    await tick(db, "transfer-worker");
+    await tick(ticker.pool, "transfer-worker");
     await proposeOnChain(await row(id), seller.wallet, buyer.wallet, 3n);
     for (let i = 1; i <= 3; i++) {
-      await tick(db, "transfer-worker");
+      await tick(ticker.pool, "transfer-worker");
       const c = await row(id);
       expect(c.execute_key).toBe(`transfer.execute:case:${String(id)}:${String(i)}`);
       await settle(c.execute_key ?? "", "failed");
     }
-    expect(await tick(db, "transfer-worker")).toBe(1);
+    expect(await tick(ticker.pool, "transfer-worker")).toBe(1);
     const c = await row(id);
     expect(c.status).toBe("failed");
     expect(c.cancel_key).toBe(`transfer.cancel:case:${String(id)}:1`);

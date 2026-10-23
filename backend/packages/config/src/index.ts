@@ -82,11 +82,34 @@ export const SERVICE_DB_ROLES = {
   recovery: { prefix: "RECOVERY", group: "pt_svc_recovery", login: "pt_recovery_app" },
   tax: { prefix: "TAX", group: "pt_svc_tax", login: "pt_tax_app" },
   notify: { prefix: "NOTIFY", group: "pt_svc_notify", login: "pt_notify_app" },
+  exit: { prefix: "EXIT", group: "pt_svc_exit", login: "pt_exit_app" },
+  transfer: { prefix: "TRANSFER", group: "pt_svc_transfer", login: "pt_transfer_app" },
   audit: { prefix: "AUDIT", group: "pt_svc_audit", login: "pt_audit_app" },
   console: { prefix: "CONSOLE", group: "pt_svc_console", login: "pt_console_app" },
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_DB_ROLES;
+export interface ServiceRole {
+  prefix: string;
+  group: string;
+  login: string;
+}
+
+/** The roles of one service. */
+export function serviceRole(service: ServiceName): ServiceRole {
+  // eslint-disable-next-line security/detect-object-injection -- service is a key of the constant above, never user input
+  return SERVICE_DB_ROLES[service];
+}
+
+/** Every service with its roles, in a fixed order. */
+export function serviceRoles(): [ServiceName, ServiceRole][] {
+  return Object.entries(SERVICE_DB_ROLES) as [ServiceName, ServiceRole][];
+}
+
+/** A value from an env-style record by a computed key (`<PREFIX>_PG_USER`), without prototype lookups. */
+export function envValue(env: Record<string, string | undefined>, key: string): string | undefined {
+  return new Map(Object.entries(env)).get(key);
+}
 
 /** The explicit opt-in for a service to use the admin login on a loopback database (development only). */
 export const ADMIN_FALLBACK_FLAG = "PT_DB_ADMIN_FALLBACK";
@@ -114,10 +137,10 @@ export interface ServiceDbLogin {
  * Error messages name settings, never values.
  */
 export function serviceDbLogin(env: Record<string, string | undefined>, service: ServiceName): ServiceDbLogin {
-  const { prefix } = SERVICE_DB_ROLES[service];
+  const { prefix } = serviceRole(service);
   const admin = env.PG_ADMIN_USER ?? "pt_admin";
-  const user = env[`${prefix}_PG_USER`];
-  const password = env[`${prefix}_PG_PASSWORD`];
+  const user = envValue(env, `${prefix}_PG_USER`);
+  const password = envValue(env, `${prefix}_PG_PASSWORD`);
   if (user || password) {
     if (!user || !password) throw new Error(`${prefix}_PG_USER and ${prefix}_PG_PASSWORD must be set together`);
     if (user === admin || user === "postgres") throw new Error(`${prefix}_PG_USER must be the ${service} service's own role, not the admin`);
@@ -129,7 +152,7 @@ export function serviceDbLogin(env: Record<string, string | undefined>, service:
     throw new Error(`refusing to connect the ${service} service to a non-local database as the admin: set ${prefix}_PG_USER/${prefix}_PG_PASSWORD (${hint})`);
   }
   if (env.NODE_ENV === "production") throw new Error(`the ${service} service never runs as the admin in production: set ${prefix}_PG_USER/${prefix}_PG_PASSWORD`);
-  if (env[ADMIN_FALLBACK_FLAG] !== "1") {
+  if (env.PT_DB_ADMIN_FALLBACK !== "1") {
     throw new Error(`no ${prefix}_PG_USER for the ${service} service: ${hint} (local development only: ${ADMIN_FALLBACK_FLAG}=1 uses the admin login)`);
   }
   return { user: admin, password: env.PG_ADMIN_PASSWORD, asAdmin: true };

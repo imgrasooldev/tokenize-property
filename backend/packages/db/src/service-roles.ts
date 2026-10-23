@@ -9,8 +9,9 @@
  *   npm run db:service-roles -- --test     (checks property_token_test instead; roles are cluster-wide)
  * Pattern of db:web-role (website) and admin/scripts/setup-server.mjs (portal).
  */
-import { SERVICE_DB_ROLES, type ServiceName } from "@pt/config";
+import { serviceRoles, type ServiceName } from "@pt/config";
 import type pg from "pg";
+
 /** Generous per-service ceilings: pools are 2-10 connections; a runaway loop cannot exhaust the server. */
 const LIMITS = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT CONNECTION LIMIT 30";
 
@@ -21,11 +22,12 @@ export interface ServiceRoleResult {
 }
 
 /** Ensures every service login on the cluster `client` is connected to (as the admin). */
-export async function ensureServiceRoles(client: pg.ClientBase, logins: Record<ServiceName, { user: string; password: string }>): Promise<ServiceRoleResult[]> {
+export async function ensureServiceRoles(client: pg.ClientBase, logins: ReadonlyMap<ServiceName, { user: string; password: string }>): Promise<ServiceRoleResult[]> {
   const results: ServiceRoleResult[] = [];
-  for (const service of Object.keys(SERVICE_DB_ROLES) as ServiceName[]) {
-    const { group } = SERVICE_DB_ROLES[service];
-    const { user, password } = logins[service];
+  for (const [service, { group }] of serviceRoles()) {
+    const login = logins.get(service);
+    if (!login) throw new Error(`no login for the ${service} service`);
+    const { user, password } = login;
     const g = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1 AND NOT rolcanlogin", [group]);
     if (g.rowCount !== 1) throw new Error(`group role ${group} does not exist: run npm run migrate first (migration 0029)`);
     const exists = (await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [user])).rowCount === 1;
