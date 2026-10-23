@@ -153,6 +153,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Accept: tax journals reconcile; certificates match ledger. Tests: rate table edge cases, rounding.
 
 ### T-025 Exit: sale, redemption/burn, closure
+- Status (2026-10-22): **Partial, on branch `s-05-exit`** (migration `0027_exit.sql`, spec S-05 sections 14-16, ADR 0005/0007/0011 amendments, runbook `exit-redemption.md`). Built: exit cases X1-X18 with capacity decisions, proceeds from escrow statements, waterfall (maker/checker/trustee) and its payments, final distribution (S-03 arithmetic, WHT placeholders, statement + trustee pre-check), redemption batch with refIds, burn rule `after_payment` by default and held-line release, signer kind `issuance.burn` (deny by default, gate, refId re-derived), tick (publish/finalize/burns/Paid Out), closure, recon burn and exit checks, PT Control `/exit`, website `/exit` with the phase-0 redemption request queue. Not built / unverified: Besu run of real burns, Playwright e2e, InvestorVote/deed anchoring (`document.add`), exit_proceeds payment code, deposit refund payment, capital release journal, partial exit, binding investor redemption (S-05 EX-46). Owner questions in S-05 §16.4.
 - Outcome: sale proceeds distribution, redemption with `IssuanceGuard.burn(from, amount, refId)` through a new signer kind, token closure, final reconciliation.
 - P high, C L, Dep T-022, T-006. Accept: burn only after payout recorded; supply reaches zero; recon passes. Tests: e2e on Besu, refId single use for burns.
 

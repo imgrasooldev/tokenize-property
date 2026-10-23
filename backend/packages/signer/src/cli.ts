@@ -134,6 +134,9 @@ async function setup(): Promise<void> {
       ...(["recovery.propose", "recovery.execute", "recovery.cancel"] as const).map((kind): [string, object] => [kind, {
         chainId: LOCAL_DEV_CHAIN_ID, keyRef: "trustee", recoveryGuard: lc(d.recovery), token: lc(d.token), identityRegistry: lc(d.ir),
         maxBalance: MAX_BALANCE, maxPerDay: 50, approvals: 0 }]),
+      // S-05 (migration 0027): every burn also needs exit.burn_allowed (an approved redemption batch) and the reconciliation gate.
+      ["issuance.burn", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "issuance", issuance: lc(d.issuance), token: lc(d.token), maxPerCommand: "100000",
+        maxPerDay: 500, approvals: 0 }],
     ];
     for (const [kind, rule] of policies) {
       const active = await db.query<{ rule: unknown }>("SELECT rule FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL", [kind]);

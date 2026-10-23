@@ -5,6 +5,7 @@ import { AnswerView } from "@/components/analyst/AnswerView";
 import { PortalShell } from "@/components/Shell";
 import { VerifyRent } from "@/components/VerifyRent";
 import { formatNumber, formatPkr, formatPrice, loc, type Dict } from "@/lib/i18n";
+import { exitDict } from "@/lib/i18n-exit";
 import { MAX_HOLDING_TOKENS } from "@/lib/invest-rules";
 import { entitlementText } from "@/lib/merkle";
 import { PROPERTIES } from "@/lib/properties";
@@ -202,6 +203,11 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
           </b>
         </div>
       </div>
+      <p className="small exit-link">
+        <Link href="/exit" data-testid="exit-link">
+          {exitDict(lang).portfolioLink} →
+        </Link>
+      </p>
 
       <div className="dash">
         <div className="stack">

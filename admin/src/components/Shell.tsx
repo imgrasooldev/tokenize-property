@@ -33,7 +33,13 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/compliance/str", label: "STR cases", icon: "✉", need: "compliance.read" },
     ],
   },
-  { title: "Cases", items: [{ href: "/recovery", label: "Recovery & succession", icon: "⟲", need: "recovery.read" }] },
+  {
+    title: "Cases",
+    items: [
+      { href: "/recovery", label: "Recovery & succession", icon: "⟲", need: "recovery.read" },
+      { href: "/exit", label: "Exit", icon: "⇥", need: "exit.read" },
+    ],
+  },
   {
     title: "Operations & tax",
     items: [

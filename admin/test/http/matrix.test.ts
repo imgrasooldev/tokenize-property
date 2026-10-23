@@ -9,6 +9,7 @@ import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
 import { caseOf, freezePolicies, investor } from "../support/compliance";
 import { reversalCase, walletCase } from "../support/recovery";
+import { exitCaseFixture, exitToken, exitWindowFixture, sha64 } from "../support/exit";
 import { operationsWorld } from "../support/operations";
 import { distribution, holding, readModelToken, type TestToken } from "../support/trustee";
 import { cast, createWorld, invite, type Actor, type Cast, type World } from "../support/world";
@@ -40,6 +41,9 @@ const TAX: Role[] = ["tax_officer", "auditor"];
 const OFFERING: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
 const COMMITTEE: Role[] = ["ops_maker", "ops_checker", "compliance_officer"];
 const NO_PROPERTY = "00000000-0000-4000-8000-000000000046";
+// S-05: operations, compliance, legal and trustee officers and auditors read exits; the four deciding roles decide.
+const EXIT: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"];
+const EXIT_DECIDE: Role[] = ["ops_checker", "compliance_officer", "legal_officer", "trustee_officer"];
 
 /**
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
@@ -108,6 +112,13 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/approvals/offering/999999", allowed: OFFERING, okStatus: 404 },
   { path: "/trustee/properties", allowed: TRUSTEE },
   { path: `/trustee/properties/${NO_PROPERTY}`, allowed: TRUSTEE, okStatus: 404 },
+  // S-05 (migration 0027): every role that works on exits reads them (never tax officers or administrators).
+  { path: "/exit", allowed: EXIT },
+  { path: "/exit/{exitCase}", allowed: EXIT },
+  { path: "/exit/999999", allowed: EXIT, okStatus: 404 },
+  { path: "/exit/windows/{exitWindow}", allowed: EXIT },
+  { path: "/exit/windows/999999", allowed: EXIT, okStatus: 404 },
+  { path: "/audit/exit", allowed: EXIT },
 ];
 
 /** Session-protected POST routes: who passes authorisation, and the status they then get. */
@@ -173,6 +184,13 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/approvals/offering/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/offering/1/return", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "return", reason: "short" } },
   { path: `/api/trustee/properties/${NO_PROPERTY}/decide`, allowed: ["trustee_officer"], okStatus: 303, form: { decision: "accept", reason: "short" } },
+  // S-05: an incomplete form (or a missing step-up, or no sync button) is answered with a 303 back (nothing done).
+  { path: "/api/audit/exit/export", allowed: ["compliance_officer", "trustee_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
+  { path: "/api/exit/cases", allowed: ["ops_maker"], okStatus: 303, form: { rationale: "short" } },
+  { path: "/api/exit/cases/{exitCase}/request", allowed: ["ops_maker"], okStatus: 303, form: { action: "propose", reason: "short" } },
+  { path: "/api/exit/windows", allowed: ["ops_maker"], okStatus: 303, form: { action: "window" } },
+  { path: "/api/exit/sync", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/exit/decide", allowed: EXIT_DECIDE, okStatus: 303, form: { kind: "vote", decision: "approve", reason: "short" } },
 ];
 
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
@@ -184,6 +202,7 @@ function userOf(path: string): Role {
   if (path.startsWith("/api/operations/") && path.endsWith("/decide")) return "ops_checker";
   if (path.includes("export")) return "auditor";
   if (path.startsWith("/api/recovery/") && path.endsWith("/act")) return "compliance_officer";
+  if (path === "/api/exit/decide") return "ops_checker";
   if (path.includes("/approvals/property/") || path.includes("/approvals/offering/")) return "compliance_officer";
   if (path.endsWith("/decide") && path.includes("/approvals/")) return "ops_checker";
   return "ops_maker";
@@ -319,6 +338,15 @@ beforeAll(async () => {
   if (!adj.rows[0]?.r.ok) throw new Error(`adjustment: ${adj.rows[0]?.r.error ?? "?"}`);
   ids.set("adjustment", String(adj.rows[0].r.id));
   ids.set("run", (await w.su.query<{ id: string }>("SELECT max(id)::text AS id FROM recon.runs")).rows[0]?.id ?? "");
+  // S-05 items: a token of its own with two holders, an exit case and a redemption window (command-line names).
+  const exitTok = await exitToken(w.su, [
+    { wallet: `0x${"e1".repeat(20)}`, units: 600n },
+    { wallet: `0x${"e2".repeat(20)}`, units: 400n },
+  ]);
+  ids.set("exitToken", exitTok);
+  ids.set("exitCase", await exitCaseFixture(w.su, exitTok));
+  // The window on a token of its own: the case's token is refused windows once its vote opens (EX-41).
+  ids.set("exitWindow", await exitWindowFixture(w.su, await exitToken(w.su, [{ wallet: `0x${"e3".repeat(20)}`, units: 1000n }])));
   const dist = process.env.ADMIN_HTTP_DIST === ".next-http" ? ".next-http" : ".next";
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     cwd: join(__dirname, "..", ".."),
@@ -361,7 +389,9 @@ describe("route coverage", () => {
     const covered = new Set([
       ...PAGES.map((p) =>
         p.path
-          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|recovery|trustee)$/, "/audit/[source]")
+          .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|recovery|trustee|exit)$/, "/audit/[source]")
+          .replace(/^\/exit\/windows\/(\{\w+\}|\d+)$/, "/exit/windows/[id]")
+          .replace(/^\/exit\/(\{\w+\}|\d+)$/, "/exit/[id]")
           .replace(/^\/trustee\/register\/adjustments\/(\{\w+\}|\d+)$/, "/trustee/register/adjustments/[id]")
           .replace(/^\/trustee\/cosign\/(signer|offering)\/(\{\w+\}|\d+)$/, "/trustee/cosign/$1/[id]")
           .replace(/^\/trustee\/distributions\/\{\w+\}\/\{\w+\}$/, "/trustee/distributions/[registry]/[id]")
@@ -385,6 +415,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
           .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
+          .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
           .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")
           .replace(/^\/api\/tax\/(rates|exports)\/\{\w+\}\/(decide|generate)$/, "/api/tax/$1/[id]/$2")
           .replace(/^\/api\/trustee\/register\/adjustments\/\{\w+\}\/decide$/, "/api/trustee/register/adjustments/[id]/decide")
@@ -940,6 +971,68 @@ describe("trustee over HTTP (Step 6d)", () => {
     }
     expect(testId(await (await req("/audit/trustee", { who: "auditor" })).text(), "chain-state")).toContain("Intact");
     expect((await w.su.query("SELECT * FROM trustee.verify_audit()")).rows).toEqual([]);
+    expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("exit over HTTP (S-05)", () => {
+  // Later than every other describe's counters: signature counters only move forward.
+  let counter = Date.now() + 9_000_000;
+  // The path and query of the 303 (the absolute origin is dropped).
+  const location = (res: Response): string => decodeURIComponent((res.headers.get("location") ?? "").replace(/^https?:\/\/[^/]+/, ""));
+  const digestOf = (html: string): string => /name="digest" value="([0-9a-f]{64})"/.exec(html)?.[1] ?? "";
+  async function fresh(a: Actor, stale = false): Promise<void> {
+    await w.portal.query("SELECT admin.record_step_up($1, $2, $3)", [a.sessionHash, a.credentialId, ++counter]);
+    if (stale) {
+      await w.su.query("ALTER TABLE admin.sessions DISABLE TRIGGER sessions_guard");
+      await w.su.query("UPDATE admin.sessions SET step_up_at = step_up_at - interval '5 minutes 1 second' WHERE token_hash = $1", [a.sessionHash]);
+      await w.su.query("ALTER TABLE admin.sessions ENABLE TRIGGER sessions_guard");
+    }
+  }
+  const decisionDigest = async (id: string): Promise<string> =>
+    (await w.su.query<{ d: string }>("SELECT encode(exit.decision_digest($1), 'hex') AS d", [id])).rows[0]?.d ?? "";
+
+  it("pages show no personal data; only the maker sees the maker's forms", async () => {
+    for (const p of ["/exit", `/exit/${resolve("{exitCase}")}`, `/exit/windows/${resolve("{exitWindow}")}`]) {
+      const html = withoutHashes(await (await req(p, { who: "auditor" })).text());
+      expect(html, p).not.toMatch(/\d{5}-\d{7}-\d|\d{13}|PK\d{2}[A-Z]{4}/);
+      expect(html, p).not.toContain('action="/api/exit/cases"');
+    }
+    expect(await (await req("/exit", { who: "ops_maker" })).text()).toContain('action="/api/exit/cases"');
+    expect(await (await req(`/exit/${resolve("{exitCase}")}?propose=X2`, { who: "ops_maker" })).text()).toContain('name="voteRecordBlock"');
+    expect(await (await req(`/exit/${resolve("{exitCase}")}?propose=X2`, { who: "ops_checker" })).text()).not.toContain('name="voteRecordBlock"');
+  });
+
+  it("the maker proposes X2 only with a fresh step-up; the checker and a compliance officer approve what they were shown", async () => {
+    const id = resolve("{exitCase}");
+    const path = `/api/exit/cases/${id}/request`;
+    const form = { action: "propose", code: "X2", minutesSha: sha64(), noticeSha: sha64(), voteRecordBlock: "20", reason: "committee recommends an investor vote" };
+    await fresh(c.ops_maker, true);
+    expect(location(await req(path, { method: "POST", who: "ops_maker", form }))).toMatch(/error=Confirm with your security key first/);
+    await fresh(c.ops_maker);
+    expect(location(await req(path, { method: "POST", who: "ops_maker", form })).startsWith(`/exit/${id}?ok=Decision proposed`), serverLog.slice(-2000)).toBe(true);
+    const dec = (await w.su.query<{ id: string }>("SELECT id::text FROM exit.decisions WHERE case_id = $1 AND status = 'open'", [id])).rows[0]?.id ?? "";
+    const vote = async (who: Role, digest: string) => {
+      // eslint-disable-next-line security/detect-object-injection
+      await fresh(c[who]);
+      return location(await req("/api/exit/decide", { method: "POST", who, form: { kind: "vote", ref: dec, case: id, decision: "approve", reason: "minutes and notice checked", digest } }));
+    };
+    const shown = await decisionDigest(dec);
+    expect(await vote("legal_officer", shown)).toMatch(/error=X2 is decided by ops_checker, compliance_officer/);
+    expect(await vote("ops_checker", shown)).toBe(`/exit/${id}?ok=Recorded: open.`);
+    expect(await vote("compliance_officer", shown)).toMatch(/error=the case or the decision changed since you reviewed it/);
+    expect(await vote("compliance_officer", await decisionDigest(dec))).toMatch(/ok=Recorded: approved/);
+    expect((await w.su.query<{ state: string }>("SELECT state FROM exit.cases WHERE id = $1", [id])).rows[0]?.state).toBe("vote_open");
+    expect(await (await req(`/exit/${id}`, { who: "auditor" })).text()).toContain("Investor vote open");
+  });
+
+  it("the operations checker approves a redemption window as shown; back on the window's page", async () => {
+    const id = resolve("{exitWindow}");
+    const html = await (await req(`/exit/windows/${id}`, { who: "ops_checker" })).text();
+    await fresh(c.ops_checker);
+    const res = await req("/api/exit/decide", { method: "POST", who: "ops_checker", form: { kind: "window", ref: id, decision: "approve", reason: "NAV evidence checked", digest: digestOf(html) } });
+    expect(location(res)).toBe(`/exit/windows/${id}?ok=Recorded: approved.`);
+    expect((await w.su.query("SELECT * FROM exit.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
 });
