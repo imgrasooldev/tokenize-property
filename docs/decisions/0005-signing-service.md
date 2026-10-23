@@ -90,6 +90,15 @@ Before the fixed gas limit: p50 738 ms. Besu reads vary from run to run; the ide
 - Not changed: requests at or below the threshold (no approvals), other kinds, how the signing key relates to the 2-of-3 Issuance Safe in production (S-02 Q-8). The off-chain rule is stricter than a Safe 2-of-3 (platform approvals plus the trustee); owner and trustee to confirm (ADR 0011 open item 11).
 - Tested in `signer/test/trustee-cosign.test.ts`, `signer/test/officer-approval.test.ts`, `signer/test/service.test.ts`, the admin HTTP matrix and the admin e2e.
 
+## Amendment 2026-10-22: redemption burns (spec S-05, task T-025, migration 0027)
+
+- New kind `issuance.burn` (rule: `chainId`, `keyRef`, `issuance`, `token`, `maxPerCommand`, `maxPerDay` as a count, `approvals` default 0, `gasLimit` default 600,000). Deny by default: allowed only when `exit.burn_allowed(payload)` answers no problem: the payload is exactly the outbox command `burn:<refId>` an approved exit redemption batch enqueued, the case is Redeeming, the line is eligible under the batch's burn rule now (after payment by default, S-05 section 14.1) and not burned yet.
+- The signer derives the refId again (`keccak256("property-token:redemption:<token>:<distributionId>:<wallet>")` from the token and on-chain distribution id that `exit.burn_allowed` returns) and refuses any other; it checks the approved IssuanceGuard, the token, `balanceOf(from) >= amount` and the per-command and daily limits, and signs `IssuanceGuard.burn(from, amount, refId)`.
+- `issuance.burn` is a gated kind (S-05 Q-4): `isPayoutKind` now covers it, so the reconciliation gate is checked at request and at signing time.
+- `issuance.burn` is listed in `signer.trustee_cosign_kinds`: when a policy asks for approvals, a trustee officer co-signs in addition (0023 T-1). The default policy asks for none because maker, checker and a trustee officer approved the batch in the database.
+- `signer:setup` activates a local policy; the preview shows the decoded call and the rules.
+- Tested in `signer/test/burn-kind.test.ts` (pure, calldata decoded, refId identical to `@pt/exit`) and `exit/test/exit-rules.test.ts` (real database and signing service: not enqueued, forged amount, signed transaction decoded, burned already, gate frozen).
+
 ## Amendment 2026-10-22: secondary transfers, phase 0 (S-04 section 16, migration 0028)
 
 - Three new kinds, separate from the S-06 kinds so neither database gate can approve the other's commands: `transfer.propose` (`RecoveryGuard.propose(ForcedTransfer, from, to, 0x0, units, evidenceHash)`), `transfer.execute` (`execute(id)`) and `transfer.cancel` (`cancel(id)`), signed with the Trustee key. Rule shape = `recovery.propose|execute|cancel` (chain, key ref, RecoveryGuard, token, identity registry, `maxBalance`, daily count, approvals).

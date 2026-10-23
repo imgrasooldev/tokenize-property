@@ -150,6 +150,23 @@ Deviation from S-02 §8 ("blocking after the SLA"): `offering.refund_overdue` is
 
 Cash matching treats a journal reversed by a closed reversal case and its correcting journal as void (both, from the start: `voidedJournals`). Loaded only where the recovery schema exists. Not built yet: `compliance.freeze_unmatched`, `kyc.holder_unverified_unfrozen`, `issuance.reversed_not_resolved`.
 
+## Amendment 2026-10-22: exit, redemption and closure (spec S-05 sections 7 and 14.3, migration 0027, T-025)
+
+The warning `issuance.burn_not_reconciled` is replaced by blocking burn checks. Data come from `exit.recon_lines`, `exit.recon_cases`, `exit.recon_finals` (loaded only where the exit schema exists; without it every burn is an orphan).
+
+| Check | Severity | Meaning |
+|---|---|---|
+| `issuance.orphan_burn` | blocking | a `Burned` refId that is not a line of an APPROVED exit redemption batch (S-06 reversal batches do not exist yet) |
+| `issuance.burn_amount_mismatch` | blocking | a burn whose amount or wallet differs from its line (the wallet's balance at the final record block) |
+| `exit.ref_id_mismatch` | blocking | a line's refId is not keccak256(`property-token:redemption:<token>:<distributionId>:<wallet>`) |
+| `exit.burn_before_payment` | blocking | under the burn rule `after_payment`, a burned line that is neither paid, nothing-to-pay nor released by checker + trustee |
+| `exit.supply_not_zero` | warning; blocking after `redeeming_sla_hours` (72) and once Paid Out | supply on chain while the case is Redeeming / after it |
+| `exit.waterfall_mismatch` | blocking | exit pool not 0 once the final distribution is booked; closure reserve not 0 at closure |
+| `exit.register_mismatch` | blocking | the trustee register still shows units of the token after Paid Out |
+| `exit.statement_totals` | blocking | a final statement inconsistent with its hashes, root or totals, or a booked one whose hash differs from the chain |
+
+The final distribution keeps the `rent:` journal family (S-05 Q-3), so `checkRent` and the cash check match it unchanged; proceeds and waterfall payments carry the bank reference as `external_ref` and match the trustee-escrow statement lines.
+
 ## Amendment 2026-10-22: secondary transfers, phase 0 (S-04 section 16.8, migration 0028)
 
 The rules are evaluated in the database (`transfer.reconcile(token)`) and mapped to findings by `checkTransfers`; loaded only where the transfer schema exists.

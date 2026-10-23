@@ -104,13 +104,14 @@ describe("checkIssuance (M-6)", () => {
     expect(names(checkIssuance(w3.data)).sort()).toEqual(["issuance.command_without_payment", "issuance.duplicate_command"]);
   });
 
-  it("warns (does not block) when a mint cannot be compared or a burn has no redemption convention yet", () => {
+  it("warns when a mint cannot be compared; a burn outside an approved exit redemption batch blocks (S-05)", () => {
     const w = world();
     w.data.expectedMints.delete(sub(w, "settled").refId);
     w.data.chain.issuances.push({ refId: keccak256(toHex("burn")), kind: "burn", account: wallet(0), amount: 1n, blockNumber: 5n, blockTime: AS_OF, txHash: keccak256(toHex("b")) });
     const found = checkIssuance(w.data);
-    expect(names(found).sort()).toEqual(["issuance.burn_not_reconciled", "issuance.unverified_amount"]);
-    expect(found.every((x) => x.severity === "warning")).toBe(true);
+    expect(names(found).sort()).toEqual(["issuance.orphan_burn", "issuance.unverified_amount"]);
+    expect(found.find((x) => x.check === "issuance.orphan_burn")?.severity).toBe("blocking");
+    expect(found.find((x) => x.check === "issuance.unverified_amount")?.severity).toBe("warning");
   });
 });
 

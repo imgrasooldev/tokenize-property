@@ -1,7 +1,8 @@
 -- S-04 phase 0 (spec S-04 section 16): permitted secondary transfers between verified investors,
 -- approved case by case and executed by the trustee as RecoveryGuard ForcedTransfer requests while
--- the token stays paused (transfer-closed mode). Numbered 0028: 0027 is reserved for S-05 (exit),
--- built in parallel; nothing here depends on it (16.7: transfer.blocks is the hook S-05 uses).
+-- the token stays paused (transfer-closed mode). Applies on top of 0027 (S-05 exit): a token with an exit
+-- underway (exit.exit_underway) takes no transfer, and units in a submitted redemption request are not
+-- free to transfer (16.7); transfer.blocks remains for incident blocks set by operations.
 --
 -- Safety properties enforced by the database itself (schema transfer, plus admin.* and webauth.* wrappers):
 --   XF-1  Cases change only along their state machine (trigger): requested -> checks -> rejected |
@@ -541,7 +542,7 @@ BEGIN
     EXECUTE format('ALTER TABLE trustee.register_entries DROP CONSTRAINT %I', r.conname);
   END LOOP;
 END $$;
-ALTER TABLE trustee.register_entries ADD CONSTRAINT register_entries_source_known CHECK (source IN ('offering', 'adjustment', 'transfer'));
+ALTER TABLE trustee.register_entries ADD CONSTRAINT register_entries_source_known CHECK (source IN ('offering', 'adjustment', 'redemption', 'transfer'));
 
 -- S-03 amendment: withholding on the disposal of units (TR-22). PLACEHOLDER rates, LEGAL/TAX TO CONFIRM.
 INSERT INTO tax.income_types (code, label, note) VALUES
@@ -697,6 +698,7 @@ DECLARE
   v_frozen numeric;
   v_pending numeric;
   v_other numeric;
+  v_redeem numeric;
   v_register numeric;
   v_held numeric;
   v_inbound numeric;
@@ -764,8 +766,12 @@ BEGIN
                          AND q.status = 'pending' AND q.id IS DISTINCT FROM c.request_id), 0);
   v_other := coalesce((SELECT sum(x.units) FROM transfer.cases x WHERE x.id <> c.id AND x.token = c.token AND x.seller_wallet = c.seller_wallet
                        AND x.status = ANY (transfer.live_states()) AND x.request_id IS NULL), 0);
-  r := r || jsonb_build_object('code', 'seller_balance', 'ok', v_balance - v_frozen >= c.units + v_pending + v_other,
-    'detail', format('free %s (balance %s, frozen %s); needed %s + pending %s + other cases %s', v_balance - v_frozen, v_balance, v_frozen, c.units, v_pending, v_other));
+  -- S-05 (0027): units in a submitted phase-0 redemption request of the seller are not free to transfer.
+  v_redeem := coalesce((SELECT sum(q.units) FROM exit.requests q JOIN exit.windows wd ON wd.id = q.window_id
+                        WHERE wd.token = c.token AND q.wallet = c.seller_wallet AND q.status = 'submitted'), 0);
+  r := r || jsonb_build_object('code', 'seller_balance', 'ok', v_balance - v_frozen >= c.units + v_pending + v_other + v_redeem,
+    'detail', format('free %s (balance %s, frozen %s); needed %s + pending %s + other cases %s + redemption requests %s', v_balance - v_frozen, v_balance,
+                     v_frozen, c.units, v_pending, v_other, v_redeem));
   v_register := trustee.register_balance(c.token, c.seller_wallet);
   v_other := coalesce((SELECT sum(x.units) FROM transfer.cases x WHERE x.id <> c.id AND x.token = c.token AND x.seller_wallet = c.seller_wallet
                        AND x.status = ANY (transfer.live_states())), 0);
@@ -797,8 +803,11 @@ BEGIN
       'detail', CASE WHEN o.completed_at IS NULL THEN 'no completed offering: the lock-up end is unknown'
                      ELSE format('lock-up ends %s UTC', to_char((o.completed_at + make_interval(months => transfer.num('lockup_months')::integer)) AT TIME ZONE 'UTC', 'YYYY-MM-DD')) END);
   END IF;
-  v_bool := NOT EXISTS (SELECT 1 FROM transfer.blocks b WHERE b.token = c.token AND b.closed_at IS NULL);
-  r := r || jsonb_build_object('code', 'exit', 'ok', v_bool, 'detail', CASE WHEN v_bool THEN 'no exit or incident block' ELSE 'the token is blocked (exit or incident)' END);
+  -- S-05 (0027): an exit from Vote Open on (exit.exit_underway) blocks transfers; transfer.blocks holds incident blocks.
+  v_bool := NOT exit.exit_underway(c.token) AND NOT EXISTS (SELECT 1 FROM transfer.blocks b WHERE b.token = c.token AND b.closed_at IS NULL);
+  r := r || jsonb_build_object('code', 'exit', 'ok', v_bool,
+    'detail', CASE WHEN v_bool THEN 'no exit underway and no incident block'
+                   WHEN exit.exit_underway(c.token) THEN 'an exit of the property is underway (S-05)' ELSE 'the token is blocked (incident)' END);
 
   -- Price band and minimum holding (decided at completion and approval).
   IF p_stage IN ('complete', 'approve') THEN

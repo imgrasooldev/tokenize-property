@@ -936,3 +936,17 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
 .xfer-optional { display: grid; gap: 10px; font-size: 13px; color: var(--muted); }
 .xfer-optional summary { cursor: pointer; margin-block-end: 8px; }
 .xfer-optional label { margin-block-end: 8px; }
+/* ---------------------------------------------------------------- S-05 exit and redemption (/exit) */
+.exit-disc { margin-block: 12px 4px; }
+.disc-list { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; color: var(--text2); }
+.exit-list { list-style: none; padding: 0; margin: 14px 0 16px; display: grid; gap: 16px; }
+.exit-card, .exit-sec, .exit-final, .exit-reqs { display: grid; gap: 10px; min-inline-size: 0; }
+.exit-card h3, .exit-reqs h3 { font-size: 14px; margin: 0; }
+.exit-card .kv3, .exit-reqs .kv3 { margin-block: 0; }
+.otl.long { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); }
+.win-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.win { border: 1px solid var(--stroke); border-radius: 12px; padding: 12px; display: grid; gap: 10px; min-inline-size: 0; }
+.win.hl { border-color: rgba(34, 227, 240, 0.55); }
+.win p { margin: 0; }
+.btn-row.start { justify-content: flex-start; align-items: center; margin-block-start: 0; }
+.exit-link { margin-block: 12px 0; }

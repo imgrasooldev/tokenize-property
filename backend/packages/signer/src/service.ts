@@ -7,6 +7,9 @@ import { custodialRef, type CustodyProvider, type KeyProvider } from "./keystore
 import { describeCall, PreviewError, type CallPreview } from "./preview.ts";
 import {
   addKeyPayload,
+  burnPayload,
+  evaluateBurn,
+  type BurnRule,
   claimHash,
   claimId,
   evaluateAddKey,
@@ -331,6 +334,8 @@ export class SignerService {
       case "transfer.execute":
       case "transfer.cancel":
         return this.evaluateTransferRequest(c, kind, rule as TransferRecoveryRule, payload, excludeRequest);
+      case "issuance.burn":
+        return this.evaluateBurn(c, rule as BurnRule, payload, excludeRequest);
       default:
         return { decision: "deny", reason: `no evaluator for ${kind}` };
     }
@@ -614,6 +619,28 @@ export class SignerService {
       need(this.chain.balanceOf, "balances")(token, to),
     ]);
     return evaluateTransferExecute(rule, payload, { chainId, request, chainTime, fromBalance, fromFrozen: freeze.frozen, frozenTokens: freeze.frozenTokens, toVerified, toBalance, ...facts });
+  }
+
+  /** S-05 (0027 EX-DB-5): exactly the burn an approved redemption batch enqueued, eligible now; refId derived again. */
+  private async evaluateBurn(c: pg.ClientBase, rule: BurnRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const closed = { chainId: 0, exit: { problem: "malformed", token: null, distributionId: null }, balance: 0n, signedToday: 0 };
+    const p = burnPayload.safeParse(payload);
+    if (!p.success) return evaluateBurn(rule, payload, closed);
+    const db = async () => {
+      const { rows } = await c.query<{ problem: string | null; token: string | null; distribution_id: string | null }>(
+        "SELECT problem, token, distribution_id::text FROM exit.burn_allowed($1::jsonb)",
+        [JSON.stringify(payload)],
+      );
+      const r = rows[0];
+      const used = await this.signedToday(c, "issuance.burn", excludeRequest, false);
+      return { exit: { problem: r ? r.problem : "no answer", token: r?.token ?? null, distributionId: r?.distribution_id ?? null }, signedToday: Number(used) };
+    };
+    const [chainId, balance, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.balanceOf, "balances")(rule.token as Hex, p.data.from.toLowerCase() as Hex),
+      db(),
+    ]);
+    return evaluateBurn(rule, payload, { chainId, balance, ...facts });
   }
 
   private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {

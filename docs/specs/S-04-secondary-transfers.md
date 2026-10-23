@@ -233,7 +233,7 @@ On completion the database evaluates `price_outside_band`, `round_trip` (opposit
 
 ### 16.7 Hooks
 
-- **S-05 exit** (built in parallel, 0027): `transfer.blocks` with `transfer.open_block` / `transfer.close_block`; the `exit` check refuses approval, payment and execution while a block of the token is open. S-05 opens one when an exit record date is set.
+- **S-05 exit** (migration 0027, merged first): the `exit` check refuses approval, payment and execution while `exit.exit_underway(token)` is true (a live exit case from Vote Open on), and `seller_balance` counts the seller's units in submitted phase-0 redemption requests (`exit.requests`). `transfer.blocks` (`transfer.open_block` / `transfer.close_block`) remains for incident blocks set by operations (source `incident`; `exit` is still accepted for a manual block).
 - **S-06 disputes**: T15 marks an `executed` or `settled` case `disputed` (compliance officer); remedy through an S-06 case; never settled automatically.
 
 ### 16.8 Reconciliation (rules in `transfer.reconcile(token)`)

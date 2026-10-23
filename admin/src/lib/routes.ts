@@ -81,6 +81,10 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/transfers", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
   { path: "/transfers/audit", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
   { path: "/transfers/[id]", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
+  // S-05 (migration 0027): exit cases, decisions by capacity and redemption windows.
+  { path: "/exit", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
+  { path: "/exit/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
+  { path: "/exit/windows/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -149,6 +153,12 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/transfers/prices", kind: "api", methods: ["POST"], access: "transfer.price", mutating: true },
   { path: "/api/transfers/conflicts", kind: "api", methods: ["POST"], access: "transfer.read", mutating: true },
   { path: "/api/transfers/links", kind: "api", methods: ["POST"], access: "transfer.decide", mutating: true },
+  // S-05 (migration 0027): operations makers prepare, deciders decide in their capacity; every call needs a step-up (checked by the database).
+  { path: "/api/exit/cases", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/cases/[id]/request", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/windows", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/sync", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/decide", kind: "api", methods: ["POST"], access: "exit.decide", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
@@ -160,6 +170,7 @@ export const AUDIT_SOURCES = {
   compliance: "compliance.read",
   recovery: "recovery.read",
   trustee: "trustee.read",
+  exit: "exit.read",
 } as const satisfies Record<string, Permission>;
 export type AuditSource = keyof typeof AUDIT_SOURCES;
 
