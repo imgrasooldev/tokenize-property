@@ -3,6 +3,8 @@ import { decodeFunctionData, encodeFunctionData, type Abi, type Hex } from "viem
 import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, recoveryGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
 import {
   addKeyPayload,
+  burnPayload,
+  type BurnRule,
   proposePayload,
   requestPayload,
   walletKey,
@@ -340,6 +342,68 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
               `checks again: recipient verified and within ${n(r.maxBalance)} units, balance, management key for a recovery`,
             ]
           : ["only a pending request of a cancelled case (objection or error)"],
+      };
+    }
+    case "transfer.propose": {
+      const r = rule as RecoveryRule;
+      const p = proposePayload.safeParse(payload);
+      if (!p.success || p.data.kind !== "forced_transfer") bad("transfer request");
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({
+          abi: recoveryGuardAbi,
+          functionName: "propose",
+          args: [1, p.data.from as Hex, p.data.to as Hex, "0x0000000000000000000000000000000000000000", BigInt(p.data.amount), p.data.evidenceHash as Hex],
+        }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved RecoveryGuard ${r.recoveryGuard.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the ForcedTransfer an approved transfer case enqueued (transfer.command_allowed: compliance + trustee approvals, buyer's money in escrow)",
+          `seller not frozen, free balance covers it with pending requests; buyer verified and stays within ${n(r.maxBalance)} units`,
+        ],
+      };
+    }
+    case "transfer.execute":
+    case "transfer.cancel": {
+      const r = rule as RecoveryRule;
+      const p = requestPayload.safeParse(payload);
+      if (!p.success) bad(kind === "transfer.execute" ? "transfer execution" : "transfer cancellation");
+      const execute = kind === "transfer.execute";
+      return {
+        to: r.recoveryGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: execute ? "execute" : "cancel", args: [BigInt(p.data.requestId)] }),
+        abi: recoveryGuardAbi,
+        contract: "RecoveryGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: execute
+          ? [
+              "only the case's own pending ForcedTransfer after its delay; the TR-11 checks pass again (transfer.command_allowed)",
+              `seller not frozen with the free balance; buyer verified and within ${n(r.maxBalance)} units`,
+            ]
+          : ["only a pending request of a case that is being cancelled or failed (transfer.command_allowed)"],
+      };
+    }
+    case "issuance.burn": {
+      const r = rule as BurnRule;
+      const p = burnPayload.safeParse(payload);
+      if (!p.success) bad("redemption burn");
+      return {
+        to: r.issuance.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: issuanceGuardAbi, functionName: "burn", args: [p.data.from as Hex, BigInt(p.data.amount), p.data.refId as Hex] }),
+        abi: issuanceGuardAbi,
+        contract: "IssuanceGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved IssuanceGuard ${r.issuance.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the burn an approved exit redemption batch enqueued, eligible under its burn rule now (exit.burn_allowed)",
+          "refId = keccak256(property-token:redemption:<token>:<distributionId>:<wallet>), single use (the guard refuses a reused refId)",
+          `amount at most ${n(r.maxPerCommand)} units, the wallet holds them; at most ${String(r.maxPerDay)} burns per day; reconciliation gate open`,
+        ],
       };
     }
     default:

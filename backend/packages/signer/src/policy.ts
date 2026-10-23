@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeFunctionData, keccak256, type Hex } from "viem";
+import { encodeAbiParameters, encodeFunctionData, keccak256, stringToBytes, type Hex } from "viem";
 import { z } from "zod";
 import { distributionRegistryAbi, freezeGuardAbi, idFactoryAbi, identityAbi, issuanceGuardAbi, recoveryGuardAbi, registrarGuardAbi, tokenAbi } from "@pt/contracts";
 import { custodialRef } from "./keystore.ts";
@@ -81,6 +81,10 @@ export const KINDS = [
   "recovery.propose",
   "recovery.execute",
   "recovery.cancel",
+  "transfer.propose",
+  "transfer.execute",
+  "transfer.cancel",
+  "issuance.burn",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -761,7 +765,199 @@ export function evaluateCancel(rule: RecoveryRule, payload: unknown, facts: Canc
   };
 }
 
-export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule | AddKeyRule | RecoveryRule;
+// ------------------------------------------------------------------ issuance.burn (S-05, migration 0027)
+
+/**
+ * Redemption burn at exit: IssuanceGuard.burn(from, amount, refId). Denied unless
+ * exit.burn_allowed(payload) confirms that the approved redemption batch enqueued exactly this command
+ * and the line may be burned now (burn rule; S-05 section 14.1). The refId is derived again here from
+ * the token, the on-chain distribution id and the wallet, so a burn can never carry another refId.
+ * A gated kind: the reconciliation gate applies (S-05 Q-4, ADR 0007 amendment).
+ */
+export const burnRule = z.object({
+  chainId: z.number().int().positive(),
+  keyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  issuance: address,
+  token: address,
+  maxPerCommand: uint,
+  /** Burns signed per day (a count: an exit burns one command per holder). */
+  maxPerDay: z.number().int().min(1).max(100_000),
+  /** The batch was approved by maker, checker and trustee in the database; a policy may still ask for approvals (+ trustee co-sign, 0023). */
+  approvals: z.number().int().min(0).max(5).default(0),
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("600000"),
+});
+export type BurnRule = z.infer<typeof burnRule>;
+
+export const burnPayload = z.strictObject({ issuance: address, from: address, amount: amount18, refId: bytes32 });
+
+export interface BurnFacts {
+  chainId: number;
+  /** exit.burn_allowed: problem null = allowed; token and distributionId to derive the refId. */
+  exit: { problem: string | null; token: string | null; distributionId: string | null };
+  /** token.balanceOf(from) on chain. */
+  balance: bigint;
+  /** Burns signed today under this kind (excluding this request). */
+  signedToday: number;
+}
+
+/** Same derivation as @pt/exit redemptionRefId (a test keeps them identical). */
+export function redemptionRefId(token: string, distributionId: string, wallet: string): Hex {
+  return keccak256(stringToBytes(`property-token:redemption:${token.toLowerCase()}:${BigInt(distributionId).toString()}:${wallet.toLowerCase()}`));
+}
+
+export function evaluateBurn(rule: BurnRule, payload: unknown, facts: BurnFacts): Decision {
+  const p = burnPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { issuance, from, refId } = p.data;
+  const amount = BigInt(p.data.amount);
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (issuance.toLowerCase() !== rule.issuance.toLowerCase()) return { decision: "deny", reason: "target is not the approved IssuanceGuard" };
+  if (BigInt(refId) === 0n) return { decision: "deny", reason: "zero refId" };
+  if (amount > BigInt(rule.maxPerCommand)) return { decision: "deny", reason: `amount ${amount.toString()} above per-command limit ${rule.maxPerCommand}` };
+  if (facts.exit.problem !== null) return { decision: "deny", reason: `exit: ${facts.exit.problem}` };
+  if (!facts.exit.token || !facts.exit.distributionId) return { decision: "deny", reason: "exit: no redemption batch facts" };
+  if (facts.exit.token.toLowerCase() !== rule.token.toLowerCase()) return { decision: "deny", reason: "the redemption belongs to another token" };
+  if (redemptionRefId(facts.exit.token, facts.exit.distributionId, from) !== refId.toLowerCase()) {
+    return { decision: "deny", reason: "refId is not keccak256(property-token:redemption:<token>:<distributionId>:<wallet>)" };
+  }
+  if (facts.balance < amount) return { decision: "deny", reason: "the wallet does not hold the units to burn" };
+  if (facts.signedToday + 1 > rule.maxPerDay) return { decision: "deny", reason: `daily limit of ${String(rule.maxPerDay)} burns would be exceeded` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount,
+    keyRef: rule.keyRef,
+    to: rule.issuance.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: issuanceGuardAbi, functionName: "burn", args: [from as Hex, amount, refId as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+// ------------------------------------------------------------------ secondary transfers (S-04 phase 0, migration 0028)
+
+/**
+ * S-04 section 16.1 (TR-B2): an approved transfer moves as a RecoveryGuard ForcedTransfer signed by
+ * the Trustee key. Separate kinds from S-06 so neither gate can approve the other's commands; every
+ * one is denied unless transfer.command_allowed(kind, payload) confirms that an approved case enqueued
+ * exactly this payload and needs it now (for execute: the case's request, delay passed, the TR-11
+ * checks pass again). Same rule shape as recovery.propose|execute|cancel.
+ */
+export const transferRecoveryRule = recoveryRule;
+export type TransferRecoveryRule = RecoveryRule;
+
+export interface TransferProposeFacts {
+  chainId: number;
+  /** transfer.command_allowed: an approved case enqueued exactly this payload and needs it now. */
+  allowed: boolean;
+  fromBalance: bigint;
+  /** The sender's address freeze (token.isFrozen) and its partially frozen tokens (getFrozenTokens). */
+  fromFrozen: boolean;
+  frozenTokens: bigint;
+  /** IdentityRegistry.isVerified(to). */
+  toVerified: boolean;
+  toBalance: bigint;
+  /** Pending RecoveryGuard requests from this wallet (read model): count and units. */
+  pendingFrom: { requests: number; amount: bigint };
+  signedToday: number;
+}
+
+function transferGuardDenial(rule: TransferRecoveryRule, guard: string, caseId: string, facts: { chainId: number; allowed: boolean; signedToday: number }): string | null {
+  if (facts.chainId !== rule.chainId) return `wrong chain ${String(facts.chainId)}`;
+  if (guard.toLowerCase() !== rule.recoveryGuard.toLowerCase()) return "target is not the approved RecoveryGuard";
+  if (BigInt(caseId) === 0n) return "zero caseId";
+  if (!facts.allowed) return "no approved transfer case enqueued this request (transfer.command_allowed)";
+  if (facts.signedToday + 1 > rule.maxPerDay) return `daily limit of ${String(rule.maxPerDay)} would be exceeded`;
+  return null;
+}
+
+export function evaluateTransferPropose(rule: TransferRecoveryRule, payload: unknown, facts: TransferProposeFacts): Decision {
+  const p = proposePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { recoveryGuard, kind, from, to, onchainId, evidenceHash, caseId } = p.data;
+  const amount = BigInt(p.data.amount);
+  const denial = transferGuardDenial(rule, recoveryGuard, caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (kind !== "forced_transfer") return { decision: "deny", reason: "a transfer is always a ForcedTransfer request" };
+  if (onchainId.toLowerCase() !== ZERO_ADDRESS) return { decision: "deny", reason: "a forced transfer carries no onchainId" };
+  if (amount <= 0n) return { decision: "deny", reason: "a forced transfer moves a positive amount" };
+  if (from.toLowerCase() === to.toLowerCase()) return { decision: "deny", reason: "from and to are the same wallet" };
+  if (BigInt(evidenceHash) === 0n) return { decision: "deny", reason: "zero evidence hash" };
+  if (facts.fromFrozen) return { decision: "deny", reason: "the seller's wallet is frozen" };
+  if (!facts.toVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
+  if (facts.pendingFrom.amount + amount > facts.fromBalance - facts.frozenTokens) {
+    return { decision: "deny", reason: "the seller's free balance does not cover this request and the requests already pending" };
+  }
+  if (facts.toBalance + amount > BigInt(rule.maxBalance)) {
+    return { decision: "deny", reason: `the recipient would hold more than the per-investor cap of ${rule.maxBalance}` };
+  }
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: "propose", args: [1, from as Hex, to as Hex, ZERO_ADDRESS as Hex, amount, evidenceHash as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export interface TransferExecuteFacts {
+  chainId: number;
+  allowed: boolean;
+  request: ChainRequest;
+  chainTime: bigint;
+  fromBalance: bigint;
+  fromFrozen: boolean;
+  frozenTokens: bigint;
+  toVerified: boolean;
+  toBalance: bigint;
+  signedToday: number;
+}
+
+export function evaluateTransferExecute(rule: TransferRecoveryRule, payload: unknown, facts: TransferExecuteFacts): Decision {
+  const p = requestPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = transferGuardDenial(rule, p.data.recoveryGuard, p.data.caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  const r = facts.request;
+  if (r.status !== "pending") return { decision: "deny", reason: `request ${p.data.requestId} is ${r.status}, not pending` };
+  if (r.kind !== "forced_transfer") return { decision: "deny", reason: "the request is not a ForcedTransfer" };
+  if (facts.chainTime < r.eta) return { decision: "deny", reason: `the delay runs until ${r.eta.toString()} (chain time ${facts.chainTime.toString()})` };
+  if (facts.fromFrozen) return { decision: "deny", reason: "the seller's wallet is frozen" };
+  if (!facts.toVerified) return { decision: "deny", reason: "recipient is not verified in the identity registry" };
+  if (facts.fromBalance - facts.frozenTokens < r.amount) return { decision: "deny", reason: "the seller's free balance no longer covers the amount" };
+  if (facts.toBalance + r.amount > BigInt(rule.maxBalance)) {
+    return { decision: "deny", reason: `the recipient would hold more than the per-investor cap of ${rule.maxBalance}` };
+  }
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: "execute", args: [BigInt(p.data.requestId)] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export function evaluateTransferCancel(rule: TransferRecoveryRule, payload: unknown, facts: CancelFacts): Decision {
+  const p = requestPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denial = transferGuardDenial(rule, p.data.recoveryGuard, p.data.caseId, facts);
+  if (denial) return { decision: "deny", reason: denial };
+  if (facts.status !== "pending") return { decision: "deny", reason: `request ${p.data.requestId} is ${facts.status}, not pending` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.recoveryGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: recoveryGuardAbi, functionName: "cancel", args: [BigInt(p.data.requestId)] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule | AddKeyRule | RecoveryRule | BurnRule;
 
 /** The key a request of this kind would be signed with (for the audit of a denial); null if unknown. */
 export function requestKeyRef(kind: string, rule: AnyRule, payload: unknown): string | null {
@@ -772,14 +968,16 @@ export function requestKeyRef(kind: string, rule: AnyRule, payload: unknown): st
 }
 
 /**
- * Kinds that move money out or settle rent (none exist yet). Whatever their own policy says, they
- * are denied unless reconciliation allows payouts (recon.payout_gate(), ADR 0007): not frozen, and
- * the latest run passed within 26 hours. Deny by default, so a future payout kind cannot forget it.
+ * Kinds that move money out or settle rent, and redemption burns (S-05 Q-4). Whatever their own
+ * policy says, they are denied unless reconciliation allows payouts (recon.payout_gate(), ADR 0007):
+ * not frozen, and the latest run passed within 26 hours. Deny by default, so a future payout kind
+ * cannot forget it.
  */
 const PAYOUT_KIND = /^(payout|rent|distribution)\./;
+const GATED_KINDS = new Set(["issuance.burn"]);
 
 export function isPayoutKind(kind: string): boolean {
-  return PAYOUT_KIND.test(kind);
+  return PAYOUT_KIND.test(kind) || GATED_KINDS.has(kind);
 }
 
 export function parseRule(kind: "issuance.mint", rule: unknown): MintRule;
@@ -796,6 +994,8 @@ export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "recovery.freeze" || kind === "recovery.unfreeze") return recoveryFreezeRule.parse(rule);
   if (kind === "recovery.add_key") return addKeyRule.parse(rule);
   if (kind === "recovery.propose" || kind === "recovery.execute" || kind === "recovery.cancel") return recoveryRule.parse(rule);
+  if (kind === "transfer.propose" || kind === "transfer.execute" || kind === "transfer.cancel") return transferRecoveryRule.parse(rule);
+  if (kind === "issuance.burn") return burnRule.parse(rule);
   throw new Error(`no policy schema for kind ${kind}`);
 }
 

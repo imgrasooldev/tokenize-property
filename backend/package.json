@@ -1,7 +1,7 @@
 {
   "name": "property-token-backend",
   "private": true,
-  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications, recovery, operations and tax",
+  "description": "Backend services: ledger, outbox, signing service, indexer, reconciliation, anchoring, KYC, bank, property onboarding, offerings, notifications, recovery, operations and tax, secondary transfers",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -76,6 +76,11 @@
     "notify:status": "tsx packages/notify/src/cli.ts status",
     "recovery:tick": "tsx packages/recovery/src/cli.ts tick",
     "recovery:audit": "tsx packages/recovery/src/cli.ts audit",
+    "transfer:tick": "tsx packages/transfer/src/cli.ts tick",
+    "transfer:audit": "tsx packages/transfer/src/cli.ts audit",
+    "exit:tick": "tsx packages/exit/src/cli.ts tick",
+    "exit:run": "tsx packages/exit/src/cli.ts run",
+    "exit:audit": "tsx packages/exit/src/cli.ts audit",
     "tax:setup": "tsx packages/tax/src/cli.ts setup",
     "tax:serve": "tsx packages/tax/src/cli.ts serve",
     "tax:atl": "tsx packages/tax/src/cli.ts atl",

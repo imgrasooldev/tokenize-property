@@ -77,6 +77,14 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/approvals/offering/[id]", kind: "page", methods: ["GET"], access: "offering.read", mutating: false },
   { path: "/trustee/properties", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
   { path: "/trustee/properties/[id]", kind: "page", methods: ["GET"], access: "trustee.read", mutating: false },
+  // S-04 phase 0 (migration 0028): off-market transfers.
+  { path: "/transfers", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
+  { path: "/transfers/audit", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
+  { path: "/transfers/[id]", kind: "page", methods: ["GET"], access: "transfer.read", mutating: false },
+  // S-05 (migration 0027): exit cases, decisions by capacity and redemption windows.
+  { path: "/exit", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
+  { path: "/exit/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
+  { path: "/exit/windows/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -134,6 +142,23 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/approvals/offering/[id]/decide", kind: "api", methods: ["POST"], access: "offering.decide", mutating: true },
   { path: "/api/approvals/offering/[id]/return", kind: "api", methods: ["POST"], access: "offering.decide", mutating: true },
   { path: "/api/trustee/properties/[id]/decide", kind: "api", methods: ["POST"], access: "trustee.decide", mutating: true },
+  // S-04 (migration 0028): the desk (operations maker) opens, completes and withdraws; compliance and trustee officers decide,
+  // cancel and dispute; operations maker and checker run the cash leg; checkers record reference prices. Every write needs a
+  // step-up and (on a case) the digest of what was shown, both checked by the database.
+  { path: "/api/transfers/cases", kind: "api", methods: ["POST"], access: "transfer.request", mutating: true },
+  { path: "/api/transfers/cases/[id]/desk", kind: "api", methods: ["POST"], access: "transfer.request", mutating: true },
+  { path: "/api/transfers/cases/[id]/decide", kind: "api", methods: ["POST"], access: "transfer.decide", mutating: true },
+  { path: "/api/transfers/cases/[id]/cash", kind: "api", methods: ["POST"], access: "transfer.cash", mutating: true },
+  { path: "/api/transfers/sync", kind: "api", methods: ["POST"], access: "transfer.request", mutating: true },
+  { path: "/api/transfers/prices", kind: "api", methods: ["POST"], access: "transfer.price", mutating: true },
+  { path: "/api/transfers/conflicts", kind: "api", methods: ["POST"], access: "transfer.read", mutating: true },
+  { path: "/api/transfers/links", kind: "api", methods: ["POST"], access: "transfer.decide", mutating: true },
+  // S-05 (migration 0027): operations makers prepare, deciders decide in their capacity; every call needs a step-up (checked by the database).
+  { path: "/api/exit/cases", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/cases/[id]/request", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/windows", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/sync", kind: "api", methods: ["POST"], access: "exit.request", mutating: true },
+  { path: "/api/exit/decide", kind: "api", methods: ["POST"], access: "exit.decide", mutating: true },
 ];
 
 /** Audit sources and the permission each needs (the [source] segment). */
@@ -145,6 +170,7 @@ export const AUDIT_SOURCES = {
   compliance: "compliance.read",
   recovery: "recovery.read",
   trustee: "trustee.read",
+  exit: "exit.read",
 } as const satisfies Record<string, Permission>;
 export type AuditSource = keyof typeof AUDIT_SOURCES;
 

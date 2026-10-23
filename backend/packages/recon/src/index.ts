@@ -1,6 +1,6 @@
 export { buildStatement, FORMAT, formatStatement, importStatement, parseStatement, StatementError, type Statement, type StatementLine } from "./bank.ts";
 export { viemChainState, type ChainState } from "./chain.ts";
-export { ALL_CHECKS, checkCash, checkHoldings, checkIntegrity, checkIssuance, checkOfferings, checkRecovery, checkRent, checkSupply, checkTax, LAG_WARN_BLOCKS, MAX_PER_CHECK, runChecks, voidedJournals } from "./checks.ts";
+export { ALL_CHECKS, checkCash, checkHoldings, checkIntegrity, checkIssuance, checkOfferings, checkRecovery, checkRent, checkSupply, checkTax, checkTransfers, LAG_WARN_BLOCKS, MAX_PER_CHECK, runChecks, voidedJournals } from "./checks.ts";
 export { dayEnd, dayStart, journalTotal, parseRentKey, parseSubscriptionKey, payoutBatchHash, pktDate, refIdForSubscription } from "./conventions.ts";
 export { loadData, type Loaded, type LoadOptions } from "./load.ts";
 export { formatReport, reconcile, reportJson, type ReconcileOptions, type RunReport } from "./run.ts";
