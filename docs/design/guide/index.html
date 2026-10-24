@@ -1,0 +1,605 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><title>Property Token Platform Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the website's own dark theme (one theme, aurora + grid backdrop, glass panels); a scroll-spy rail on the left, sections each keyed to one site accent. */
+:root{
+  --bg:#05070f; --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.08); --stroke:rgba(255,255,255,.09); --stroke2:rgba(255,255,255,.18);
+  --text:#e8eef9; --muted:#8b97ad; --dim:#6f7b93;
+  --cyan:#22e3f0; --teal:#2ef2b5; --violet:#8b5cf6; --violet-soft:#d9ccff; --pink:#f472b6; --gold:#f5c46b; --up:#3be89b; --down:#ff6b81; --amber:#ffb547;
+  --radius:16px;
+  --display:"Space Grotesk",system-ui,"Segoe UI",sans-serif; --sans:"Inter",system-ui,"Segoe UI",Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15.5px;line-height:1.6;margin:0;overflow-x:hidden}
+h1,h2,h3,h4{margin:0;font-family:var(--display);letter-spacing:-.02em;font-weight:700;line-height:1.15;text-wrap:balance}
+p{margin:0}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.aurora{position:fixed;inset:-20%;z-index:0;pointer-events:none;opacity:.55;background:radial-gradient(40% 35% at 20% 20%,rgba(139,92,246,.3),transparent 70%),radial-gradient(35% 30% at 80% 10%,rgba(34,227,240,.22),transparent 70%),radial-gradient(40% 35% at 60% 85%,rgba(46,242,181,.12),transparent 70%);animation:drift 22s ease-in-out infinite alternate;will-change:transform}
+@keyframes drift{to{transform:translate(4%,-3%) rotate(8deg)}}
+.gridbg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse at 50% 0%,#000 30%,transparent 75%)}
+#progress{position:fixed;top:env(safe-area-inset-top,0px);left:0;height:3px;width:0;background:linear-gradient(90deg,var(--cyan),var(--violet) 55%,var(--pink));z-index:20;transition:width .1s linear}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));position:relative;z-index:2}
+.kicker{font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:1px;text-transform:uppercase}
+.grad{background:linear-gradient(90deg,var(--cyan),var(--violet) 55%,var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+.mono{font-family:var(--mono);font-size:.92em}
+.glass{background:var(--glass);border:1px solid var(--stroke);border-radius:var(--radius);backdrop-filter:blur(8px)}
+/* hero */
+.hero{padding-block:64px 40px;display:grid;gap:22px}
+.hero h1{font-size:clamp(34px,6vw,64px);max-width:14ch}
+.hero .lede{font-size:18px;max-width:64ch;color:var(--muted)}
+.hero .meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:6px}
+.tile{padding:14px 16px;display:grid;gap:2px;position:relative;overflow:hidden}
+.tile::after{content:"";position:absolute;inset:auto 0 0 0;height:2px;background:var(--tc,var(--cyan));opacity:.8}
+.tile b{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile span{font-size:12.5px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--stroke2);border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:600;background:var(--glass)}
+.chip.ok{color:var(--up);border-color:rgba(59,232,155,.4)} .chip.warn{color:var(--amber);border-color:rgba(255,181,71,.4)} .chip.bad{color:var(--down);border-color:rgba(255,107,129,.4)} .chip.info{color:var(--cyan);border-color:rgba(34,227,240,.4)} .chip.vi{color:var(--violet-soft);border-color:rgba(139,92,246,.5)}
+/* page + rail */
+.page{display:grid;grid-template-columns:230px minmax(0,1fr);gap:44px;padding-block:24px 90px}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);align-self:start;display:grid;gap:2px;font-size:13.5px;max-height:calc(100vh - 40px);overflow:auto}
+.rail a{text-decoration:none;padding:7px 12px;border-left:2px solid var(--stroke);color:var(--muted);transition:color .15s,border-color .15s,background .15s}
+.rail a:hover{color:var(--text);background:var(--glass)}
+.rail a.active{color:var(--text);border-left-color:var(--sc,var(--cyan));background:var(--glass)}
+.rail a:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+main{display:grid;gap:72px;min-width:0}
+section{--sc:var(--cyan);display:grid;gap:20px;min-width:0;scroll-margin-top:24px}
+section[data-c="teal"]{--sc:var(--teal)} section[data-c="violet"]{--sc:var(--violet)} section[data-c="pink"]{--sc:var(--pink)} section[data-c="gold"]{--sc:var(--gold)} section[data-c="amber"]{--sc:var(--amber)} section[data-c="cyan"]{--sc:var(--cyan)} section[data-c="up"]{--sc:var(--up)}
+.rail a[data-c="teal"]{--sc:var(--teal)} .rail a[data-c="violet"]{--sc:var(--violet)} .rail a[data-c="pink"]{--sc:var(--pink)} .rail a[data-c="gold"]{--sc:var(--gold)} .rail a[data-c="amber"]{--sc:var(--amber)} .rail a[data-c="up"]{--sc:var(--up)}
+.shead{display:grid;gap:8px;position:relative}
+.shead .kicker{color:var(--sc)}
+.shead h2{font-size:clamp(26px,3.4vw,40px)}
+.shead p{color:var(--muted);max-width:70ch;font-size:16.5px}
+.shead .link{position:absolute;right:0;top:0;font-family:var(--mono);font-size:11.5px;color:var(--dim);border:1px solid var(--stroke);border-radius:8px;padding:4px 8px}
+.shead .link:hover{color:var(--text);border-color:var(--stroke2)}
+h3{font-size:19px;margin-top:6px;display:flex;align-items:center;gap:10px}
+h3::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--sc);transform:rotate(45deg)}
+.prose{max-width:74ch;display:grid;gap:12px}
+.note{border-radius:12px;padding:14px 18px;background:color-mix(in srgb,var(--sc) 10%,transparent);border:1px solid color-mix(in srgb,var(--sc) 35%,transparent);font-size:14.5px}
+.note b{color:var(--sc)}
+/* cards */
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{padding:16px 18px;display:grid;gap:8px;align-content:start;min-width:0;transition:transform .2s,border-color .2s,background .2s}
+.card:hover{transform:translateY(-2px);border-color:var(--stroke2);background:var(--glass2)}
+.card h4{font-size:15.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card p,.card li{font-size:14px;color:var(--muted)}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--sc);flex:none;box-shadow:0 0 10px var(--sc)}
+/* tables */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:600px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--stroke);vertical-align:top}
+th{font-family:var(--mono);font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--sc);font-weight:600}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+td:first-child{font-weight:600;white-space:nowrap}
+code{font-family:var(--mono);font-size:.9em;background:var(--glass2);padding:1px 6px;border-radius:6px}
+/* compare */
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.cmp button{padding:12px 14px;text-align:left;display:grid;gap:4px;transition:border-color .15s,background .15s}
+.cmp button b{font-family:var(--display);font-size:15px}
+.cmp button span{font-size:12.5px;color:var(--muted)}
+.cmp button[aria-pressed="true"]{border-color:var(--sc);background:color-mix(in srgb,var(--sc) 12%,transparent)}
+.score{display:grid;gap:10px;padding:18px}
+.score .row{display:grid;grid-template-columns:150px 1fr 60px;gap:12px;align-items:center;font-size:13.5px}
+.score .bar{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.score .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--cyan),var(--teal));transition:width .5s cubic-bezier(.2,.7,.2,1)}
+.score .row.low .bar i{background:linear-gradient(90deg,var(--down),var(--amber))}
+.score .row.mid .bar i{background:linear-gradient(90deg,var(--amber),var(--gold))}
+.score .v{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+.score .why{font-size:14px;color:var(--muted);border-top:1px solid var(--stroke);padding-top:10px}
+/* flow player */
+.player{display:grid;gap:14px;padding:18px}
+.pbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--stroke2);border-radius:10px;padding:7px 14px;font-weight:600;font-size:13.5px;background:var(--glass);transition:background .15s,border-color .15s}
+.btn:hover{background:var(--glass2);border-color:var(--sc)}
+.btn.primary{background:color-mix(in srgb,var(--sc) 20%,transparent);border-color:var(--sc)}
+.btn:focus-visible{outline:2px solid var(--sc);outline-offset:2px}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.flow .n{flex:1 1 140px;min-width:0;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;background:var(--glass);display:grid;gap:3px;align-content:start;transition:all .25s;cursor:pointer}
+.flow .n .k{font-family:var(--mono);font-size:10.5px;color:var(--sc);letter-spacing:.5px}
+.flow .n b{font-size:13.5px}
+.flow .n span{font-size:12.5px;color:var(--muted)}
+.flow .n.on{border-color:var(--sc);background:color-mix(in srgb,var(--sc) 16%,transparent);box-shadow:0 0 0 1px var(--sc),0 0 24px color-mix(in srgb,var(--sc) 35%,transparent);transform:translateY(-2px)}
+.flow .n.done{border-color:color-mix(in srgb,var(--sc) 50%,transparent)}
+.flow .ar{align-self:center;color:var(--dim);flex:none;padding:0 2px}
+.explain{font-size:14.5px;min-height:3.2em;color:var(--text);border-left:3px solid var(--sc);padding-left:12px}
+/* tabs */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--stroke)}
+.tabs button{padding:9px 14px;font-weight:600;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--sc)}
+.tabs button:focus-visible{outline:2px solid var(--sc);outline-offset:-2px;border-radius:6px}
+.panel[hidden]{display:none}
+.panel{display:grid;gap:14px}
+/* ladder */
+.ladder{display:grid;gap:10px}
+.rung{display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:start;padding:12px 16px}
+.rung .lvl{font-family:var(--mono);font-size:12px;color:var(--sc);padding-top:3px}
+.rung b{display:block;font-family:var(--display)}
+.rung span{font-size:14px;color:var(--muted)}
+/* lifecycle timeline */
+.tl{display:grid;gap:16px}
+.tl-track{display:grid;grid-template-columns:repeat(8,1fr);gap:0;position:relative}
+.tl-track::before{content:"";position:absolute;left:6%;right:6%;top:18px;height:2px;background:linear-gradient(90deg,var(--muted),var(--teal),var(--gold),var(--up),var(--violet),var(--pink));opacity:.6}
+.tl-track button{display:grid;justify-items:center;gap:8px;padding:0 4px;font-size:12px;color:var(--muted);text-align:center;line-height:1.2}
+.tl-track button i{width:36px;height:36px;border-radius:50%;border:2px solid var(--stc);background:var(--bg);display:grid;place-items:center;font-family:var(--mono);font-weight:600;font-size:13px;color:var(--stc);transition:all .2s;position:relative;z-index:1}
+.tl-track button:hover i,.tl-track button[aria-selected="true"] i{background:var(--stc);color:#05070f;box-shadow:0 0 22px color-mix(in srgb,var(--stc) 60%,transparent)}
+.tl-track button[aria-selected="true"]{color:var(--text)}
+.tl-track button:focus-visible{outline:none} .tl-track button:focus-visible i{outline:2px solid #fff;outline-offset:2px}
+.stage{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;border-top:3px solid var(--stc,var(--sc))}
+.stage .who{font-family:var(--mono);font-size:11.5px;color:var(--stc);letter-spacing:.5px;text-transform:uppercase}
+.stage h4{font-size:22px;margin:4px 0 8px}
+.stage p{color:var(--muted);font-size:14.5px}
+.stage .side{display:grid;gap:10px;align-content:start}
+.stage .kv{padding:10px 12px;border-radius:10px;background:var(--glass);border:1px solid var(--stroke);font-size:13.5px}
+.stage .kv b{display:block;font-family:var(--mono);font-size:11px;color:var(--stc);letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px}
+.stage .nav{display:flex;gap:8px;justify-content:space-between;grid-column:1/-1}
+/* architecture svg */
+.fig{padding:16px;overflow-x:auto}
+.fig svg{display:block;max-width:100%;height:auto;margin:0 auto}
+.fig text{font-family:var(--sans);font-size:13px;fill:var(--text)}
+.fig text.m{font-size:11.5px;fill:var(--muted)}
+.fig text.t{font-weight:700;font-size:14px;font-family:var(--display)}
+.fig .box{fill:rgba(255,255,255,.04);stroke:var(--stroke2);stroke-width:1.2;transition:all .2s}
+.fig .ln{fill:none;stroke:var(--dim);stroke-width:1.3;transition:all .2s}
+.fig g.node{cursor:pointer}
+.fig g.node:hover .box,.fig g.node.on .box{stroke:var(--sc);fill:color-mix(in srgb,var(--sc) 14%,transparent)}
+.fig .ln.on{stroke:var(--sc);stroke-width:2.2}
+.fig .cap{font-size:14px;color:var(--muted);margin-top:10px;min-height:2.6em;border-left:3px solid var(--sc);padding-left:12px}
+/* roles explorer */
+.roles{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:16px}
+.rlist{display:grid;gap:4px;align-content:start}
+.rlist button{text-align:left;padding:8px 12px;border-radius:10px;font-size:13.5px;font-family:var(--mono);border:1px solid transparent}
+.rlist button:hover{background:var(--glass)}
+.rlist button[aria-pressed="true"]{background:color-mix(in srgb,var(--sc) 14%,transparent);border-color:var(--sc)}
+.rdetail{padding:18px;display:grid;gap:12px;align-content:start}
+.rdetail h4{font-size:20px}
+.rdetail .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.rdetail .cols div{padding:10px 12px;border-radius:10px;background:var(--glass);border:1px solid var(--stroke);font-size:13.5px}
+.rdetail .cols b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
+.rdetail .cols .can b{color:var(--up)} .rdetail .cols .never b{color:var(--down)} .rdetail .cols .sod b{color:var(--amber)}
+.rdetail ul{margin:0;padding-left:16px;color:var(--muted)}
+/* filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters input{flex:1 1 200px;min-width:0;background:var(--glass);border:1px solid var(--stroke2);border-radius:10px;padding:8px 12px;color:var(--text);font:inherit;font-size:14px}
+.filters input:focus{outline:2px solid var(--sc);outline-offset:1px}
+.fbtn{border:1px solid var(--stroke2);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.fbtn[aria-pressed="true"]{color:var(--text);border-color:var(--fc,var(--sc));background:color-mix(in srgb,var(--fc,var(--sc)) 16%,transparent)}
+.card.done{border-top:3px solid var(--up)} .card.partial{border-top:3px solid var(--amber)} .card.notbuilt{border-top:3px solid var(--down)}
+.empty{color:var(--dim);font-size:14px;padding:8px 0}
+/* roadmap */
+.gates{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;counter-reset:g}
+.gate{padding:16px;display:grid;gap:6px;position:relative;border-top:3px solid var(--gc)}
+.gate::before{counter-increment:g;content:"Gate " counter(g, upper-alpha);font-family:var(--mono);font-size:11px;color:var(--gc);letter-spacing:1px}
+.gate h4{font-size:16px}
+.gate p{font-size:13.5px;color:var(--muted)}
+.gate .own{font-size:12px;color:var(--dim)}
+/* faq */
+.faq{display:grid;gap:8px}
+details{padding:0 16px}
+summary{cursor:pointer;padding:13px 0;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center;font-family:var(--display);font-size:15.5px}
+summary::before{content:"+";font-family:var(--mono);color:var(--sc);width:16px;flex:none;transition:transform .2s}
+details[open] summary::before{content:"–"}
+details p{padding:0 0 14px 26px;color:var(--muted);font-size:14.5px;max-width:78ch}
+summary:focus-visible{outline:2px solid var(--sc);outline-offset:4px;border-radius:6px}
+details[hidden]{display:none}
+footer{border-top:1px solid var(--stroke);padding-block:24px 48px;font-size:12.5px;color:var(--dim);position:relative;z-index:2}
+.toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);left:50%;transform:translateX(-50%) translateY(20px);background:#141a2b;border:1px solid var(--stroke2);border-radius:10px;padding:8px 14px;font-size:13px;opacity:0;transition:all .25s;z-index:30;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%)}
+@media (max-width:900px){.page{grid-template-columns:1fr;gap:20px}.rail{position:static;display:flex;flex-wrap:wrap;gap:6px;max-height:none}.rail a{border-left:0;border-bottom:2px solid var(--stroke);border-radius:8px 8px 0 0}.rail a.active{border-bottom-color:var(--sc)}.rung{grid-template-columns:1fr}.stage{grid-template-columns:1fr}.roles{grid-template-columns:1fr}.rlist{display:flex;flex-wrap:wrap}.tl-track{grid-template-columns:repeat(4,1fr);row-gap:14px}.tl-track::before{display:none}.shead .link{position:static;justify-self:start}.score .row{grid-template-columns:110px 1fr 50px}}
+@media (prefers-reduced-motion:reduce){.aurora{animation:none}html{scroll-behavior:auto}*{transition:none!important}}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+<div class="aurora" aria-hidden="true"></div><div class="gridbg" aria-hidden="true"></div>
+<div id="progress" aria-hidden="true"></div>
+
+<header class="wrap hero">
+  <div class="kicker">Technical and product documentation · v1 · 24 Oct 2026</div>
+  <h1>Property Token <span class="grad">Platform</span></h1>
+  <p class="lede">Fractional ownership of Pakistani real estate as regulated digital tokens. A private Ethereum-compatible chain holds the register, a public chain proves it was never rewritten, and every rupee moves only after two officers approve and three ledgers agree.</p>
+  <div class="chips"><span class="chip info">Demo live</span><span class="chip warn">Pre-pilot</span><span class="chip vi">ERC-3643 on Besu</span><span class="chip ok">CI green</span></div>
+  <div class="tiles">
+    <div class="tile glass" style="--tc:var(--cyan)"><b data-count="4">4</b><span>QBFT validators, ~2 s finality</span></div>
+    <div class="tile glass" style="--tc:var(--violet)"><b>ERC-3643</b><span>permissioned security tokens</span></div>
+    <div class="tile glass" style="--tc:var(--teal)"><b data-count="137">137</b><span>passing contract tests</span></div>
+    <div class="tile glass" style="--tc:var(--gold)"><b data-count="72" data-suffix=" h">72 h</b><span>timelock on every change</span></div>
+    <div class="tile glass" style="--tc:var(--pink)"><b data-count="31">31</b><span>append-only migrations</span></div>
+    <div class="tile glass" style="--tc:var(--up)"><b>0 gas</b><span>investors never hold crypto</span></div>
+  </div>
+  <div class="meta"><span>repo imgrasooldev/tokenize-property</span><span>chain id 586586</span><span>anchor every 15 min</span></div>
+</header>
+
+<div class="wrap page">
+  <nav class="rail" aria-label="Sections">
+    <a href="#summary" data-c="cyan">1 · Summary</a>
+    <a href="#chain" data-c="teal">2 · Blockchain</a>
+    <a href="#contracts" data-c="gold">3 · Smart contracts</a>
+    <a href="#lifecycle" data-c="up">4 · Property lifecycle</a>
+    <a href="#architecture" data-c="violet">5 · Architecture</a>
+    <a href="#portals" data-c="pink">6 · Portals and roles</a>
+    <a href="#features" data-c="cyan">7 · Done / remaining</a>
+    <a href="#quality" data-c="teal">8 · Testing and demo</a>
+    <a href="#roadmap" data-c="amber">9 · Roadmap</a>
+    <a href="#faq" data-c="violet">10 · Investor FAQ</a>
+    <a href="#glossary" data-c="gold">11 · Glossary</a>
+  </nav>
+
+  <main>
+
+  <section id="summary" data-c="cyan">
+    <div class="shead"><div class="kicker">Section 1</div><h2>Executive summary</h2><p>What the platform is, who it is for, and where it stands today.</p><button class="link" data-copy="summary">copy link</button></div>
+    <div class="prose"><p>Each property is held by a trustee structure. Investors own units of that property as ERC-3643 security tokens on a permissioned blockchain operated by the platform. Rent is collected in rupees through a bank, split by holdings, taxed, and paid to investors' bank accounts. Every money or token action is proposed by one officer and approved by another, written to an append-only hash-chained ledger, and reconciled against the chain and the bank before anything is paid out.</p></div>
+    <div class="note"><b>Status, 24 October 2026.</b> The core platform is built and running on a demo server with a live private chain. It is <b>not yet open to real investors</b>: KYC, bank, SMS and email providers are mock adapters, our own contracts have not had an external audit, and the legal wrapper (SECP sandbox, trustee agreement, SPV) is pending.</div>
+    <div class="grid">
+      <div class="card glass"><h4><i class="dot"></i>Which chain?</h4><p>A private Hyperledger Besu network (Ethereum technology, QBFT consensus) with state hashes anchored to a public Ethereum Layer 2. Not Solana, not public Ethereum mainnet.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Who controls it?</h4><p>Nobody alone. A 72-hour timelock owns every contract; multisig Safes for Admin, Trustee, Issuance and Operations sit behind it.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Where is the money?</h4><p>In rupees, in trustee bank accounts. The chain records ownership and payout proofs; it never holds investor cash.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Biggest gaps?</h4><p>External audit, real provider contracts, legal and SECP wrapper, and the final choice of public L2 for anchoring.</p></div>
+    </div>
+  </section>
+
+  <section id="chain" data-c="teal">
+    <div class="shead"><div class="kicker">Section 2</div><h2>The blockchain: what we use and why</h2><p>A private chain as the system of record, a public chain as the public proof. Pick an option to see how it scores against what a regulated Pakistani issuer needs.</p><button class="link" data-copy="chain">copy link</button></div>
+    <div class="cmp" id="cmp">
+      <button class="glass" data-opt="eth"><b>Public Ethereum</b><span class="chip bad">rejected</span></button>
+      <button class="glass" data-opt="sol"><b>Solana</b><span class="chip bad">rejected</span></button>
+      <button class="glass" data-opt="l2"><b>Public L2 only</b><span class="chip warn">anchor layer</span></button>
+      <button class="glass" data-opt="besu" aria-pressed="true"><b>Private Besu + anchor</b><span class="chip ok">chosen</span></button>
+    </div>
+    <div class="score glass" id="score"></div>
+
+    <h3>The private chain</h3>
+    <div class="tbl glass"><table>
+      <thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+      <tr><td>Software</td><td>Hyperledger Besu 26.9, the Linux Foundation enterprise Ethereum client</td></tr>
+      <tr><td>Consensus</td><td>QBFT, Byzantine fault tolerant. 4 validators today, tolerates 1 faulty node. Target 5 to 7 across platform, trustee and an independent party.</td></tr>
+      <tr><td>Chain ID</td><td><code>586586</code></td></tr>
+      <tr><td>Block time</td><td>About 2 seconds, immediate finality (no forks, no reorganisations)</td></tr>
+      <tr><td>Gas</td><td>Zero. The platform pays nothing per transaction and investors never need cryptocurrency.</td></tr>
+      <tr><td>Who writes</td><td>Only the signing service, through contracts owned by the timelock. Investors hold tokens in wallets bound to their verified identity.</td></tr>
+      </tbody></table></div>
+
+    <h3>How a transaction flows</h3>
+    <div class="player glass" id="player">
+      <div class="pbar"><button class="btn primary" id="play">▶ Play the flow</button><button class="btn" id="stepb">Step</button><button class="btn" id="reset">Reset</button><span class="mono" style="color:var(--dim);font-size:12px">click any node to jump</span></div>
+      <div class="flow" id="txflow">
+        <div class="n" data-x="An operations maker fills the request in PT Control: for example mint 1,000 units to investor X against a completed subscription."><span class="k">1 · PT Control</span><b>Officer proposes</b><span>mint 1,000 units to investor X</span></div><span class="ar">→</span>
+        <div class="n" data-x="A different officer with the checker duty reviews the exact calldata preview, passes a fresh hardware-key step-up, and approves. The approval digest is in the audit chain."><span class="k">2 · PT Control</span><b>Second officer approves</b><span>different person, step-up</span></div><span class="ar">→</span>
+        <div class="n" data-x="The command is written to the outbox table in PostgreSQL before anything is broadcast. If the process dies, the command still exists and is resumed exactly once."><span class="k">3 · Outbox</span><b>Recorded before broadcast</b><span>exists in PostgreSQL first</span></div><span class="ar">→</span>
+        <div class="n" data-x="The signing service checks a deny-by-default policy for the action kind: allowed contract, allowed caller, daily limits, KYC status of the recipient, and that reconciliation currently allows payouts. Only then does it sign with a key from the encrypted keystore."><span class="k">4 · Signer</span><b>Policy check, then sign</b><span>deny-by-default per kind</span></div><span class="ar">→</span>
+        <div class="n" data-x="Four Besu validators reach QBFT agreement in about two seconds. The block is final: there is no reorganisation and no fork."><span class="k">5 · Besu</span><b>Final in ~2 s</b><span>4 validators, no reorg</span></div><span class="ar">→</span>
+        <div class="n" data-x="The indexer reads the Minted event back into the read model. Reconciliation compares chain supply and balances with the ledger and the bank; any mismatch freezes payouts until two operators clear it."><span class="k">6 · Indexer + recon</span><b>Read back, reconcile</b><span>chain vs ledger vs bank</span></div><span class="ar">→</span>
+        <div class="n" data-x="Within 15 minutes the anchor job writes the new private block hash and ledger head hash to the StateAnchor contract on the public chain. Anyone can later prove the private history matches."><span class="k">7 · Anchor</span><b>Public hash every 15 min</b><span>StateAnchor on an L2</span></div>
+      </div>
+      <div class="explain" id="explain">Press Play, or click a node, to follow one mint from proposal to public proof.</div>
+    </div>
+
+    <h3>Public anchoring</h3>
+    <div class="prose"><p>Every 15 minutes the platform writes a StateAnchor record to a public chain: the latest private block number, its hash, and the hashes of the ledger and distribution state. Anyone can later take a private block and prove it matches the public anchor, without any investor data leaving the private network.</p></div>
+    <div class="note"><b>Today:</b> the anchor target is a local stand-in chain (Anvil, chain ID 586650) so the pipeline runs end to end in the demo; more than 180 anchors are recorded. <b>Production:</b> a public Ethereum L2 (Base, Arbitrum or Polygon PoS), an owner decision; a few US dollars a month at 15-minute cadence.</div>
+  </section>
+
+  <section id="contracts" data-c="gold">
+    <div class="shead"><div class="kicker">Section 3</div><h2>Smart contracts</h2><p>Audited standard code does the token logic. Our small, non-upgradeable guards are the only things allowed to touch it.</p><button class="link" data-copy="contracts">copy link</button></div>
+    <div class="tabs" role="tablist" id="ctabs">
+      <button role="tab" aria-selected="true" data-tab="t-core">ERC-3643 core</button>
+      <button role="tab" aria-selected="false" data-tab="t-guards">Our guards</button>
+      <button role="tab" aria-selected="false" data-tab="t-reg">Registries</button>
+      <button role="tab" aria-selected="false" data-tab="t-keys">Keys and control</button>
+      <button role="tab" aria-selected="false" data-tab="t-how">How they are written</button>
+    </div>
+    <div class="panel" id="t-core" role="tabpanel">
+      <div class="prose"><p>ERC-3643 (T-REX 4.1) is the open standard for permissioned security tokens, used by regulated issuers worldwide. Unlike an ordinary ERC-20, every transfer is checked against an on-chain identity registry and compliance rules. We vendor the audited T-REX code unchanged.</p></div>
+      <div class="grid">
+        <div class="card glass"><h4><i class="dot"></i>Token, one per property</h4><p>The units of ownership. Mint, burn, pause, freeze and forced transfer exist but can only be called by our guards.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>ONCHAINID, one per investor</h4><p>The investor's identity contract holding signed KYC and AML claims. Personal data stays off-chain; only claim hashes go on.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>IdentityRegistry + Storage</h4><p>Maps wallets to identities and countries. A wallet without a verified identity cannot receive tokens.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>ModularCompliance</h4><p>Runs rule modules on every transfer: CountryAllowModule (Pakistan, 586, only) and MaxBalanceModule (no identity above 10% of a property).</p></div>
+      </div>
+    </div>
+    <div class="panel" id="t-guards" role="tabpanel" hidden>
+      <div class="tbl glass"><table>
+        <thead><tr><th>Guard</th><th>What it does</th><th>Caller</th></tr></thead><tbody>
+        <tr><td>IssuanceGuard</td><td>Only path to mint and burn. Supply can never exceed the trustee cap; one-time reference per subscription; no minting while paused.</td><td>Issuance Safe 2-of-3, at least one trustee signer</td></tr>
+        <tr><td>PauseGuard</td><td>Pause immediately; unpause only by the Admin Safe. A stolen on-call key can stop trading but never restart it.</td><td>Pauser key, Ops or Admin Safe to pause; Admin Safe to unpause</td></tr>
+        <tr><td>FreezeGuard</td><td>Freeze or unfreeze a wallet or part of a balance, tied to a compliance case ID.</td><td>Ops Safe</td></tr>
+        <tr><td>RecoveryGuard</td><td>Lost-wallet recovery and court-ordered forced transfers. Two steps, 48-hour delay, cancellable, works while paused.</td><td>Trustee Safe proposes and executes; Admin or Trustee cancels</td></tr>
+        <tr><td>RegistrarGuard</td><td>Registers KYC-approved investors, rate-limited on-chain to 50 per hour so a stolen automation key cannot flood the registry.</td><td>Registrar key in the signing service</td></tr>
+        </tbody></table></div>
+      <div class="note"><b>Design rule.</b> All guards are owned by the timelock, emit an event for every state change, have no payable functions, no delegatecall, no selfdestruct, and are not upgradeable.</div>
+    </div>
+    <div class="panel" id="t-reg" role="tabpanel" hidden>
+      <div class="grid">
+        <div class="card glass"><h4><i class="dot"></i>DistributionRegistry</h4><p>Each rent distribution is published as a Merkle root of (investor, amount). A 48-hour challenge window follows; the Trustee Safe can reject. After finalisation the SHA-256 of the bank payout file is recorded once.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>DocumentRegistry</h4><p>Append-only hashes of title deeds, trustee agreements, valuations and court orders. Records are never modified or deleted.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>StateAnchor (public chain)</h4><p>Receives the periodic hash of private chain state. Anchored block numbers must strictly increase.</p></div>
+      </div>
+    </div>
+    <div class="panel" id="t-keys" role="tabpanel" hidden>
+      <div class="ladder">
+        <div class="rung glass"><div class="lvl">TIMELOCK · 72 h</div><div><b>Owns every contract</b><span>Any change is visible for three days before it can execute. The Trustee Safe can cancel it. This includes the authorities that could upgrade tokens or identities.</span></div></div>
+        <div class="rung glass"><div class="lvl">SAFES · multisig</div><div><b>Admin 3-of-5 · Trustee 2-of-3 · Issuance 2-of-3 · Ops 2-of-3</b><span>Directors and CTO on hardware wallets in two cities; independent trustee officers; operations staff. Anything that creates or moves value needs one of these.</span></div></div>
+        <div class="rung glass"><div class="lvl">HOT KEYS</div><div><b>Pauser · Registrar · Claim issuer · Anchor</b><span>Can only do what is safe to do too often: pause, register an already KYC-approved investor, sign a claim, write a hash. A stolen hot key cannot move value.</span></div></div>
+      </div>
+    </div>
+    <div class="panel" id="t-how" role="tabpanel" hidden>
+      <div class="grid">
+        <div class="card glass"><h4><i class="dot"></i>1 · Specification first</h4><p>Every contract starts from the written spec: a table of functions, callers and behaviours.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>2 · Invariants I-1 to I-17</h4><p>Each safety property is a numbered rule: supply never exceeds the trustee cap; a frozen address cannot send; the owner of every contract is the timelock.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>3 · Foundry tests</h4><p>Each invariant becomes a unit, fuzz or invariant test. 137 tests pass; a failing invariant blocks the merge.</p></div>
+        <div class="card glass"><h4><i class="dot"></i>4 · Static analysis and findings</h4><p>Slither runs in CI with zero open findings. Every finding gets a regression test.</p></div>
+      </div>
+      <div class="note"><b>Audit status.</b> The ERC-3643 base is audited by its maintainers. Our guards and registries have internal review and automated analysis only. An external audit is required before real investor funds.</div>
+    </div>
+  </section>
+
+  <section id="lifecycle" data-c="up">
+    <div class="shead"><div class="kicker">Section 4</div><h2>A property's life on the platform</h2><p>Eight stages. Click a stage, or use the arrow keys, to see who acts, what happens, and the control that makes it safe.</p><button class="link" data-copy="lifecycle">copy link</button></div>
+    <div class="tl">
+      <div class="tl-track" role="tablist" id="tltrack"></div>
+      <div class="stage glass" id="stage"></div>
+    </div>
+
+    <h3>Rent cycle in detail</h3>
+    <div class="flow" id="rentflow">
+      <div class="n"><span class="k">Bank</span><b>Rent credit on escrow</b><span>matched to an invoice</span></div><span class="ar">→</span>
+      <div class="n"><span class="k">Tax</span><b>Expenses and WHT</b><span>ATL status per investor</span></div><span class="ar">→</span>
+      <div class="n"><span class="k">Ledger</span><b>Split at record block</b><span>largest remainder, integer paisa</span></div><span class="ar">→</span>
+      <div class="n on"><span class="k">Chain</span><b>Merkle root published</b><span>48 h trustee challenge</span></div><span class="ar">→</span>
+      <div class="n on"><span class="k">Recon gate</span><b>Chain = ledger = bank?</b><span>mismatch freezes payouts</span></div><span class="ar">→</span>
+      <div class="n"><span class="k">Bank</span><b>Payout file, two operators</b><span>SHA-256 recorded on-chain</span></div><span class="ar">→</span>
+      <div class="n"><span class="k">Investor</span><b>Paid to registered account</b><span>72 h cooling-off on changes</span></div>
+    </div>
+    <div class="grid">
+      <div class="card glass"><h4><i class="dot"></i>Lost wallets and succession</h4><p>Through RecoveryGuard at any stage: the trustee proposes, a 48-hour delay runs, and the full balance moves to the re-verified wallet, even while the token is paused.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Notifications</h4><p>Raised inside the same database transaction as the event. Security notices cannot be switched off, carry no links, and go to the replaced contact as well as the new one.</p></div>
+    </div>
+  </section>
+
+  <section id="architecture" data-c="violet">
+    <div class="shead"><div class="kicker">Section 5</div><h2>Platform architecture</h2><p>A PostgreSQL-centred TypeScript backend, one component that holds keys, a private chain for tokens, and three Next.js front ends. Hover or tap a block to see its job and what it talks to.</p><button class="link" data-copy="architecture">copy link</button></div>
+    <figure class="fig glass" style="margin:0">
+      <svg viewBox="0 0 760 470" role="img" aria-label="Portals write to the database; the signing service alone reaches the chain" id="arch">
+        <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6f7b93"/></marker></defs>
+        <path class="ln" data-e="web db" d="M133 86V124" marker-end="url(#ar2)"/><path class="ln" data-e="ctl db" d="M380 86V124" marker-end="url(#ar2)"/><path class="ln" data-e="ver db" d="M627 86V124" marker-end="url(#ar2)"/>
+        <path class="ln" data-e="sg besu" d="M380 300V356" marker-end="url(#ar2)"/><path class="ln" data-e="rd besu" d="M200 358V318" marker-end="url(#ar2)"/><path class="ln" data-e="rd l2" d="M600 316V356" marker-end="url(#ar2)"/>
+        <text class="m" x="390" y="340">signed transactions</text><text class="m" x="190" y="340" text-anchor="end">events read back</text><text class="m" x="610" y="340">state hash</text>
+        <g class="node" data-id="web" data-cap="Public website and investor portal. Server-rendered Next.js in English and Urdu. It reads the chain read model and database records and signs nothing: every investor action becomes a database command executed by the services."><rect class="box" x="20" y="20" width="226" height="66" rx="12"/><text class="t" x="133" y="44" text-anchor="middle">Website + investor portal</text><text class="m" x="133" y="62" text-anchor="middle">Next.js · EN/UR · reads records</text><text class="m" x="133" y="77" text-anchor="middle">signs nothing</text></g>
+        <g class="node" data-id="ctl" data-cap="PT Control, the internal portal. FIDO2 hardware-key sign-in, database sessions with step-up, maker-checker approvals whose preview equals the signed calldata, and a hash-chained audit. Reachable only through a tunnel or VPN."><rect class="box" x="267" y="20" width="226" height="66" rx="12"/><text class="t" x="380" y="44" text-anchor="middle">PT Control (officers)</text><text class="m" x="380" y="62" text-anchor="middle">FIDO2 keys · maker-checker</text><text class="m" x="380" y="77" text-anchor="middle">tunnel / VPN only</text></g>
+        <g class="node" data-id="ver" data-cap="Public verification page. Anyone can check token supply against the trustee register, verify a document hash, verify public anchors, and prove their own rent entitlement with a Merkle proof recomputed in the browser."><rect class="box" x="514" y="20" width="226" height="66" rx="12"/><text class="t" x="627" y="44" text-anchor="middle">Public verification page</text><text class="m" x="627" y="62" text-anchor="middle">supply · document hashes</text><text class="m" x="627" y="77" text-anchor="middle">anchors · rent Merkle proofs</text></g>
+        <rect x="20" y="126" width="720" height="190" rx="14" style="fill:rgba(139,92,246,.08);stroke:rgba(255,255,255,.12)"/>
+        <text class="t" x="36" y="150">Backend · TypeScript services on one server · queues in PostgreSQL</text>
+        <g class="node" data-id="wf" data-cap="Workflow services: KYC, bank, offering, property, tax, transfer, exit, recovery and notifications. Each has its own schema, its own database role, and a state machine enforced by triggers."><rect class="box" x="36" y="164" width="226" height="68" rx="10"/><text class="t" x="149" y="186" text-anchor="middle">Workflow services</text><text class="m" x="149" y="204" text-anchor="middle">KYC, bank, offering, property,</text><text class="m" x="149" y="219" text-anchor="middle">tax, transfer, exit, notify</text></g>
+        <g class="node on" data-id="db" data-cap="PostgreSQL 18 is where every decision is first recorded: the double-entry hash-chained ledger, the outbox of chain commands, the audit chain, every workflow state machine, and 31 append-only checksum-protected migrations."><rect class="box" x="278" y="164" width="204" height="68" rx="10"/><text class="t" x="380" y="186" text-anchor="middle">PostgreSQL 18</text><text class="m" x="380" y="204" text-anchor="middle">ledger · outbox · audit chain</text><text class="m" x="380" y="219" text-anchor="middle">state machines · service roles</text></g>
+        <g class="node" data-id="rd" data-cap="Indexer, reconciliation and anchor. The indexer follows chain events into the read model; reconciliation compares chain, ledger and bank and freezes payouts on any mismatch; the anchor job publishes the state hash every 15 minutes."><rect class="box" x="498" y="164" width="226" height="68" rx="10"/><text class="t" x="611" y="186" text-anchor="middle">Indexer · Recon · Anchor</text><text class="m" x="611" y="204" text-anchor="middle">read model from chain events</text><text class="m" x="611" y="219" text-anchor="middle">chain vs ledger vs bank gate</text></g>
+        <g class="node" data-id="sg" data-cap="The signing service is the only component with private keys. Every request is checked against a deny-by-default policy for its kind (mint, burn, freeze, record payout, transfer, identity, recovery), then signed from an encrypted keystore. HSM or MPC in production."><rect class="box" x="250" y="248" width="260" height="52" rx="10"/><text class="t" x="380" y="270" text-anchor="middle">Signing service · the only key holder</text><text class="m" x="380" y="288" text-anchor="middle">deny-by-default policy per action kind</text></g>
+        <g class="node" data-id="besu" data-cap="The private chain: Hyperledger Besu with QBFT consensus, four validators, two-second blocks, zero gas, immediate finality. It holds the ERC-3643 tokens, our guards and registries, all owned by a 72-hour timelock."><rect class="box" x="20" y="358" width="410" height="70" rx="12"/><text class="t" x="225" y="382" text-anchor="middle">Private chain · Besu QBFT · 4 validators</text><text class="m" x="225" y="400" text-anchor="middle">ERC-3643 tokens, guards, registries, 72 h timelock</text><text class="m" x="225" y="416" text-anchor="middle">2 s blocks · zero gas · immediate finality</text></g>
+        <g class="node" data-id="l2" data-cap="The public anchor: a StateAnchor contract on an Ethereum Layer 2 receives the private block hash and ledger head hash every 15 minutes. Today a local stand-in chain; the production L2 is an owner decision."><rect class="box" x="460" y="358" width="280" height="70" rx="12"/><text class="t" x="600" y="382" text-anchor="middle">Public Ethereum L2 · StateAnchor</text><text class="m" x="600" y="400" text-anchor="middle">hash of private state every 15 min</text><text class="m" x="600" y="416" text-anchor="middle">local stand-in until the L2 is chosen</text></g>
+      </svg>
+      <figcaption class="cap" id="archcap">Portals write only to the database. The signing service is the single path from database to chain; the indexer reads the chain back so both are reconciled before any payout.</figcaption>
+    </figure>
+
+    <h3>Database and security rules</h3>
+    <div class="grid">
+      <div class="card glass"><h4><i class="dot"></i>Append-only migrations</h4><p>31 checksum-protected migrations. A committed migration is never edited; fixes are new migrations.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>State machines in triggers</h4><p>Offering, exit, transfer and recovery transitions are enforced by the database, not only by application code.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Hash-chained audit</h4><p>Every officer action is in a chained audit log with daily UTC digests; a verify function detects tampering.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Least-privilege roles</h4><p>Each service has its own database role. The signer can read a bank file hash but cannot read bank tables.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Sealed personal data</h4><p>Names, CNICs, phones and emails are AES-256-GCM sealed under keys outside the database, with separate keys for KYC, tax and notifications.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>No single person, no single key</h4><p>Hardware-key sign-in, step-up per action, a different approver, and a segregation-of-duties matrix with a verified digest.</p></div>
+    </div>
+  </section>
+
+  <section id="portals" data-c="pink">
+    <div class="shead"><div class="kicker">Section 6</div><h2>Portals, apps and roles</h2><p>Four surfaces built today, three planned. Technically two Next.js apps plus the self-hosted Safe console.</p><button class="link" data-copy="portals">copy link</button></div>
+    <div class="tbl glass"><table>
+      <thead><tr><th>Surface</th><th>Users</th><th>What it does</th><th>Status</th></tr></thead><tbody>
+      <tr><td>Public website</td><td>Everyone</td><td>How it works, live and upcoming properties with a rule-based score, fees, risk disclosure, FAQ, English and Urdu, grounded AI analyst that never gives advice, live chain pulse.</td><td><span class="chip ok">live on demo</span></td></tr>
+      <tr><td>Investor portal</td><td>Investors</td><td>Passkey sign-up and KYC, reserve and pay, portfolio, rent statements with Merkle proofs, payout account with cooling-off, transfer, exit and redemption requests, notifications.</td><td><span class="chip warn">built, gaps</span></td></tr>
+      <tr><td>Verification page</td><td>Anyone</td><td>Supply vs trustee register, document hashes, public anchors, verify your own rent entitlement.</td><td><span class="chip ok">live on demo</span></td></tr>
+      <tr><td>PT Control</td><td>Officers</td><td>Approvals, offerings, property files, operations and rent, tax, compliance cases and freezes, recovery, trustee register and distribution review, transfers, exits, officers and roles, audit viewer.</td><td><span class="chip warn">built, gaps</span></td></tr>
+      <tr><td>Safe console</td><td>Safe signers</td><td>Review and sign multisig transactions on hardware wallets.</td><td><span class="chip info">production setup</span></td></tr>
+      <tr><td>Mobile app</td><td>Investors</td><td>Portal features plus biometrics, push, device binding (Flutter).</td><td><span class="chip bad">planned</span></td></tr>
+      <tr><td>Sponsor portal</td><td>Property owners</td><td>Submit a property, upload title documents, track due diligence.</td><td><span class="chip bad">later</span></td></tr>
+      <tr><td>Secondary market</td><td>Investors</td><td>Open buy and sell between verified investors.</td><td><span class="chip bad">after approval</span></td></tr>
+      </tbody></table></div>
+
+    <h3>Role explorer</h3>
+    <div class="prose"><p>Officers sign in with FIDO2 hardware keys only. Every role is read-only until a second officer with the right duty approves. Pick a role to see what it can do, what it can never do, and which roles it can never be combined with.</p></div>
+    <div class="roles"><div class="rlist" id="rlist"></div><div class="rdetail glass" id="rdetail"></div></div>
+  </section>
+
+  <section id="features" data-c="cyan">
+    <div class="shead"><div class="kicker">Section 7</div><h2>Feature inventory</h2><p>Everything marked done is merged on main and running on the demo server with migrations 0001 to 0030 applied. Filter or search.</p><button class="link" data-copy="features">copy link</button></div>
+    <div class="filters">
+      <input id="fsearch" type="search" placeholder="Search features, e.g. Merkle, KYC, passkey" aria-label="Search features">
+      <button class="fbtn" data-f="all" aria-pressed="true" style="--fc:var(--cyan)">All</button>
+      <button class="fbtn" data-f="done" aria-pressed="false" style="--fc:var(--up)">Done</button>
+      <button class="fbtn" data-f="partial" aria-pressed="false" style="--fc:var(--amber)">Partial</button>
+      <button class="fbtn" data-f="notbuilt" aria-pressed="false" style="--fc:var(--down)">Not built</button>
+    </div>
+    <div class="grid" id="fgrid">
+      <div class="card glass done"><h4>Blockchain <span class="chip ok">done</span></h4><ul><li>ERC-3643 suite with ONCHAINID</li><li>Five guards, two registries, StateAnchor</li><li>72 h timelock ownership</li><li>4-validator Besu QBFT network</li><li>Scripted deploy with invariant checks</li></ul></div>
+      <div class="card glass done"><h4>Core backend <span class="chip ok">done</span></h4><ul><li>Hash-chained ledger with running balances</li><li>Exactly-once outbox</li><li>Signer policies for every action kind</li><li>Indexer read model with verify</li><li>Reconciliation with payout freeze</li><li>Anchoring every 15 min</li></ul></div>
+      <div class="card glass done"><h4>Workflows S-01 to S-07 <span class="chip ok">done</span></h4><ul><li>Property onboarding and committee votes</li><li>Offering lifecycle with FCFS and refunds</li><li>Operations, FBR withholding, distributions</li><li>Transfers phase 0 with DvP escrow</li><li>Exit, waterfall, redemption burns</li><li>Recovery and succession; public verification</li></ul></div>
+      <div class="card glass done"><h4>Front ends <span class="chip ok">done</span></h4><ul><li>Website EN/UR with real chain data, catalogue, search, analyst</li><li>Passkeys, offerings, portfolio with rent Merkle proofs</li><li>PT Control with 8 roles, approvals, compliance, trustee, tax, exit, transfers, audit</li><li>End-to-end tests in CI, automated demo deploy</li></ul></div>
+      <div class="card glass done"><h4>KYC, bank, notify <span class="chip ok">done (mock providers)</span></h4><ul><li>Sealed personal data, sanctions maker-checker, offboarding freeze</li><li>Signed Raast webhooks, exact-match or suspense booking</li><li>Payout accounts with 72 h cooling-off, held payouts</li><li>Typed, link-free notifications, record-before-send</li></ul></div>
+      <div class="card glass partial"><h4>Platform roles <span class="chip warn">partial</span></h4><ul><li>platform_owner, property_manager, support_agent drafted in migration 0031</li><li>Not applied, tested or deployed; support page not written</li></ul></div>
+      <div class="card glass partial"><h4>Rent on-chain publication <span class="chip warn">partial</span></h4><ul><li>Publish and finalize run through a script</li><li>Signer kinds rent.publish and rent.finalize pending</li></ul></div>
+      <div class="card glass partial"><h4>Investor portal gaps <span class="chip warn">partial</span></h4><ul><li>Tax certificate download</li><li>Demo personas need a KYC subject for notifications</li><li>Offering withdrawal window, supplementary disclosure, document download</li></ul></div>
+      <div class="card glass partial"><h4>PT Control gaps <span class="chip warn">partial</span></h4><ul><li>CLI-only: bank statement import, suspense returns, follow-up batches, signer policy changes</li><li>Session binding for S-01 maker actions</li><li>Playwright for newest screens; enrol 14 demo officers</li></ul></div>
+      <div class="card glass partial"><h4>Providers and keys <span class="chip warn">partial</span></h4><ul><li>NADRA Verisys, liveness, sanctions, bank, Raast, SMS, email are mocks with real interfaces</li><li>Anchor target is a local stand-in chain</li><li>Encrypted file keystore; no HSM or MPC yet</li></ul></div>
+      <div class="card glass notbuilt"><h4>Apps and portals <span class="chip bad">not built</span></h4><ul><li>Flutter mobile app and public API</li><li>Sponsor portal</li><li>Open secondary market (needs approval)</li></ul></div>
+      <div class="card glass notbuilt"><h4>Investor features <span class="chip bad">not built</span></h4><ul><li>Tenant rent-collection link, auto-reinvest</li><li>Complaints system, Roshan Digital Account onboarding</li><li>Document vault, token-holder voting</li></ul></div>
+      <div class="card glass notbuilt"><h4>Operations and assurance <span class="chip bad">not built</span></h4><ul><li>Monitoring and alerting stack</li><li>Offsite encrypted backups (waiting on an offline GPG key)</li><li>goAML regulatory reporting</li><li>External audits, pen test, formal verification</li></ul></div>
+    </div>
+    <div class="empty" id="fempty" hidden>No features match. Try another word.</div>
+  </section>
+
+  <section id="quality" data-c="teal">
+    <div class="shead"><div class="kicker">Section 8</div><h2>Testing, quality and the demo</h2><p>Every push runs the full suite in GitHub Actions; a green run on main deploys the demo server automatically.</p><button class="link" data-copy="quality">copy link</button></div>
+    <div class="tbl glass"><table>
+      <thead><tr><th>Layer</th><th>What is tested</th><th>How</th></tr></thead><tbody>
+      <tr><td>Smart contracts</td><td>137 Foundry unit, fuzz and invariant tests for I-1 to I-17; deployment checks; regression test per finding; Slither with zero open findings; 100% line coverage at the gate</td><td>forge test, Slither in CI</td></tr>
+      <tr><td>Backend</td><td>Per-package suites on scratch databases: ledger integrity, outbox exactly-once (property-tested), signer policies, indexer verify, reconciliation, KYC and bank rules, every state machine</td><td>Vitest</td></tr>
+      <tr><td>PT Control</td><td>207 unit and DB tests, 272-case HTTP permission matrix (every route vs every role), end-to-end sign-in and approvals with virtual FIDO2 keys</td><td>Vitest + Playwright</td></tr>
+      <tr><td>Website</td><td>67 tests and 11 end-to-end flows: sign-up, KYC, invest, portfolio, verify</td><td>Vitest + Playwright</td></tr>
+      <tr><td>Chain ops</td><td>50-of-50 flow checks on real blocks; validator outage and recovery drills</td><td>chain/flow.py</td></tr>
+      </tbody></table></div>
+    <div class="grid">
+      <div class="card glass"><h4><i class="dot"></i>Security findings</h4><p>Six recorded and fixed: three in vendored ERC-3643 code, three in ours (time-zone dependent audit digest, drifting running balances, a NULL comparison that blocked valid rows). Each has a regression test.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Demo server</h4><p>One Ubuntu 24.04 VPS in Singapore: four Besu validators, PostgreSQL 18, all services, website on plain HTTP, PT Control behind an SSH tunnel. Verified 24 Oct 2026: CI and deploy green, chain past block 490,000, 180+ anchors.</p></div>
+      <div class="card glass"><h4><i class="dot"></i>Demo console</h4><p>Scripted scenarios mint, run a rent cycle, and deliberately tamper with the ledger to show reconciliation catching it. Local test keys only; no real money or investors.</p></div>
+    </div>
+  </section>
+
+  <section id="roadmap" data-c="amber">
+    <div class="shead"><div class="kicker">Section 9</div><h2>Roadmap: before real investors</h2><p>Five gates. Each is a hard stop: the next does not start until the previous passes and the owner signs it off.</p><button class="link" data-copy="roadmap">copy link</button></div>
+    <div class="gates">
+      <div class="gate glass" style="--gc:var(--cyan)"><h4>Finish the code</h4><p>Platform roles 0031, rent publish/finalize signer kinds, remaining investor screens, CLI-only actions into PT Control, Playwright for new screens, demo officer enrolment.</p><span class="own">Engineering</span></div>
+      <div class="gate glass" style="--gc:var(--gold)"><h4>Owner decisions</h4><p>Public L2 for anchoring; offline GPG key for backups; retail investment limits; KYC retention; withholding rates confirmed by a tax adviser; branch protection and signed commits.</p><span class="own">Owner</span></div>
+      <div class="gate glass" style="--gc:var(--teal)"><h4>Real integrations</h4><p>NADRA Verisys, liveness vendor, sanctions and PEP screening, trustee bank Raast and payout API, SMS and email; HSM or MPC keys; monitoring; offsite encrypted backups.</p><span class="own">Owner + engineering</span></div>
+      <div class="gate glass" style="--gc:var(--pink)"><h4>Assurance and legal</h4><p>Two independent contract audits, penetration test, formal verification of the guards, GPL-3.0 opinion on ERC-3643, SECP sandbox application, trustee agreement and SPV, Shariah review if offered.</p><span class="own">Auditors + counsel</span></div>
+      <div class="gate glass" style="--gc:var(--up)"><h4>Pilot</h4><p>Full rehearsal with the trustee on staging, then a limited first offering under SECP sandbox conditions.</p><span class="own">Everyone</span></div>
+    </div>
+    <div class="note"><b>After the pilot:</b> mobile app and public API, sponsor portal, open secondary market once approved, tenant rent-collection link, auto-reinvest, Roshan Digital Account onboarding, complaints system, document vault, token-holder voting, goAML reporting.</div>
+  </section>
+
+  <section id="faq" data-c="violet">
+    <div class="shead"><div class="kicker">Section 10</div><h2>Investor and regulator FAQ</h2><p>The questions investors ask, with the answers the system actually supports.</p><button class="link" data-copy="faq">copy link</button></div>
+    <div class="filters"><input id="qsearch" type="search" placeholder="Search questions, e.g. freeze, Solana, rent" aria-label="Search FAQ"><button class="btn" id="qall">Expand all</button></div>
+    <div class="faq" id="faqlist">
+      <details class="glass" open><summary>Is this a cryptocurrency?</summary><p>No. Tokens represent units of ownership in a specific property held by a trustee. They are priced and paid in rupees, cannot be sent to anonymous wallets, and have no value outside the platform's legal structure.</p></details>
+      <details class="glass" open><summary>Which blockchain is it on? Ethereum? Solana?</summary><p>A private, permissioned Ethereum-compatible network (Hyperledger Besu) run by the platform, with its state hashes published to a public Ethereum Layer 2. Ethereum technology, not public Ethereum mainnet, and not Solana.</p></details>
+      <details class="glass"><summary>Why not a public chain where I can see everything?</summary><p>Public chains expose every holding and wallet and require everyone to hold crypto for fees. Our chain keeps holdings private while the public anchor proves the records were not altered. You can verify your own entitlement on the verification page.</p></details>
+      <details class="glass"><summary>Do I need a crypto wallet or to buy crypto?</summary><p>No. Your wallet is created and bound to your verified identity during KYC. You never pay gas or hold cryptocurrency.</p></details>
+      <details class="glass"><summary>Who can hold the tokens?</summary><p>Only investors who passed KYC (CNIC, liveness, sanctions screening) and are resident in Pakistan. A transfer to anyone else fails on-chain. No identity may hold more than 10% of a property.</p></details>
+      <details class="glass"><summary>What stops the platform from minting tokens for itself?</summary><p>Minting goes only through IssuanceGuard, which refuses any supply above the units on the trustee's register, and only a multisig with a trustee signer can call it. Supply is publicly checkable against the register.</p></details>
+      <details class="glass"><summary>Can the platform freeze or take my tokens?</summary><p>A freeze requires a compliance case and the Ops multisig, recorded on-chain with a case reference. A forced transfer requires the independent trustee, a 48-hour delay, and an evidence hash (for example a court order) in the DocumentRegistry.</p></details>
+      <details class="glass"><summary>What if I lose my wallet or pass away?</summary><p>The trustee runs a recovery: identity is re-verified or succession documents are filed, a 48-hour delay runs, and the full balance moves to the new wallet.</p></details>
+      <details class="glass"><summary>How is rent paid?</summary><p>Rent lands in the trustee's bank account; expenses and withholding tax are deducted; the split is published on-chain as a Merkle root; the trustee has 48 hours to object; then a bank file pays your registered account. The file's hash is recorded on-chain.</p></details>
+      <details class="glass"><summary>What if the bank, the ledger and the chain disagree?</summary><p>Reconciliation runs the three-way check before every payout. Any mismatch freezes all payouts until two operators investigate and clear it.</p></details>
+      <details class="glass"><summary>Who holds the keys?</summary><p>No individual. A 72-hour timelock owns every contract; multisig Safes of directors, trustee officers and operations staff sit behind it. Automated keys can only pause, register KYC-approved investors, or write anchors.</p></details>
+      <details class="glass"><summary>Has the code been audited?</summary><p>The ERC-3643 base is audited upstream. Our own contracts have internal review, 137 automated tests and static analysis. Two external audits and a penetration test are scheduled before any real offering.</p></details>
+      <details class="glass"><summary>Where is my personal data?</summary><p>Off-chain, sealed with encryption keys held outside the database. The chain holds only claim hashes. Even support staff see masked data only.</p></details>
+      <details class="glass"><summary>What is the regulatory status?</summary><p>Pre-pilot. The platform is designed for the SECP regulatory sandbox; the application, trustee agreement and SPV structure are pending.</p></details>
+      <details class="glass"><summary>Can I sell my tokens?</summary><p>Today, through case-by-case transfers to another verified investor, approved by compliance and executed by the trustee with delivery-versus-payment. An open secondary market comes only after regulatory approval.</p></details>
+      <details class="glass"><summary>What are the main risks?</summary><p>Property and tenant risk, liquidity (no open market yet), regulatory outcome, and the platform's own operational risk. The technical controls reduce fraud and error risk; they do not remove investment risk.</p></details>
+    </div>
+    <div class="empty" id="qempty" hidden>No question matches.</div>
+  </section>
+
+  <section id="glossary" data-c="gold">
+    <div class="shead"><div class="kicker">Section 11</div><h2>Glossary</h2><p>Terms used across this document.</p><button class="link" data-copy="glossary">copy link</button></div>
+    <div class="filters"><input id="gsearch" type="search" placeholder="Search terms" aria-label="Search glossary"></div>
+    <div class="tbl glass"><table id="gtable">
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>
+      <tr><td>ERC-3643 (T-REX)</td><td>Open standard for permissioned security tokens; every transfer is checked against identity and compliance rules.</td></tr>
+      <tr><td>ONCHAINID</td><td>An investor's on-chain identity contract holding signed KYC and AML claims.</td></tr>
+      <tr><td>Hyperledger Besu</td><td>Enterprise Ethereum client used to run the private chain.</td></tr>
+      <tr><td>QBFT</td><td>Byzantine fault tolerant consensus for private chains; immediate finality, no forks.</td></tr>
+      <tr><td>Layer 2 (L2)</td><td>A public network settled on Ethereum (Base, Arbitrum, Polygon). Used only for anchoring.</td></tr>
+      <tr><td>StateAnchor</td><td>Our public contract storing periodic hashes of the private chain.</td></tr>
+      <tr><td>Guard</td><td>A small contract of ours that is the only allowed caller of a sensitive token function.</td></tr>
+      <tr><td>Timelock</td><td>A contract that delays every ownership action by at least 72 hours so it can be reviewed or cancelled.</td></tr>
+      <tr><td>Safe (multisig)</td><td>A wallet that needs several signers (for example 3 of 5) to act.</td></tr>
+      <tr><td>Trustee</td><td>The independent party that holds the property and co-signs issuance, distributions and recoveries.</td></tr>
+      <tr><td>Maker-checker</td><td>One officer prepares, a different officer approves.</td></tr>
+      <tr><td>Segregation of duties</td><td>Roles that cannot be held by the same person, enforced in the database.</td></tr>
+      <tr><td>Outbox</td><td>A command is recorded in the database before it is sent to the chain, so nothing is lost or sent twice.</td></tr>
+      <tr><td>Reconciliation</td><td>The three-way comparison of chain, ledger and bank that gates payouts.</td></tr>
+      <tr><td>Merkle root</td><td>One hash committing to every (investor, amount) line of a distribution; each investor can prove their own line.</td></tr>
+      <tr><td>DvP</td><td>Delivery versus payment: tokens and money move together or not at all.</td></tr>
+      <tr><td>KYC / AML / PEP</td><td>Know your customer, anti money laundering, politically exposed person checks.</td></tr>
+      <tr><td>ATL / WHT</td><td>FBR Active Taxpayer List; withholding tax deducted from rent.</td></tr>
+      <tr><td>Raast</td><td>Pakistan's instant payment system, used for subscriptions and payouts.</td></tr>
+      <tr><td>Passkey / FIDO2</td><td>Phishing-resistant sign-in with a hardware key or device biometrics.</td></tr>
+      <tr><td>Paisa</td><td>One hundredth of a rupee; all money is stored as integer paisa.</td></tr>
+      <tr><td>SECP</td><td>Securities and Exchange Commission of Pakistan.</td></tr>
+      </tbody></table></div>
+  </section>
+
+  </main>
+</div>
+<footer><div class="wrap">Property Token Platform documentation · prepared 24 October 2026 from the repository's specs, ADRs and status log. Test counts, block height and anchor counts were read from CI and the demo server on that date.</div></footer>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800)};
+  /* progress + scroll spy */
+  const bar=$('#progress'), links=$$('.rail a'), secs=$$('main section');
+  const onScroll=()=>{const h=document.documentElement;bar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%'};
+  addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id))}})},{rootMargin:'-20% 0px -70% 0px'});
+  secs.forEach(s=>io.observe(s));
+  /* copy link */
+  $$('[data-copy]').forEach(b=>b.addEventListener('click',()=>{const u=location.href.split('#')[0]+'#'+b.dataset.copy;const done=()=>toast('Link copied');const fail=()=>{try{const r=document.createRange();r.selectNodeContents(b.closest('.shead').querySelector('h2'));getSelection().removeAllRanges();getSelection().addRange(r)}catch(e){}toast(u)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(done,fail)}else fail()}));
+  /* count-up tiles */
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){$$('[data-count]').forEach(el=>{const n=+el.dataset.count,suf=el.dataset.suffix||'',t0=performance.now();const f=t=>{const p=Math.min(1,(t-t0)/900);el.textContent=Math.round(n*(1-Math.pow(1-p,3)))+suf;if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)})}
+  /* chain comparison */
+  const OPT={
+    eth:{name:'Public Ethereum mainnet',why:'Every transfer costs gas in ETH, which a Pakistani investor cannot easily or legally hold. All holdings and wallets are public. Finality takes minutes.',s:[['Investor cost',1],['Privacy of holdings',1],['Security-token standard',5],['Regulatory control',3],['Audit and tooling',5],['Public proof',5]]},
+    sol:{name:'Solana',why:'Fast and cheap, but there is no mature permissioned security-token standard with built-in identity. Validators are not ours, so freezes and regulatory control depend on custom program design. Audit and formal-verification tooling is thinner.',s:[['Investor cost',4],['Privacy of holdings',1],['Security-token standard',1],['Regulatory control',2],['Audit and tooling',2],['Public proof',5]]},
+    l2:{name:'Public Ethereum L2 only (Base, Arbitrum, Polygon)',why:'Low cost and good tooling, but holdings and investor wallets are still public, and the platform still needs crypto on hand for every action. Kept as the anchoring layer instead.',s:[['Investor cost',3],['Privacy of holdings',1],['Security-token standard',5],['Regulatory control',3],['Audit and tooling',5],['Public proof',5]]},
+    besu:{name:'Private Besu QBFT + public L2 anchor (chosen)',why:'Zero gas for investors, private holdings, Ethereum tooling and audits, ERC-3643 unchanged, and a public hash trail that proves nobody rewrote history. Public proof is indirect (hashes, not transactions), which is the one trade-off.',s:[['Investor cost',5],['Privacy of holdings',5],['Security-token standard',5],['Regulatory control',5],['Audit and tooling',5],['Public proof',4]]}};
+  const score=$('#score');
+  const renderScore=k=>{const o=OPT[k];score.innerHTML='<div style="font-family:var(--display);font-weight:700;font-size:17px">'+o.name+'</div>'+o.s.map(([n,v])=>'<div class="row '+(v<=2?'low':v<=3?'mid':'')+'"><span>'+n+'</span><div class="bar"><i style="width:0"></i></div><span class="v">'+v+' / 5</span></div>').join('')+'<div class="why">'+o.why+'</div>';requestAnimationFrame(()=>$$('.bar i',score).forEach((i,j)=>i.style.width=(o.s[j][1]*20)+'%'))};
+  $$('#cmp button').forEach(b=>b.addEventListener('click',()=>{$$('#cmp button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderScore(b.dataset.opt)}));renderScore('besu');
+  /* tx flow player */
+  const nodes=$$('#txflow .n'),ex=$('#explain');let cur=-1,timer=null;
+  const show=i=>{cur=i;nodes.forEach((n,j)=>{n.classList.toggle('on',j===i);n.classList.toggle('done',j<i)});ex.textContent=i<0?'Press Play, or click a node, to follow one mint from proposal to public proof.':nodes[i].dataset.x};
+  const stop=()=>{clearInterval(timer);timer=null;$('#play').textContent='▶ Play the flow'};
+  $('#play').addEventListener('click',()=>{if(timer){stop();return}if(cur>=nodes.length-1)cur=-1;$('#play').textContent='❚❚ Pause';timer=setInterval(()=>{if(cur>=nodes.length-1){stop();return}show(cur+1)},2200);show(cur+1)});
+  $('#stepb').addEventListener('click',()=>{stop();show((cur+1)%nodes.length)});
+  $('#reset').addEventListener('click',()=>{stop();show(-1)});
+  nodes.forEach((n,i)=>n.addEventListener('click',()=>{stop();show(i)}));
+  /* tabs */
+  $$('#ctabs [role=tab]').forEach(t=>t.addEventListener('click',()=>{$$('#ctabs [role=tab]').forEach(x=>x.setAttribute('aria-selected',x===t));$$('#contracts .panel').forEach(p=>p.hidden=p.id!==t.dataset.tab)}));
+  /* lifecycle */
+  const ST=[
+    {c:'var(--muted)',t:'Property onboarding',s:'S-01',who:'Sponsor · Legal · Valuation · Technical · Investment committee',what:'Title documents, valuation and technical report are reviewed by named duties; an investment committee with an independent member votes. Document hashes go to the DocumentRegistry.',ctl:'A party to the file cannot approve its offering. Every reviewer duty is bound to an officer; maker-checker on each decision.',chain:'DocumentRegistry: hashes of title deed, valuation, trustee agreement.',off:'Property file, KYB of the sponsor, committee votes, audit chain.'},
+    {c:'var(--cyan)',t:'Investor KYC',s:'Y-1 to Y-6',who:'Investor · KYC service · Compliance officer',what:'CNIC check (NADRA Verisys in production), liveness and selfie, sanctions and PEP screening, wallet binding, ONCHAINID with KYC and AML claims, registration through RegistrarGuard.',ctl:'Personal data sealed under keys outside the database; only peppered hashes and last four digits are readable. Sanctions hits need two officers.',chain:'ONCHAINID claims, IdentityRegistry entry via RegistrarGuard (50/hour cap).',off:'Sealed name and CNIC, screening results, status derived in the database.'},
+    {c:'var(--teal)',t:'Offering',s:'S-02',who:'Operations maker and checker · Investors · Bank',what:'Terms approved; investors reserve first-come-first-served, get a unique payment code, pay in PKR by transfer or Raast. Exact credits confirm; wrong amounts go to suspense; a waitlist fills freed units; refunds and extensions are maker-checker.',ctl:'Reserved plus paid never exceeds the hard cap, under a row lock. A payment code exists only for a reservation.',chain:'Nothing yet: no token moves until completion.',off:'Reservations, payment codes, bank credits, suspense, waitlist, refund requests.'},
+    {c:'var(--gold)',t:'Minting',s:'I-2, I-11',who:'Issuance Safe · Signing service · Indexer',what:'Only when the offering completes. An issuance batch is approved, IssuanceGuard mints with a one-time reference per subscription, and the indexer confirms the balance before settlement is booked.',ctl:'Supply can never exceed the trustee cap; each reference is used once; mint retries are approved separately.',chain:'IssuanceGuard.mint per subscription; Minted events.',off:'Issuance batch, settlement journal from the read model.'},
+    {c:'var(--up)',t:'Operations and rent',s:'S-03',who:'Operations · External property manager · Tax officer',what:'Leases, invoices, expenses and vendor payments are proposed and approved. Rent credits on the trustee escrow are matched to invoices. Withholding tax per investor from the Active Taxpayer List.',ctl:'CNIC for tax sealed under a separate tax-only key; FBR export needs two tax officers and a one-time ticket. Seeded rates are placeholders.',chain:'None until distribution.',off:'Leases, invoices, expenses, escrow statements, ATL status, WHT schedule.'},
+    {c:'var(--up)',t:'Distribution and payout',s:'I-14',who:'Operations · Trustee · Bank · Reconciliation',what:'Net rent is split by holdings at a record block in integer paisa. The Merkle root is published on-chain; the trustee has 48 h to reject; then finalised. A bank payout file is approved by two operators and its SHA-256 recorded on-chain.',ctl:'Payouts are blocked while reconciliation has a blocking finding; two operators lift the freeze after a passed run. Payee accounts have a 72 h cooling-off.',chain:'DistributionRegistry: publish root, finalize, recordPayout(hash).',off:'Statement per investor, bank file, held payouts, running balances.'},
+    {c:'var(--violet)',t:'Transfers (phase 0)',s:'S-04',who:'Compliance officer · Trustee officer · Operations',what:'Case-by-case transfers between verified investors. Buyer pays into a per-case escrow; compliance and trustee approve; the trustee executes on-chain as a forced transfer while the token stays in transfer-closed mode; seller is paid after the chain confirms.',ctl:'Delivery versus payment: money and tokens never move without each other. Approvers are different people, neither the opener nor the completer.',chain:'RecoveryGuard ForcedTransfer propose, 48 h delay, execute.',off:'Case, escrow, checks TR-10 to TR-13, refund path.'},
+    {c:'var(--pink)',t:'Exit',s:'S-05',who:'Operations · Legal · Trustee · Investors',what:'Property sale or wind-up. Proceeds land in escrow, a waterfall of payments is approved line by line, a final distribution is computed and published, redemption burns go through IssuanceGuard, and the case is closed.',ctl:'Never pays out more than the pool holds; the trustee pre-checks the root; one live case per token.',chain:'Final distribution root, IssuanceGuard.burn per redemption.',off:'Exit case, waterfall lines, final statements, closure record.'}];
+  const track=$('#tltrack'),stage=$('#stage');let si=0;
+  track.innerHTML=ST.map((s,i)=>'<button role="tab" aria-selected="'+(i===0)+'" style="--stc:'+s.c+'"><i>'+(i+1)+'</i><span>'+s.t+'</span></button>').join('');
+  const renderStage=i=>{si=i;const s=ST[i];$$('button',track).forEach((b,j)=>b.setAttribute('aria-selected',j===i));stage.style.setProperty('--stc',s.c);stage.innerHTML='<div><div class="who">Stage '+(i+1)+' · '+s.s+' · '+s.who+'</div><h4>'+s.t+'</h4><p>'+s.what+'</p></div><div class="side"><div class="kv"><b>Control</b>'+s.ctl+'</div><div class="kv"><b>On-chain</b>'+s.chain+'</div><div class="kv"><b>Off-chain</b>'+s.off+'</div></div><div class="nav"><button class="btn" data-d="-1">← Previous</button><button class="btn" data-d="1">Next →</button></div>';$$('.nav .btn',stage).forEach(b=>b.addEventListener('click',()=>renderStage((si+(+b.dataset.d)+ST.length)%ST.length)))};
+  $$('button',track).forEach((b,i)=>b.addEventListener('click',()=>renderStage(i)));
+  track.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){renderStage((si+1)%ST.length);$$('button',track)[si].focus()}if(e.key==='ArrowLeft'){renderStage((si-1+ST.length)%ST.length);$$('button',track)[si].focus()}});
+  renderStage(0);
+  /* architecture map */
+  const cap=$('#archcap'),dflt=cap.textContent;let pinned=null;
+  const hi=id=>{$$('#arch .node').forEach(n=>n.classList.toggle('on',n.dataset.id===id));$$('#arch .ln').forEach(l=>l.classList.toggle('on',!!id&&l.dataset.e.split(' ').includes(id)));cap.textContent=id?$('#arch .node[data-id="'+id+'"]').dataset.cap:dflt};
+  $$('#arch .node').forEach(n=>{n.addEventListener('mouseenter',()=>{if(!pinned)hi(n.dataset.id)});n.addEventListener('mouseleave',()=>{if(!pinned)hi(null)});n.addEventListener('click',()=>{pinned=pinned===n.dataset.id?null:n.dataset.id;hi(pinned)})});
+  /* roles */
+  const R={ops_maker:{l:'Live',can:['Prepare mint requests, distributions, payout batches','Prepare leases, invoices, expenses, exits, transfers','Open and complete cases'],never:['Approve anything','Approve own work']},ops_checker:{l:'Live',can:['Approve what makers prepared','Approve settlements and refunds'],never:['Prepare anything','Approve own work']},compliance_officer:{l:'Live',can:['KYC decisions, sanctions review','Freeze and unfreeze requests','Case files, transfer compliance approval','Masked support lookup'],never:['Money or token actions','Legal, tax or trustee decisions']},legal_officer:{l:'Live',can:['Legal sign-offs on property files','Exit decisions in legal capacity','Recovery and succession review'],never:['Money','Compliance decisions']},tax_officer:{l:'Live',can:['Tax rates','ATL checks','Two-officer FBR export'],never:['Money','Compliance']},trustee_officer:{l:'Live',can:['Trustee register','Co-sign issuance','Reject distributions within 48 h','Recovery requests, transfer execution'],never:['Prepare anything','Hold any platform role (independent trustee)']},auditor:{l:'Live',can:['Read everything','Export audit'],never:['Any change']},admin:{l:'Live',can:['Manage officers and roles, with a second admin'],never:['Any business action']},platform_owner:{l:'Drafted (0031)',can:['See everything: every read and audit permission','Manage officers','Place an emergency hold on payouts (recorded as a reconciliation freeze that two operators must lift)'],never:['Prepare or approve money or token actions','Compliance, legal, tax or trustee decisions']},property_manager:{l:'Drafted (0031)',can:['Read its properties’ operations','Propose leases, invoices and expenses'],never:['Approve anything','See investor or officer data','Export audit']},support_agent:{l:'Drafted (0031)',can:['Masked investor lookup by CNIC last four digits: status word, wallet, payout account last digits (audited)'],never:['Decisions','Exports','Officer data']}};
+  const SOD=[['ops_maker','ops_checker'],['ops_maker','compliance_officer'],['ops_checker','compliance_officer'],['auditor','ops_maker'],['auditor','ops_checker'],['auditor','compliance_officer'],['auditor','admin'],['auditor','legal_officer'],['auditor','tax_officer'],['auditor','trustee_officer'],['ops_maker','trustee_officer'],['ops_checker','trustee_officer'],['compliance_officer','trustee_officer'],['tax_officer','trustee_officer'],['legal_officer','trustee_officer'],['admin','ops_maker'],['admin','ops_checker'],['admin','compliance_officer'],['ops_checker','platform_owner'],['ops_maker','platform_owner'],['compliance_officer','platform_owner'],['legal_officer','platform_owner'],['platform_owner','tax_officer'],['platform_owner','trustee_officer'],['auditor','platform_owner'],['platform_owner','property_manager'],['platform_owner','support_agent'],['ops_checker','property_manager'],['ops_maker','property_manager'],['compliance_officer','property_manager'],['legal_officer','property_manager'],['property_manager','tax_officer'],['property_manager','trustee_officer'],['auditor','property_manager'],['admin','property_manager'],['ops_checker','support_agent'],['ops_maker','support_agent'],['compliance_officer','support_agent'],['legal_officer','support_agent'],['support_agent','tax_officer'],['support_agent','trustee_officer'],['auditor','support_agent'],['admin','support_agent'],['property_manager','support_agent']];
+  const rl=$('#rlist'),rd=$('#rdetail');
+  rl.innerHTML=Object.keys(R).map((k,i)=>'<button aria-pressed="'+(i===0)+'" data-r="'+k+'">'+k+'</button>').join('');
+  const renderRole=k=>{const r=R[k];$$('button',rl).forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===k));const sod=SOD.filter(p=>p.includes(k)).map(p=>p[0]===k?p[1]:p[0]).sort();rd.innerHTML='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h4 class="mono">'+k+'</h4><span class="chip '+(r.l==='Live'?'ok':'warn')+'">'+r.l+'</span></div><div class="cols"><div class="can"><b>Can do</b><ul>'+r.can.map(x=>'<li>'+x+'</li>').join('')+'</ul></div><div class="never"><b>Can never do</b><ul>'+r.never.map(x=>'<li>'+x+'</li>').join('')+'</ul></div><div class="sod"><b>Never combined with ('+sod.length+')</b><ul>'+(sod.map(x=>'<li class="mono">'+x+'</li>').join('')||'<li>none</li>')+'</ul></div></div><p style="font-size:13px;color:var(--dim)">Conflicts are refused by the database (admin.role_conflicts) whoever writes the grant, and the role matrix has a fixed digest that the audit verifies.</p>'};
+  $$('button',rl).forEach(b=>b.addEventListener('click',()=>renderRole(b.dataset.r)));renderRole('ops_maker');
+  /* feature filters */
+  let ff='all';const fcards=$$('#fgrid .card');
+  const applyF=()=>{const q=$('#fsearch').value.trim().toLowerCase();let n=0;fcards.forEach(c=>{const ok=(ff==='all'||c.classList.contains(ff))&&(!q||c.textContent.toLowerCase().includes(q));c.hidden=!ok;if(ok)n++});$('#fempty').hidden=n>0};
+  $$('.fbtn').forEach(b=>b.addEventListener('click',()=>{ff=b.dataset.f;$$('.fbtn').forEach(x=>x.setAttribute('aria-pressed',x===b));applyF()}));$('#fsearch').addEventListener('input',applyF);
+  /* faq */
+  const qs=$$('#faqlist details');
+  $('#qsearch').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();let n=0;qs.forEach(d=>{const ok=!q||d.textContent.toLowerCase().includes(q);d.hidden=!ok;if(ok){n++;if(q)d.open=true}});$('#qempty').hidden=n>0});
+  $('#qall').addEventListener('click',()=>{const all=qs.every(d=>d.open);qs.forEach(d=>d.open=!all);$('#qall').textContent=all?'Expand all':'Collapse all'});
+  /* glossary */
+  $('#gsearch').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();$$('#gtable tbody tr').forEach(r=>r.hidden=!!q&&!r.textContent.toLowerCase().includes(q))});
+  /* hash on load */
+  if(location.hash){const t=$(location.hash);if(t)setTimeout(()=>t.scrollIntoView(),50)}
+})();
+</script>
+</body></html>
