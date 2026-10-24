@@ -290,7 +290,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 | 2026-10-10 | Next; chose PostgreSQL 18, queues in PostgreSQL, approved download | Unsigned EDB zip rejected; signed installer verified and extracted via UAC (no service). 5a foundation done (10 tests, lint 0 warnings, 0 vulnerabilities); ADR 0003; CI fixed + backend job; pushed |
 
 - 2026-10-24: documentation request: Claude Docs doc, then a website-themed interactive guide + 32-page PDF; published at /docs/ on the demo server (commit ad8f790).
-- 2026-10-24: OPEN: CI on 0d9ab16 (MEMORY.md-only commit) failed and its deploy was skipped; likely flaky, check the run before the next feature. Guide deploy (ad8f790, 13920f3) was in progress at session end: verify `http://51.79.144.40/docs/` returns 200.
+- 2026-10-24: CI on 0d9ab16/ad8f790 failed in the dependency-audit step (new zod advisory GHSA, memory exhaustion on oversized constrained collections) in web, backend and admin; fixed by pinning zod 4.6.7 (205b84a). Gotcha: zod is pinned exact, so `npm audit fix` does nothing; use `npm install --save-exact zod@<ver>` in each workspace. Deploy of the guide follows that CI run; verify `http://51.79.144.40/docs/` is 200.
 
 ## 11. Document index
 
