@@ -89,6 +89,8 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/exit/windows/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
   // T-049 (migration 0031): investor support lookups by reference.
   { path: "/support", kind: "page", methods: ["GET"], access: "support.read", mutating: false },
+  { path: "/complaints", kind: "page", methods: ["GET"], access: "complaints.read", mutating: false },
+  { path: "/complaints/[id]", kind: "page", methods: ["GET"], access: "complaints.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -136,6 +138,7 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/operations/bank/followup", kind: "api", methods: ["POST"], access: "operations.request", mutating: true },
   { path: "/api/operations/policies", kind: "api", methods: ["POST"], access: "operations.request", mutating: true },
   { path: "/api/operations/policies/[id]/decide", kind: "api", methods: ["POST"], access: "operations.read", mutating: true },
+  { path: "/api/complaints/[id]/act", kind: "api", methods: ["POST"], access: "complaints.handle", mutating: true },
   { path: "/api/tax/rates", kind: "api", methods: ["POST"], access: "tax.decide", mutating: true },
   { path: "/api/tax/rates/[id]/decide", kind: "api", methods: ["POST"], access: "tax.decide", mutating: true },
   { path: "/api/tax/exports", kind: "api", methods: ["POST"], access: "tax.export", mutating: true },

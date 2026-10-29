@@ -61,7 +61,13 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/trustee/recoveries", label: "Recoveries", icon: "↺", need: "trustee.read" },
     ],
   },
-  { title: "Support", items: [{ href: "/support", label: "Investor lookup", icon: "☎", need: "support.read" }] },
+  {
+    title: "Support",
+    items: [
+      { href: "/support", label: "Investor lookup", icon: "☎", need: "support.read" },
+      { href: "/complaints", label: "Complaints", icon: "✉", need: "complaints.read" },
+    ],
+  },
   { title: "Administration", items: [{ href: "/officers", label: "Officers & roles", icon: "⚿", need: "officers.read" }] },
 ];
 

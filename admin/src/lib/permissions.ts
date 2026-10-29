@@ -49,6 +49,8 @@ export const PERMISSIONS = [
   "transfer.price",
   "payouts.hold",
   "support.read",
+  "complaints.read",
+  "complaints.handle",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -70,6 +72,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "transfer.read",
     "transfer.request",
     "transfer.cash",
+    "complaints.read",
+    "complaints.handle",
   ],
   ops_checker: [
     "ops.read",
@@ -90,6 +94,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "transfer.read",
     "transfer.cash",
     "transfer.price",
+    "complaints.read",
   ],
   compliance_officer: [
     "ops.read",
@@ -110,6 +115,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "exit.decide",
     "transfer.read",
     "transfer.decide",
+    "complaints.read",
   ],
   legal_officer: ["recovery.read", "recovery.decide", "exit.read", "exit.decide"],
   trustee_officer: ["audit.export", "trustee.read", "trustee.decide", "trustee.export", "operations.read", "exit.read", "exit.decide", "transfer.read", "transfer.decide"],
@@ -131,6 +137,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "tax.read",
     "exit.read",
     "transfer.read",
+    "complaints.read",
   ],
   admin: ["audit.read.admin", "officers.read", "officers.manage"],
   platform_owner: [
@@ -146,9 +153,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "transfer.read",
     "support.read",
     "payouts.hold",
+    "complaints.read",
   ],
   property_manager: ["property.read", "operations.read"],
-  support_agent: ["support.read"],
+  support_agent: ["support.read", "complaints.read", "complaints.handle"],
 };
 
 /** Incompatible pairs (segregation of duties), sorted alphabetically within each pair. */

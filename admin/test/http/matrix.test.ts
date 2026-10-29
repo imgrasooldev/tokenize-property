@@ -59,6 +59,7 @@ const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 const TRUSTEE: Role[] = ["trustee_officer", "auditor"];
 // S-06: every role that works on cases reads them (never trustee officers or administrators).
 const RECOVERY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"];
+const COMPLAINTS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "support_agent"];
 const OPERATIONS: Role[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor", "platform_owner", "property_manager"];
 const TAX: Role[] = ["tax_officer", "auditor"];
 // T-046: offering approvals are read by operations, compliance and auditors; committee members are platform officers.
@@ -116,6 +117,9 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/operations/distributions/{distribution}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
   { path: "/operations/bank", allowed: OPERATIONS },
   { path: "/operations/policies", allowed: OPERATIONS },
+  // 0040: complaints for support, operations, compliance, auditors and the platform owner; unknown items are "not found".
+  { path: "/complaints", allowed: COMPLAINTS },
+  { path: "/complaints/999999", allowed: COMPLAINTS, okStatus: 404 },
   { path: "/tax", allowed: TAX },
   { path: "/tax/exports", allowed: TAX },
   { path: "/tax/exports/{taxExport}", allowed: TAX },
@@ -216,6 +220,7 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   // 0039: an incomplete proposal or decision is answered with a 303 back (nothing changed).
   { path: "/api/operations/policies", allowed: ["ops_maker"], okStatus: 303, form: { kind: "x" } },
   { path: "/api/operations/policies/1/decide", allowed: OPERATIONS, okStatus: 303, form: { decision: "nope" } },
+  { path: "/api/complaints/1/act", allowed: ["ops_maker", "support_agent"], okStatus: 303, form: { action: "nope" } },
   { path: "/api/tax/rates", allowed: ["tax_officer"], okStatus: 303, form: {} },
   { path: "/api/tax/rates/{taxRate}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/tax/exports", allowed: ["tax_officer"], okStatus: 303, form: {} },
@@ -483,7 +488,8 @@ describe("route coverage", () => {
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
           .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
-          .replace(/^\/transfers\/(\{\w+\}|\d+)$/, "/transfers/[id]"),
+          .replace(/^\/transfers\/(\{\w+\}|\d+)$/, "/transfers/[id]")
+          .replace(/^\/complaints\/\d+$/, "/complaints/[id]"),
       ),
       ...APIS.map((a) =>
         a.path
@@ -492,6 +498,8 @@ describe("route coverage", () => {
           .replace(/\/scopes\/1\/decide$/, "/scopes/[id]/decide")
           .replace(/\/bank\/returns\/1\/decide$/, "/bank/returns/[id]/decide")
           .replace(/\/policies\/1\/decide$/, "/policies/[id]/decide")
+          .replace(/^\/complaints\/\d+$/, "/complaints/[id]")
+          .replace(/^\/api\/complaints\/1\/act$/, "/api/complaints/[id]/act")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")

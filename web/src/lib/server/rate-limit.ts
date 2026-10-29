@@ -8,7 +8,7 @@ import { headers } from "next/headers";
  * Signed-in actions are keyed by investor id (cannot be spoofed). Anonymous actions are keyed by
  * the client address the server sees; in this prototype the server binds to 127.0.0.1 only.
  */
-export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify" | "reserve" | "ask" | "payee" | "passkeyLogin" | "passkey" | "exit" | "transfer" | "notify";
+export type Limit = "login" | "signup" | "order" | "topup" | "cancel" | "verify" | "invest" | "publicVerify" | "reserve" | "ask" | "payee" | "passkeyLogin" | "passkey" | "exit" | "transfer" | "notify" | "complaint";
 
 const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   login: { capacity: 10, perMinute: 10 },
@@ -37,6 +37,8 @@ const RULES: Record<Limit, { capacity: number; perMinute: number }> = {
   transfer: { capacity: 20, perMinute: 10 },
   // Notification centre: mark read and message settings (T-028), keyed by investor id.
   notify: { capacity: 30, perMinute: 30 },
+  // Complaints (migration 0040): filing and replies, keyed by investor id (the database also caps 5 new complaints a day).
+  complaint: { capacity: 10, perMinute: 5 },
 };
 
 const MAX_KEYS = 10_000;

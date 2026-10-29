@@ -85,7 +85,8 @@ describe("roles", () => {
     expect(permissionsOf(["platform_owner"]).has("compliance.read")).toBe(false);
     expect(permissionsOf(["platform_owner"]).has("tax.read")).toBe(false);
     expect([...permissionsOf(["property_manager"])].sort()).toEqual(["operations.read", "property.read"]);
-    expect([...permissionsOf(["support_agent"])]).toEqual(["support.read"]);
+    // 0040: support also reads and handles investor complaints (no money, token or compliance decision).
+    expect([...permissionsOf(["support_agent"])].sort()).toEqual(["complaints.handle", "complaints.read", "support.read"]);
     expect(ROLES.filter((r) => permissionsOf([r]).has("payouts.hold"))).toEqual(["platform_owner"]);
     expect(landingFor(permissionsOf(["platform_owner"]))).toBe("/");
     expect(landingFor(permissionsOf(["property_manager"]))).toBe("/operations");

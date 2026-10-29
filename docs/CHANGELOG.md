@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-10-30
+
+- Complaints system (migration `0040_complaints.sql`, CP-1..CP-5): investors file complaints on the website (`/complaints`, EN/UR; category, subject, details; reference CMP-XXXXXXXX; acknowledgement and resolution deadlines from `complaints.settings`, PLACEHOLDERS 2 and 15 days, LEGAL TO CONFIRM), follow the conversation and history, reply, accept a resolution or reopen it within 7 days. PT Control `/complaints` (new permissions `complaints.read` for support, operations, compliance, auditors and the platform owner; `complaints.handle` for support agents and operations makers): list with late flags, acknowledge, reply, resolve with a summary, refer to compliance (reads "under review" to the investor). Free text refuses CNIC, IBAN and phone numbers; messages and history are append-only.
+
 ## 2026-10-29
 
 - PT Control bank desk and signing policies: `/operations/bank` also lists credits in suspense (reference, amount, value date, payer's last four digits) with maker-checker returns to the payer (`admin.request_suspense_return` / `admin.decide_suspense_return` -> `bank.return_credit`, migration `0038_portal_bank_desk.sql`), and submitted batches with held lines with a one-click follow-up batch for those payable now (`admin.create_followup_batch`; the checker decides it on /approvals/payouts). `/operations/policies` shows every signing policy; an operations maker proposes new values with exactly the fields of the active version, a different checker activates it (`admin.propose_signer_policy` / `admin.approve_signer_policy` / `admin.withdraw_signer_policy`, migration `0039_portal_signer_policies.sql`); pt-signer loads it on its next start.
