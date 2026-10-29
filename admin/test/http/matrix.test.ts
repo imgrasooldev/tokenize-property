@@ -114,6 +114,8 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/operations/charges/{charge}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
   { path: "/operations/charges/999999", allowed: OPERATIONS, okStatus: 404 },
   { path: "/operations/distributions/{distribution}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
+  { path: "/operations/bank", allowed: OPERATIONS },
+  { path: "/operations/policies", allowed: OPERATIONS },
   { path: "/tax", allowed: TAX },
   { path: "/tax/exports", allowed: TAX },
   { path: "/tax/exports/{taxExport}", allowed: TAX },
@@ -205,6 +207,15 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/operations/distributions/{distribution}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   // 0033: an unknown step is answered with a 303 back (nothing requested).
   { path: "/api/operations/distributions/{distribution}/rent", allowed: ["ops_maker"], okStatus: 303, form: { step: "nope" } },
+  // 0037: a missing statement file is answered with a 303 back (nothing imported).
+  { path: "/api/operations/bank", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  // 0038: incomplete forms are answered with a 303 back (nothing asked, decided or created).
+  { path: "/api/operations/bank/returns", allowed: ["ops_maker"], okStatus: 303, form: { reason: "short" } },
+  { path: "/api/operations/bank/returns/1/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/operations/bank/followup", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  // 0039: an incomplete proposal or decision is answered with a 303 back (nothing changed).
+  { path: "/api/operations/policies", allowed: ["ops_maker"], okStatus: 303, form: { kind: "x" } },
+  { path: "/api/operations/policies/1/decide", allowed: OPERATIONS, okStatus: 303, form: { decision: "nope" } },
   { path: "/api/tax/rates", allowed: ["tax_officer"], okStatus: 303, form: {} },
   { path: "/api/tax/rates/{taxRate}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/tax/exports", allowed: ["tax_officer"], okStatus: 303, form: {} },
@@ -479,6 +490,8 @@ describe("route coverage", () => {
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
           .replace(/\/scopes\/1\/decide$/, "/scopes/[id]/decide")
+          .replace(/\/bank\/returns\/1\/decide$/, "/bank/returns/[id]/decide")
+          .replace(/\/policies\/1\/decide$/, "/policies/[id]/decide")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")

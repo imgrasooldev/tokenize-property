@@ -47,7 +47,7 @@ export function StepUpButton({ csrf, freshUntil }: { csrf: string; freshUntil: s
  * A decision form that first performs a step-up, then submits natively (the server and the
  * database refuse the decision without a step-up less than five minutes old).
  */
-export function StepUpForm({ csrf, action, children }: { csrf: string; action: string; children: ReactNode }) {
+export function StepUpForm({ csrf, action, children, upload = false }: { csrf: string; action: string; children: ReactNode; upload?: boolean }) {
   const ref = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +78,7 @@ export function StepUpForm({ csrf, action, children }: { csrf: string; action: s
     }
   }
   return (
-    <form ref={ref} method="post" action={action} onSubmit={(e) => void submit(e)} className="stack">
+    <form ref={ref} method="post" action={action} encType={upload ? "multipart/form-data" : undefined} onSubmit={(e) => void submit(e)} className="stack">
       <input type="hidden" name="csrf" value={csrf} />
       {/* Disabled only before hydration; never while submitting (disabled controls are not sent). */}
       <fieldset disabled={!ready} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }} aria-busy={busy}>

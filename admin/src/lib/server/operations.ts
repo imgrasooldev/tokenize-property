@@ -269,3 +269,38 @@ export function ratePercent(ppm: number): string {
 export const INCOME_STATUSES = ["filer", "non_filer", "exempt"] as const;
 export const CHARGE_KINDS = ["expense", "fee", "reserve_contribution", "reserve_release"] as const;
 export const FEE_TYPES = ["property_manager", "trustee", "platform"] as const;
+
+/** Registered bank accounts and the latest imported statements (admin.bank_statements, migration 0037). */
+export interface BankStatements {
+  accounts: string[];
+  statements: { id: number; account: string; date: string; opening: string; closing: string; by: string; at: string }[];
+}
+
+export async function bankStatements(sessionHash: Buffer): Promise<BankStatements> {
+  const { rows } = await db().query<{ v: BankStatements }>("SELECT admin.bank_statements($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { accounts: [], statements: [] };
+}
+
+/** Credits in suspense, open return requests and batches with held lines (admin.bank_desk, migration 0038). */
+export interface BankDesk {
+  suspense: { ref: string; amount: string; valueDate: string; payerLast4: string }[];
+  returns: { id: number; ref: string; reason: string; requestedBy: string; requestedAt: string }[];
+  held: { batch: number; reference: string; token: string; distribution: string; heldLines: number; payableNow: number }[];
+}
+
+export async function bankDesk(sessionHash: Buffer): Promise<BankDesk> {
+  const { rows } = await db().query<{ v: BankDesk }>("SELECT admin.bank_desk($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { suspense: [], returns: [], held: [] };
+}
+
+/** Signing policies per kind: the active version and open proposals (admin.signer_policies, migration 0039). */
+export interface SignerPolicyKind {
+  kind: string;
+  active: { id: number; version: number; rule: Record<string, unknown>; proposedBy: string; approvedBy: string | null; approvedAt: string | null } | null;
+  proposals: { id: number; version: number; rule: Record<string, unknown>; proposedBy: string; proposedAt: string }[];
+}
+
+export async function signerPolicies(sessionHash: Buffer): Promise<SignerPolicyKind[]> {
+  const { rows } = await db().query<{ v: SignerPolicyKind[] }>("SELECT admin.signer_policies($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? [];
+}

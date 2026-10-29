@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { passRecon } from "../support/approvals";
 import { investor } from "../support/compliance";
 import { operationsWorld, type OperationsWorld } from "../support/operations";
 import { cast, createWorld, invite, verify, type Actor, type Cast, type World } from "../support/world";
@@ -168,5 +169,101 @@ describe("tax rates and filing exports: two different tax officers (OT-7, OT-9)"
   it("the admin and operations audit chains verify", async () => {
     expect(await verify(w)).toEqual([]);
     expect((await w.su.query("SELECT * FROM ops.verify_audit()")).rows).toEqual([]);
+  });
+});
+
+describe("bank statement import from the portal (migration 0037 BI-1..BI-3)", () => {
+  it("an operations maker imports with a fresh step-up; the same content is one statement; a different one for that day is refused", async () => {
+    const account = `TEST-PORTAL-${randomBytes(3).toString("hex").toUpperCase()}`;
+    const ledger = `bank:test-portal-${account.toLowerCase()}`;
+    await w.su.query("SELECT ledger.open_account($1, 'asset', 'PKR')", [ledger]);
+    await w.su.query("SELECT recon.register_bank_account($1, $2, 'test:setup')", [account, ledger]);
+    const lines = [
+      { valueDate: "2026-10-20", amountPaisa: "500000", reference: "RAAST-PORTAL-0001", counterparty: "Tenant (test)", balancePaisa: "500000" },
+      { valueDate: "2026-10-20", amountPaisa: "-1000", reference: "BANKFEE-PORTAL-01", counterparty: "Bank charge", balancePaisa: "499000" },
+    ];
+    const imp = (a: Actor, closing: string, l: unknown[]) =>
+      call("SELECT admin.import_bank_statement($1, $2, '2026-10-20'::date, 0, $3, $4::jsonb) AS r", [a.sessionHash, account, closing, JSON.stringify(l)]);
+    await stepUp(c.ops_maker, true);
+    expect(await code(imp(c.ops_maker, "499000", lines))).toBe("PTS01");
+    await stepUp(c.ops_maker);
+    const first = await imp(c.ops_maker, "499000", lines);
+    expect(first).toMatchObject({ ok: true, status: "imported" });
+    expect((await imp(c.ops_maker, "499000", lines)).id).toBe(first.id);
+    const other = await imp(c.ops_maker, "500000", lines.slice(0, 1));
+    expect(other.ok).toBe(false);
+    const bad = await imp(c.ops_maker, "1", lines);
+    expect(bad.ok).toBe(false);
+    await stepUp(c.ops_checker);
+    expect(await code(imp(c.ops_checker, "499000", lines))).toBe("42501");
+    const st = await w.su.query<{ imported_by: string }>("SELECT imported_by FROM recon.bank_statements WHERE id = $1", [first.id]);
+    expect(st.rows[0]?.imported_by).toBe(c.ops_maker.handle);
+    const view = await read<{ accounts: string[]; statements: { id: number }[] }>("bank_statements", c.auditor);
+    expect(view.accounts).toContain(account);
+    expect(view.statements.map((s) => s.id)).toContain(first.id);
+  });
+});
+
+describe("bank desk: suspense returns and held payouts (migration 0038 BD-1..BD-3)", () => {
+  it("a suspense credit goes back to its payer only after a maker asks and a different checker approves", async () => {
+    await passRecon(w.su);
+    const ref = `RAAST-SUSP-${randomBytes(4).toString("hex").toUpperCase()}`;
+    await w.su.query("INSERT INTO bank.events (event_id, type, body_sha256, key_id) VALUES ($1, 'credit.received', $2, 'k1')", [`evt-${ref}`, randomBytes(32)]);
+    await w.su.query("SELECT bank.book_credit($1, $2::jsonb, 'bank-webhook')", [
+      `evt-${ref}`,
+      JSON.stringify({ raastRef: ref, amountPaisa: "4200", valueDate: "2026-10-20", payerHash: randomBytes(32).toString("hex"), payerLast4: "9876", intentCode: null }),
+    ]);
+    let desk = await read<{ suspense: { ref: string; payerLast4: string }[] }>("bank_desk", c.auditor);
+    expect(desk.suspense.find((s) => s.ref === ref)).toMatchObject({ payerLast4: "9876" });
+    await stepUp(c.ops_maker);
+    expect((await call("SELECT admin.request_suspense_return($1, 'RAAST-NOT-THERE', 'payer could not be identified') AS r", [c.ops_maker.sessionHash])).ok).toBe(false);
+    const ask = await call("SELECT admin.request_suspense_return($1, $2, 'payer could not be identified') AS r", [c.ops_maker.sessionHash, ref]);
+    expect(ask).toMatchObject({ ok: true, status: "open" });
+    expect((await call("SELECT admin.request_suspense_return($1, $2, 'payer could not be identified') AS r", [c.ops_maker.sessionHash, ref])).error).toMatch(/already waiting/);
+    await stepUp(c.ops_checker);
+    expect(await code(call("SELECT admin.request_suspense_return($1, $2, 'checkers do not ask') AS r", [c.ops_checker.sessionHash, ref]))).toBe("42501");
+    const done = await call("SELECT admin.decide_suspense_return($1, $2, 'approve', 'no matching intent; returned to sender') AS r", [c.ops_checker.sessionHash, ask.id]);
+    expect(done).toMatchObject({ ok: true, status: "returned" });
+    const ret = await w.su.query<{ returned_by: string }>("SELECT returned_by FROM bank.credit_returns WHERE raast_ref = $1", [ref]);
+    expect(ret.rows[0]?.returned_by).toBe(c.ops_checker.handle);
+    desk = await read("bank_desk", c.auditor);
+    expect(desk.suspense.some((s) => s.ref === ref)).toBe(false);
+    expect(await code(w.su.query("UPDATE admin.suspense_returns SET reason = 'changed afterwards!' WHERE id = $1", [ask.id]))).toBe("42501");
+  });
+
+  it("a follow-up batch is refused while no held line can be paid", async () => {
+    await stepUp(c.ops_maker);
+    const r = await call("SELECT admin.create_followup_batch($1, 999999) AS r", [c.ops_maker.sessionHash]);
+    expect(r.error).toMatch(/no held line/);
+    expect(Array.isArray((await read<{ held: unknown[] }>("bank_desk", c.ops_maker)).held)).toBe(true);
+  });
+});
+
+describe("signing policy changes from the portal (migration 0039 SP-1..SP-5)", () => {
+  it("a maker proposes new values for an existing kind, a different checker activates it; the shape cannot change", async () => {
+    const kind = `test.portal${randomBytes(3).toString("hex")}`;
+    const p0 = await w.su.query<{ id: string }>("SELECT signer.propose_policy($1, $2::jsonb, 'cli:maker') AS id", [kind, JSON.stringify({ chainId: 586586, maxPerDay: "100", approvals: 2 })]);
+    await w.su.query("SELECT signer.approve_policy($1, 'cli:checker')", [p0.rows[0]?.id]);
+    const propose = (a: Actor, rule: object) => call("SELECT admin.propose_signer_policy($1, $2, $3::jsonb) AS r", [a.sessionHash, kind, JSON.stringify(rule)]);
+    await stepUp(c.ops_maker);
+    expect((await call("SELECT admin.propose_signer_policy($1, 'no.such.kind', '{}'::jsonb) AS r", [c.ops_maker.sessionHash])).error).toMatch(/existing kind/);
+    expect((await propose(c.ops_maker, { chainId: 586586, maxPerDay: "100", approvals: 2, keyRef: "rogue" })).error).toMatch(/exactly the fields/);
+    expect((await propose(c.ops_maker, { chainId: 586586, maxPerDay: "100", approvals: 2 })).error).toMatch(/same as the active/);
+    const p = await propose(c.ops_maker, { chainId: 586586, maxPerDay: "250", approvals: 2 });
+    expect(p).toMatchObject({ ok: true, status: "proposed" });
+    expect((await propose(c.ops_maker, { chainId: 586586, maxPerDay: "300", approvals: 2 })).error).toMatch(/already waiting/);
+    const listed = await read<{ kind: string; proposals: { id: number }[] }[]>("signer_policies", c.auditor);
+    expect(listed.find((k) => k.kind === kind)?.proposals.map((x) => x.id)).toEqual([p.id]);
+    expect(await code(call("SELECT admin.approve_signer_policy($1, $2) AS r", [c.ops_maker.sessionHash, p.id]))).toBe("42501");
+    await stepUp(c.ops_checker);
+    expect(await call("SELECT admin.approve_signer_policy($1, $2) AS r", [c.ops_checker.sessionHash, p.id])).toMatchObject({ ok: true, status: "active" });
+    const active = await w.su.query<{ rule: { maxPerDay: string }; approved_by: string }>(
+      "SELECT rule, approved_by FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL", [kind]);
+    expect(active.rows[0]).toMatchObject({ rule: { maxPerDay: "250" }, approved_by: c.ops_checker.handle });
+    // A proposal can be withdrawn; it stays in the history, retired unapproved.
+    await stepUp(c.ops_maker);
+    const q = await propose(c.ops_maker, { chainId: 586586, maxPerDay: "1", approvals: 0 });
+    expect(await call("SELECT admin.withdraw_signer_policy($1, $2) AS r", [c.ops_maker.sessionHash, q.id])).toMatchObject({ ok: true, status: "withdrawn" });
+    expect((await w.su.query("SELECT * FROM signer.verify_audit()")).rows).toEqual([]);
   });
 });

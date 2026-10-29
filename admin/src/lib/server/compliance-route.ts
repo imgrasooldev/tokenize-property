@@ -32,7 +32,7 @@ export async function complianceRoute(
     /** Page to return to (also on refusal). */
     back: string;
     /** Either an error message for the officer, or the SQL and its parameters. */
-    build: (officer: Officer, form: Form) => { sql: string; params: unknown[] } | string;
+    build: (officer: Officer, form: Form) => { sql: string; params: unknown[] } | string | Promise<{ sql: string; params: unknown[] } | string>;
     /** Where to go after success (default: back). */
     okPath?: (r: DecisionResult) => string;
     okMessage: (r: DecisionResult) => string;
@@ -42,7 +42,7 @@ export async function complianceRoute(
   const officer = await requireApi(request, opts.permission, form);
   if (!("sessionHash" in officer)) return officer;
   const go = (path: string, key: "ok" | "error", msg: string) => seeOther(`${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(msg.slice(0, 300))}`);
-  const built = opts.build(officer, form);
+  const built = await opts.build(officer, form);
   if (typeof built === "string") return go(opts.back, "error", built);
   try {
     const r = await decision(built.sql, built.params);

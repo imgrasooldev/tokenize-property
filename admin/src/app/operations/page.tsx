@@ -27,7 +27,21 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   const canPropose = officer.permissions.has("operations.request");
 
   return (
-    <Shell officer={officer} current="/operations" title="Property operations">
+    <Shell
+      officer={officer}
+      current="/operations"
+      title="Property operations"
+      actions={
+        <span className="row">
+          <a className="btn" href="/operations/bank">
+            Bank desk
+          </a>
+          <a className="btn" href="/operations/policies">
+            Signing policies
+          </a>
+        </span>
+      }
+    >
       <Flash q={q} />
       <div className="g2">
         <section className="card" aria-labelledby="periods">

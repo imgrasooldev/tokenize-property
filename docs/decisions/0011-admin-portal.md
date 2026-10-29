@@ -478,3 +478,13 @@ officer's handle in the same transaction; the backend keeps every business rule.
 - A `property_manager` sees only the properties assigned to them (none until one is: deny by default). Assignments are maker-checker between two administrators (`officers.manage`, step-up, reason) on `/officers` (`POST /api/officers/scopes`, `POST /api/officers/scopes/[id]/decide`), audited as `manager_scope.requested|decided`, decided changes append-only.
 - The reads a manager reaches are wrapped (`admin.<name>` checks the scope, `admin.<name>_all` is the unscoped original, no longer executable by the portal): operations periods, statement, charge, distribution, rent status, property requests, approvals inbox (property section), committees and committee. A token belongs to a property through its offering. Out-of-scope items read as not found; sponsor (KYB) requests stay hidden from managers. Other roles are unaffected.
 
+### Addendum 2026-10-29: bank statement import (migration 0037)
+
+- `/operations/bank` (operations.read): registered bank accounts and the latest 30 statements. An operations maker (`operations.request`, step-up) uploads one statement file (`POST /api/operations/bank`, multipart); the portal only reads the header and lines, `admin.import_bank_statement` binds the officer's handle and `recon.import_bank_statement` applies every R-5 rule again. Refusals are audited (`approval.refused`), imports as `operations.requested`. `StepUpForm` takes `upload` for multipart forms.
+
+### Addendum 2026-10-29: bank desk and signing policies (migrations 0038, 0039)
+
+- Suspense returns are maker-checker in the portal (`operations.request` asks, a different `operations.decide` approves; both step-up); the approval runs `bank.return_credit` under the checker's handle (payout gate applies). Requests are append-only once decided.
+- Follow-up batches for held payouts are created by a maker for every held line whose investor now has an active payout account (`bank.create_followup_batch` checks again); the existing checker decision on `/approvals/payouts` follows.
+- Signing policies: only new values for an existing kind with an active version, with exactly the same fields (a new kind or field stays a code change); maker proposes, a different checker activates, the proposer or a checker may withdraw. The signing service validates rules again when it loads them (deny by default) and loads them on start.
+
