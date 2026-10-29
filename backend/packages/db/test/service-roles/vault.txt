@@ -2,5 +2,7 @@ function vault.log_read(p_sha bytea, p_client text, p_purpose text)
 function vault.object(p_sha bytea)
 function vault.public_document(p_sha bytea)
 function vault.register(p_sha bytea, p_size bigint, p_media text, p_key_version smallint, p_wrapped bytea, p_nonce bytea, p_actor text)
+function vault.rewrap(p_sha bytea, p_from smallint, p_to smallint, p_wrapped bytea)
+function vault.stale(p_current smallint, p_limit integer, p_after bytea)
 schema public: USAGE
 schema vault: USAGE

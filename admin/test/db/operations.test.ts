@@ -267,3 +267,25 @@ describe("signing policy changes from the portal (migration 0039 SP-1..SP-5)", (
     expect((await w.su.query("SELECT * FROM signer.verify_audit()")).rows).toEqual([]);
   });
 });
+
+describe("document vault uploads from the portal (migration 0042 PV-1, PV-2)", () => {
+  it("an operations maker with a fresh step-up may store; the upload is audited; the list shows what is published", async () => {
+    const sha = createHash("sha256").update(`vault-test-${randomBytes(4).toString("hex")}`).digest();
+    await stepUp(c.ops_maker, true);
+    expect(await code(call("SELECT admin.vault_upload($1, $2, 1024, 'application/pdf') AS r", [c.ops_maker.sessionHash, sha]))).toBe("PTS01");
+    await stepUp(c.ops_maker);
+    expect((await call("SELECT admin.vault_upload($1, $2, 1024, 'text/html') AS r", [c.ops_maker.sessionHash, sha])).ok).toBe(false);
+    const ok = (await w.portal.query<{ r: { ok: boolean; officer: string } }>("SELECT admin.vault_upload($1, $2, 1024, 'application/pdf') AS r", [c.ops_maker.sessionHash, sha])).rows[0]?.r;
+    expect(ok).toEqual({ ok: true, officer: c.ops_maker.handle });
+    const a = await w.su.query("SELECT 1 FROM admin.audit WHERE action = 'vault.upload' AND detail->>'sha256' = $1", [sha.toString("hex")]);
+    expect(a.rowCount).toBe(1);
+    await stepUp(c.ops_checker);
+    expect(await code(call("SELECT admin.vault_upload($1, $2, 1024, 'application/pdf') AS r", [c.ops_checker.sessionHash, sha]))).toBe("42501");
+    await w.su.query(
+      "INSERT INTO vault.objects (sha256, size_bytes, media_type, key_version, wrapped_key, nonce, created_by) VALUES ($1, 1024, 'application/pdf', 1, $2, $3, $4)",
+      [sha, randomBytes(60), randomBytes(12), `officer:${c.ops_maker.handle}`],
+    );
+    const list = await read<{ sha256: string; published: boolean; by: string }[]>("vault_objects", c.auditor);
+    expect(list.find((o) => o.sha256 === sha.toString("hex"))).toMatchObject({ published: false, by: `officer:${c.ops_maker.handle}` });
+  });
+});

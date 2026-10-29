@@ -86,6 +86,9 @@ export async function warm(): Promise<void> {
     "/login", "/enrol", "/account", "/officers", "/", "/audit/signer", "/audit/admin", "/approvals", "/compliance", "/trustee",
     "/api/auth/login/options", "/api/auth/login/verify", "/api/auth/enrol/options", "/api/auth/enrol/verify",
     "/api/auth/stepup/options", "/api/auth/stepup/verify", "/api/auth/logout", "/api/officers/changes", "/api/officers/changes/1/decide",
+    // Screens of 2026-10-29/30: a route compiled for the first time while a page is open makes the dev server reload it.
+    "/support", "/complaints", "/complaints/1", "/operations", "/operations/bank", "/operations/policies", "/documents",
+    "/api/complaints/1/act", "/api/operations/bank", "/api/operations/policies", "/api/operations/policies/1/decide", "/api/approvals/hold",
   ];
   for (const p of paths) {
     await fetch(`http://localhost:3301${p}`, { redirect: "manual", signal: AbortSignal.timeout(170_000) }).catch(() => undefined);

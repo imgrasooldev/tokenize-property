@@ -16,9 +16,14 @@ Property onboarding (S-01), offerings (S-02) and the public verification page pu
 5. Every read is logged before bytes leave the service (`vault.reads`). A read decrypts and checks the SHA-256 again; a changed file or a wrong key is refused. The website checks the hash once more before sending the file as an attachment.
 6. The service connects as `pt_vault_app` (group `pt_svc_vault`, T-012): register, look up, check publication, log reads; nothing else.
 
+## Addendum 2026-10-30
+
+- PT Control uploads: `/documents` (operations makers, step-up; migration 0042). The portal never holds a key; it audits the upload, then sends the file to `/v1/store` (client `admin-portal`, scope that path only).
+- Key rotation: `npm run vault:rotate` (migration 0043). Load the new `VAULT_MASTER_KEY_V<n>`, set `VAULT_KEY_CURRENT=<n>`, keep the old key loaded, run rotate until it reports 0 re-wrapped and no failures, then retire the old key.
+
 ## Consequences
 
 - Investors download the offering documents they accept and the public property documents; the bytes provably match the hashes on the page and on chain.
-- Operators store files with `npm run vault:put` until a portal upload screen exists; re-encryption under a new key version (key rotation) is a follow-up tool.
+- Operators store files on PT Control `/documents` or with `npm run vault:put`; key rotation with `npm run vault:rotate`.
 - Retention and erasure (ADR 0009: KYC records ten years after the relationship) need a separate, legal-approved procedure; the vault never deletes.
 - Backups must include `VAULT_DIR` and the master key separately (the key never in the same backup as the files).

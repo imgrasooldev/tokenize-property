@@ -45,6 +45,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Operations & tax",
     items: [
       { href: "/operations", label: "Property operations", icon: "₨", need: "operations.read" },
+      { href: "/documents", label: "Document vault", icon: "▤", need: "operations.read" },
       { href: "/tax", label: "Withholding tax", icon: "%", need: "tax.read" },
       { href: "/tax/exports", label: "FBR filing exports", icon: "⇩", need: "tax.read" },
     ],

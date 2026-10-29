@@ -68,6 +68,12 @@ function gcmOpen(key: Buffer, sealed: Buffer, nonce: Buffer, aad: string): Buffe
 
 export const sha256 = (b: Buffer): Buffer => createHash("sha256").update(b).digest();
 
+interface StaleRow {
+  sha256: Buffer;
+  key_version: number;
+  wrapped_key: Buffer;
+}
+
 export class VaultError extends Error {
   override name = "VaultError";
   constructor(
@@ -121,6 +127,43 @@ export class Vault {
       actor,
     ]);
     return { sha256: sha.toString("hex"), storeRef: rows[0]?.r ?? "" };
+  }
+
+  /**
+   * Re-wraps every data key that is not under the current master key version (key rotation,
+   * migration 0043). The files do not change: each data key is unwrapped with its old master key,
+   * the file is decrypted and checked against its hash, and only then is the new wrap recorded. A
+   * file that does not check out keeps its old wrap and is reported in `failed`.
+   */
+  async rotate(batch = 200): Promise<{ rewrapped: number; failed: string[] }> {
+    const v = this.keys.current;
+    let rewrapped = 0;
+    const failed: string[] = [];
+    let after: Buffer | null = null;
+    for (;;) {
+      const page: pg.QueryResult<StaleRow> = await this.db.query<StaleRow>("SELECT * FROM vault.stale($1, $2, $3)", [v, batch, after]);
+      const rows: StaleRow[] = page.rows;
+      if (rows.length === 0) return { rewrapped, failed };
+      for (const o of rows) {
+        after = o.sha256;
+        const hex = o.sha256.toString("hex");
+        const meta = await this.db.query<{ nonce: Buffer }>("SELECT nonce FROM vault.object($1)", [o.sha256]);
+        let dataKey: Buffer;
+        try {
+          dataKey = gcmOpen(this.keys.key(o.key_version), o.wrapped_key.subarray(12), o.wrapped_key.subarray(0, 12), `pt-vault-key-v1:${hex}`);
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- path built from a hex hash under the vault directory
+          const plain = gcmOpen(dataKey, await readFile(this.path(o.sha256)), meta.rows[0]?.nonce ?? Buffer.alloc(12), `pt-vault-file-v1:${hex}`);
+          if (!sha256(plain).equals(o.sha256)) throw new Error("hash");
+        } catch {
+          failed.push(hex);
+          continue;
+        }
+        const wrapNonce = randomBytes(12);
+        const wrapped = Buffer.concat([wrapNonce, gcmSeal(this.keys.key(v), dataKey, wrapNonce, `pt-vault-key-v1:${hex}`)]);
+        await this.db.query("SELECT vault.rewrap($1, $2, $3, $4)", [o.sha256, o.key_version, v, wrapped]);
+        rewrapped++;
+      }
+    }
   }
 
   /**

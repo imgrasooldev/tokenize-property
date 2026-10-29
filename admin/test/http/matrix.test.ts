@@ -117,6 +117,7 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/operations/distributions/{distribution}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
   { path: "/operations/bank", allowed: OPERATIONS },
   { path: "/operations/policies", allowed: OPERATIONS },
+  { path: "/documents", allowed: OPERATIONS },
   // 0040: complaints for support, operations, compliance, auditors and the platform owner; unknown items are "not found".
   { path: "/complaints", allowed: COMPLAINTS },
   { path: "/complaints/999999", allowed: COMPLAINTS, okStatus: 404 },
@@ -221,6 +222,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/operations/policies", allowed: ["ops_maker"], okStatus: 303, form: { kind: "x" } },
   { path: "/api/operations/policies/1/decide", allowed: OPERATIONS, okStatus: 303, form: { decision: "nope" } },
   { path: "/api/complaints/1/act", allowed: ["ops_maker", "support_agent"], okStatus: 303, form: { action: "nope" } },
+  // 0042: a missing document is answered with a 303 back (nothing stored).
+  { path: "/api/documents/upload", allowed: ["ops_maker"], okStatus: 303, form: {} },
   { path: "/api/tax/rates", allowed: ["tax_officer"], okStatus: 303, form: {} },
   { path: "/api/tax/rates/{taxRate}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/tax/exports", allowed: ["tax_officer"], okStatus: 303, form: {} },

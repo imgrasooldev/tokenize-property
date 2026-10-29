@@ -59,6 +59,7 @@
     "vault:setup": "tsx packages/vault/src/cli.ts setup",
     "vault:serve": "tsx packages/vault/src/cli.ts serve",
     "vault:put": "tsx packages/vault/src/cli.ts put",
+    "vault:rotate": "tsx packages/vault/src/cli.ts rotate",
     "bank": "tsx packages/bank/src/cli.ts serve",
     "bank:setup": "tsx packages/bank/src/cli.ts setup",
     "bank:audit": "tsx packages/bank/src/cli.ts audit",
