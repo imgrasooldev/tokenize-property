@@ -106,3 +106,10 @@ Before the fixed gas limit: p50 738 ms. Besu reads vary from run to run; the ide
 - Chain facts on top: ForcedTransfer only (`onchainId` zero, amount > 0); seller not address-frozen (`isFrozen`) and its free balance (`balanceOf − getFrozenTokens`) covers the amount plus every pending request from it; buyer `isVerified`; buyer stays within `maxBalance`; for execute the request is pending and `eta` passed. New optional chain-reader fact `holderFreeze` (fails closed when missing).
 - `token.transfer` is unchanged and not used for phase 0 (paused token, demo-market escrow only). `signer:setup` activates local policies for the three kinds. The approvals preview shows the same calldata.
 - Tested in `signer/test/transfer-kinds.test.ts` (pure, calldata decoded, preview equals the signed calldata) and `transfer/test/transfer.test.ts` (real database and signing service, forged payloads and the S-06 gate refused).
+
+## Amendment 2026-10-29: rent publication and finalisation (T-022, migration 0032)
+
+- Kinds `rent.publish` (`DistributionRegistry.publish(token, recordBlock, root, total, statementHash)`) and `rent.finalize` (`finalize(id)`), both with the Ops key; rule `{chainId, keyRef, registry, token, approvals, gasLimit}`.
+- The operator enqueues them with `npm run ops:run publish '{"id","actor"}'` / `ops:run finalize '{"registry","onchainId","actor"}'` (`ops.request_publish`, `ops.request_finalize`); the payload is built in SQL from the approved calculation (total = sum of net), never typed.
+- The signer denies unless `ops.publish_allowed(payload)` / `ops.finalize_allowed(payload)` is NULL: the exact enqueued command, calculation still approved and not already live on chain; for finalisation the 48-hour window closed (publish block time), no trustee rejection (`trustee.distribution_blocked`) and a matching approved calculation; on-chain status `published` is read from the contract. Both are payout kinds: the reconciliation gate applies.
+- `chain/rent.py` stays for the local demo flow only.

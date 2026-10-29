@@ -217,6 +217,81 @@ describe("statement and tax schedule, approval (OT-5, OT-6)", () => {
   });
 });
 
+describe("publication and finalisation through the signing service (T-022, migration 0032)", () => {
+  const asRole = async <T>(role: string, fn: (c: pg.Client) => Promise<T>): Promise<T> => {
+    const c = new pg.Client(w.settings);
+    await c.connect();
+    try {
+      await c.query(`SET ROLE ${role}`);
+      return await fn(c);
+    } finally {
+      await c.end();
+    }
+  };
+  const problem = (fn: string, payload: unknown) =>
+    asRole("pt_signer", async (c) => (await c.query<{ p: string | null }>(`SELECT ${fn}($1::jsonb) AS p`, [JSON.stringify(payload)])).rows[0]?.p);
+  /** An on-chain distribution published at a block of the given age (the challenge window is 48 hours). */
+  async function published(id: number, ageHours: number, total: bigint, root: string, statementHash: string): Promise<void> {
+    const n = 1000 + id;
+    await w.su.query("INSERT INTO chain.blocks (number, hash, parent_hash, block_time) VALUES ($1, $2, $3, now() - make_interval(hours => $4))", [
+      n, `0x${n.toString(16).padStart(64, "0")}`, `0x${(n + 1).toString(16).padStart(64, "f")}`, ageHours,
+    ]);
+    await w.su.query(
+      `INSERT INTO chain.distributions (registry, id, token, record_block, merkle_root, total_paisa, statement_hash, status, published_block, updated_block)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'published', $8, $8)`,
+      [t.registry, id, t.token, RECORD_BLOCK, root, total.toString(), statementHash, n],
+    );
+  }
+
+  it("enqueues exactly the approved calculation; the signer accepts only that command, once", async () => {
+    expect(await message(w.ops.query("SELECT ops.request_publish($1, 'operator:omar')", [calcId]))).toMatch(/no DistributionRegistry/);
+    await w.su.query("INSERT INTO chain.contracts (deployment, role, address) VALUES ($1, 'distributions', $2)", [t.deployment, t.registry]);
+    const docs = await new OpsService(w.ops).documents(calcId);
+    const net = (await w.pool.query<{ n: string }>("SELECT sum_net::text AS n FROM ops.distributions WHERE id = $1", [calcId])).rows[0]?.n ?? "";
+    const cmd = (await w.ops.query<{ r: string }>("SELECT ops.request_publish($1, 'operator:omar')::text AS r", [calcId])).rows[0]?.r;
+    const o = (await w.pool.query<{ kind: string; payload: Record<string, string> }>("SELECT kind, payload FROM outbox.commands WHERE id = $1", [cmd])).rows[0];
+    expect(o?.kind).toBe("rent.publish");
+    expect(o?.payload).toEqual({ registry: t.registry, token: t.token, recordBlock: String(RECORD_BLOCK), merkleRoot: docs.root, totalPaisa: net,
+      statementHash: docs.statementHash, calculation: calcId });
+    expect(await problem("ops.publish_allowed", o?.payload)).toBeNull();
+    expect(await problem("ops.publish_allowed", { ...o?.payload, totalPaisa: (BigInt(net) + 1n).toString() })).toMatch(/not the publish command/);
+    // Asking twice enqueues nothing new (same idempotency key).
+    expect((await w.ops.query<{ r: string }>("SELECT ops.request_publish($1, 'operator:omar')::text AS r", [calcId])).rows[0]?.r).toBe(cmd);
+    await published(101, 49, BigInt(net), docs.root, docs.statementHash);
+    expect(await problem("ops.publish_allowed", o?.payload)).toMatch(/already published/);
+    expect(await message(w.ops.query("SELECT ops.request_publish($1, 'operator:omar')", [calcId]))).toMatch(/already published/);
+    const a = await w.pool.query("SELECT 1 FROM ops.audit WHERE action = 'distribution.publish_requested' AND (detail->>'distribution')::bigint = $1", [calcId]);
+    expect(a.rowCount).toBeGreaterThan(0);
+  });
+
+  it("finalises only after the window, never what the trustee rejected or what no approved calculation explains", async () => {
+    const docs = await new OpsService(w.ops).documents(calcId);
+    const net = BigInt((await w.pool.query<{ n: string }>("SELECT sum_net::text AS n FROM ops.distributions WHERE id = $1", [calcId])).rows[0]?.n ?? "0");
+    const finalize = (id: number) => w.ops.query<{ r: string }>("SELECT ops.request_finalize($1, $2, 'operator:omar')::text AS r", [t.registry, id]);
+    await published(102, 47, net, docs.root, docs.statementHash);
+    expect(await message(finalize(102))).toMatch(/challenge window closes/);
+    await published(103, 49, net + 1n, docs.root, docs.statementHash);
+    expect(await message(finalize(103))).toMatch(/no approved calculation matches/);
+    const cmd = (await finalize(101)).rows[0]?.r;
+    const o = (await w.pool.query<{ kind: string; payload: Record<string, string> }>("SELECT kind, payload FROM outbox.commands WHERE id = $1", [cmd])).rows[0];
+    expect(o).toEqual({ kind: "rent.finalize", payload: { registry: t.registry, distributionId: "101" } });
+    expect(await problem("ops.finalize_allowed", o?.payload)).toBeNull();
+    expect(await problem("ops.finalize_allowed", { registry: t.registry, distributionId: "102" })).toMatch(/not the finalize command/);
+    await w.su.query(
+      `INSERT INTO trustee.distribution_reviews (registry, distribution_id, token, decision, reason, digest, window_closes, decided_by)
+       VALUES ($1, 101, $2, 'reject', 'the statement omits a tenant payment', $3, now() + interval '1 hour', 'trustee.test')`,
+      [t.registry, t.token, Buffer.alloc(32, 7)],
+    );
+    expect(await problem("ops.finalize_allowed", o?.payload)).toMatch(/the trustee rejected/);
+  });
+
+  it("the signer only checks, the operator only enqueues", async () => {
+    expect(await asRole("pt_signer", (c) => code(c.query("SELECT ops.request_publish($1, 'operator:x')", [calcId])))).toBe("42501");
+    expect(await asRole("pt_ops_operator", (c) => code(c.query("SELECT ops.publish_allowed('{}'::jsonb)")))).toBe("42501");
+    expect(await asRole("pt_ops_reader", (c) => code(c.query("SELECT ops.request_finalize($1, 1, 'operator:x')", [t.registry])))).toBe("42501");
+  });
+});
+
 describe("booking against the finalized on-chain distribution (D9)", () => {
   it("refuses a distribution that is not finalized or differs from the calculation; books WHT and net in one transaction", async () => {
     const docs = await new OpsService(w.ops).documents(calcId);

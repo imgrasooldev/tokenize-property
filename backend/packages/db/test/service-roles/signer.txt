@@ -6,6 +6,8 @@ function kyc.subject_status(p_subject uuid)
 function ledger.balance_guard()
 function ledger.escrow_held(p_account text)
 function offering.mint_allowed(p_ref_id text, p_to text, p_amount numeric)
+function ops.finalize_allowed(p_payload jsonb)
+function ops.publish_allowed(p_payload jsonb)
 function recon.payout_gate()
 function recon.payouts_allowed()
 function recovery.command_allowed(p_kind text, p_payload jsonb)
@@ -22,6 +24,7 @@ schema exit: USAGE
 schema kyc: USAGE
 schema ledger: USAGE
 schema offering: USAGE
+schema ops: USAGE
 schema public: USAGE
 schema recon: USAGE
 schema recovery: USAGE

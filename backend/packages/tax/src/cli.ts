@@ -112,6 +112,9 @@ const SQL_ACTIONS = {
     args: ["token", "period", "recordDate", "recordBlock", "incomeType", "actor"],
   },
   "decide-distribution": { sql: "SELECT ops.decide_distribution($1, $2, $3, $4) AS r", args: ["id", "actor", "decision", "reason"] },
+  // T-022 (migration 0032): enqueue the on-chain publication / finalisation; the signing service checks it again.
+  publish: { sql: "SELECT ops.request_publish($1, $2) AS r", args: ["id", "actor"] },
+  finalize: { sql: "SELECT ops.request_finalize($1, $2, $3) AS r", args: ["registry", "onchainId", "actor"] },
   book: { sql: "SELECT ops.book_distribution($1, $2, $3, $4) AS r", args: ["id", "registry", "onchainId", "actor"] },
   remit: {
     sql: "SELECT tax.propose_remittance($1, $2, $3, $4, $5, $6, $7, $8) AS r",

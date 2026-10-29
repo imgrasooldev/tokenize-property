@@ -4,6 +4,7 @@ Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are comm
 
 ## 2026-10-29
 
+- T-022 rent publication through the backend (branch `t-022-rent-publish`; migration `0032_rent_publish.sql`, ADR 0005 amendment): signer kinds `rent.publish` and `rent.finalize`; `ops.request_publish` / `ops.request_finalize` build the outbox command from the approved calculation; `ops.publish_allowed` / `ops.finalize_allowed` confirm it for the signer (one live publication per statement, 48-hour window, no trustee rejection, matching calculation); `ops:run publish|finalize`; dev policies in `signer:setup`.
 - T-049 platform roles (branch `platform-roles-0031`, not merged; migration `0031_platform_roles.sql`, ADR 0011 addendum, ADR 0007 amendment): roles `platform_owner` (read-only operational view plus an emergency payout hold that operations release maker-checker after a new passed reconciliation run), `property_manager` (properties and operating statements) and `support_agent` (`/support`: one investor by reference, masked, no compliance detail, every lookup audited). Portal permissions copy, nav, landing pages, `/api/approvals/hold`, `/support`; DB, unit and HTTP matrix tests extended.
 
 ## 2026-10-23

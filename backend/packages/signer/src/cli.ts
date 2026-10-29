@@ -126,6 +126,9 @@ async function setup(): Promise<void> {
       ["compliance.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["compliance.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["rent.record_payout", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],
+      // T-022 (migration 0032): the payload must be the command ops.request_publish / ops.request_finalize enqueued.
+      ["rent.publish", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],
+      ["rent.finalize", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],
       ["identity.create", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "identity", idFactory: lc(factories.idFactory), maxPerDay: 500 }],
       ["identity.add_claim", { chainId: LOCAL_DEV_CHAIN_ID, claimKeyRef: "claims", idFactory: lc(factories.idFactory), claimIssuer: lc(factories.claimIssuer),
         topics: [1, 2], maxPerDay: 1000 }],
