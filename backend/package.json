@@ -27,6 +27,7 @@
     "signer:setup": "tsx packages/signer/src/cli.ts setup",
     "signer:decide": "tsx packages/signer/src/cli.ts decide",
     "signer:audit": "tsx packages/signer/src/cli.ts audit",
+    "test:rent-e2e": "vitest run packages/tax/test/rent-besu.test.ts",
     "perf": "node packages/signer/scripts/perf.mjs",
     "perf:signer": "node packages/signer/scripts/perf.mjs signer",
     "signer:import-web-wallets": "tsx packages/signer/src/cli.ts import-web-wallets",
