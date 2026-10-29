@@ -59,6 +59,8 @@ export const config = {
    * The tax service (ADR 0014) and the portal's client (scope: generate an approved FBR filing
    * export with a one-time ticket, nothing else). Without a secret no export can be generated.
    */
+  /** The investor website's public address, for links the portal hands out (rent invoice payment pages). */
+  webPublicUrl: setting("WEB_PUBLIC_URL", "http://localhost:3100") ?? "http://localhost:3100",
   vaultService: {
     url: setting("VAULT_SERVICE_URL", "http://127.0.0.1:4950") ?? "http://127.0.0.1:4950",
     secret: setting("VAULT_CLIENT_SECRET_ADMIN", "") ?? "",

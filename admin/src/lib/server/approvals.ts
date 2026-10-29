@@ -225,6 +225,9 @@ export interface DecisionResult {
   expiresAt?: string;
   /** T-046 (migration 0026): the meeting a committee member opened. */
   meeting?: number;
+  /** Migration 0044: a new rent invoice's payment reference and its one-time link secret. */
+  code?: string;
+  link?: string;
 }
 
 export async function decision(sql: string, params: unknown[]): Promise<DecisionResult> {
@@ -281,3 +284,15 @@ export function rupees(paisa: string | null | undefined): string {
   const cents = (abs % 100n).toString().padStart(2, "0");
   return `${neg ? "-" : ""}Rs ${whole}.${cents}`;
 }
+
+/** Files an officer may ask an S-01 decision for, with the codes allowed from their state (admin.property_request_options, migration 0045). */
+export interface PropertyRequestOptions {
+  sponsors: { id: string; state: string; codes: string[] | null }[];
+  properties: { id: string; state: string; building: string | null; district: string | null; codes: string[] | null }[];
+}
+
+export async function propertyRequestOptions(sessionHash: Buffer): Promise<PropertyRequestOptions> {
+  const { rows } = await db().query<{ v: PropertyRequestOptions }>("SELECT admin.property_request_options($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { sponsors: [], properties: [] };
+}
+

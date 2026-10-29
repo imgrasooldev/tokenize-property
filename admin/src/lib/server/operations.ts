@@ -304,3 +304,28 @@ export async function signerPolicies(sessionHash: Buffer): Promise<SignerPolicyK
   const { rows } = await db().query<{ v: SignerPolicyKind[] }>("SELECT admin.signer_policies($1) AS v", [sessionHash]);
   return rows[0]?.v ?? [];
 }
+
+/** Rent invoices with the bank lines that could have paid them (admin.rent_invoices, migration 0044). */
+export interface RentInvoice {
+  id: number;
+  token: string;
+  period: string;
+  tenant: string;
+  amount: string;
+  due: string;
+  code: string;
+  status: "open" | "proposed" | "paid" | "cancelled";
+  collection: number | null;
+  collectionStatus: string | null;
+  collectionBy: string | null;
+  overdue: boolean;
+  by: string;
+  at: string;
+  candidates: { statement: number; line: number; date: string; reference: string; counterparty: string }[] | null;
+}
+
+export async function rentInvoices(sessionHash: Buffer): Promise<{ invoices: RentInvoice[]; tokens: string[] }> {
+  const { rows } = await db().query<{ v: { invoices: RentInvoice[]; tokens: string[] } }>("SELECT admin.rent_invoices($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { invoices: [], tokens: [] };
+}
+

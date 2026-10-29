@@ -488,6 +488,10 @@ officer's handle in the same transaction; the backend keeps every business rule.
 - Follow-up batches for held payouts are created by a maker for every held line whose investor now has an active payout account (`bank.create_followup_batch` checks again); the existing checker decision on `/approvals/payouts` follows.
 - Signing policies: only new values for an existing kind with an active version, with exactly the same fields (a new kind or field stays a code change); maker proposes, a different checker activates, the proposer or a checker may withdraw. The signing service validates rules again when it loads them (deny by default) and loads them on start.
 
+### Addendum 2026-10-30: S-01 maker requests bound (migration 0045)
+
+- `property.requests` refuses a request under an officer's handle unless an admin.* function bound it (trigger `requests_officer_binding`). `/approvals/property` has an "Ask for a decision" form (`POST /api/approvals/property/request`, property.read + step-up); the S-01 duty rules decide who may ask. Property managers are never offered sponsor (KYB) files.
+
 ### Addendum 2026-10-30: complaints (migration 0040)
 
 - New permissions `complaints.read` (support_agent, ops_maker, ops_checker, compliance_officer, auditor, platform_owner) and `complaints.handle` (support_agent, ops_maker); the role matrix digest is fixed again. `/complaints` and `/complaints/[id]`; `POST /api/complaints/[id]/act` (acknowledge, reply, resolve, refer; step-up; under the officer's handle). The investor appears by support reference only; a referral to compliance reads "under review" on the website.

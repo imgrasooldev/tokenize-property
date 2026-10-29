@@ -12,6 +12,7 @@ import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { unreadCount } from "@/lib/server/notifications";
 import { complaintsDict } from "@/lib/i18n-complaints";
+import { votesDict } from "@/lib/i18n-votes";
 import { currentInvestorId, currentSession } from "@/lib/server/session";
 import { SearchShortcut } from "./analyst/SearchShortcut";
 import { LangToggle } from "./LangToggle";
@@ -268,7 +269,7 @@ export function PublicPage({ active, children, minimal = false }: { active: Publ
   );
 }
 
-export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account" | "notifications" | "complaints";
+export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account" | "notifications" | "complaints" | "votes";
 
 function initials(name: string): string {
   // Words that start with a letter only, so "Bob (demo)" gives "B", not "B(".
@@ -330,6 +331,9 @@ export async function PortalShell({
                 {unread > 99 ? "99+" : String(unread)}
               </span>
             )}
+          </Link>
+          <Link href="/votes" className={`nav ${active === "votes" ? "on" : ""}`} aria-current={active === "votes" ? "page" : undefined}>
+            <span aria-hidden="true">☑</span> {votesDict(lang).nav}
           </Link>
           <Link href="/complaints" className={`nav ${active === "complaints" ? "on" : ""}`} aria-current={active === "complaints" ? "page" : undefined}>
             <span aria-hidden="true">☏</span> {complaintsDict(lang).nav}

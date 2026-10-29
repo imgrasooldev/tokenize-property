@@ -289,3 +289,44 @@ describe("document vault uploads from the portal (migration 0042 PV-1, PV-2)", (
     expect(list.find((o) => o.sha256 === sha.toString("hex"))).toMatchObject({ published: false, by: `officer:${c.ops_maker.handle}` });
   });
 });
+
+describe("tenant rent invoices and payment links (migration 0044 RI-1..RI-4)", () => {
+  it("a maker issues an invoice with a one-time link; payment is recorded maker-checker; the tenant page shows only what it needs", async () => {
+    const account = `TEST-RENT-${randomBytes(3).toString("hex").toUpperCase()}`;
+    await w.su.query("SELECT ledger.open_account($1, 'asset', 'PKR')", [`bank:${account.toLowerCase()}`]);
+    await w.su.query("SELECT recon.register_bank_account($1, $2, 'test:setup')", [account, `bank:${account.toLowerCase()}`]);
+    const today = (await w.su.query<{ d: string }>("SELECT current_date::text AS d")).rows[0]?.d ?? "";
+    const st = await w.su.query<{ id: string }>("SELECT recon.import_bank_statement('test:import', $1, $2::date, 0, 7500000, $3::jsonb) AS id", [
+      account,
+      today,
+      JSON.stringify([{ valueDate: today, amountPaisa: "7500000", reference: `RAAST-TENANT-${randomBytes(3).toString("hex").toUpperCase()}`, counterparty: "Tenant shop 4", balancePaisa: "7500000" }]),
+    ]);
+    await stepUp(c.ops_maker);
+    const inv = (await w.portal.query<{ r: { ok: boolean; id: number; code: string; link: string } }>(
+      "SELECT admin.create_rent_invoice($1, $2, '2026-10', 'Shop 4, ground floor', 7500000, current_date + 10) AS r", [c.ops_maker.sessionHash, ow.token])).rows[0]?.r;
+    expect(inv).toMatchObject({ ok: true });
+    expect(inv?.code).toMatch(/^TR-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    expect((await call("SELECT admin.create_rent_invoice($1, $2, '2026-10', 'Tenant 3520212345678', 100, current_date) AS r", [c.ops_maker.sessionHash, ow.token])).ok).toBe(false);
+
+    // The tenant's page: by link only, nothing else.
+    const page = (await w.su.query<{ v: Record<string, string> | null }>("SELECT ops.web_invoice($1) AS v", [inv?.link])).rows[0]?.v;
+    expect(page).toMatchObject({ code: inv?.code, amountPaisa: "7500000", status: "open", tenant: "Shop 4, ground floor" });
+    expect((await w.su.query<{ v: unknown }>("SELECT ops.web_invoice($1) AS v", [randomBytes(32).toString("base64url")])).rows[0]?.v).toBeNull();
+    const stored = await w.su.query<{ link_hash: Buffer }>("SELECT link_hash FROM ops.rent_invoices WHERE id = $1", [inv?.id]);
+    expect(stored.rows[0]?.link_hash.toString("hex")).toBe(createHash("sha256").update(inv?.link ?? "").digest("hex"));
+
+    const list = await read<{ invoices: { id: number; candidates: { statement: number; line: number }[] }[] }>("rent_invoices", c.ops_maker);
+    const cand = list.invoices.find((x) => x.id === inv?.id)?.candidates.find((x) => String(x.statement) === st.rows[0]?.id);
+    expect(cand).toBeDefined();
+    const rec = await call("SELECT admin.record_invoice_payment($1, $2, $3, $4) AS r", [c.ops_maker.sessionHash, inv?.id, cand?.statement, cand?.line]);
+    expect(rec).toMatchObject({ ok: true, status: "proposed" });
+    await stepUp(c.ops_checker);
+    expect(await call("SELECT admin.decide_collection($1, $2, 'approve', 'matches the tenant invoice and the bank line') AS r", [c.ops_checker.sessionHash, rec.id])).toMatchObject({
+      ok: true,
+      status: "approved",
+    });
+    expect((await w.su.query<{ v: { status: string } }>("SELECT ops.web_invoice($1) AS v", [inv?.link])).rows[0]?.v.status).toBe("paid");
+    expect(await code(w.su.query("UPDATE ops.rent_invoices SET amount_paisa = 1 WHERE id = $1", [inv?.id]))).toBe("42501");
+    expect((await call("SELECT admin.cancel_rent_invoice($1, $2) AS r", [c.ops_maker.sessionHash, inv?.id])).ok).toBe(false);
+  });
+});

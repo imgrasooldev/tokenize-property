@@ -165,6 +165,8 @@ export interface PortalResult {
   /** SQLSTATE of the backend's refusal (migration 0026): 23514 guard, 23505 duplicate, 42501 forbidden, 22023 input. */
   state?: string;
   meeting?: number;
+  /** Migration 0045: the id of a new S-01 request. */
+  id?: number;
   vote?: number;
 }
 
@@ -194,6 +196,26 @@ const DEFAULT_REASON = "reviewed the file in PT Control, agree with the outcome"
 export async function committeeOpen(db: pg.ClientBase, chair: string, propertyId: string, reason = "the file is complete and ready for the committee"): Promise<PortalResult> {
   const o = await officer(db, chair, "ops_checker");
   return portalCall(db, "SELECT admin.open_committee($1, $2, $3) AS r", [o.sessionHash, propertyId, reason]);
+}
+
+/**
+ * Migration 0045: an S-01 maker-checker request (K4, K5, K10, K11, SC, P6, P13, P14) asked by an
+ * officer in the portal (session, fresh step-up; the duty rules still decide).
+ */
+export async function propertyRequest(
+  db: pg.ClientBase,
+  handle: string,
+  r: { entity: "sponsor" | "property"; id: string; code: string; reason: string; detail?: Record<string, unknown> },
+): Promise<PortalResult> {
+  const o = await officer(db, handle, "compliance_officer");
+  return portalCall(db, "SELECT admin.request_property_transition($1, $2, $3, $4, $5, $6::jsonb) AS r", [
+    o.sessionHash,
+    r.entity,
+    r.id,
+    r.code,
+    r.reason,
+    JSON.stringify(r.detail ?? {}),
+  ]);
 }
 
 export async function committeeVote(

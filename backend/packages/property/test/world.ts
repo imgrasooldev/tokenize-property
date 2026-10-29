@@ -3,7 +3,7 @@ import { mockProviders, KycService, Peppers } from "@pt/kyc";
 import pg from "pg";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
-import { committeeClose, committeeVote, officerForDuty, trusteePropertyDecision, type PortalResult } from "../../db/test/officers.ts";
+import { committeeClose, committeeVote, officerForDuty, propertyRequest, trusteePropertyDecision, type PortalResult } from "../../db/test/officers.ts";
 import { SponsorSecrets } from "../src/crypto.ts";
 import { mapError, PropertyService, runAction, type ActionInput, type ActionName, type ActionResult, type Identifiers } from "../src/service.ts";
 import { contiguousMigrations } from "./helpers.ts";
@@ -94,7 +94,7 @@ export async function makeWorld(): Promise<World> {
       await pool.end();
       await s.drop();
     },
-    run: (name, input) => runAction(pool, name, input),
+    run: (name, input) => (name === "requestTransition" ? portalRequest(s.client, input as ActionInput<"requestTransition">) : runAction(pool, name, input)) as Promise<ActionResult<typeof name>>,
   };
   for (const [actor, duty] of DUTIES) await grant(w, actor, duty);
   const valuers: string[] = [];
@@ -297,6 +297,23 @@ export async function completeDueDiligence(w: World, s: Sponsor, propertyId: str
  * PropertyError with the code of the backend's refusal (or FORBIDDEN when the portal refuses the
  * session or permission).
  */
+/**
+ * Migration 0045: an S-01 request under an officer's handle goes through the portal (session,
+ * step-up); any other name goes to the database directly (and is refused by the duty rules there).
+ */
+async function portalRequest(client: pg.Client, i: ActionInput<"requestTransition">): Promise<bigint> {
+  const { rowCount } = await client.query("SELECT 1 FROM admin.officers WHERE handle = $1", [i.officer]);
+  if (!rowCount) return runAction(client, "requestTransition", i);
+  let r: PortalResult;
+  try {
+    r = await propertyRequest(client, i.officer, { entity: i.entity, id: i.id, code: i.code, reason: i.reason, detail: i.detail ?? {} });
+  } catch (e) {
+    throw mapError(e);
+  }
+  if (!r.ok) throw mapError({ code: r.state ?? "42501", message: r.error ?? "refused" });
+  return BigInt(r.id ?? 0);
+}
+
 export async function viaPortal(p: Promise<PortalResult>): Promise<string> {
   let r: PortalResult;
   try {

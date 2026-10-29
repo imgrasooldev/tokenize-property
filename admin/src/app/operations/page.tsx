@@ -39,6 +39,9 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
           <a className="btn" href="/operations/policies">
             Signing policies
           </a>
+          <a className="btn" href="/operations/invoices">
+            Rent invoices
+          </a>
         </span>
       }
     >

@@ -631,8 +631,14 @@ async function ensureSponsor(c: Ctx): Promise<SponsorRef> {
       "SELECT id::text, requested_by FROM property.requests WHERE entity = 'sponsor' AND entity_id = $1 AND code = 'K4' AND status = 'open' AND expires_at > now() ORDER BY id DESC LIMIT 1",
       [sponsorId],
     );
-    const requestId = open?.id ?? String(await c.p("requestTransition", { entity: "sponsor", id: sponsorId, code: "K4", officer: c.h.complianceMaker, reason: "demo catalog: all KYB checks complete and clear" }));
-    const checker = open?.requested_by === c.h.complianceChecker ? c.h.complianceMaker : c.h.complianceChecker;
+    // Migration 0045: a request under an officer's handle is asked in PT Control too, never from here.
+    if (!open) {
+      throw new Waiting([
+        `K4 KYB approval of the demo sponsor ${sponsorId}: ${c.h.complianceMaker} asks for it in PT Control, Approvals > Property & KYB (/approvals/property), with a security-key step-up; then a different compliance officer decides it`,
+      ]);
+    }
+    const requestId = open.id;
+    const checker = open.requested_by === c.h.complianceChecker ? c.h.complianceMaker : c.h.complianceChecker;
     throw new Waiting([
       `K4 KYB approval of the demo sponsor (request #${requestId}): ${checker} decides it in PT Control, Approvals > Property & KYB (/approvals/property/${requestId}), with a security-key step-up`,
     ]);

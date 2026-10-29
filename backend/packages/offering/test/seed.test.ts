@@ -6,7 +6,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { scratchDatabase } from "../../db/test/helpers.ts";
-import { committeeClose, committeeVote, offeringTrusteeVote, offeringVote, officer, officerForDuty, trusteePropertyDecision } from "../../db/test/officers.ts";
+import { committeeClose, committeeVote, offeringTrusteeVote, offeringVote, officer, officerForDuty, propertyRequest, trusteePropertyDecision } from "../../db/test/officers.ts";
 import { contiguousMigrations } from "../../property/test/helpers.ts";
 import { DEMO_DIR, DEMO_PROPERTIES, DEMO_ROLES, minutesFile, propertyFiles, seedCatalog, SPONSOR, type SeedResult, type SeedSecrets } from "../src/seed.ts";
 
@@ -93,15 +93,15 @@ describe("seed:catalog with the demo officers enrolled", () => {
     (await q("SELECT count(*) FROM property.trustee_decisions d JOIN admin.officers o ON o.handle = d.trustee")) +
     (await q("SELECT count(*) FROM offering.request_votes v JOIN admin.officers o ON o.handle = v.officer"));
 
-  it("prepares the KYB file, then stops at the K4 decision: no vote is cast under an officer's name", async () => {
+  it("prepares the KYB file, then stops before the K4 request: no request or vote is made under an officer's name", async () => {
     expect(first.properties.map((p) => p.outcome)).toEqual(["waiting", "waiting"]);
     for (const p of first.properties) {
       expect(p.votes).toHaveLength(1);
-      expect(p.votes[0]).toMatch(/K4 KYB approval .* decides it in PT Control, Approvals > Property & KYB \(\/approvals\/property\/\d+\)/);
+      expect(p.votes[0]).toMatch(/K4 KYB approval of the demo sponsor .* asks for it in PT Control, Approvals > Property & KYB/);
       expect(p.propertyId).toBeNull();
     }
     expect(first.dutiesGranted).toBe(Object.keys(DEMO_ROLES).length);
-    expect(await q("SELECT count(*) FROM property.requests WHERE code = 'K4' AND status = 'open'")).toBe(1);
+    expect(await q("SELECT count(*) FROM property.requests WHERE code = 'K4'")).toBe(0);
     expect(await officerVotes()).toBe(0);
   });
 
@@ -115,6 +115,15 @@ describe("seed:catalog with the demo officers enrolled", () => {
     ]);
     expect(again.properties.map((p) => p.votes)).toEqual(first.properties.map((p) => p.votes));
     expect(await counts(db.client, ["property", "offering", "kyc", "admin"])).toEqual(before);
+  });
+
+  it("the compliance maker asks for K4 in the portal (migration 0045); the seed then waits for the decision", async () => {
+    const sponsor = (await db.client.query<{ id: string }>("SELECT id::text FROM property.sponsors ORDER BY created_at LIMIT 1")).rows[0]?.id ?? "";
+    const r = await propertyRequest(db.client, DEMO_ROLES.complianceMaker.handle, { entity: "sponsor", id: sponsor, code: "K4", reason: "demo catalog: all KYB checks complete and clear" });
+    expect(r).toMatchObject({ ok: true });
+    const after = done(await seedCatalog(db.pool, { env: {}, secrets: keys }));
+    for (const p of after.properties) expect(p.votes[0]).toMatch(/K4 KYB approval .* decides it in PT Control, Approvals > Property & KYB \(\/approvals\/property\/\d+\)/);
+    expect(await q("SELECT count(*) FROM property.requests WHERE code = 'K4' AND status = 'open'")).toBe(1);
   });
 
   it("continues once the compliance officer decided K4 in the portal (session, step-up, digest), and stops at the committee votes", async () => {

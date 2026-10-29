@@ -122,3 +122,35 @@ describe("S-01 requests decided in the portal (Step 6b)", () => {
     expect(await pgCode(decide(senior, request, "approve", "00".repeat(32)))).toBe("42501");
   });
 });
+
+describe("S-01 maker requests are bound to the portal (migration 0045 PB-1..PB-3)", () => {
+  it("an officer's handle cannot ask outside the portal; the portal asks with the officer's session and the duty rules still apply", async () => {
+    const s = await draftSponsor(w);
+    await w.run("submitKyb", { sponsorId: s.sponsorId, actor: O.onb1, actingFor: s.repId });
+    await w.run("screenKyb", { sponsorId: s.sponsorId, actor: O.onb2, accept: true });
+    await w.run("recordRegistrationCheck", { sponsorId: s.sponsorId, method: "secp_eservices", outcome: "verified", evidence: hex(), actor: O.onb2 });
+    await w.run("recordScreening", { sponsorId: s.sponsorId, provider: "mock-screen", listVersion: "un-2026-10", outcome: "clear", evidence: hex(), actor: O.comp1 });
+    await w.run("recordRisk", { sponsorId: s.sponsorId, rating: "low", reasons: "listed group, simple ownership", actor: O.comp1 });
+    // Directly under the officer's handle: refused by the binding trigger.
+    expect(
+      await pgCode(w.client.query("SELECT property.request_transition('sponsor', $1, 'K4', $2, 'all KYB checks complete and clear', '{}'::jsonb)", [s.sponsorId, O.comp1])),
+    ).toBe("42501");
+    const comp = await officer(w.client, O.comp1, "compliance_officer");
+    const options = (await portal.query<{ v: { sponsors: { id: string; codes: string[] | null }[] } }>("SELECT admin.property_request_options($1) AS v", [comp.sessionHash])).rows[0]?.v;
+    expect(options?.sponsors.find((x) => x.id === s.sponsorId)?.codes).toEqual(["K4", "K5"]);
+    const ok = (await portal.query<{ r: { ok: boolean; id?: number } }>(
+      "SELECT admin.request_property_transition($1, 'sponsor', $2, 'K4', 'all KYB checks complete and clear', '{}'::jsonb) AS r",
+      [comp.sessionHash, s.sponsorId],
+    )).rows[0]?.r;
+    expect(ok).toMatchObject({ ok: true });
+    const req = await w.client.query<{ requested_by: string }>("SELECT requested_by FROM property.requests WHERE id = $1", [ok?.id]);
+    expect(req.rows[0]?.requested_by).toBe(O.comp1);
+    // An officer without the duty is refused by the duty rule, with its SQLSTATE.
+    const onb = await officer(w.client, O.onb1, "ops_maker");
+    const no = (await portal.query<{ r: { ok: boolean; state?: string } }>(
+      "SELECT admin.request_property_transition($1, 'sponsor', $2, 'K5', 'not my duty to ask for this', '{}'::jsonb) AS r",
+      [onb.sessionHash, s.sponsorId],
+    )).rows[0]?.r;
+    expect(no).toMatchObject({ ok: false });
+  });
+});
