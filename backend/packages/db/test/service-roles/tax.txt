@@ -1,3 +1,4 @@
+function ops.finalize_due(p_actor text)
 function tax.atl_due(p_as_of date, p_limit integer, p_worker text)
 function tax.complete_export(p_token_hash bytea, p_id bigint, p_sha256 bytea, p_rows integer)
 function tax.enrol_cnic(p_subject uuid, p_key_version integer, p_candidates jsonb, p_actor text)

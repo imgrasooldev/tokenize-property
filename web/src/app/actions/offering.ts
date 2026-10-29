@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { cancelSchema, reserveSchema, type CancelErrorKey, type ReserveErrorKey } from "@/lib/offering-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { logError } from "@/lib/server/log";
-import { cancelSubscription, reserveUnits } from "@/lib/server/offerings";
+import { cancelSubscription, reserveUnits, withdrawSubscription } from "@/lib/server/offerings";
 import { take } from "@/lib/server/rate-limit";
 import { keyedHash } from "@/lib/server/secrets";
 import { currentSession, sessionFingerprint } from "@/lib/server/session";
@@ -82,6 +82,26 @@ export async function cancelReservationAction(_prev: CancelState, formData: Form
     if ("error" in r) return r.error === "session" ? { error: "generic" } : { error: r.error };
   } catch (e) {
     logError("cancel-reservation", e);
+    return { error: "generic" };
+  }
+  revalidatePath("/subscriptions");
+  return { ok: true };
+}
+
+/**
+ * Withdraw a paid subscription within the withdrawal window after an extension or a supplementary
+ * disclosure (S-02 OF-22/OF-23); the refund follows. Passkey step-up when the investor has one.
+ */
+export async function withdrawSubscriptionAction(_prev: CancelState, formData: FormData): Promise<CancelState> {
+  const investor = await signedIn();
+  if (!take("reserve", investor.id)) return { error: "rate" };
+  const parsed = cancelSchema.safeParse({ subscriptionId: formData.get("subscriptionId") });
+  if (!parsed.success) return { error: "input" };
+  try {
+    const r = await withdrawSubscription(investor, parsed.data.subscriptionId, investor.session);
+    if ("error" in r) return r.error === "session" ? { error: "generic" } : { error: r.error };
+  } catch (e) {
+    logError("withdraw-subscription", e);
     return { error: "generic" };
   }
   revalidatePath("/subscriptions");

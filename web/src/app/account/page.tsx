@@ -4,6 +4,8 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { PayoutForm } from "@/components/account/PayoutForm";
 import { Countdown } from "@/components/offering/Countdown";
 import { formatNumber } from "@/lib/i18n";
+import { supportReference } from "@/lib/support";
+import { certificates } from "@/lib/server/tax-certificates";
 import { catalogDict, pktTime } from "@/lib/i18n-catalog";
 import { fill } from "@/lib/i18n-verify";
 import { investorById } from "@/lib/server/db";
@@ -29,13 +31,14 @@ export default async function AccountPage() {
   // Read model (ADR 0010): as of the indexer cursor, never a chain call per page.
   const onboarding = investor.onboard_step === "identity" || investor.onboard_step === "claims" || investor.onboard_step === "register";
   const l = catalogDict(lang);
-  const [verified, balance, index, progress, payees, expires] = await Promise.all([
+  const [verified, balance, index, progress, payees, expires, certs] = await Promise.all([
     registeredOnChain(investor.wallet_address),
     holdingOf(investor.wallet_address),
     indexStatus(),
     onboarding ? onboardingProgress(investor.id) : Promise.resolve(null),
     payoutAccounts(investor.kyc_subject),
     sessionExpiresAt(),
+    certificates(session.hash),
   ]);
   const now = Date.now();
   const status = investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
@@ -95,6 +98,14 @@ export default async function AccountPage() {
               <>
                 <dt>{t.cnicOnFile}</dt>
                 <dd dir="ltr">•••••-•••{investor.cnic_last4.slice(0, 3)}-{investor.cnic_last4.slice(3)}</dd>
+              </>
+            )}
+            {investor.kyc_subject && (
+              <>
+                <dt>{t.supportRef}</dt>
+                <dd className="mono" dir="ltr" data-testid="support-ref" title={t.supportRefNote}>
+                  {supportReference(investor.kyc_subject)}
+                </dd>
               </>
             )}
             <dt>{t.holdings}</dt>
@@ -165,6 +176,34 @@ export default async function AccountPage() {
             </h3>
             <p className="note">{expires ? fill(l.sessionBody, { t: pktTime(expires) }) : "—"}</p>
             <p className="fine">{l.sessionsSoon}</p>
+          </section>
+          <section className="panel" aria-labelledby="tax-h" data-testid="tax-certificates">
+            <h2 id="tax-h">{t.taxCertTitle}</h2>
+            {certs.length === 0 ? (
+              <p className="note">{t.taxCertNone}</p>
+            ) : (
+              <ul className="plain stack">
+                {certs.map((c) => (
+                  <li key={c.id}>
+                    <b>{fill(t.taxCertYear, { y: String(c.fiscalYear - 1), z: String(c.fiscalYear) })}</b>
+                    {c.supersededBy ? <span className="chip amber">{t.taxCertSuperseded}</span> : null}
+                    <span className="fine">
+                      {t.taxCertIssued} <span dir="ltr">{pktTime(c.issuedAt.toISOString())}</span>
+                    </span>
+                    <span className="row">
+                      <a href={`/account/tax/${c.id}`}>{t.taxCertView}</a>
+                      <a href={`/api/tax-certificates/${c.id}`} download>
+                        {t.taxCertDownload}
+                      </a>
+                    </span>
+                    <span className="mono fine" dir="ltr" title="SHA-256">
+                      {c.sha256.slice(0, 16)}…
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="fine">{t.taxCertNote}</p>
           </section>
         </div>
       </div>

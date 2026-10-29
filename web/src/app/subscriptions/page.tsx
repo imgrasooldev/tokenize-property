@@ -3,13 +3,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { CancelForm } from "@/components/offering/CancelForm";
+import { WithdrawForm } from "@/components/offering/WithdrawForm";
 import { Countdown } from "@/components/offering/Countdown";
 import { PortalShell } from "@/components/Shell";
 import type { Lang } from "@/lib/i18n";
 import { formatNumber } from "@/lib/i18n";
 import { fill } from "@/lib/i18n-verify";
 import { label, offeringDict, type OfferingDict } from "@/lib/i18n-offering";
-import { canCancel, formatPaisa, formatPkt, isUuid, stateTone, timeline } from "@/lib/offering-rules";
+import { canCancel, canWithdraw, formatPaisa, formatPkt, isUuid, stateTone, timeline } from "@/lib/offering-rules";
 import { investorById } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { logError } from "@/lib/server/log";
@@ -149,6 +150,9 @@ function SubscriptionCard({ s, l, lang, title, now, highlight }: { s: MySubscrip
         </p>
       )}
       {canCancel(s.state) && <CancelForm l={l} subscriptionId={s.subscriptionId} queued={s.state !== "payment_pending"} />}
+      {s.withdrawalUntil && canWithdraw(s.state, s.withdrawalUntil, now) && (
+        <WithdrawForm l={l} subscriptionId={s.subscriptionId} until={fill(l.withdrawUntil, { t: formatPkt(s.withdrawalUntil, lang) })} />
+      )}
     </li>
   );
 }

@@ -154,6 +154,29 @@ export async function distribution(sessionHash: Buffer, id: string): Promise<Dis
   return rows[0]?.v ?? null;
 }
 
+export interface RentCommand {
+  id: number;
+  status: string;
+  lastError: string | null;
+  txHash: string | null;
+  by: string;
+  at: string;
+}
+
+/** Where an approved calculation stands on chain (admin.rent_onchain, migration 0033); a blocker of null = the step is allowed now. */
+export interface RentOnchain {
+  status: string;
+  onchain: { registry: string; id: string; status: string; closesAt: string | null } | null;
+  publishCommand: RentCommand | null;
+  finalizeCommand: RentCommand | null;
+  blockers: { publish: string | null; finalize: string | null; book: string | null };
+}
+
+export async function rentOnchain(sessionHash: Buffer, id: string): Promise<RentOnchain | null> {
+  const { rows } = await db().query<{ v: RentOnchain | null }>("SELECT admin.rent_onchain($1, $2) AS v", [sessionHash, id]);
+  return rows[0]?.v ?? null;
+}
+
 export interface Rate {
   id: number;
   incomeType: string;

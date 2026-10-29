@@ -1,0 +1,21 @@
+[Unit]
+Description=Property Token demo: rent finalisation scheduler (enqueues rent.finalize once a distribution's 48-hour window has closed), every 5 min
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Database login: TAX_PG_USER from backend/.env.local (T-012, group pt_svc_tax; never the admin).
+# Rollback to the admin login: bash deploy/demo-server/db-login.sh admin pt-rent-finalize
+Environment=NODE_OPTIONS=--max-old-space-size=128
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/tax/src/cli.ts finalize-due --loop
+Restart=always
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

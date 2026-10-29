@@ -75,7 +75,8 @@ const EXIT_DECIDE: Role[] = ["ops_checker", "compliance_officer", "legal_officer
  * Who gets the page (200, or the documented redirect); everyone else 403, visitors -> /login.
  * {signer}, {payout} and {unfreeze} are items created in beforeAll.
  */
-const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
+/** notFoundFor: roles that may open the page but for whom the item is outside their scope (404, migration 0034). */
+const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: Role[] }[] = [
   { path: "/", allowed: OPS },
   { path: "/account", allowed: ROLES },
   { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin", "platform_owner"], okStatus: 307 },
@@ -109,9 +110,10 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/audit/recovery", allowed: RECOVERY },
   // S-03 (migration 0021): operations for makers, checkers, the trustee, tax officers and auditors; tax for tax officers and auditors.
   { path: "/operations", allowed: OPERATIONS },
-  { path: "/operations/charges/{charge}", allowed: OPERATIONS },
+  // 0034: a property manager with no assigned property reads every item as not found.
+  { path: "/operations/charges/{charge}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
   { path: "/operations/charges/999999", allowed: OPERATIONS, okStatus: 404 },
-  { path: "/operations/distributions/{distribution}", allowed: OPERATIONS },
+  { path: "/operations/distributions/{distribution}", allowed: OPERATIONS, notFoundFor: ["property_manager"] },
   { path: "/tax", allowed: TAX },
   { path: "/tax/exports", allowed: TAX },
   { path: "/tax/exports/{taxExport}", allowed: TAX },
@@ -166,6 +168,9 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/audit/admin/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "json" } },
   { path: "/api/officers/changes", allowed: ["admin"], okStatus: 303, form: { kind: "invite", reason: "too short" } },
   { path: "/api/officers/changes/1/decide", allowed: ["admin"], okStatus: 303, form: { decision: "approve", reason: "matrix test" } },
+  // 0034: property managers' properties; an incomplete form is answered with a 303 back (nothing requested).
+  { path: "/api/officers/scopes", allowed: ["admin"], okStatus: 303, form: { action: "grant", reason: "short" } },
+  { path: "/api/officers/scopes/1/decide", allowed: ["admin"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   // Step 6b: an incomplete decision is answered with a 303 back to the item (nothing decided).
   { path: "/api/approvals/signer/{signer}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/payouts/{payout}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
@@ -198,6 +203,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/operations/charges", allowed: ["ops_maker"], okStatus: 303, form: {} },
   { path: "/api/operations/charges/{charge}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/operations/distributions/{distribution}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  // 0033: an unknown step is answered with a 303 back (nothing requested).
+  { path: "/api/operations/distributions/{distribution}/rent", allowed: ["ops_maker"], okStatus: 303, form: { step: "nope" } },
   { path: "/api/tax/rates", allowed: ["tax_officer"], okStatus: 303, form: {} },
   { path: "/api/tax/rates/{taxRate}/decide", allowed: ["tax_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/tax/exports", allowed: ["tax_officer"], okStatus: 303, form: {} },
@@ -471,6 +478,7 @@ describe("route coverage", () => {
         a.path
           .replace(/^\/api\/audit\/\w+\/export$/, "/api/audit/[source]/export")
           .replace(/\/changes\/1\/decide$/, "/changes/[id]/decide")
+          .replace(/\/scopes\/1\/decide$/, "/scopes/[id]/decide")
           .replace(/^\/api\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/approvals/$1/[id]/decide")
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
@@ -479,6 +487,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
           .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")
+          .replace(/^\/api\/operations\/distributions\/\{\w+\}\/rent$/, "/api/operations/distributions/[id]/rent")
           .replace(/^\/api\/tax\/(rates|exports)\/\{\w+\}\/(decide|generate)$/, "/api/tax/$1/[id]/$2")
           .replace(/^\/api\/trustee\/register\/adjustments\/\{\w+\}\/decide$/, "/api/trustee/register/adjustments/[id]/decide")
           .replace(/^\/api\/trustee\/cosign\/(signer|offering)\/(\{\w+\}|\d+)\/decide$/, "/api/trustee/cosign/$1/[id]/decide")
@@ -500,7 +509,8 @@ describe("pages × roles", () => {
   for (const page of PAGES) {
     for (const who of EVERYONE) {
       const allowed = (page.allowed as Who[]).includes(who);
-      const expected = who === "anonymous" || who === "investor" ? 307 : allowed ? (page.okStatus ?? 200) : 403;
+      const outOfScope = (page.notFoundFor as Who[] | undefined)?.includes(who) ?? false;
+      const expected = who === "anonymous" || who === "investor" ? 307 : allowed ? (outOfScope ? 404 : (page.okStatus ?? 200)) : 403;
       it(`GET ${page.path} as ${who} -> ${String(expected)}`, async () => {
         const res = await req(page.path, { who });
         expect(res.status, serverLog.slice(-2000)).toBe(expected);

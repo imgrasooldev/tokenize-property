@@ -137,7 +137,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - Tests: state machine, maker-checker, document hash matches.
 
 ### T-022 Rent publish/finalize and rent journals through the backend
-- Status (2026-10-29): **signer kinds built on branch `t-022-rent-publish`** (migration `0032_rent_publish.sql`, RP-1..RP-5, ADR 0005 amendment): `rent.publish` / `rent.finalize`, enqueued by `ops:run publish|finalize` from the approved calculation, checked by `ops.publish_allowed` / `ops.finalize_allowed` and the payout gate. The rent journals were already booked by `ops.book_distribution` (S-03). Besu e2e `npm run test:rent-e2e` (2026-10-29): publish leg passed on Besu (on-chain id 2, window closes 2026-10-31 16:09 UTC); the finalize + book leg runs on the first run after that. Not done: PT Control buttons for publish/finalize, a scheduler unit that enqueues finalisation when the window closes.
+- Status (2026-10-29): **signer kinds built on branch `t-022-rent-publish`** (migration `0032_rent_publish.sql`, RP-1..RP-5, ADR 0005 amendment): `rent.publish` / `rent.finalize`, enqueued by `ops:run publish|finalize` from the approved calculation, checked by `ops.publish_allowed` / `ops.finalize_allowed` and the payout gate. The rent journals were already booked by `ops.book_distribution` (S-03). Besu e2e `npm run test:rent-e2e` (2026-10-29): publish leg passed on Besu (on-chain id 2, window closes 2026-10-31 16:09 UTC); the finalize + book leg runs on the first run after that. PT Control buttons done (migration 0033, `/operations/distributions/[id]`). Finalisation scheduler done (`ops.finalize_due`, unit `pt-rent-finalize`, 2026-10-29).
 - Outcome: signer kinds for `DistributionRegistry.publish` (and finalize if not left to anyone), statement generation in the backend (replacing `chain/rent.py` for non-dev use), `rent:collected` / `rent:distribution:<token>:<id>` journals booked by a producer.
 - P critical, C M, Dep T-002 (overlaps; confirm scope with the 5h branch first). Files: `backend/packages/signer/src/policy.ts`, new rent service, recon conventions.
 - Accept: recon `rent.missing_ledger` no longer appears for new distributions; publish needs Ops Safe policy and recon gate.
@@ -264,6 +264,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ### T-034 Scheduled services with alerting
 - Outcome: systemd (or equivalent) units for indexer, signer, outbox worker, bank, anchor; daily `recon` and `anchor:verify` with alerts; on the demo server first.
+- Status (2026-10-29): units also for `notify:run` (`pt-notify`), `transfer:tick --loop` (`pt-transfer`) and the rent finalisation scheduler (`pt-rent-finalize`). Still CLI-only: `recovery:tick`, `exit:tick`, `kyc:rescreen` as units.
 - P high, C M, Dep T-002.
 
 ### T-035 Monitoring, backups, runbooks

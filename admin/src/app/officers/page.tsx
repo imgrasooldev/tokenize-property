@@ -3,10 +3,14 @@ import { Shell } from "@/components/Shell";
 import { StepUpForm } from "@/components/StepUp";
 import { pkt } from "@/lib/format";
 import { ROLE_CONFLICTS, roleLabel, ROLES, conflicts } from "@/lib/permissions";
-import { listChanges, listOfficers } from "@/lib/server/officers";
+import { listChanges, listOfficers, managerScopes, type ScopeProperty } from "@/lib/server/officers";
 import { requirePage } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Officers and roles" };
+
+function place(p: ScopeProperty): string {
+  return [p.building, p.district, p.propertyKey].filter(Boolean).join(" · ") || p.id.slice(0, 8);
+}
 
 function describe(c: { kind: string; officerHandle: string | null; role: string | null; newHandle: string | null; newName: string | null }): string {
   if (c.kind === "invite") return `Invite ${c.newName ?? ""} (${c.newHandle ?? ""}) as ${c.role ?? ""}`;
@@ -18,7 +22,7 @@ function describe(c: { kind: string; officerHandle: string | null; role: string 
 export default async function OfficersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const officer = await requirePage("officers.read", "/officers");
   const q = await searchParams;
-  const [officers, changes] = await Promise.all([listOfficers(officer.sessionHash), listChanges(officer.sessionHash)]);
+  const [officers, changes, scopes] = await Promise.all([listOfficers(officer.sessionHash), listChanges(officer.sessionHash), managerScopes(officer.sessionHash)]);
   const manage = officer.permissions.has("officers.manage");
   const ok = typeof q.ok === "string" ? q.ok.slice(0, 300) : null;
   const error = typeof q.error === "string" ? q.error.slice(0, 300) : null;
@@ -201,6 +205,95 @@ export default async function OfficersPage({ searchParams }: { searchParams: Pro
           </section>
         ) : null}
       </div>
+
+      <section className="card" aria-labelledby="pm" style={{ marginBlockEnd: 16 }} data-testid="manager-scopes">
+        <h2 id="pm">
+          Property managers&apos; properties <span className="sp" />
+          <span className="chip warn">maker-checker · step-up</span>
+        </h2>
+        <p className="small mu">A property manager sees only the properties assigned here (and nothing until one is). One administrator asks, another decides.</p>
+        {scopes.managers.length === 0 ? <p className="empty">No officer holds the property manager role.</p> : null}
+        <ul className="small">
+          {scopes.managers.map((m) => (
+            <li key={m.id}>
+              <span className="mono">{m.handle}</span>: {m.properties.length ? m.properties.map(place).join("; ") : "no property (sees nothing)"}
+            </li>
+          ))}
+        </ul>
+        {scopes.open.map((c) => {
+          const mine = c.requestedBy === officer.handle;
+          return (
+            <article key={c.id} className="card" style={{ background: "rgba(255,255,255,.02)" }} data-testid={`scope-change-${String(c.id)}`}>
+              <b>
+                #{c.id} {c.action === "grant" ? "Assign" : "Remove"} {place(c.property)} {c.action === "grant" ? "to" : "from"} {c.officer}
+              </b>
+              <p className="small mu">
+                Requested by <span className="mono">{c.requestedBy}</span> at {pkt(c.requestedAt)}: {c.reason}
+              </p>
+              {manage && !mine ? (
+                <StepUpForm csrf={officer.csrf} action={`/api/officers/scopes/${String(c.id)}/decide`}>
+                  <label className="sr-only" htmlFor={`sr-${String(c.id)}`}>
+                    Reason for the decision
+                  </label>
+                  <textarea id={`sr-${String(c.id)}`} name="reason" required minLength={10} maxLength={500} placeholder="Reason (at least 10 characters)" />
+                  <div className="row">
+                    <button className="btn ok" type="submit" name="decision" value="approve">
+                      Approve with security key
+                    </button>
+                    <button className="btn no" type="submit" name="decision" value="reject">
+                      Reject
+                    </button>
+                  </div>
+                </StepUpForm>
+              ) : (
+                <p className="small di">{mine ? "Your request: another administrator must decide it." : "Read-only."}</p>
+              )}
+            </article>
+          );
+        })}
+        {manage && scopes.managers.length > 0 ? (
+          <StepUpForm csrf={officer.csrf} action="/api/officers/scopes">
+            <div className="row">
+              <label className="sr-only" htmlFor="scope-officer">
+                Property manager
+              </label>
+              <select id="scope-officer" name="officer" required>
+                {scopes.managers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.handle}
+                  </option>
+                ))}
+              </select>
+              <label className="sr-only" htmlFor="scope-property">
+                Property
+              </label>
+              <select id="scope-property" name="property" required>
+                {scopes.properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {place(p)} ({p.state})
+                  </option>
+                ))}
+              </select>
+              <label className="sr-only" htmlFor="scope-action">
+                Assign or remove
+              </label>
+              <select id="scope-action" name="action">
+                <option value="grant">Assign</option>
+                <option value="revoke">Remove</option>
+              </select>
+            </div>
+            <label className="sr-only" htmlFor="scope-reason">
+              Reason
+            </label>
+            <textarea id="scope-reason" name="reason" required minLength={10} maxLength={500} placeholder="Why (at least 10 characters), e.g. the management contract" />
+            <div className="row">
+              <button className="btn" type="submit">
+                Request (another administrator decides)
+              </button>
+            </div>
+          </StepUpForm>
+        ) : null}
+      </section>
 
       <div className="g2">
         <section className="card" aria-labelledby="sod">

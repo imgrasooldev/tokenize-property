@@ -173,6 +173,11 @@ describe("least privilege (IP-9)", () => {
   it("the website can no longer reserve or cancel offering units without a session (0018 wrappers revoked)", async () => {
     expect(await code(web.query("SELECT offering.web_reserve($1, $2, 'x', $3, 1, 'k', 'web:x')", [randomUUID(), randomUUID(), randomUUID()]))).toBe("42501");
     expect(await code(web.query("SELECT offering.web_cancel($1, $2, 'web:x')", [randomUUID(), randomUUID()]))).toBe("42501");
+    // 0036: withdrawing only through the session-bound wrapper, which refuses without a live session.
+    expect(await code(web.query("SELECT offering.web_withdraw($1, $2, 'web:x')", [randomUUID(), randomUUID()]))).toBe("42501");
+    const w = await web.query<{ r: { error?: string } }>("SELECT webauth.web_withdraw($1, $2) AS r", [randomBytes(32), randomUUID()]);
+    expect(w.rows[0]?.r).toEqual({ error: "session" });
+    expect(await code(web.query("SELECT * FROM offering.web_disclosures($1)", [randomUUID()]))).toBe("ok");
     // The read wrappers stay available.
     expect(await code(web.query("SELECT * FROM offering.web_offerings()"))).toBe("ok");
   });

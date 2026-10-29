@@ -68,6 +68,9 @@ the chain does not match the read model; fail closed, find the cause, ADR 0006).
 | `pt-kyc` | KYC API for the website's sign-up (mock providers) | 4910 |
 | `pt-bank-payees` | Bank payout-account API for the website (`bank:payees`; demo title fetch, refused in production; the database still checks the title against the KYC name and the 72-hour cooling-off) | 4920 |
 | `pt-offboarding` | Queues a freeze when an investor loses verification | – |
+| `pt-notify` | Notification worker (mock SMS/e-mail providers, reminders every minute) | – |
+| `pt-transfer` | S-04 transfer tick every 60 s (bank + read model -> cases -> outbox) | – |
+| `pt-rent-finalize` | Enqueues `rent.finalize` once a distribution's 48-hour window has closed (every 5 min; the signer re-checks) | – |
 | `pt-anchor-chain` | Anvil stand-in for the public anchor L2 (chain 586650, 127.0.0.1:8650, state in `chain/data/anchor/`) until the owner picks the L2 (ADR 0008) | – |
 | `pt-anchor` | Anchoring job: every 15 min commits the ledger head and a Besu block to `StateAnchor` (exit 3 = AnchorAlarm, not restarted: investigate, never delete anchor records) | `cd backend && npm run anchor:status` / `anchor:verify` |
 

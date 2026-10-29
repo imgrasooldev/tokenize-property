@@ -219,3 +219,8 @@ export function cancelErrorKey(code: string | undefined): CancelErrorKey {
   if (code === "23514") return "state";
   return "generic";
 }
+
+/** OF-22/OF-23: a paid, not yet allocated subscription may be withdrawn while the window is open. */
+export function canWithdraw(state: string, withdrawalUntil: string | null, now: number): boolean {
+  return state === "payment_confirmed" && withdrawalUntil !== null && Date.parse(withdrawalUntil) > now;
+}

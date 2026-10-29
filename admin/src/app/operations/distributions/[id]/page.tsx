@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DecisionPanel, Flash } from "@/components/Decision";
 import { Shell } from "@/components/Shell";
+import { StepUpForm } from "@/components/StepUp";
 import { pkt, short } from "@/lib/format";
 import { stateChip } from "@/lib/server/compliance";
-import { distribution, ratePercent, rupees } from "@/lib/server/operations";
+import { distribution, ratePercent, rentOnchain, rupees } from "@/lib/server/operations";
 import { requirePage } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Distribution calculation" };
@@ -29,6 +30,7 @@ export default async function DistributionPage({
   const q = await searchParams;
   const d = await distribution(officer.sessionHash, id);
   if (!d) notFound();
+  const rent = d.status === "approved" || d.status === "booked" ? await rentOnchain(officer.sessionHash, id) : null;
 
   return (
     <Shell officer={officer} current="/operations" title={`Distribution calculation #${String(d.id)}`}>
@@ -106,6 +108,49 @@ export default async function DistributionPage({
           />
         </section>
       </div>
+      {rent ? (
+        <section className="card" aria-labelledby="chain" style={{ marginBlockStart: 16 }} data-testid="rent-onchain">
+          <h2 id="chain">On chain: publish → 48 h → finalize → book</h2>
+          <dl className="kv">
+            <dt>Publish command</dt>
+            <dd className="mono small">
+              {rent.publishCommand ? `#${String(rent.publishCommand.id)} ${rent.publishCommand.status} · ${rent.publishCommand.by} · ${pkt(rent.publishCommand.at)}` : "–"}
+              {rent.publishCommand?.lastError ? <span className="dn"> {rent.publishCommand.lastError}</span> : null}
+            </dd>
+            <dt>On-chain distribution</dt>
+            <dd className="mono small" data-testid="rent-onchain-status">
+              {rent.onchain ? `${rent.onchain.id} · ${rent.onchain.status} · registry ${short(rent.onchain.registry)}` : "not published yet"}
+            </dd>
+            <dt>Challenge window closes</dt>
+            <dd className="mono">{rent.onchain?.closesAt ? pkt(rent.onchain.closesAt) : "–"}</dd>
+            <dt>Finalize command</dt>
+            <dd className="mono small">
+              {rent.finalizeCommand ? `#${String(rent.finalizeCommand.id)} ${rent.finalizeCommand.status} · ${rent.finalizeCommand.by} · ${pkt(rent.finalizeCommand.at)}` : "–"}
+              {rent.finalizeCommand?.lastError ? <span className="dn"> {rent.finalizeCommand.lastError}</span> : null}
+            </dd>
+          </dl>
+          <StepUpForm csrf={officer.csrf} action={`/api/operations/distributions/${String(d.id)}/rent`}>
+            <div className="row">
+              {(
+                [
+                  ["publish", "Publish on chain", rent.blockers.publish],
+                  ["finalize", "Finalize (after 48 h)", rent.blockers.finalize],
+                  ["book", "Book journals", rent.blockers.book],
+                ] as const
+              ).map(([step, label, blocker]) => (
+                <button key={step} className="btn" type="submit" name="step" value={step} disabled={blocker !== null} title={blocker ?? undefined}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </StepUpForm>
+          <ul className="small mu" data-testid="rent-blockers">
+            {rent.blockers.publish ? <li>Publish: {rent.blockers.publish}</li> : null}
+            {rent.blockers.finalize ? <li>Finalize: {rent.blockers.finalize}</li> : null}
+            {rent.blockers.book ? <li>Book: {rent.blockers.book}</li> : null}
+          </ul>
+        </section>
+      ) : null}
       <section className="card" aria-labelledby="lines" style={{ marginBlockStart: 16 }}>
         <h2 id="lines">Lines (leaf = wallet, net paisa)</h2>
         <div className="tbl-wrap">

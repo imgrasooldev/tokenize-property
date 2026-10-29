@@ -24,6 +24,8 @@ import { OpsService, TaxService } from "./service.ts";
  *   npm run tax:reconcile -- <token>          tax consistency findings for one token (exit 3 if any)
  *   npm run ops:statement -- <token> <YYYY-MM>     the operating statement of a period (JSON)
  *   npm run ops:run -- <action> '<json>'      one operation (ops:run -- actions lists them)
+ *   npm run ops:finalize-due [-- --loop]      enqueue the finalisation of every distribution whose 48-hour window has
+ *                                             closed (T-034; as TAX_PG_USER; --loop: every OPS_FINALIZE_SECONDS, default 300)
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 const ENV_FILE = `${BACKEND}.env.local`;
@@ -238,8 +240,29 @@ async function main(): Promise<void> {
     }
     case "run":
       return run(a1, a2);
+    case "finalize-due":
+      return finalizeDue(a1 === "--loop");
     default:
-      throw new Error("commands: setup | serve | atl | enrol-cnic | audit | reconcile | statement | run");
+      throw new Error("commands: setup | serve | atl | enrol-cnic | audit | reconcile | statement | run | finalize-due");
+  }
+}
+
+/** The finalisation scheduler (migration 0033 PRT-4): ops.finalize_due under the tax service's own login. */
+async function finalizeDue(loop: boolean): Promise<void> {
+  const db = pool(true);
+  const seconds = Number(env().OPS_FINALIZE_SECONDS ?? 300);
+  if (!Number.isInteger(seconds) || seconds < 10) throw new Error("OPS_FINALIZE_SECONDS must be a whole number of at least 10");
+  const state = { stop: !loop };
+  process.on("SIGTERM", () => (state.stop = true));
+  process.on("SIGINT", () => (state.stop = true));
+  try {
+    do {
+      const { rows } = await db.query<{ n: number }>("SELECT ops.finalize_due('ops-scheduler') AS n");
+      console.log(`${new Date().toISOString()} finalize-due: ${String(rows[0]?.n ?? 0)} enqueued`);
+      for (let waited = 0; !state.stop && waited < seconds; waited++) await new Promise((r) => setTimeout(r, 1_000));
+    } while (!state.stop);
+  } finally {
+    await db.end();
   }
 }
 

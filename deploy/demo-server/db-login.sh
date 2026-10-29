@@ -21,6 +21,9 @@ prefix_of() { # unit -> env prefix of the service login it uses
   pt-outbox) echo OUTBOX ;;
   pt-kyc) echo KYC ;;
   pt-offboarding) echo OFFBOARDING ;;
+  pt-notify) echo NOTIFY ;;
+  pt-transfer) echo TRANSFER ;;
+  pt-rent-finalize) echo TAX ;;
   pt-bank-payees) echo BANK ;;
   pt-anchor | pt-anchor-verify) echo ANCHOR ;;
   pt-console) echo CONSOLE ;;

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { passRecon } from "../support/approvals";
+import { operationsWorld } from "../support/operations";
 import { cast, createWorld, type Actor, type Cast, type World } from "../support/world";
 
 /**
@@ -143,5 +144,83 @@ describe("support lookup (PR-4)", () => {
     expect(await lookup(c.support_agent, "xyz")).toMatchObject({ ok: false });
     const audit = await w.su.query("SELECT 1 FROM admin.audit WHERE action = 'support.lookup' AND detail->>'ref' = '00000000'");
     expect(audit.rowCount).toBe(1);
+  });
+});
+
+describe("property managers see only their own properties (migration 0034 MS-1..MS-3)", () => {
+  type Answer = { ok: boolean; id?: number; status?: string; error?: string };
+  const wallet = () => `0x${randomBytes(20).toString("hex")}`;
+  const v = async <T>(fn: string, a: Actor, ...args: unknown[]): Promise<T> => {
+    const params = [a.sessionHash, ...args];
+    const { rows } = await w.portal.query<{ v: T }>(`SELECT admin.${fn}(${params.map((_, i) => `$${String(i + 1)}`).join(", ")}) AS v`, params);
+    return rows[0]?.v as T;
+  };
+  async function property(token: string | null): Promise<string> {
+    // TEST ONLY: a property file (and its completed offering) written directly with foreign keys off.
+    await w.su.query("SET session_replication_role = replica");
+    try {
+      const p = await w.su.query<{ id: string }>("INSERT INTO property.properties (sponsor_id, created_by, district) VALUES (gen_random_uuid(), 'test-setup', 'Lahore') RETURNING id");
+      if (token) {
+        await w.su.query(
+          `INSERT INTO offering.offerings (property_id, state, price_paisa, min_units, max_units, max_holding_units, register_units, token, completed_at, created_by)
+           VALUES ($1, 'completed', 100000, 10, 100000, 100000, 1000000, $2, now(), 'test-setup')`,
+          [p.rows[0]?.id, token],
+        );
+      }
+      return p.rows[0]?.id ?? "";
+    } finally {
+      await w.su.query("RESET session_replication_role");
+    }
+  }
+  async function scope(action: "grant" | "revoke", prop: string, officer = c.property_manager): Promise<Answer> {
+    await stepUp(c.admin);
+    const ask = (await w.portal.query<{ r: Answer }>("SELECT admin.request_manager_scope($1, $2, $3, $4, 'manages tower A for the trust') AS r", [c.admin.sessionHash, officer.officerId, prop, action])).rows[0]?.r;
+    if (!ask?.ok) return ask ?? { ok: false };
+    await stepUp(c.admin2);
+    return (await w.portal.query<{ r: Answer }>("SELECT admin.decide_manager_scope($1, $2, 'approve', 'contract with the manager on file') AS r", [c.admin2.sessionHash, ask.id])).rows[0]?.r ?? { ok: false };
+  }
+  const tokens = async (a: Actor) => new Set((await v<{ token: string }[]>("operations_periods", a)).map((p) => p.token));
+
+  it("deny by default, maker-checker assignment, scoped reads, revocation; nobody else is affected", async () => {
+    const mine = await operationsWorld(w.su, [{ wallet: wallet(), units: 10n }]);
+    const other = await operationsWorld(w.su, [{ wallet: wallet(), units: 10n }]);
+    const towerA = await property(mine.token);
+    await property(other.token);
+
+    expect(await tokens(c.property_manager)).toEqual(new Set());
+    expect(await v("operations_distribution", c.property_manager, mine.distributionId)).toBeNull();
+
+    // The administrator who asks cannot decide; only a property manager can be granted a property.
+    await stepUp(c.admin);
+    const ask = (await w.portal.query<{ r: Answer }>("SELECT admin.request_manager_scope($1, $2, $3, 'grant', 'manages tower A for the trust') AS r", [c.admin.sessionHash, c.property_manager.officerId, towerA])).rows[0]?.r;
+    expect(ask?.ok).toBe(true);
+    const self = (await w.portal.query<{ r: Answer }>("SELECT admin.decide_manager_scope($1, $2, 'approve', 'my own request, approving it') AS r", [c.admin.sessionHash, ask?.id])).rows[0]?.r;
+    expect(self?.error).toMatch(/different administrator/);
+    expect((await scope("grant", towerA, c.ops_maker)).error).toMatch(/property_manager role/);
+    expect(await code(w.portal.query("SELECT admin.request_manager_scope($1, $2, $3, 'grant', 'not an administrator at all')", [c.ops_maker.sessionHash, c.property_manager.officerId, towerA]))).toBe("42501");
+    await stepUp(c.admin2);
+    expect((await w.portal.query<{ r: Answer }>("SELECT admin.decide_manager_scope($1, $2, 'approve', 'contract with the manager on file') AS r", [c.admin2.sessionHash, ask?.id])).rows[0]?.r).toMatchObject({ ok: true, status: "approved" });
+
+    expect(await tokens(c.property_manager)).toEqual(new Set([mine.token]));
+    expect(await v("operations_distribution", c.property_manager, mine.distributionId)).not.toBeNull();
+    expect(await v("operations_distribution", c.property_manager, other.distributionId)).toBeNull();
+    expect(await v("operations_charge", c.property_manager, other.chargeId)).toBeNull();
+    expect(await v("operations_charge", c.property_manager, mine.chargeId)).not.toBeNull();
+    expect(await v("operations_statement", c.property_manager, other.token, other.period)).toBeNull();
+    expect(await v("rent_onchain", c.property_manager, other.distributionId)).toBeNull();
+    // Unscoped officers still see everything.
+    const all = await tokens(c.ops_maker);
+    expect(all.has(mine.token) && all.has(other.token)).toBe(true);
+    expect(await v("operations_distribution", c.platform_owner, other.distributionId)).not.toBeNull();
+    // The unscoped originals are out of the portal's reach.
+    expect(await code(w.portal.query("SELECT admin.operations_periods_all($1)", [c.property_manager.sessionHash]))).toBe("42501");
+    const managers = await v<{ managers: { handle: string; properties: { id: string }[] }[] }>("manager_scopes", c.admin);
+    expect(managers.managers.find((m) => m.handle === c.property_manager.handle)?.properties.map((p) => p.id)).toEqual([towerA]);
+
+    expect(await scope("revoke", towerA)).toMatchObject({ ok: true, status: "approved" });
+    expect(await tokens(c.property_manager)).toEqual(new Set());
+    const audit = await w.su.query("SELECT action FROM admin.audit WHERE action LIKE 'manager_scope.%'");
+    expect(audit.rowCount).toBeGreaterThanOrEqual(4);
+    expect(await code(w.su.query("UPDATE admin.manager_scope_changes SET reason = 'rewritten after the fact' WHERE id = $1", [ask?.id]))).toBe("42501");
   });
 });

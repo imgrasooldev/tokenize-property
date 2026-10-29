@@ -7,6 +7,7 @@ import pg from "pg";
 import { keyFromEnv, Peppers } from "./crypto.ts";
 import { createKycServer, RECOVERY_KYC_SCOPE, WEB_KYC_SCOPE } from "./http.ts";
 import { OffboardingWorker } from "./offboarding.ts";
+import { linkDemoPersonas } from "./personas.ts";
 import { mockProviders } from "./providers.ts";
 import { RescreenWorker } from "./rescreen.ts";
 import { KycService, statusOf, verifyAudit } from "./service.ts";
@@ -19,6 +20,7 @@ import { KycService, statusOf, verifyAudit } from "./service.ts";
  *   npm run kyc:serve                the KYC API for the website's sign-up (127.0.0.1:4910, mock providers)
  *   npm run kyc:offboard             queue a freeze for every wallet whose owner lost the verification
  *                                    (on kyc_alert and every minute; KYC_FREEZE_GUARD or the local deployment)
+ *   npm run kyc:demo-personas        DEMO ONLY: give the demo personas (Alice, Bob) a KYC subject (mock providers, fictional CNICs)
  *   npm run kyc:rescreen             execute the re-screenings compliance officers queue in the portal
  *                                    (on compliance_rescreen and every 30 s; mock providers, not in production)
  * Sanctions and PEP reviews (maker-checker) are decided in the compliance portal (Step 6c, migration
@@ -128,12 +130,34 @@ async function rescreen(): Promise<void> {
   process.on("SIGTERM", stop);
 }
 
+/** Demo personas get a real KYC subject (personas.ts); operator setup command, so it keeps the admin login. */
+async function demoPersonas(): Promise<void> {
+  const e = env();
+  if (process.env.NODE_ENV === "production") throw new Error("kyc:demo-personas uses mock providers and does not run in production");
+  const db = new pg.Pool({
+    host: e.PG_HOST ?? "127.0.0.1",
+    port: Number(e.PG_PORT ?? 5433),
+    user: e.PG_ADMIN_USER ?? "pt_admin",
+    password: e.PG_ADMIN_PASSWORD,
+    database: e.PG_DATABASE ?? "property_token",
+    application_name: "kyc-demo-personas",
+    max: 2,
+  });
+  try {
+    const service = new KycService(db, mockProviders(), Peppers.fromEnv(e), keyFromEnv(e, "KYC_DATA_KEY"), "kyc-service");
+    for (const l of await linkDemoPersonas(db, service)) console.log(`${l.persona}: ${l.outcome} (subject ${l.subjectId.slice(0, 8)})`);
+  } finally {
+    await db.end();
+  }
+}
+
 async function main(): Promise<void> {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "setup") return setup();
   if (cmd === "offboard") return offboard();
   if (cmd === "serve") return serve();
   if (cmd === "rescreen") return rescreen();
+  if (cmd === "demo-personas") return demoPersonas();
   const db = pool("audit", "kyc-audit");
   try {
     if (cmd === "status" && arg) {
@@ -145,7 +169,7 @@ async function main(): Promise<void> {
       console.log(problems.length === 0 ? "KYC audit chain intact" : `${String(problems.length)} problem(s)`);
       if (problems.length) process.exitCode = 3;
     } else {
-      console.log("usage: kyc setup | serve | status <subjectId> | audit | offboard | rescreen");
+      console.log("usage: kyc setup | serve | status <subjectId> | audit | offboard | rescreen | demo-personas");
       process.exitCode = 2;
     }
   } finally {

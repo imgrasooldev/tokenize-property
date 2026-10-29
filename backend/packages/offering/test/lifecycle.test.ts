@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OfferingError, executeApprovedRefunds } from "../src/service.ts";
 import {
@@ -342,7 +343,12 @@ describe("closing outcomes", () => {
     expect(await w.of("decide", { requestId: ext, officer: OF.trustee, approve: true, reason: "trustee agrees to extend" })).toBe("approved");
     // One extension only.
     expect(await code(w.of("request", { offeringId: o.id, code: "L10", actor: OF.maker, reason: "another extension attempt", detail: { days: 5, disclosureSha: hex32() } }))).toBe("GUARD");
-    const v = await w.of("withdraw", { subscriptionId: a.sub, subjectId: a.inv.subjectId, actor: `investor:${a.inv.subjectId}` });
+    // The website shows the disclosure that opened the window (0036 WW-2) and withdraws through its wrapper (WW-1).
+    const sha = (await w.client.query<{ s: string }>("SELECT detail->>'disclosureSha' AS s FROM offering.requests WHERE id = $1", [ext])).rows[0]?.s;
+    const shown = await w.client.query<{ kind: string; sha256: string }>("SELECT kind, sha256 FROM offering.web_disclosures($1)", [o.id]);
+    expect(shown.rows).toEqual([{ kind: "extension", sha256: sha }]);
+    await expect(w.client.query("SELECT offering.web_withdraw($1, $2, $3)", [a.sub, a.inv.subjectId, `investor:${a.inv.subjectId}`])).rejects.toThrow(/web:<investor id>/);
+    const v = (await w.client.query<{ r: { state: string } }>("SELECT offering.web_withdraw($1, $2, $3) AS r", [a.sub, a.inv.subjectId, `web:${randomUUID()}`])).rows[0]?.r ?? { state: "" };
     expect(v.state).toBe("refund_pending");
     await w.of("decideAll", { offeringId: o.id, code: "V20", officer: OF.bank1, approve: true, reason: "withdrawal refund checked" });
     await w.of("decideAll", { offeringId: o.id, code: "V20", officer: OF.bank3, approve: true, reason: "withdrawal refund checked" });

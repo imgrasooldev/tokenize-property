@@ -467,3 +467,14 @@ officer's handle in the same transaction; the backend keeps every business rule.
 - Segregation of duties: the platform owner conflicts with every deciding role, the auditor and the trustee (compatible only with `admin` and `support_agent`, so a "super admin" may also manage officers but never approve money); the property manager is an external fee payee and holds no other role; investor support holds no decision role and never compliance (no tipping-off).
 - `admin.emergency_payout_hold` (step-up, reason, refusals audited) calls `recon.emergency_hold` (ADR 0007 amendment 2026-10-29). Route `POST /api/approvals/hold`; the form sits on `/approvals` for holders of `payouts.hold` while payouts are not frozen.
 - `admin.support_lookup` answers one exact 8-hex reference; status values `verified`, `expired`, `pending`, `refer_compliance` (suspended, review, rejected, revoked); no name, CNIC beyond the masked last four, hold, case or reason; every lookup audited as `support.lookup`. Page `/support`.
+
+### Addendum 2026-10-29: rent publication buttons (migration 0033, T-022)
+
+- `/operations/distributions/[id]` shows, for an approved or booked calculation, where it stands on chain (`admin.rent_onchain`: publish command, on-chain distribution and window close, finalize command, and the reason each next step is refused now).
+- An operations maker (`operations.request`, fresh step-up) asks for the next step with `POST /api/operations/distributions/[id]/rent` (`step` = `publish` | `finalize` | `book`) through `admin.rent_step`, which binds the officer's handle and calls only `ops.request_publish`, `ops.request_finalize` or `ops.book_distribution`: every 0021/0032 rule (approved calculation, one live publication, 48-hour window, trustee rejection, payout gate in the signer, finalized before booking) still decides. The on-chain distribution is found from the calculation; nobody types a registry or an id. Refusals are audited (`approval.refused`), successes as `operations.requested`.
+
+### Addendum 2026-10-29: property managers scoped to their properties (migration 0034)
+
+- A `property_manager` sees only the properties assigned to them (none until one is: deny by default). Assignments are maker-checker between two administrators (`officers.manage`, step-up, reason) on `/officers` (`POST /api/officers/scopes`, `POST /api/officers/scopes/[id]/decide`), audited as `manager_scope.requested|decided`, decided changes append-only.
+- The reads a manager reaches are wrapped (`admin.<name>` checks the scope, `admin.<name>_all` is the unscoped original, no longer executable by the portal): operations periods, statement, charge, distribution, rent status, property requests, approvals inbox (property section), committees and committee. A token belongs to a property through its offering. Out-of-scope items read as not found; sponsor (KYB) requests stay hidden from managers. Other roles are unaffected.
+

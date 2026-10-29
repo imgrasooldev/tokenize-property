@@ -458,3 +458,106 @@ describe("audit, officer binding and roles (OT-11)", () => {
     }
   });
 });
+
+describe("PT Control: publish, finalize and book from the distribution page (0033 PRT-1..PRT-3)", () => {
+  type Onchain = {
+    status: string;
+    onchain: { registry: string; id: string; status: string; closesAt: string } | null;
+    publishCommand: { status: string; by: string } | null;
+    finalizeCommand: { status: string; by: string } | null;
+    blockers: { publish: string | null; finalize: string | null; book: string | null };
+  };
+  type R = { ok?: boolean; status?: string; error?: string };
+  const view = async (session: Buffer, id: string) =>
+    (await w.su.query<{ v: Onchain }>("SELECT admin.rent_onchain($1, $2) AS v", [session, id])).rows[0]?.v as Onchain;
+  const step = async (session: Buffer, id: string, s: string) => (await w.su.query<{ r: R }>("SELECT admin.rent_step($1, $2, $3) AS r", [session, id, s])).rows[0]?.r;
+
+  it("a maker walks an approved calculation through publish -> finalize -> book; every rule of 0032 still holds", async () => {
+    await allowPlaceholders(w, true);
+    const tk = await token(w);
+    await w.su.query("INSERT INTO chain.contracts (deployment, role, address) VALUES ($1, 'distributions', $2)", [tk.deployment, tk.registry]);
+    await transfer(w, tk, ZERO, alice.wallet, 600n, 3);
+    await transfer(w, tk, ZERO, dave, 400n, 3);
+    await collect(w, tk, "2026-09-15", 5_000_000n);
+    const id = await calculate(w, tk, PERIOD, today, 4);
+    const docs = await new OpsService(w.ops).attach(id, "operator:omar");
+    await trusteePrecheck(w, id);
+    await w.ops.query("SELECT ops.decide_distribution($1, 'operator:sara', 'approve', 'recomputed from chain and statement')", [id]);
+    const maker = await officer(w.su, "ops.rent.maker", "ops_maker");
+    const taxman = await officer(w.su, "tax.rent.reader", "tax_officer");
+
+    let v = await view(maker.sessionHash, id);
+    expect(v).toMatchObject({ status: "approved", onchain: null, publishCommand: null, blockers: { publish: null } });
+    expect(v.blockers.finalize).toMatch(/not published/i);
+    expect(v.blockers.book).toMatch(/finalized/);
+    expect((await view(taxman.sessionHash, id)).blockers.publish).toMatch(/operations maker/);
+    expect(await code(step(taxman.sessionHash, id, "publish"))).toBe("42501");
+    expect((await step(maker.sessionHash, id, "finalize"))?.error).toMatch(/not published/);
+
+    expect(await step(maker.sessionHash, id, "publish")).toMatchObject({ ok: true, status: "publish requested" });
+    v = await view(maker.sessionHash, id);
+    expect(v.publishCommand).toMatchObject({ status: "pending", by: "ops.rent.maker" });
+    expect(v.blockers.publish).toMatch(/already in the outbox/);
+
+    // The indexer saw the publication 49 hours ago: the window has closed.
+    const net = (await w.pool.query<{ n: string }>("SELECT sum_net::text AS n FROM ops.distributions WHERE id = $1", [id])).rows[0]?.n ?? "";
+    await w.su.query("INSERT INTO chain.blocks (number, hash, parent_hash, block_time) VALUES (2001, $1, $2, now() - interval '49 hours')", [
+      `0x${"21".repeat(32)}`, `0x${"22".repeat(32)}`,
+    ]);
+    await w.su.query(
+      `INSERT INTO chain.distributions (registry, id, token, record_block, merkle_root, total_paisa, statement_hash, status, published_block, updated_block)
+       VALUES ($1, 7, $2, 4, $3, $4, $5, 'published', 2001, 2001)`,
+      [tk.registry, tk.token, docs.root, net, docs.statementHash],
+    );
+    v = await view(maker.sessionHash, id);
+    expect(v.onchain).toMatchObject({ registry: tk.registry, id: "7", status: "published" });
+    expect(v.blockers).toMatchObject({ publish: "Already published on chain.", finalize: null });
+    expect((await step(maker.sessionHash, id, "book"))?.error).toMatch(/finalized/);
+    expect(await step(maker.sessionHash, id, "finalize")).toMatchObject({ ok: true, status: "finalize requested" });
+    expect((await view(maker.sessionHash, id)).finalizeCommand).toMatchObject({ status: "pending", by: "ops.rent.maker" });
+
+    await w.su.query("UPDATE chain.distributions SET status = 'finalized' WHERE registry = $1 AND id = 7", [tk.registry]);
+    expect(await step(maker.sessionHash, id, "book")).toMatchObject({ ok: true, status: "booked" });
+    const booked = await w.pool.query<{ status: string; booked_by: string }>("SELECT status, booked_by FROM ops.distributions WHERE id = $1", [id]);
+    expect(booked.rows[0]).toEqual({ status: "booked", booked_by: "ops.rent.maker" });
+    expect((await view(maker.sessionHash, id)).blockers.book).toMatch(/Already booked/);
+    const a = await w.su.query("SELECT 1 FROM admin.audit WHERE action = 'operations.requested' AND detail->>'kind' = 'distribution' AND (detail->>'ref')::bigint = $1", [id]);
+    expect(a.rowCount).toBe(3);
+  });
+});
+
+describe("finalisation scheduler (0033 PRT-4, T-034)", () => {
+  it("enqueues only closed windows of approved calculations, once, under the tax service's own login", async () => {
+    await allowPlaceholders(w, true);
+    const tk = await token(w);
+    await w.su.query("INSERT INTO chain.contracts (deployment, role, address) VALUES ($1, 'distributions', $2)", [tk.deployment, tk.registry]);
+    await transfer(w, tk, ZERO, dave, 1_000n, 3);
+    await collect(w, tk, "2026-09-15", 2_000_000n);
+    const id = await calculate(w, tk, PERIOD, today, 4);
+    const docs = await new OpsService(w.ops).attach(id, "operator:omar");
+    await trusteePrecheck(w, id);
+    await w.ops.query("SELECT ops.decide_distribution($1, 'operator:sara', 'approve', 'recomputed from chain and statement')", [id]);
+    const net = (await w.pool.query<{ n: string }>("SELECT sum_net::text AS n FROM ops.distributions WHERE id = $1", [id])).rows[0]?.n ?? "";
+    // Two publications of the same statement: one window closed (49 h), one still open (47 h).
+    for (const [n, hours] of [[3001, 49], [3002, 47]] as const) {
+      await w.su.query("INSERT INTO chain.blocks (number, hash, parent_hash, block_time) VALUES ($1, $2, $3, now() - make_interval(hours => $4))", [
+        n, `0x${n.toString(16).padStart(64, "0")}`, `0x${(n + 1).toString(16).padStart(64, "e")}`, hours,
+      ]);
+      await w.su.query(
+        `INSERT INTO chain.distributions (registry, id, token, record_block, merkle_root, total_paisa, statement_hash, status, published_block, updated_block)
+         VALUES ($1, $2, $3, 4, $4, $5, $6, 'published', $7, $7)`,
+        [tk.registry, n, tk.token, docs.root, net, docs.statementHash, n],
+      );
+    }
+    const due = () => w.taxdb.query<{ n: number }>("SELECT ops.finalize_due('ops-scheduler') AS n");
+    await due();
+    const keys = async () =>
+      (await w.pool.query<{ k: string }>("SELECT idempotency_key AS k FROM outbox.commands WHERE kind = 'rent.finalize' AND payload->>'registry' = $1 ORDER BY 1", [tk.registry])).rows.map((r) => r.k);
+    expect(await keys()).toEqual([`rent.finalize:${tk.registry}:3001`]);
+    expect((await due()).rows[0]?.n).toBe(0);
+    expect(await keys()).toHaveLength(1);
+    // The scheduler is not an officer and cannot use one's handle; other services cannot call it.
+    expect(await message(w.taxdb.query("SELECT ops.finalize_due('ops.rent.maker')"))).toMatch(/officer/);
+    expect(await code(w.ops.query("SELECT ops.finalize_due('ops-scheduler')"))).toBe("42501");
+  });
+});

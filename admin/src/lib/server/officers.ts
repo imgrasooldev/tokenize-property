@@ -120,3 +120,23 @@ export async function myCredentials(sessionHash: Buffer): Promise<CredentialRow[
     disabledAt: r.disabled_at,
   }));
 }
+
+export interface ScopeProperty {
+  id: string;
+  state: string;
+  district: string | null;
+  building: string | null;
+  propertyKey: string | null;
+}
+
+/** Property managers, the properties assigned to them and the open assignment changes (admin.manager_scopes, migration 0034). */
+export interface ManagerScopes {
+  managers: { id: string; handle: string; status: string; properties: ScopeProperty[] }[];
+  open: { id: number; officer: string; property: ScopeProperty; action: "grant" | "revoke"; reason: string; requestedBy: string; requestedAt: string }[];
+  properties: ScopeProperty[];
+}
+
+export async function managerScopes(sessionHash: Buffer): Promise<ManagerScopes> {
+  const { rows } = await db().query<{ v: ManagerScopes }>("SELECT admin.manager_scopes($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { managers: [], open: [], properties: [] };
+}

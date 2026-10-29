@@ -61,8 +61,12 @@ echo "== backend setup (idempotent, no secrets printed)"
   && npm run --silent signer:admin-client >/dev/null \
   && npm run --silent db:web-role >/dev/null \
   && npm run --silent db:service-roles >/dev/null \
+  && npm run --silent notify:setup >/dev/null \
   && npm run --silent signer:import-web-wallets >/dev/null) \
   || { echo "backend setup failed; the website keeps running the previous build" >&2; exit 7; }
+# Demo personas (Alice, Bob) get a KYC subject (mock providers) so notifications, payout accounts and
+# tax certificates work for them; idempotent, and never a reason to stop the deploy.
+(cd backend && npm run --silent kyc:demo-personas) || echo "WARNING: demo personas were not linked to a KYC subject" >&2
 
 echo "== systemd units (install new or changed ones, enable, restart the backend services)"
 changed=0
@@ -74,7 +78,7 @@ for unit in deploy/demo-server/pt-*.service deploy/demo-server/pt-*.timer; do
   fi
 done
 [ "$changed" = 1 ] && sudo systemctl daemon-reload
-BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding"
+BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-notify pt-transfer pt-rent-finalize"
 sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
 # The signer reloads its keystore (new custodial wallets) and policies only on start.
 sudo systemctl restart $BACKEND_UNITS

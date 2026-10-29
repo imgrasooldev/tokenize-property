@@ -55,6 +55,7 @@
     "kyc:offboard": "tsx packages/kyc/src/cli.ts offboard",
     "kyc:serve": "tsx packages/kyc/src/cli.ts serve",
     "kyc:rescreen": "tsx packages/kyc/src/cli.ts rescreen",
+    "kyc:demo-personas": "tsx packages/kyc/src/cli.ts demo-personas",
     "bank": "tsx packages/bank/src/cli.ts serve",
     "bank:setup": "tsx packages/bank/src/cli.ts setup",
     "bank:audit": "tsx packages/bank/src/cli.ts audit",
@@ -90,7 +91,8 @@
     "tax:audit": "tsx packages/tax/src/cli.ts audit",
     "tax:reconcile": "tsx packages/tax/src/cli.ts reconcile",
     "ops:statement": "tsx packages/tax/src/cli.ts statement",
-    "ops:run": "tsx packages/tax/src/cli.ts run"
+    "ops:run": "tsx packages/tax/src/cli.ts run",
+    "ops:finalize-due": "tsx packages/tax/src/cli.ts finalize-due"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

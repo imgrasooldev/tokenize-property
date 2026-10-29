@@ -11,7 +11,7 @@ import { label, offeringDict, type OfferingDict } from "@/lib/i18n-offering";
 import { canCancel, formatPaisa, formatPkt, isUuid } from "@/lib/offering-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
-import { mySubscriptions, offeringById, type PublicOffering } from "@/lib/server/offerings";
+import { disclosures, mySubscriptions, offeringById, type PublicOffering } from "@/lib/server/offerings";
 import { currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const o = await offeringById(id);
+  const discl = o ? await disclosures(o.offeringId) : [];
   if (!o) notFound();
   const { lang } = await getDict();
   const l = offeringDict(lang);
@@ -135,6 +136,21 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
                   ))}
                 </div>
                 <p className="fine">{l.docHashNote}</p>
+                {discl.length > 0 && (
+                  <>
+                    <h3 className="small">{l.disclosures}</h3>
+                    <ul className="plain" data-testid="disclosures">
+                      {discl.map((d) => (
+                        <li key={d.sha256}>
+                          <b>{d.kind === "supplementary" ? l.discl_supplementary : l.discl_extension}</b> · {formatPkt(d.publishedAt, lang)}{" "}
+                          <span className="di mono small" dir="ltr" title={d.sha256}>
+                            SHA-256 {short(d.sha256)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
                 <p className="fine">
                   <Link href="/verify#sec-docs">{l.verifyLink}</Link> · {l.downloadSoon}
                 </p>

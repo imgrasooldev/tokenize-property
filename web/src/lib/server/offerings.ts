@@ -173,6 +173,8 @@ export interface MySubscription {
   refundCause: string | null;
   refundStatus: "requested" | "approved" | "sent" | "in_review" | null;
   refundSentAt: string | null;
+  /** S-02 OF-22/OF-23: until when a paid subscription may be withdrawn (null = no window open). */
+  withdrawalUntil: string | null;
   createdAt: string;
   events: { code: string; toState: string; at: string }[];
 }
@@ -195,6 +197,7 @@ interface SubRow {
   refund_cause: string | null;
   refund_status: MySubscription["refundStatus"];
   refund_sent_at: Date | null;
+  withdrawal_until: Date | null;
   created_at: Date;
 }
 
@@ -224,6 +227,7 @@ export async function mySubscriptions(investor: Pick<InvestorRow, "kyc_subject">
     refundCause: r.refund_cause,
     refundStatus: r.refund_status,
     refundSentAt: iso(r.refund_sent_at),
+    withdrawalUntil: iso(r.withdrawal_until),
     createdAt: r.created_at.toISOString(),
     events: events.rows.filter((e) => e.subscription_id === r.subscription_id).map((e) => ({ code: e.code, toState: e.to_state, at: e.at.toISOString() })),
   }));
@@ -312,4 +316,35 @@ export async function cancelSubscription(investor: Pick<InvestorRow, "id" | "kyc
     if (code === "P0002" || code === "23514") return { error: cancelErrorKey(code) };
     throw e;
   }
+}
+
+/**
+ * OF-22/OF-23: withdraws the investor's own paid subscription while the withdrawal window is open
+ * (migration 0036), through webauth.web_withdraw: passkey step-up when the investor has one; the
+ * backend checks ownership, state and the window and opens the refund.
+ */
+export async function withdrawSubscription(investor: Pick<InvestorRow, "id" | "kyc_subject">, subscriptionId: string, session: Buffer): Promise<CancelResult> {
+  if (!investor.kyc_subject) return { error: "unknown" };
+  try {
+    const { rows } = await (await db()).query<{ r: { state: string; error?: string } }>("SELECT webauth.web_withdraw($1, $2) AS r", [session, subscriptionId]);
+    const gate = gateError(rows[0]?.r);
+    if (gate) return { error: gate };
+    return { state: rows[0]?.r.state ?? "unknown" };
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "P0002" || code === "23514") return { error: cancelErrorKey(code) };
+    throw e;
+  }
+}
+
+export interface Disclosure {
+  kind: "supplementary" | "extension";
+  sha256: string;
+  publishedAt: string;
+}
+
+/** The disclosures that opened a withdrawal window for an offering (migration 0036 WW-2): kind, hash, time. */
+export async function disclosures(offeringId: string): Promise<Disclosure[]> {
+  const { rows } = await (await db()).query<{ kind: Disclosure["kind"]; sha256: string; published_at: Date }>("SELECT * FROM offering.web_disclosures($1)", [offeringId]);
+  return rows.map((r) => ({ kind: r.kind, sha256: r.sha256, publishedAt: r.published_at.toISOString() }));
 }

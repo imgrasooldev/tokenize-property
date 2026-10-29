@@ -5,6 +5,7 @@ import { label, offeringDict } from "../src/lib/i18n-offering";
 import {
   bpText,
   canCancel,
+  canWithdraw,
   cancelErrorKey,
   countdown,
   countdownText,
@@ -196,5 +197,15 @@ describe("English and Urdu texts", () => {
   it("never ask for card or bank credentials, and say so", () => {
     expect(en.reserveNote).toMatch(/never ask/i);
     expect(en.payWarnNever).toMatch(/never ask/i);
+  });
+});
+
+describe("withdrawal window (S-02 OF-22/OF-23, migration 0036)", () => {
+  it("only a paid subscription, only while the window is open", () => {
+    const now = Date.parse("2026-10-29T12:00:00Z");
+    expect(canWithdraw("payment_confirmed", "2026-10-30T00:00:00Z", now)).toBe(true);
+    expect(canWithdraw("payment_confirmed", "2026-10-29T11:59:59Z", now)).toBe(false);
+    expect(canWithdraw("payment_confirmed", null, now)).toBe(false);
+    for (const s of ["payment_pending", "reserved", "allocated", "refund_pending", "issued"]) expect(canWithdraw(s, "2026-10-30T00:00:00Z", now)).toBe(false);
   });
 });
