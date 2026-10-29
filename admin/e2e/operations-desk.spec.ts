@@ -73,7 +73,11 @@ test("an operations maker imports a bank statement file with a security-key step
   await m.page.goto("/operations/bank");
   const upload = async () => {
     await m.page.getByLabel("Statement file (.jsonl)").setInputFiles({ name: "statement.jsonl", mimeType: "application/json", buffer: Buffer.from(file) });
+    // Wait for this upload's own redirect: the previous upload's message is still on the page.
+    const done = m.page.waitForResponse((r) => r.url().endsWith("/api/operations/bank") && r.request().method() === "POST");
     await m.page.getByRole("button", { name: "Import with security key" }).click();
+    await done;
+    await m.page.waitForLoadState("load");
     await expect(m.page.getByTestId("decision-ok")).toContainText("imported");
   };
   await upload();
