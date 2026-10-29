@@ -50,6 +50,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 | 40 | T-047 | Website: real public-anchoring status (rail + `/verify#anchor`, migration 0025) | high | S | feature | LE |
 | 41 | T-046 | PT Control screens for the remaining officer votes (committee, P8, platform L3) | high | M | feature | LE |
 | 42 | T-048 | S-04 phase 0: permitted off-market transfers (desk, compliance + trustee, DvP, RecoveryGuard) | high | L | feature | LE (if SECP allows phase 0) |
+| 43 | T-049 | Platform roles: platform owner (emergency payout hold), property manager, investor support (migration 0031) | high | M | feature | LE |
 
 ## 2. Bugs
 
@@ -185,6 +186,13 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 - After merging main 2337afa (S-05 0027, Next.js 16.4.2) on 2026-10-23, no placeholder: backend typecheck/lint, `migrate -- --test` (0028 on top of 0027), vitest 761 passed + 13 skipped; admin typecheck/lint, `npm test` 1203/1203, build, `test:http` 1433/1433; web typecheck/lint, vitest 350 passed + 24 skipped, build.
 - Remaining: owner questions S-04 TQ-1..TQ-6 and Q-1..Q-4; a demo-server unit for `transfer:tick` (T-034); the bank service sending settlement/refund instructions; trustee inbox co-signature of proposals (TQ-5); Playwright e2e and a browser check at 375 px (not done); a Besu run of the 48-hour path; phase 1 (T-041).
 - Dep T-006, T-020, T-026, T-030; S-05 (0027, merged; exit hook `exit.exit_underway`).
+
+### T-049 Platform roles (platform owner, property manager, investor support)
+- Status (2026-10-29): **Partial (built and tested on branch `platform-roles-0031`, not merged)**, migration `0031_platform_roles.sql` (PR-1..PR-5), ADR 0011 addendum and ADR 0007 amendment 2026-10-29.
+- `platform_owner`: reads the operational pages and places an emergency payout hold (one person, fresh step-up, reason); the hold is lifted only by the existing maker-checker unfreeze after a reconciliation run that started after it has passed. Decides nothing; no compliance or tax reads; compatible with `admin` and `support_agent` only.
+- `property_manager`: reads properties and operating statements; holds no other role. `support_agent`: `/support` looks up one investor by the 8-character reference (masked CNIC, support-safe status, account age, wallet, recent notices; reviews, holds and reasons read "refer to compliance"); every lookup audited.
+- Tests: admin typecheck/lint, unit 18, db `rules` + `read-matrix` 1509, `platform.test.ts` 8, build, `test:http` (see the MEMORY log).
+- Remaining: the investor-visible reference on the website account page (so support can ask for it); scoping property managers to their own properties (today they read all); Playwright spec for `/support` and the hold form; owner to confirm the role set and who receives `platform_owner`.
 
 ### T-028 Notifications
 - Status (2026-10-23): **producers built on branch `t-028-producers`, not merged** (migration `0030_notify_producers.sql` on top of 0029, ADR 0013 amendment 1, NP-1..NP-9). Producers 1-5 and 7-9 below are wired as deferred constraint triggers plus `notify.sweep` (reminders), and S-04/S-05/S-03/S-06-era modules on top (exit milestones, final distribution, burns, transfer checks, tax certificate, rent credited/held/returned, offering lifecycle, officer queues and alerts, SLA breaches, passkeys, new-device sign-in); marketing category with opt-in consents; no-tipping-off rules and a DB guard on investor templates; investor notification centre `/notifications` (EN/UR, `notify.web_*` for `pt_web`). Tests: backend `notify/test/producer-rules|producers-offering|producers-bank|producers-kyc-ops|producers-exit.test.ts`, `db/test/web-notify.test.ts`, transfer test assertion; web `notify-render.test.ts`, `notifications.integration.test.ts`. Remaining: item 6 (investor `large_transaction_pending`: signer amounts are token units), contact capture with one-time codes, real providers (T-031), `notify:run` as a demo-server unit (T-034), officer notification screen in PT Control, browser check at 375 px and a Playwright spec, quiet hours (owner).

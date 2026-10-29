@@ -85,6 +85,8 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/exit", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
   { path: "/exit/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
   { path: "/exit/windows/[id]", kind: "page", methods: ["GET"], access: "exit.read", mutating: false },
+  // T-049 (migration 0031): investor support lookups by reference.
+  { path: "/support", kind: "page", methods: ["GET"], access: "support.read", mutating: false },
   { path: "/api/health", kind: "api", methods: ["GET"], access: "public", mutating: false },
   { path: "/api/auth/login/options", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
   { path: "/api/auth/login/verify", kind: "api", methods: ["POST"], access: "anonymous", mutating: true },
@@ -101,6 +103,8 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/approvals/unfreeze", kind: "api", methods: ["POST"], access: "approvals.request", mutating: true },
   { path: "/api/approvals/unfreeze/[id]/decide", kind: "api", methods: ["POST"], access: "approvals.decide", mutating: true },
   { path: "/api/approvals/property/[id]/decide", kind: "api", methods: ["POST"], access: "property.decide", mutating: true },
+  // T-049 (migration 0031): the platform owner's emergency payout hold; released by the maker-checker unfreeze above.
+  { path: "/api/approvals/hold", kind: "api", methods: ["POST"], access: "payouts.hold", mutating: true },
   // Step 6c: compliance (migration 0019). Decisions need a step-up as well (checked by the database).
   { path: "/api/compliance/kyc", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/kyc/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },

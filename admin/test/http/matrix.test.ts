@@ -24,28 +24,51 @@ import { cast, createWorld, invite, type Actor, type Cast, type World } from "..
 const PORT = 3399;
 const ORIGIN = `http://localhost:${String(PORT)}`;
 const COOKIE = "__Host-pt_admin";
-type Role = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "tax_officer" | "auditor" | "admin";
+type Role =
+  | "ops_maker"
+  | "ops_checker"
+  | "compliance_officer"
+  | "legal_officer"
+  | "trustee_officer"
+  | "tax_officer"
+  | "auditor"
+  | "admin"
+  | "platform_owner"
+  | "property_manager"
+  | "support_agent";
 type Who = Role | "anonymous" | "investor";
-const ROLES: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"];
+const ROLES: Role[] = [
+  "ops_maker",
+  "ops_checker",
+  "compliance_officer",
+  "legal_officer",
+  "trustee_officer",
+  "tax_officer",
+  "auditor",
+  "admin",
+  "platform_owner",
+  "property_manager",
+  "support_agent",
+];
 const EVERYONE: Who[] = [...ROLES, "anonymous", "investor"];
-const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+const OPS: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"];
 
-const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor"];
-const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+const APPROVALS: Role[] = ["ops_maker", "ops_checker", "auditor", "platform_owner"];
+const PROPERTY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "property_manager"];
 const COMPLIANCE: Role[] = ["compliance_officer", "auditor"];
 const TRUSTEE: Role[] = ["trustee_officer", "auditor"];
 // S-06: every role that works on cases reads them (never trustee officers or administrators).
 const RECOVERY: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "auditor"];
-const OPERATIONS: Role[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
+const OPERATIONS: Role[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor", "platform_owner", "property_manager"];
 const TAX: Role[] = ["tax_officer", "auditor"];
 // T-046: offering approvals are read by operations, compliance and auditors; committee members are platform officers.
-const OFFERING: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor"];
+const OFFERING: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"];
 const COMMITTEE: Role[] = ["ops_maker", "ops_checker", "compliance_officer"];
 const NO_PROPERTY = "00000000-0000-4000-8000-000000000046";
 // S-04 (migration 0028): transfers are read by the desk, checkers, compliance, the trustee and auditors (never legal, tax or administrators).
-const TRANSFER: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor"];
+const TRANSFER: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "platform_owner"];
 // S-05: operations, compliance, legal and trustee officers and auditors read exits; the four deciding roles decide.
-const EXIT: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"];
+const EXIT: Role[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "platform_owner"];
 const EXIT_DECIDE: Role[] = ["ops_checker", "compliance_officer", "legal_officer", "trustee_officer"];
 
 /**
@@ -55,12 +78,12 @@ const EXIT_DECIDE: Role[] = ["ops_checker", "compliance_officer", "legal_officer
 const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/", allowed: OPS },
   { path: "/account", allowed: ROLES },
-  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin"], okStatus: 307 },
+  { path: "/audit", allowed: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "admin", "platform_owner"], okStatus: 307 },
   { path: "/audit/signer", allowed: OPS },
   { path: "/audit/recon", allowed: OPS },
   { path: "/audit/ledger", allowed: OPS },
-  { path: "/audit/admin", allowed: ["compliance_officer", "auditor", "admin"] },
-  { path: "/officers", allowed: ["auditor", "admin"] },
+  { path: "/audit/admin", allowed: ["compliance_officer", "auditor", "admin", "platform_owner"] },
+  { path: "/officers", allowed: ["auditor", "admin", "platform_owner"] },
   { path: "/approvals", allowed: APPROVALS },
   { path: "/approvals/signer/{signer}", allowed: APPROVALS },
   { path: "/approvals/payouts/{payout}", allowed: APPROVALS },
@@ -127,6 +150,9 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number }[] = [
   { path: "/exit/windows/{exitWindow}", allowed: EXIT },
   { path: "/exit/windows/999999", allowed: EXIT, okStatus: 404 },
   { path: "/audit/exit", allowed: EXIT },
+  // T-049 (migration 0031): investor support lookups.
+  { path: "/support", allowed: ["platform_owner", "support_agent"] },
+  { path: "/support?ref=00000000", allowed: ["platform_owner", "support_agent"] },
 ];
 
 /** Session-protected POST routes: who passes authorisation, and the status they then get. */
@@ -144,6 +170,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/approvals/signer/{signer}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/payouts/{payout}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/unfreeze", allowed: ["ops_maker"], okStatus: 303, form: { reason: "short" } },
+  // T-049: the platform owner's emergency hold; a short reason is answered with a 303 back (nothing held).
+  { path: "/api/approvals/hold", allowed: ["platform_owner"], okStatus: 303, form: { reason: "short" } },
   { path: "/api/approvals/unfreeze/{unfreeze}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/approvals/property/1/decide", allowed: ["ops_checker", "compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   // Step 6c: compliance officers only; an incomplete form (or a missing step-up) is answered with a 303 back (nothing decided).
@@ -213,6 +241,7 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
 /** The role that may use a mutating route (CSRF tests use it, so a refusal is the CSRF check's own). */
 function userOf(path: string): Role {
   if (path.includes("officers")) return "admin";
+  if (path === "/api/approvals/hold") return "platform_owner";
   if (path.startsWith("/api/transfers/") && (path.endsWith("/decide") || path.endsWith("/links"))) return "compliance_officer";
   if (path === "/api/transfers/prices") return "ops_checker";
   if (path.startsWith("/api/trustee/")) return "trustee_officer";
@@ -420,6 +449,7 @@ describe("route coverage", () => {
     const covered = new Set([
       ...PAGES.map((p) =>
         p.path
+          .replace(/\?.*$/, "")
           .replace(/^\/audit\/(signer|recon|ledger|admin|compliance|recovery|trustee|exit)$/, "/audit/[source]")
           .replace(/^\/exit\/windows\/(\{\w+\}|\d+)$/, "/exit/windows/[id]")
           .replace(/^\/exit\/(\{\w+\}|\d+)$/, "/exit/[id]")

@@ -171,6 +171,8 @@ Step 6b (migration 0016): command-line operator names that are the handle of an 
 | `POST /api/approvals/payouts/[id]/decide` | `approvals.decide` | form `decision`, `reason`, `itemsDigest` → `admin.decide_payout_batch` → `bank.decide_payout_batch` |
 | `POST /api/approvals/unfreeze` | `approvals.request` | form `reason` → `admin.request_unfreeze` → `recon.request_unfreeze`; 303 to the new request |
 | `POST /api/approvals/unfreeze/[id]/decide` | `approvals.decide` | form `decision`, `reason`, `freezeEvent` → `admin.decide_unfreeze` → `recon.decide_unfreeze` |
+| `POST /api/approvals/hold` | `payouts.hold` (platform owner, 0031) | form `reason` (10-500), fresh step-up → `admin.emergency_payout_hold` → `recon.emergency_hold`; 303 to `/approvals`; released by the unfreeze above |
+| `GET /support?ref=` | `support.read` (investor support, platform owner; 0031) | `admin.support_lookup`: one investor by 8-hex reference, masked, no compliance detail; every lookup audited |
 | `POST /api/approvals/property/[id]/decide` | `property.decide` | form `decision`, `reason`, `digest` → `admin.decide_property_request` → `property.decide_request` |
 
 Every decision needs a step-up younger than five minutes (`PTS01` → "Confirm with your security key first"); the forms run it with the officer's key before submitting. Database refusals come back as `{ok: false, error}` from the `admin.*` function and are shown on the page.

@@ -5,33 +5,59 @@ import { cast, createWorld, sha, token, type Cast, type World } from "../support
  * Authorisation inside the database (defence in depth): every function the portal can call, for
  * every role and for no session, against an explicit expected table (not derived from the code).
  */
-type Who = "ops_maker" | "ops_checker" | "compliance_officer" | "legal_officer" | "trustee_officer" | "tax_officer" | "auditor" | "admin" | "nobody";
-const WHO: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin", "nobody"];
-const OPERATIONS: Who[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor"];
+type Who =
+  | "ops_maker"
+  | "ops_checker"
+  | "compliance_officer"
+  | "legal_officer"
+  | "trustee_officer"
+  | "tax_officer"
+  | "auditor"
+  | "admin"
+  | "platform_owner"
+  | "property_manager"
+  | "support_agent"
+  | "nobody";
+const WHO: Who[] = [
+  "ops_maker",
+  "ops_checker",
+  "compliance_officer",
+  "legal_officer",
+  "trustee_officer",
+  "tax_officer",
+  "auditor",
+  "admin",
+  "platform_owner",
+  "property_manager",
+  "support_agent",
+  "nobody",
+];
+const EVERY_OFFICER: Who[] = WHO.filter((x) => x !== "nobody");
+const OPERATIONS: Who[] = ["ops_maker", "ops_checker", "trustee_officer", "tax_officer", "auditor", "platform_owner", "property_manager"];
 
-const TRANSFER: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor"];
+const TRANSFER: Who[] = ["ops_maker", "ops_checker", "compliance_officer", "trustee_officer", "auditor", "platform_owner"];
 
 const MATRIX_TOKEN = `0x${"6".repeat(40)}`;
 
 const EXPECT: Record<string, Who[]> = {
-  ops_overview: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  "audit_rows:signer": ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  "audit_rows:recon": ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  "audit_rows:ledger": ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  "audit_rows:admin": ["compliance_officer", "auditor", "admin"],
+  ops_overview: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  "audit_rows:signer": ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  "audit_rows:recon": ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  "audit_rows:ledger": ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  "audit_rows:admin": ["compliance_officer", "auditor", "admin", "platform_owner"],
   "record_export:signer": ["compliance_officer", "auditor"],
   "record_export:admin": ["compliance_officer", "auditor"],
-  officers_list: ["auditor", "admin"],
-  changes_list: ["auditor", "admin"],
-  my_account: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"],
-  session_credentials: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"],
+  officers_list: ["auditor", "admin", "platform_owner"],
+  changes_list: ["auditor", "admin", "platform_owner"],
+  my_account: EVERY_OFFICER,
+  session_credentials: EVERY_OFFICER,
   request_change: ["admin"],
   // Step 6b (migration 0016)
-  approvals_inbox: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  signer_request: ["ops_maker", "ops_checker", "auditor"],
-  payout_batch: ["ops_maker", "ops_checker", "auditor"],
-  unfreeze_request: ["ops_maker", "ops_checker", "auditor"],
-  property_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  approvals_inbox: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "property_manager"],
+  signer_request: ["ops_maker", "ops_checker", "auditor", "platform_owner"],
+  payout_batch: ["ops_maker", "ops_checker", "auditor", "platform_owner"],
+  unfreeze_request: ["ops_maker", "ops_checker", "auditor", "platform_owner"],
+  property_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "property_manager"],
   issue_signer_ticket: ["ops_checker"],
   decide_payout_batch: ["ops_checker"],
   decide_unfreeze: ["ops_checker"],
@@ -112,16 +138,16 @@ const EXPECT: Record<string, Who[]> = {
   precheck_distribution: ["trustee_officer"],
   // T-046 (migration 0026): committee members vote (maker, checker, compliance), the trustee accepts (P8),
   // operations checkers and compliance officers vote on offering requests; auditors read.
-  committees: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  committee: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  committees: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "property_manager"],
+  committee: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner", "property_manager"],
   open_committee: ["ops_maker", "ops_checker", "compliance_officer"],
   committee_vote: ["ops_maker", "ops_checker", "compliance_officer"],
   close_committee: ["ops_maker", "ops_checker", "compliance_officer"],
   trustee_properties: ["trustee_officer", "auditor"],
   trustee_property: ["trustee_officer", "auditor"],
   decide_property_trustee: ["trustee_officer"],
-  offering_votes: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
-  offering_vote_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor"],
+  offering_votes: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  offering_vote_request: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
   vote_offering_request: ["ops_checker", "compliance_officer"],
   return_offering: ["ops_checker", "compliance_officer"],
   // S-04 (migration 0028): the desk (operations makers) opens, completes and refreshes; compliance and trustee officers
@@ -139,14 +165,17 @@ const EXPECT: Record<string, Who[]> = {
   transfer_set_price: ["ops_checker"],
   transfer_link_parties: ["compliance_officer", "trustee_officer"],
   // S-05 (migration 0027): operations makers prepare, the four deciding roles decide in their capacity, auditors read.
-  "audit_rows:exit": ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  "audit_rows:exit": ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "platform_owner"],
   "record_export:exit": ["compliance_officer", "trustee_officer", "auditor"],
-  exit_overview: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
-  exit_case: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
-  exit_window: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor"],
+  exit_overview: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "platform_owner"],
+  exit_case: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "platform_owner"],
+  exit_window: ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "auditor", "platform_owner"],
   exit_request: ["ops_maker"],
   exit_sync: ["ops_maker"],
   exit_decide: ["ops_checker", "compliance_officer", "legal_officer", "trustee_officer"],
+  // T-049 (migration 0031): the platform owner holds payouts; support (and the platform owner) look up investors.
+  emergency_payout_hold: ["platform_owner"],
+  support_lookup: ["platform_owner", "support_agent"],
 };
 
 const CALLS: Record<string, string> = {
@@ -281,6 +310,9 @@ const CALLS: Record<string, string> = {
   exit_request: "SELECT admin.exit_request($1, NULL, 'open', '{}', 'matrix permission probe for exit')",
   exit_sync: "SELECT admin.exit_sync($1)",
   exit_decide: `SELECT admin.exit_decide($1, 'vote', 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}', '{}')`,
+  // Without a reconciliation run, or once frozen, the hold is an audited refusal: only the permission (and step-up) decides.
+  emergency_payout_hold: "SELECT admin.emergency_payout_hold($1, 'matrix permission probe')",
+  support_lookup: "SELECT admin.support_lookup($1, 'deadbeef')",
 };
 
 const DECISIONS = new Set([
@@ -325,6 +357,7 @@ const DECISIONS = new Set([
   "transfer_link_parties",
   "exit_request",
   "exit_decide",
+  "emergency_payout_hold",
 ]);
 let stepCounter = Date.now();
 let w: World;
@@ -380,6 +413,9 @@ describe("database authorisation matrix", () => {
     expect(await chains("admin")).toEqual(["admin"]);
     expect(await chains("trustee_officer")).toEqual(["exit", "trustee"]);
     expect(await chains("tax_officer")).toEqual([]);
+    expect(await chains("platform_owner")).toEqual(["admin", "exit", "ledger", "recon", "signer"]);
+    expect(await chains("property_manager")).toEqual([]);
+    expect(await chains("support_agent")).toEqual([]);
     const code = await w.portal.query("SELECT * FROM admin.verify_chains($1, NULL)", [sessionOf("nobody")]).then(
       () => "ok",
       (e: unknown) => (e as { code?: string }).code,

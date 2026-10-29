@@ -64,6 +64,14 @@ describe("role matrix", () => {
     expect(conflicts("compliance_officer", "tax_officer")).toBe(true);
     expect(conflicts("ops_checker", "tax_officer")).toBe(false);
   });
+
+  it("platform roles (0031): the owner only holds admin or support beside it, the property manager nothing, support no decision role", () => {
+    for (const r of ROLES) if (r !== "property_manager") expect(conflicts("property_manager", r), r).toBe(true);
+    const owner = ROLES.filter((r) => r !== "platform_owner" && !conflicts("platform_owner", r));
+    expect(owner.sort()).toEqual(["admin", "support_agent"]);
+    const support = ROLES.filter((r) => r !== "support_agent" && !conflicts("support_agent", r));
+    expect(support).toEqual(["platform_owner"]);
+  });
 });
 
 describe("segregation of duties (enforced by the database for any writer)", () => {

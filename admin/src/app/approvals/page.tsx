@@ -22,6 +22,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const unfreeze = box.unfreeze ?? [];
   const property = box.property ?? [];
   const canRequest = officer.permissions.has("approvals.request");
+  const canHold = officer.permissions.has("payouts.hold");
 
   return (
     <Shell officer={officer} current="/approvals" title="Approvals" actions={<GateChip gate={box.gate} />}>
@@ -189,6 +190,23 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
                 <div className="row">
                   <button className="btn" type="submit" name="decision" value="request">
                     Request unfreeze (a checker decides)
+                  </button>
+                </div>
+              </StepUpForm>
+            </div>
+          ) : null}
+          {canHold && !box.gate?.frozen ? (
+            <div className="stack" style={{ marginBlockStart: 10 }} data-testid="emergency-hold">
+              <b className="small">Emergency payout hold (platform owner)</b>
+              <span className="mu small">Stops every payout at once. Operations lift it maker-checker after a new reconciliation run passes.</span>
+              <StepUpForm csrf={officer.csrf} action="/api/approvals/hold">
+                <label className="sr-only" htmlFor="hold-reason">
+                  Why payouts must stop
+                </label>
+                <textarea id="hold-reason" name="reason" required minLength={10} maxLength={500} placeholder="Why payouts must stop now (at least 10 characters)" />
+                <div className="row">
+                  <button className="btn no" type="submit" name="decision" value="hold">
+                    Hold all payouts now
                   </button>
                 </div>
               </StepUpForm>
