@@ -211,7 +211,12 @@ export default async function PropertyPage({ params }: { params: Promise<{ symbo
                           <div className="hashline" dir="ltr">
                             sha256 {d.sha256}
                           </div>
-                          <div className="fine">{pktDate(d.uploadedAt)}</div>
+                          <div className="fine">
+                            {pktDate(d.uploadedAt)} ·{" "}
+                            <a href={`/api/documents/${d.sha256}`} download>
+                              {offeringDict(lang).download}
+                            </a>
+                          </div>
                         </div>
                       </div>
                     ))}

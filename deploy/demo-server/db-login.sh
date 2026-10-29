@@ -24,6 +24,7 @@ prefix_of() { # unit -> env prefix of the service login it uses
   pt-notify) echo NOTIFY ;;
   pt-transfer) echo TRANSFER ;;
   pt-rent-finalize) echo TAX ;;
+  pt-vault) echo VAULT ;;
   pt-bank-payees) echo BANK ;;
   pt-anchor | pt-anchor-verify) echo ANCHOR ;;
   pt-console) echo CONSOLE ;;

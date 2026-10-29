@@ -86,6 +86,7 @@ export const SERVICE_DB_ROLES = {
   transfer: { prefix: "TRANSFER", group: "pt_svc_transfer", login: "pt_transfer_app" },
   audit: { prefix: "AUDIT", group: "pt_svc_audit", login: "pt_audit_app" },
   console: { prefix: "CONSOLE", group: "pt_svc_console", login: "pt_console_app" },
+  vault: { prefix: "VAULT", group: "pt_svc_vault", login: "pt_vault_app" },
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_DB_ROLES;

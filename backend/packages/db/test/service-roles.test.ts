@@ -240,6 +240,15 @@ describe("what each service may not do (42501)", () => {
       "SELECT * FROM kyc.status",
       "SELECT * FROM signer.requests",
     ],
+    // T-038 (0041): register, look up, check publication and log reads only.
+    vault: [
+      "SELECT * FROM vault.objects",
+      "DELETE FROM vault.reads",
+      "SELECT * FROM offering.offerings",
+      "SELECT * FROM property.documents",
+      "SELECT * FROM kyc.status",
+      "SELECT * FROM webdemo.investors",
+    ],
   };
   it.each(SERVICES)("%s", async (s) => {
     for (const sql of new Map(Object.entries(forbidden)).get(s) ?? []) await denied(s, sql);

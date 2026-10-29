@@ -235,6 +235,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ### T-038 Encrypted document vault
 - Outcome: storage for title deeds, valuations, KYC documents (ADR 0009 retention), hashes on chain.
+- Status (2026-10-30): built (ADR 0017, migration 0041, `@pt/vault`, `pt-vault`): encrypted store, publication rule, website downloads. Not done: portal upload screen (operators use `vault:put`), key rotation tool, retention/erasure procedure (legal), KMS/HSM for the master key.
 - P medium, C M.
 
 ### T-039 Multisig signing console

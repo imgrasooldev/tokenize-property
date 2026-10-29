@@ -131,6 +131,11 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
                         <div className="di mono small" dir="ltr" title={sha ?? undefined}>
                           SHA-256 {short(sha)}
                         </div>
+                        {sha ? (
+                          <a className="small" href={`/api/documents/${sha}`} download>
+                            {l.download}
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -152,7 +157,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
                   </>
                 )}
                 <p className="fine">
-                  <Link href="/verify#sec-docs">{l.verifyLink}</Link> · {l.downloadSoon}
+                  <Link href="/verify#sec-docs">{l.verifyLink}</Link> · {l.downloadNote}
                 </p>
               </section>
               {o.useOfProceeds.length > 0 && (

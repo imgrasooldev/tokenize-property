@@ -10,9 +10,9 @@ import { backendEnv } from "./db";
  * come from backend/.env.local; they are never logged or sent anywhere else.
  */
 
-function secret(name: "SIGNER_CLIENT_SECRET_WEB" | "KYC_CLIENT_SECRET_WEB" | "BANK_CLIENT_SECRET_WEB"): Buffer {
+function secret(name: "SIGNER_CLIENT_SECRET_WEB" | "KYC_CLIENT_SECRET_WEB" | "BANK_CLIENT_SECRET_WEB" | "VAULT_CLIENT_SECRET_WEB"): Buffer {
   const v = backendEnv().get(name);
-  if (!v || !/^[A-Za-z0-9_-]{43,}$/.test(v)) throw new Error(`${name} is not set up (backend: npm run signer:setup / kyc:setup / bank:setup).`);
+  if (!v || !/^[A-Za-z0-9_-]{43,}$/.test(v)) throw new Error(`${name} is not set up (backend: npm run signer:setup / kyc:setup / bank:setup / vault:setup).`);
   return Buffer.from(v, "base64url");
 }
 
@@ -90,3 +90,32 @@ export async function registerPayoutAccount(input: {
   if (typeof j?.error === "string" && PAYOUT_ERRORS.includes(j.error)) return { ok: false, error: j.error as PayoutAccountError };
   return { ok: false, error: "unavailable" };
 }
+
+const vaultUrl = (): string => process.env.VAULT_URL ?? "http://127.0.0.1:4950";
+
+/**
+ * A published offering or property document from the document vault (T-038, ADR 0017): the vault
+ * decides what is published and checks the bytes against the hash; null when it is not published
+ * (or not stored). The website never holds a vault key.
+ */
+export async function publicDocument(sha256: string): Promise<{ bytes: Buffer; media: string } | null> {
+  if (!/^[0-9a-f]{64}$/.test(sha256)) return null;
+  const path = "/v1/public-document";
+  const s = JSON.stringify({ sha256 });
+  const key = secret("VAULT_CLIENT_SECRET_WEB");
+  const ts = String(Date.now());
+  const nonce = randomBytes(16).toString("hex");
+  const sig = createHmac("sha256", key).update(`POST\n${path}\n${ts}\n${nonce}\n${createHash("sha256").update(s).digest("hex")}`).digest("hex");
+  const res = await fetch(`${vaultUrl()}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-pt-client": "web", "x-pt-ts": ts, "x-pt-nonce": nonce, "x-pt-sig": sig },
+    body: s,
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (res.status === 404) return null;
+  if (res.status !== 200) throw new Error(`vault service returned ${String(res.status)}`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (createHash("sha256").update(bytes).digest("hex") !== sha256) throw new Error("the vault returned bytes that do not match the hash");
+  return { bytes, media: res.headers.get("content-type") ?? "application/octet-stream" };
+}
+
