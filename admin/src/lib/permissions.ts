@@ -2,11 +2,11 @@
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
  * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016, the Step 6c ones of 0019, the
  * S-06 role and permissions of 0020, the S-03 role and permissions of 0021, the Step 6d ones of
- * 0023, the committee and offering votes of 0026, the S-05 exit permissions of 0027 and the S-04 transfers of 0028). The database is the authority and checks every request itself; this copy only drives
+ * 0023, the committee and offering votes of 0026, the S-05 exit permissions of 0027, the S-04 transfers of 0028 and the platform roles of 0031). The database is the authority and checks every request itself; this copy only drives
  * menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
-export const ROLES = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin"] as const;
+export const ROLES = ["ops_maker", "ops_checker", "compliance_officer", "legal_officer", "trustee_officer", "tax_officer", "auditor", "admin", "platform_owner", "property_manager", "support_agent"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const PERMISSIONS = [
@@ -47,6 +47,8 @@ export const PERMISSIONS = [
   "transfer.decide",
   "transfer.cash",
   "transfer.price",
+  "payouts.hold",
+  "support.read",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -131,6 +133,22 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "transfer.read",
   ],
   admin: ["audit.read.admin", "officers.read", "officers.manage"],
+  platform_owner: [
+    "ops.read",
+    "audit.read.ops",
+    "audit.read.admin",
+    "officers.read",
+    "approvals.read",
+    "property.read",
+    "offering.read",
+    "operations.read",
+    "exit.read",
+    "transfer.read",
+    "support.read",
+    "payouts.hold",
+  ],
+  property_manager: ["property.read", "operations.read"],
+  support_agent: ["support.read"],
 };
 
 /** Incompatible pairs (segregation of duties), sorted alphabetically within each pair. */
@@ -140,26 +158,51 @@ export const ROLE_CONFLICTS: readonly (readonly [Role, Role])[] = [
   ["admin", "legal_officer"],
   ["admin", "ops_checker"],
   ["admin", "ops_maker"],
+  ["admin", "property_manager"],
+  ["admin", "support_agent"],
   ["admin", "tax_officer"],
   ["admin", "trustee_officer"],
   ["auditor", "compliance_officer"],
   ["auditor", "legal_officer"],
   ["auditor", "ops_checker"],
   ["auditor", "ops_maker"],
+  ["auditor", "platform_owner"],
+  ["auditor", "property_manager"],
+  ["auditor", "support_agent"],
   ["auditor", "tax_officer"],
   ["auditor", "trustee_officer"],
   ["compliance_officer", "legal_officer"],
   ["compliance_officer", "ops_maker"],
+  ["compliance_officer", "platform_owner"],
+  ["compliance_officer", "property_manager"],
+  ["compliance_officer", "support_agent"],
   ["compliance_officer", "tax_officer"],
   ["compliance_officer", "trustee_officer"],
   ["legal_officer", "ops_checker"],
   ["legal_officer", "ops_maker"],
+  ["legal_officer", "platform_owner"],
+  ["legal_officer", "property_manager"],
+  ["legal_officer", "support_agent"],
   ["legal_officer", "tax_officer"],
   ["legal_officer", "trustee_officer"],
   ["ops_checker", "ops_maker"],
+  ["ops_checker", "platform_owner"],
+  ["ops_checker", "property_manager"],
+  ["ops_checker", "support_agent"],
   ["ops_checker", "trustee_officer"],
+  ["ops_maker", "platform_owner"],
+  ["ops_maker", "property_manager"],
+  ["ops_maker", "support_agent"],
   ["ops_maker", "tax_officer"],
   ["ops_maker", "trustee_officer"],
+  ["platform_owner", "property_manager"],
+  ["platform_owner", "tax_officer"],
+  ["platform_owner", "trustee_officer"],
+  ["property_manager", "support_agent"],
+  ["property_manager", "tax_officer"],
+  ["property_manager", "trustee_officer"],
+  ["support_agent", "tax_officer"],
+  ["support_agent", "trustee_officer"],
   ["tax_officer", "trustee_officer"],
 ];
 
@@ -172,6 +215,9 @@ const LABELS: Readonly<Record<Role, string>> = {
   tax_officer: "Tax officer",
   auditor: "Auditor",
   admin: "Administrator",
+  platform_owner: "Platform owner",
+  property_manager: "Property manager",
+  support_agent: "Investor support",
 };
 
 const LABEL_MAP = new Map<Role, string>(Object.entries(LABELS) as [Role, string][]);

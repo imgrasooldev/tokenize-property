@@ -181,3 +181,9 @@ The rules are evaluated in the database (`transfer.reconcile(token)`) and mapped
 | `transfer.paid_not_executed_overdue` | blocking | the same after `paid_not_executed_hours` |
 
 `recovery.unmatched` no longer reports a RecoveryGuard request that belongs to a transfer case (`transfer.recon_requests`). Ledger conventions: `xfer:<caseUuid>:paid` (bank → `transfer:<caseUuid>:escrow`, external reference = the buyer's Raast reference), `:fee`, `:tax`, `:settled` (external reference = the settlement reference `PTXFER-…`), `:refunded` (external reference = the buyer's original Raast reference).
+
+## Amendment 2026-10-29: emergency payout hold (migration 0031, T-049)
+
+- Until now the gate froze only from a reconciliation run (OPERATIONS "Manual payout stop" gap). `recon.emergency_hold(operator, reason)` lets one operator freeze payouts at once: stopping money is the safe direction, so it needs no second person.
+- The hold is an ordinary `freeze` gate event whose `run_id` is the newest run (finished or running), so R-3 is unchanged: the release is the maker-checker unfreeze and needs a run that started after the hold and passed. A hold while frozen, or before any run exists (payouts blocked anyway), is refused. Audit action `gate.hold`; the existing "payouts paused" officer alert fires.
+- Only the portal reaches it, for the `platform_owner` role with a fresh security-key step-up (ADR 0011 addendum 2026-10-29).

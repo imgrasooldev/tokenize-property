@@ -78,6 +78,19 @@ describe("roles", () => {
     expect(landingFor(permissionsOf(["trustee_officer"]))).toBe("/trustee");
     expect(landingFor(permissionsOf(["ops_maker"]))).toBe("/");
   });
+
+  it("platform roles (0031) decide nothing; only the platform owner holds payouts", () => {
+    const decides = (p: string) => /\.(decide|request|manage|export|cash|price|vote)$/.test(p);
+    for (const r of ["platform_owner", "property_manager", "support_agent"] as const) expect([...permissionsOf([r])].filter(decides), r).toEqual([]);
+    expect(permissionsOf(["platform_owner"]).has("compliance.read")).toBe(false);
+    expect(permissionsOf(["platform_owner"]).has("tax.read")).toBe(false);
+    expect([...permissionsOf(["property_manager"])].sort()).toEqual(["operations.read", "property.read"]);
+    expect([...permissionsOf(["support_agent"])]).toEqual(["support.read"]);
+    expect(ROLES.filter((r) => permissionsOf([r]).has("payouts.hold"))).toEqual(["platform_owner"]);
+    expect(landingFor(permissionsOf(["platform_owner"]))).toBe("/");
+    expect(landingFor(permissionsOf(["property_manager"]))).toBe("/operations");
+    expect(landingFor(permissionsOf(["support_agent"]))).toBe("/support");
+  });
 });
 
 describe("tokens and CSRF", () => {
