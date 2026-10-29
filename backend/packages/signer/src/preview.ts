@@ -16,7 +16,10 @@ import {
   identityCreatePayload,
   identityRegisterPayload,
   mintPayload,
+  finalizePayload,
+  publishPayload,
   recordPayoutPayload,
+  type RentRule,
   transferPayload,
   type AnyRule,
   type FreezeRule,
@@ -197,6 +200,49 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
           `target is the approved DistributionRegistry ${r.registry.toLowerCase()} (token ${r.token.toLowerCase()})`,
           "the distribution is finalized on chain",
           "the hash is the SHA-256 of the bank file of the distribution's submitted payout batch",
+          "payouts allowed by reconciliation (payout gate)",
+        ],
+      };
+    }
+    case "rent.publish": {
+      const r = rule as RentRule;
+      const p = publishPayload.safeParse(payload);
+      if (!p.success) bad("rent publication");
+      const d = p.data;
+      return {
+        to: r.registry.toLowerCase() as Hex,
+        data: encodeFunctionData({
+          abi: distributionRegistryAbi,
+          functionName: "publish",
+          args: [d.token.toLowerCase() as Hex, BigInt(d.recordBlock), d.merkleRoot as Hex, BigInt(d.totalPaisa), d.statementHash as Hex],
+        }),
+        abi: distributionRegistryAbi,
+        contract: "DistributionRegistry",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved DistributionRegistry ${r.registry.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          `exactly the payload ops.request_publish built from approved calculation ${d.calculation} (root, statement hash, total = sum of net)`,
+          "the statement is not already published on chain",
+          "payouts allowed by reconciliation (payout gate)",
+        ],
+      };
+    }
+    case "rent.finalize": {
+      const r = rule as RentRule;
+      const p = finalizePayload.safeParse(payload);
+      if (!p.success) bad("rent finalisation");
+      return {
+        to: r.registry.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: distributionRegistryAbi, functionName: "finalize", args: [BigInt(p.data.distributionId)] }),
+        abi: distributionRegistryAbi,
+        contract: "DistributionRegistry",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved DistributionRegistry ${r.registry.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "the distribution is published, its 48-hour challenge window has closed and the trustee has not rejected it",
+          "it matches an approved calculation",
           "payouts allowed by reconciliation (payout gate)",
         ],
       };

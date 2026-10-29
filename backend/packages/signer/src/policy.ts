@@ -71,6 +71,8 @@ export const KINDS = [
   "compliance.freeze",
   "compliance.unfreeze",
   "rent.record_payout",
+  "rent.publish",
+  "rent.finalize",
   "token.transfer",
   "identity.create",
   "identity.add_claim",
@@ -232,6 +234,93 @@ export function evaluateRecordPayout(rule: RecordPayoutRule, payload: unknown, f
     keyRef: rule.keyRef,
     to: rule.registry.toLowerCase() as Hex,
     data: encodeFunctionData({ abi: distributionRegistryAbi, functionName: "recordPayout", args: [BigInt(distributionId), payoutBatchHash as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+// ------------------------------------------------------------------ rent.publish / rent.finalize (T-022, migration 0032)
+
+/**
+ * Publishes an approved S-03 distribution (DistributionRegistry.publish) and finalises it after the
+ * 48-hour challenge window (DistributionRegistry.finalize), with the Ops key. The payloads are built by
+ * ops.request_publish / ops.request_finalize from the approved calculation itself; the database answer
+ * (ops.publish_allowed / ops.finalize_allowed: the enqueued command, still approved, not yet published,
+ * window closed, not rejected by the trustee) must be NULL. Payout kinds: the reconciliation gate applies.
+ */
+export const rentRule = z.object({
+  chainId: z.number().int().positive(),
+  keyRef: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/),
+  registry: address,
+  token: address,
+  approvals: z.number().int().min(0).max(5),
+  gasLimit: z.string().regex(/^[1-9][0-9]{4,6}$/).default("300000"),
+});
+export type RentRule = z.infer<typeof rentRule>;
+
+export const publishPayload = z.strictObject({
+  registry: address,
+  token: address,
+  recordBlock: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  merkleRoot: bytes32,
+  totalPaisa: z.string().regex(/^[1-9][0-9]{0,30}$/),
+  statementHash: bytes32,
+  calculation: z.string().regex(/^[1-9][0-9]{0,17}$/),
+});
+export const finalizePayload = z.strictObject({ registry: address, distributionId: z.string().regex(/^[1-9][0-9]{0,30}$/) });
+
+export interface RentFacts {
+  chainId: number;
+  /** ops.publish_allowed / ops.finalize_allowed: why not (null = allowed). */
+  problem: string | null;
+  /** finalize only: on-chain status of the distribution (none | published | rejected | finalized | paid) and its token. */
+  status?: string;
+  token?: string;
+}
+
+function rentTarget(rule: RentRule, registry: string, facts: RentFacts): Decision | null {
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (registry.toLowerCase() !== rule.registry.toLowerCase()) return { decision: "deny", reason: "target is not the approved DistributionRegistry" };
+  if (facts.problem !== null) return { decision: "deny", reason: `operations: ${facts.problem}` };
+  return null;
+}
+
+export function evaluatePublish(rule: RentRule, payload: unknown, facts: RentFacts): Decision {
+  const p = publishPayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const { registry, token, recordBlock, merkleRoot, totalPaisa, statementHash } = p.data;
+  const denied = rentTarget(rule, registry, facts);
+  if (denied) return denied;
+  if (token.toLowerCase() !== rule.token.toLowerCase()) return { decision: "deny", reason: "distribution belongs to another token" };
+  if (BigInt(merkleRoot) === 0n || BigInt(statementHash) === 0n) return { decision: "deny", reason: "zero root or statement hash" };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.registry.toLowerCase() as Hex,
+    data: encodeFunctionData({
+      abi: distributionRegistryAbi,
+      functionName: "publish",
+      args: [token.toLowerCase() as Hex, BigInt(recordBlock), merkleRoot as Hex, BigInt(totalPaisa), statementHash as Hex],
+    }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+export function evaluateFinalize(rule: RentRule, payload: unknown, facts: RentFacts): Decision {
+  const p = finalizePayload.safeParse(payload);
+  if (!p.success) return malformed(p.error);
+  const denied = rentTarget(rule, p.data.registry, facts);
+  if (denied) return denied;
+  if ((facts.token ?? "").toLowerCase() !== rule.token.toLowerCase()) return { decision: "deny", reason: "distribution belongs to another token" };
+  if (facts.status !== "published") return { decision: "deny", reason: `distribution is ${facts.status ?? "unknown"} on chain, not published` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.registry.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: distributionRegistryAbi, functionName: "finalize", args: [BigInt(p.data.distributionId)] }),
     gas: BigInt(rule.gasLimit),
   };
 }
@@ -957,7 +1046,7 @@ export function evaluateTransferCancel(rule: TransferRecoveryRule, payload: unkn
   };
 }
 
-export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule | AddKeyRule | RecoveryRule | BurnRule;
+export type AnyRule = MintRule | FreezeRule | RecordPayoutRule | RentRule | TransferRule | IdentityCreateRule | IdentityClaimRule | IdentityRegisterRule | AddKeyRule | RecoveryRule | BurnRule;
 
 /** The key a request of this kind would be signed with (for the audit of a denial); null if unknown. */
 export function requestKeyRef(kind: string, rule: AnyRule, payload: unknown): string | null {
@@ -987,6 +1076,7 @@ export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "compliance.freeze") return freezeRule.parse(rule);
   if (kind === "compliance.unfreeze") return unfreezeRule.parse(rule);
   if (kind === "rent.record_payout") return recordPayoutRule.parse(rule);
+  if (kind === "rent.publish" || kind === "rent.finalize") return rentRule.parse(rule);
   if (kind === "token.transfer") return transferRule.parse(rule);
   if (kind === "identity.create") return identityCreateRule.parse(rule);
   if (kind === "identity.add_claim") return identityClaimRule.parse(rule);

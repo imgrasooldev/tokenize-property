@@ -34,7 +34,12 @@ import {
   evaluateIdentityCreate,
   evaluateIdentityRegister,
   evaluateMint,
+  evaluateFinalize,
+  evaluatePublish,
   evaluateRecordPayout,
+  finalizePayload,
+  publishPayload,
+  type RentRule,
   evaluateTransfer,
   evaluateUnfreeze,
   freezePayload,
@@ -80,7 +85,7 @@ export interface ChainReader {
   /** Whether the token already freezes this wallet. */
   isFrozen(rule: FreezeRule, account: Hex): Promise<boolean>;
   /** A distribution's on-chain status (none | published | rejected | finalized | paid) and token. */
-  distribution(rule: RecordPayoutRule, id: bigint): Promise<{ status: string; token: string }>;
+  distribution(rule: Pick<RecordPayoutRule, "registry">, id: bigint): Promise<{ status: string; token: string }>;
   /** "dropped" only when there is no receipt and the sender's mined nonce is past this one. */
   txState(hash: Hex, from: Hex, nonce: bigint): Promise<"mined" | "dropped" | "pending">;
   /** Facts for a DvP delivery (token.transfer). Optional so older test doubles keep compiling. */
@@ -313,6 +318,9 @@ export class SignerService {
         return this.evaluateUnfreeze(c, rule as UnfreezeRule, payload, excludeRequest);
       case "rent.record_payout":
         return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
+      case "rent.publish":
+      case "rent.finalize":
+        return this.evaluateRent(c, kind, rule as RentRule, payload);
       case "token.transfer":
         return this.evaluateTransfer(c, rule as TransferRule, payload, excludeRequest);
       case "identity.create":
@@ -641,6 +649,27 @@ export class SignerService {
       db(),
     ]);
     return evaluateBurn(rule, payload, { chainId, balance, ...facts });
+  }
+
+  /** T-022 (0032 RP-1, RP-3): exactly the command ops.request_publish / ops.request_finalize enqueued, still allowed now. */
+  private async evaluateRent(c: pg.ClientBase, kind: "rent.publish" | "rent.finalize", rule: RentRule, payload: unknown): Promise<Decision> {
+    const allowed = async (fn: string): Promise<string | null> => {
+      const { rows } = await c.query<{ problem: string | null }>(`SELECT ${fn}($1::jsonb) AS problem`, [JSON.stringify(payload)]);
+      return rows[0] ? rows[0].problem : "no answer";
+    };
+    if (kind === "rent.publish") {
+      if (!publishPayload.safeParse(payload).success) return evaluatePublish(rule, payload, { chainId: 0, problem: "malformed" });
+      const [chainId, problem] = await Promise.all([this.chain.chainId(), allowed("ops.publish_allowed")]);
+      return evaluatePublish(rule, payload, { chainId, problem });
+    }
+    const p = finalizePayload.safeParse(payload);
+    if (!p.success) return evaluateFinalize(rule, payload, { chainId: 0, problem: "malformed" });
+    const [chainId, problem, d] = await Promise.all([
+      this.chain.chainId(),
+      allowed("ops.finalize_allowed"),
+      this.chain.distribution(rule, BigInt(p.data.distributionId)),
+    ]);
+    return evaluateFinalize(rule, payload, { chainId, problem, status: d.status, token: d.token });
   }
 
   private async evaluateRecordPayout(c: pg.ClientBase, rule: RecordPayoutRule, payload: unknown): Promise<Decision> {
