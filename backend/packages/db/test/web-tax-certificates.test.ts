@@ -91,3 +91,16 @@ describe("tax certificates on the website (0035)", () => {
     expect(await code("SELECT tax.certificate_data(gen_random_uuid(), 2026)")).toBe("42501");
   });
 });
+
+describe("tenant payment page through the website's own role (0044 RI-2, fixed by 0047)", () => {
+  it("pt_web reads an invoice by its link through payweb.invoice only; an unknown link is null, not an error", async () => {
+    expect((await web.query<{ v: unknown }>("SELECT payweb.invoice($1) AS v", [randomBytes(32).toString("base64url")])).rows[0]?.v).toBeNull();
+    const code = async (sql: string) =>
+      web.query(sql).then(
+        () => "ok",
+        (e: unknown) => (e as { code?: string }).code,
+      );
+    expect(await code("SELECT ops.web_invoice('x')")).toBe("42501");
+    expect(await code("SELECT * FROM ops.rent_invoices")).toBe("42501");
+  });
+});

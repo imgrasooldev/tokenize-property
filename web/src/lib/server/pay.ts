@@ -17,6 +17,6 @@ export interface TenantInvoice {
 
 export async function invoiceByLink(link: string): Promise<TenantInvoice | null> {
   if (!/^[A-Za-z0-9_-]{43,64}$/.test(link)) return null;
-  const { rows } = await (await db()).query<{ v: TenantInvoice | null }>("SELECT ops.web_invoice($1) AS v", [link]);
+  const { rows } = await (await db()).query<{ v: TenantInvoice | null }>("SELECT payweb.invoice($1) AS v", [link]);
   return rows[0]?.v ?? null;
 }
