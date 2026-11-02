@@ -4,6 +4,7 @@ Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are comm
 
 ## 2026-11-02
 
+- Playwright `admin/e2e/ops-followups.spec.ts` (4/4 in Edge with virtual FIDO2 keys): a property manager sees only the assigned property on `/operations`; a credit in suspense is returned maker-checker on `/operations/bank`; a rent invoice is issued (one-time link), paid by a bank line and approved on `/operations/invoices`; a poll is proposed and approved by a trustee officer on `/votes`. The rent publish/finalize buttons stay covered by DB/HTTP tests and the Besu e2e (an approved calculation needs the statement and the trustee pre-check, which the admin e2e has no fixture for).
 - T-022 Besu end to end completed: the second half of `npm run test:rent-e2e` finalised on-chain distribution 2 through outbox + signing service on the local Besu network after its 48-hour window, the indexer read it as finalized, and `ops.book_distribution` booked calculation 1 (`rent:distribution:<token>:2` and `rent:wht:<token>:2` journals). Two test fixes: the contract's `Status.Finalized` is 3 (None 0, Published 1, Rejected 2, Finalized 3, Paid 4), and the journal table is `ledger.journal`. The next cycle (calculation 2) is published; its window closes 2026-11-04 18:51 UTC.
 
 ## 2026-10-30
