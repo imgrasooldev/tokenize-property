@@ -269,7 +269,7 @@ export function PublicPage({ active, children, minimal = false }: { active: Publ
   );
 }
 
-export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account" | "notifications" | "complaints" | "votes";
+export type PortalKey = "portfolio" | "invest" | "subscriptions" | "transfers" | "exit" | "market" | "rent" | "properties" | "account" | "notifications" | "complaints" | "votes" | "sponsor";
 
 function initials(name: string): string {
   // Words that start with a letter only, so "Bob (demo)" gives "B", not "B(".

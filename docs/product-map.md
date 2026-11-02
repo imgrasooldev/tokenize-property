@@ -22,7 +22,7 @@ Everything the platform consists of: what each user sees, and the services behin
 | 6 | **Compliance portal** (module of admin) | Compliance officer | KYC review queue, AML and sanctions hits, case files, freeze requests, suspicious transaction reports to FMU, full audit log | Pilot |
 | 7 | **Trustee portal** | Trustee officers (e.g. CDC) | Trustee register view, co-sign issuance, review and reject distributions within 48h, recovery requests, daily reconciliation reports | Pilot |
 | 8 | **Multisig signing console** | Safe signers (directors, trustee, ops) | Review and sign Safe transactions on hardware wallets | Self-hosted Safe{Wallet} | Pilot |
-| 9 | **Property sponsor portal** | Property owners and developers | Submit a property, upload title documents, track due diligence and valuation | Later |
+| 9 | **Property sponsor portal** | Property owners and developers | Submit a property, upload title documents, track due diligence and valuation | Built (website `/sponsor`) |
 | 10 | **Secondary market** | Investors | Buy and sell tokens between verified investors | Later, only after regulatory approval |
 
 All internal portals are one Next.js app with role-based access, reachable only over VPN with SSO and FIDO2 hardware keys (NIST AAL3). Built as `admin/` ("PT Control"); Step 6a (2026-10-13) delivered sign-in with hardware keys, roles with segregation of duties, the audit trail and the operations overview, see [ADR 0011](decisions/0011-admin-portal.md); approvals 6b, compliance 6c and trustee 6d follow.

@@ -167,6 +167,17 @@ export class Vault {
   }
 
   /**
+   * A sponsor's upload from the website (migration 0048 SP-3): stored only against an unused
+   * one-time ticket issued for exactly this file (hash, size, media type); the ticket is spent first.
+   */
+  async putWithTicket(ticket: string, plain: Buffer, media: string): Promise<{ sha256: string; storeRef: string }> {
+    if (!/^[A-Za-z0-9_-]{43,64}$/.test(ticket)) throw new VaultError("INVALID", "a valid upload ticket is required");
+    const { rows } = await this.db.query<{ ok: boolean }>("SELECT vault.redeem_upload_ticket($1, $2, $3, $4) AS ok", [ticket, sha256(plain), plain.length, media]);
+    if (!rows[0]?.ok) throw new VaultError("INVALID", "the upload ticket is unknown, used, expired or for another file");
+    return this.put(plain, media, "sponsor-upload");
+  }
+
+  /**
    * Reads one file for a client. purpose "public": only what vault.public_document allows (the
    * published offering and property documents). Every read is logged before the bytes are returned.
    */

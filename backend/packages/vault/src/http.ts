@@ -8,8 +8,10 @@ import { Vault, VaultError } from "./store.ts";
  *   POST /v1/public-document {sha256}            decrypted bytes of a published document (client "web" only)
  *   POST /v1/store {mediaType, officer, dataBase64}  encrypt and store one file (client "admin-portal" only,
  *                                                 for an officer the portal signed in with a fresh step-up)
+ *   POST /v1/sponsor-store {ticket, mediaType, dataBase64}  a sponsor's upload from the website (client "web"),
+ *                                                 only against a one-time ticket for exactly that file (0048)
  */
-export const WEB_VAULT_SCOPE = ["/v1/public-document"] as const;
+export const WEB_VAULT_SCOPE = ["/v1/public-document", "/v1/sponsor-store"] as const;
 export const ADMIN_VAULT_SCOPE = ["/v1/store"] as const;
 const MAX_STORE_BYTES = 25 * 1024 * 1024;
 
@@ -19,7 +21,7 @@ async function handle(vault: Vault, auth: HmacAuthenticator, req: IncomingMessag
     sendJson(res, 200, { ok: true });
     return;
   }
-  if (req.method === "POST" && path === "/v1/store") {
+  if (req.method === "POST" && (path === "/v1/store" || path === "/v1/sponsor-store")) {
     await store(vault, auth, req, res, path);
     return;
   }
@@ -75,18 +77,21 @@ async function store(vault: Vault, auth: HmacAuthenticator, req: IncomingMessage
     sendJson(res, a.status, { error: "unauthorized" });
     return;
   }
-  let p: { mediaType?: unknown; officer?: unknown; dataBase64?: unknown };
+  let p: { mediaType?: unknown; officer?: unknown; ticket?: unknown; dataBase64?: unknown };
   try {
     p = JSON.parse(body) as typeof p;
   } catch {
     p = {};
   }
-  if (typeof p.mediaType !== "string" || typeof p.officer !== "string" || !/^[a-z][a-z0-9._-]{2,39}$/.test(p.officer) || typeof p.dataBase64 !== "string") {
+  const sponsor = path === "/v1/sponsor-store";
+  const who = sponsor ? typeof p.ticket === "string" : typeof p.officer === "string" && /^[a-z][a-z0-9._-]{2,39}$/.test(p.officer);
+  if (typeof p.mediaType !== "string" || !who || typeof p.dataBase64 !== "string") {
     sendJson(res, 400, { error: "invalid" });
     return;
   }
   try {
-    const r = await vault.put(Buffer.from(p.dataBase64, "base64"), p.mediaType, `officer:${p.officer}`);
+    const bytes = Buffer.from(p.dataBase64, "base64");
+    const r = sponsor ? await vault.putWithTicket(String(p.ticket), bytes, p.mediaType) : await vault.put(bytes, p.mediaType, `officer:${String(p.officer)}`);
     sendJson(res, 200, r);
   } catch (e) {
     if (e instanceof VaultError) {

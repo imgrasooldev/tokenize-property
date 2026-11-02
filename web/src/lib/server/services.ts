@@ -119,3 +119,25 @@ export async function publicDocument(sha256: string): Promise<{ bytes: Buffer; m
   return { bytes, media: res.headers.get("content-type") ?? "application/octet-stream" };
 }
 
+
+/**
+ * A sponsor's upload to the document vault (migration 0048 SP-3): the vault stores it only against
+ * the one-time ticket the database issued for exactly this file. Returns false when refused.
+ */
+export async function sponsorStore(ticket: string, media: string, bytes: Buffer): Promise<boolean> {
+  const path = "/v1/sponsor-store";
+  const s = JSON.stringify({ ticket, mediaType: media, dataBase64: bytes.toString("base64") });
+  const key = secret("VAULT_CLIENT_SECRET_WEB");
+  const ts = String(Date.now());
+  const nonce = randomBytes(16).toString("hex");
+  const sig = createHmac("sha256", key).update(`POST\n${path}\n${ts}\n${nonce}\n${createHash("sha256").update(s).digest("hex")}`).digest("hex");
+  const res = await fetch(`${vaultUrl()}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-pt-client": "web", "x-pt-ts": ts, "x-pt-nonce": nonce, "x-pt-sig": sig },
+    body: s,
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (res.status === 400) return false;
+  if (res.status !== 200) throw new Error(`vault service returned ${String(res.status)}`);
+  return true;
+}

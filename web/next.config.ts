@@ -21,6 +21,12 @@ const config: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR === ".next-e2e" ? ".next-e2e" : ".next",
   poweredByHeader: false,
   reactStrictMode: true,
+  // Sponsor document uploads (/sponsor, up to 25 MB per file) go through a server action and the
+  // proxy. nginx keeps every other path at 1 MB.
+  experimental: {
+    serverActions: { bodySizeLimit: "26mb" },
+    proxyClientMaxBodySize: "26mb",
+  },
   headers() {
     return Promise.resolve([{ source: "/:path*", headers: securityHeaders }]);
   },

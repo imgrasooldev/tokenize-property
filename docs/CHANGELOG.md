@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-03
+
+- T-042 property sponsor portal (migration `0048_sponsor_portal.sql`, SP-1..SP-4): website `/sponsor` (EN/UR; linked from `/account` for representatives). For each sponsor the signed-in person currently represents (S-01 representative or individual owner, by KYC subject): the KYB state, the team's last message (K3/K6 and P2/P5 reasons only), documents, and the properties with their state, what is still missing and their documents. Within the person's powers: submit the KYB file, add a property, edit a draft's identifiers, submit it for review, withdraw it with a reason, and upload documents (PDF/JPEG/PNG/TIFF up to 25 MB). Everything runs through the session-bound `sponsorweb.*` functions, which call the S-01 functions as the representative (`web:<investor>`; S-01 power, KYC and state rules unchanged; the `onboarding` duty check accepts that actor only inside `sponsorweb.act`). Uploads: `sponsorweb.upload_ticket` issues a one-time ticket for exactly that file (hash, size, media type; 10 minutes; 30 an hour), the vault service stores it only against that ticket (`/v1/sponsor-store`, client `web`; `vault.redeem_upload_ticket`), then `sponsorweb.add_document` records it as `vault://<sha256>`. Screening, risk, duplicates and reviewers never reach the website. Upload size: Next.js server actions and the proxy accept 26 MB; nginx allows 26 MB on `/sponsor` only (1 MB elsewhere).
+
 ## 2026-11-02
 
 - Playwright `admin/e2e/ops-followups.spec.ts` (4/4 in Edge with virtual FIDO2 keys): a property manager sees only the assigned property on `/operations`; a credit in suspense is returned maker-checker on `/operations/bank`; a rent invoice is issued (one-time link), paid by a bank line and approved on `/operations/invoices`; a poll is proposed and approved by a trustee officer on `/votes`. The rent publish/finalize buttons stay covered by DB/HTTP tests and the Besu e2e (an approved calculation needs the statement and the trustee pre-check, which the admin e2e has no fixture for).

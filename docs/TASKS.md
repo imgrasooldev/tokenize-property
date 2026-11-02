@@ -249,6 +249,7 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 
 ### T-042 Sponsor self-service portal
 - P low, C L, Opt (product-map "Later"); T-021 covers the operator-assisted path.
+- Status (2026-11-03): **Done** (migration 0048): website `/sponsor` for representatives (KYB submit, add/edit/submit/withdraw property, ticketed document uploads into the vault). Reviews, committees and the trustee stay in PT Control.
 
 ## 5. Improvements
 

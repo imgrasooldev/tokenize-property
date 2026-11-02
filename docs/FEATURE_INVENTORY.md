@@ -108,7 +108,7 @@ The owner's 16-stage lifecycle brief is not in the repository. The stages below 
 | 6b not yet in the portal: payout batch creation and submission, bank statement import, suspense returns, outbox review decisions, signer policy changes, backup keys | Missing (CLI or service only) | ADR 0011 section 10 |
 | 6c-6d compliance, trustee portals | Missing | product-map #5-7 |
 | Multisig signing console (self-hosted Safe) | Missing | product-map #8 |
-| Sponsor portal | Missing | product-map #9 |
+| Sponsor portal | Done 2026-11-03 (website `/sponsor`, migration 0048) | product-map #9 |
 | Flutter investor app | Missing | no `mobile/` folder |
 | Demo server deploy (CI-gated) | Done | `.github/workflows/deploy-demo.yml`, `deploy/demo-server/*` |
 | Indexer, recon, anchor, signer, bank services on the demo server | Missing | `deploy/demo-server/*.service` run only Besu, PostgreSQL, web, console |

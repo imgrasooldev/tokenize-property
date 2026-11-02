@@ -6,6 +6,8 @@ import { Countdown } from "@/components/offering/Countdown";
 import { formatNumber } from "@/lib/i18n";
 import { supportReference } from "@/lib/support";
 import { certificates } from "@/lib/server/tax-certificates";
+import { sponsorOverview } from "@/lib/server/sponsor";
+import { sponsorDict } from "@/lib/i18n-sponsor";
 import { catalogDict, pktTime } from "@/lib/i18n-catalog";
 import { fill } from "@/lib/i18n-verify";
 import { investorById } from "@/lib/server/db";
@@ -40,6 +42,7 @@ export default async function AccountPage() {
     sessionExpiresAt(),
     certificates(session.hash),
   ]);
+  const sponsors = await sponsorOverview(session.hash);
   const now = Date.now();
   const status = investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
   const chainSteps = [t.stepIdentity, t.stepClaims, t.stepRegistered];
@@ -62,6 +65,11 @@ export default async function AccountPage() {
         <div className="alert" role="status" style={{ marginBlockEnd: 16 }}>
           {t.onboardFailed}
         </div>
+      )}
+      {sponsors.length > 0 && (
+        <p className="note" data-testid="sponsor-link">
+          <a href="/sponsor">{sponsorDict(lang).link}</a>
+        </p>
       )}
       <div className="kpi-strip">
         <div>
