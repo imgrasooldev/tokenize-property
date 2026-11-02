@@ -74,5 +74,6 @@ Status of each feature: [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md). Components
 | Questioning a design choice | [DECISIONS.md](DECISIONS.md), [decisions/](decisions/) |
 | History | [CHANGELOG.md](CHANGELOG.md) |
 | Behaviour and security (sources of truth) | [contract-spec.md](contract-spec.md), [threat-model.md](threat-model.md), [security-standards.md](security-standards.md) |
+| Every portal: who uses it and what it does | [PORTALS.md](PORTALS.md) |
 | Target product list | [product-map.md](product-map.md) (build-order section is stale: says Step 3 "in progress") |
 | Decisions, gotchas, owner log | [../MEMORY.md](../MEMORY.md) |

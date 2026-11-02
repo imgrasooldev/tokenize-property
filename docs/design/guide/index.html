@@ -395,17 +395,20 @@ footer{border-top:1px solid var(--stroke);padding-block:24px 48px;font-size:12.5
   </section>
 
   <section id="portals" data-c="pink">
-    <div class="shead"><div class="kicker">Section 6</div><h2>Portals, apps and roles</h2><p>Four surfaces built today, three planned. Technically two Next.js apps plus the self-hosted Safe console.</p><button class="link" data-copy="portals">copy link</button></div>
+    <div class="shead"><div class="kicker">Section 6</div><h2>Portals, apps and roles</h2><p>Ten portals: eight live on the demo server, two still to build. Technically two Next.js apps (the website and PT Control), plus the Flutter app and the self-hosted Safe console. Full detail in docs/PORTALS.md.</p><button class="link" data-copy="portals">copy link</button></div>
     <div class="tbl glass"><table>
-      <thead><tr><th>Surface</th><th>Users</th><th>What it does</th><th>Status</th></tr></thead><tbody>
-      <tr><td>Public website</td><td>Everyone</td><td>How it works, live and upcoming properties with a rule-based score, fees, risk disclosure, FAQ, English and Urdu, grounded AI analyst that never gives advice, live chain pulse.</td><td><span class="chip ok">live on demo</span></td></tr>
-      <tr><td>Investor portal</td><td>Investors</td><td>Passkey sign-up and KYC, reserve and pay, portfolio, rent statements with Merkle proofs, payout account with cooling-off, transfer, exit and redemption requests, notifications.</td><td><span class="chip warn">built, gaps</span></td></tr>
-      <tr><td>Verification page</td><td>Anyone</td><td>Supply vs trustee register, document hashes, public anchors, verify your own rent entitlement.</td><td><span class="chip ok">live on demo</span></td></tr>
-      <tr><td>PT Control</td><td>Officers</td><td>Approvals, offerings, property files, operations and rent, tax, compliance cases and freezes, recovery, trustee register and distribution review, transfers, exits, officers and roles, audit viewer.</td><td><span class="chip warn">built, gaps</span></td></tr>
-      <tr><td>Safe console</td><td>Safe signers</td><td>Review and sign multisig transactions on hardware wallets.</td><td><span class="chip info">production setup</span></td></tr>
-      <tr><td>Mobile app</td><td>Investors</td><td>Portal features plus biometrics, push, device binding (Flutter).</td><td><span class="chip bad">planned</span></td></tr>
-      <tr><td>Sponsor portal</td><td>Property owners</td><td>Submit a property, upload title documents, track due diligence.</td><td><span class="chip bad">later</span></td></tr>
-      <tr><td>Secondary market</td><td>Investors</td><td>Open buy and sell between verified investors.</td><td><span class="chip bad">after approval</span></td></tr>
+      <thead><tr><th>Portal</th><th>For</th><th>What it does</th><th>Status</th></tr></thead><tbody>
+      <tr><td>1 · Public website</td><td>Everyone, no account</td><td>How it works, live and upcoming properties with a rule-based score, fees, risk disclosure, public documents (hash checked), search and a grounded AI analyst that never gives advice, English and Urdu.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>2 · Investor portal</td><td>Investors (passkey)</td><td>Sign-up and KYC, invest with recorded disclosures and Raast payment, withdrawal in the cooling-off, portfolio with rent proofs, transfers, exit, demo market, payout account with 72 h wait, tax certificates, notifications, votes, complaints. Passkey step-up on every money move.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>3 · Public verification</td><td>Anyone</td><td>Supply vs trustee register, document hashes, public anchors, your own rent entitlement by Merkle proof.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>4 · Sponsor portal</td><td>Property owners' representatives</td><td>KYB state and team notes, submit KYB, add / edit / submit / withdraw properties, upload documents through one-time vault tickets; powers checked by the database.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>5 · Tenant payment page</td><td>Tenants (one-time link)</td><td>Rent invoice: amount, due date, reference, collection account; payment recorded maker-checker.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>6 · Operations / admin portal</td><td>Administrators, platform owner, operations makers and checkers, legal, tax, auditors, property managers, support (FIDO2 keys)</td><td>Officers and roles, approvals, payout batches, bank desk, signing policies, rent publish and finalize, tenant invoices, documents, polls, recovery, exits, transfers, tax, support lookup, complaints, audit. Everything maker-checker.</td><td><span class="chip warn">live, gaps</span></td></tr>
+      <tr><td>7 · Compliance portal</td><td>Compliance officers</td><td>KYC and AML queue, sanctions and PEP hits, cases, freezes, exports, complaints referred to compliance. goAML reporting still to build.</td><td><span class="chip warn">live, gaps</span></td></tr>
+      <tr><td>8 · Trustee portal</td><td>Trustee officers</td><td>Trustee register, rent distribution review in the 48 h window, exit and transfer decisions, poll approvals, exports.</td><td><span class="chip ok">live</span></td></tr>
+      <tr><td>9 · Investor mobile app</td><td>Investors</td><td>Portal features plus biometrics, push, device binding (Flutter). Interactive design: 49 screens, three looks at /mockups/app/.</td><td><span class="chip info">design ready</span></td></tr>
+      <tr><td>10 · Multisig console</td><td>Safe signers</td><td>Review and sign multisig transactions on hardware wallets (self-hosted Safe).</td><td><span class="chip bad">to build</span></td></tr>
+      <tr><td>Later · Secondary market</td><td>Investors</td><td>Open buy and sell between verified investors (a labelled demo market exists today).</td><td><span class="chip bad">after approval</span></td></tr>
       </tbody></table></div>
 
     <h3>Role explorer</h3>
@@ -433,7 +436,7 @@ footer{border-top:1px solid var(--stroke);padding-block:24px 48px;font-size:12.5
       <div class="card glass partial"><h4>Investor portal gaps <span class="chip warn">partial</span></h4><ul><li>Tax certificate download</li><li>Demo personas need a KYC subject for notifications</li><li>Offering withdrawal window, supplementary disclosure, document download</li></ul></div>
       <div class="card glass partial"><h4>PT Control gaps <span class="chip warn">partial</span></h4><ul><li>CLI-only: bank statement import, suspense returns, follow-up batches, signer policy changes</li><li>Session binding for S-01 maker actions</li><li>Playwright for newest screens; enrol 14 demo officers</li></ul></div>
       <div class="card glass partial"><h4>Providers and keys <span class="chip warn">partial</span></h4><ul><li>NADRA Verisys, liveness, sanctions, bank, Raast, SMS, email are mocks with real interfaces</li><li>Anchor target is a local stand-in chain</li><li>Encrypted file keystore; no HSM or MPC yet</li></ul></div>
-      <div class="card glass notbuilt"><h4>Apps and portals <span class="chip bad">not built</span></h4><ul><li>Flutter mobile app and public API</li><li>Sponsor portal</li><li>Open secondary market (needs approval)</li></ul></div>
+      <div class="card glass notbuilt"><h4>Apps and portals <span class="chip bad">not built</span></h4><ul><li>Flutter mobile app (design ready) and public API</li><li>Multisig signing console (self-hosted Safe)</li><li>Open secondary market (needs approval)</li></ul></div>
       <div class="card glass notbuilt"><h4>Investor features <span class="chip bad">not built</span></h4><ul><li>Tenant rent-collection link, auto-reinvest</li><li>Complaints system, Roshan Digital Account onboarding</li><li>Document vault, token-holder voting</li></ul></div>
       <div class="card glass notbuilt"><h4>Operations and assurance <span class="chip bad">not built</span></h4><ul><li>Monitoring and alerting stack</li><li>Offsite encrypted backups (waiting on an offline GPG key)</li><li>goAML regulatory reporting</li><li>External audits, pen test, formal verification</li></ul></div>
     </div>
@@ -466,7 +469,7 @@ footer{border-top:1px solid var(--stroke);padding-block:24px 48px;font-size:12.5
       <div class="gate glass" style="--gc:var(--pink)"><h4>Assurance and legal</h4><p>Two independent contract audits, penetration test, formal verification of the guards, GPL-3.0 opinion on ERC-3643, SECP sandbox application, trustee agreement and SPV, Shariah review if offered.</p><span class="own">Auditors + counsel</span></div>
       <div class="gate glass" style="--gc:var(--up)"><h4>Pilot</h4><p>Full rehearsal with the trustee on staging, then a limited first offering under SECP sandbox conditions.</p><span class="own">Everyone</span></div>
     </div>
-    <div class="note"><b>After the pilot:</b> mobile app and public API, sponsor portal, open secondary market once approved, tenant rent-collection link, auto-reinvest, Roshan Digital Account onboarding, complaints system, document vault, token-holder voting, goAML reporting.</div>
+    <div class="note"><b>After the pilot:</b> mobile app and public API, open secondary market once approved, auto-reinvest, Roshan Digital Account onboarding, goAML reporting. Already built ahead of plan: sponsor portal, tenant rent-collection link, complaints system, document vault, token-holder voting.</div>
   </section>
 
   <section id="faq" data-c="violet">

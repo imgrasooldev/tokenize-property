@@ -16,6 +16,8 @@ Everything the platform consists of: what each user sees, and the services behin
 
 ## 2. Internal portals
 
+Current status of every portal, role by role: [PORTALS.md](PORTALS.md).
+
 | # | Portal | Users | Main features | Phase |
 |---|---|---|---|---|
 | 5 | **Operations / admin portal** | Operations staff | Set up offerings, process subscriptions, prepare mint requests, prepare rent distributions, payout reconciliation, investor support. Every money or token action is maker-checker. | Pilot |
