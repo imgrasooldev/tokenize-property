@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-02
+
+- T-022 Besu end to end completed: the second half of `npm run test:rent-e2e` finalised on-chain distribution 2 through outbox + signing service on the local Besu network after its 48-hour window, the indexer read it as finalized, and `ops.book_distribution` booked calculation 1 (`rent:distribution:<token>:2` and `rent:wht:<token>:2` journals). Two test fixes: the contract's `Status.Finalized` is 3 (None 0, Published 1, Rejected 2, Finalized 3, Paid 4), and the journal table is `ledger.journal`. The next cycle (calculation 2) is published; its window closes 2026-11-04 18:51 UTC.
+
 ## 2026-10-30
 
 - Fix (migration `0047_payweb.sql`): the tenant payment page `/pay/<link>` failed with 500 on the demo server because the website's role had no USAGE on schema `ops`; the website now calls `payweb.invoice` (a schema of its own with that one function), tested as pt_web.

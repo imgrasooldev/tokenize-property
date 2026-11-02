@@ -169,13 +169,13 @@ describe.skipIf(!live)("rent publish -> 48 h -> finalize -> book on the local Be
         expect(await settle(BigInt(cmd))).toBe("confirmed");
         await ix.catchUp();
       }
-      expect((await onChain(BigInt(r.id))).status).toBe(2); // Finalized
+      expect((await onChain(BigInt(r.id))).status).toBe(3); // Status.Finalized (None 0, Published 1, Rejected 2, Finalized 3, Paid 4)
       expect((await w.su.query<{ s: string }>("SELECT status AS s FROM chain.distributions WHERE registry = $1 AND id = $2", [t.registry, r.id])).rows[0]?.s).toBe("finalized");
       await w.ops.query("SELECT ops.book_distribution($1, $2, $3, 'operator:omar')", [r.calc, t.registry, r.id]);
       const booked = await w.su.query<{ status: string; j: string | null }>("SELECT status, distribution_journal_id::text AS j FROM ops.distributions WHERE id = $1", [r.calc]);
       expect(booked.rows[0]?.status).toBe("booked");
       expect(booked.rows[0]?.j).not.toBeNull();
-      const j = await w.su.query("SELECT 1 FROM ledger.journals WHERE id = $1", [booked.rows[0]?.j]);
+      const j = await w.su.query("SELECT 1 FROM ledger.journal WHERE id = $1", [booked.rows[0]?.j]);
       expect(j.rowCount).toBe(1);
     }
   }, 300_000);
