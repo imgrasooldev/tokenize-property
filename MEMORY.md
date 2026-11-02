@@ -6,7 +6,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Repository: https://github.com/imgrasooldev/tokenize-property (public: never commit secrets; dev keys stay git-ignored)
 - Local path: `D:\property-token`
 - Start here: docs/CURRENT_STATUS.md (handoff) and docs/TASKS.md (roadmap); this file keeps decisions, gotchas and the communication log.
-- Current position: **Steps 1-5 and the 6a-6d portals are done and live on the demo server; migrations 0001-0050 are on `main` (2026-10-29/11-03: rent publish/finalize + buttons + scheduler, platform roles + manager scope, website tax certificates / withdrawal / support reference, bank import + bank desk + signing policies, complaints, document vault + uploads + key rotation, tenant rent invoices, S-01 request binding, token-holder voting, sponsor portal, PT Control onboarding desk, goAML STR draft, website information pages). Next: the open items in section 8 (public API, Flutter app, monitoring; owner decisions).**
+- Current position: **Steps 1-5 and the 6a-6d portals are done and live on the demo server; migrations 0001-0050 are on `main` (2026-10-29/11-03: rent publish/finalize + buttons + scheduler, platform roles + manager scope, website tax certificates / withdrawal / support reference, bank import + bank desk + signing policies, complaints, document vault + uploads + key rotation, tenant rent invoices, S-01 request binding, token-holder voting, sponsor portal, PT Control onboarding desk, goAML STR draft, website information pages). Next: see "Handoff 2026-11-03" in section 8 (tests to run first, then transaction monitoring, monitoring dashboard, auto-reinvest, Roshan Digital Account, public API, Flutter app).**
 
 ---
 
@@ -185,7 +185,41 @@ Updated 2026-10-24 (owner asked for a plain "done / remaining" list).
 2. ~~`rent.publish` / `rent.finalize` signer kinds~~ built and merged 2026-10-29 (4ffc8b6; migration `0032_rent_publish.sql`): `ops:run publish {id, actor}` / `ops:run finalize {registry, onchainId, actor}` enqueue from the approved calculation; signer checks `ops.publish_allowed` / `ops.finalize_allowed` + payout gate. Follow-ups done 2026-10-29: Besu e2e (`npm run test:rent-e2e`; finalize + book half runs after 2026-10-31 16:09 UTC), PT Control buttons (0033), finalize scheduler + units `pt-notify`/`pt-transfer`/`pt-rent-finalize` (T-034). Besu e2e complete 2026-11-02: distribution 2 finalized on Besu, calculation 1 booked (`rent:distribution` + `rent:wht` journals); a new cycle (calculation 2) is published, window closes 2026-11-04 18:51 UTC.
 3. ~~Website~~ done 2026-10-29: tax certificates on `/account` + printable page + verifiable JSON download (0035); `kyc:demo-personas` gives Alice/Bob a KYC subject; withdrawal within the S-02 window on `/subscriptions` + disclosures on the offering page (0036). Still open: offering document download (needs the document vault T-038: only hashes are stored).
 4. Portal: CLI-only actions (~~bank statement import~~ done 2026-10-29: `/operations/bank`, migration 0037; ~~suspense returns~~, ~~follow-up batches~~ (0038, `/operations/bank`), ~~signer policy changes~~ (0039, `/operations/policies`; pt-signer loads them on start)); ~~session binding of S-01 maker requests~~ (done 2026-10-30, migration 0045: `/approvals/property` "Ask for a decision"; the other S-01 maker actions moved to PT Control `/onboarding` on 2026-11-03, migration 0049; only createSponsor stays CLI because it seals with keys the portal does not hold), ~~Playwright for the new screens~~ (done: `desk-followups.spec.ts` complaints + policies, `ops-followups.spec.ts` manager scope, suspense return, rent invoice, poll; rent buttons stay DB/HTTP + Besu e2e), enrol the 14 demo officers (owner action: each needs its own security key) so `seed:catalog` completes.
-5. Later features: ~~document vault T-038~~ (done 2026-10-30, migrations 0041-0043, ADR 0017; PT Control `/documents` upload, `vault:rotate`; `vault:serve` / `vault:put`, unit `pt-vault`, website `/api/documents/[sha]`; documents must be stored with `vault:put` before they download), ~~complaints system~~ (done 2026-10-30, migration 0040: website `/complaints`, PT Control `/complaints`; SLA days are placeholders, legal to confirm), ~~tenant rent-collection link~~ (done 2026-10-30, migration 0044: `/operations/invoices`, website `/pay/<link>`; account text is a placeholder), auto-reinvest, Roshan Digital Account, document vault (T-038), Flutter app + public API, ~~sponsor portal~~ (done 2026-11-03, migration 0048: website `/sponsor`; representatives submit KYB, add/edit/submit/withdraw properties, upload documents through one-time vault tickets), ~~token-holder voting~~ (done 2026-10-30, migration 0046: PT Control `/votes`, website `/votes`; matters and quorum legal to confirm), regulatory reporting (goAML).
+5. Later features: ~~document vault T-038~~ (done 2026-10-30, migrations 0041-0043, ADR 0017; PT Control `/documents` upload, `vault:rotate`; `vault:serve` / `vault:put`, unit `pt-vault`, website `/api/documents/[sha]`; documents must be stored with `vault:put` before they download), ~~complaints system~~ (done 2026-10-30, migration 0040: website `/complaints`, PT Control `/complaints`; SLA days are placeholders, legal to confirm), ~~tenant rent-collection link~~ (done 2026-10-30, migration 0044: `/operations/invoices`, website `/pay/<link>`; account text is a placeholder), auto-reinvest, Roshan Digital Account, Flutter app + public API, ~~sponsor portal~~ (done 2026-11-03, migration 0048: website `/sponsor`; representatives submit KYB, add/edit/submit/withdraw properties, upload documents through one-time vault tickets), ~~token-holder voting~~ (done 2026-10-30, migration 0046: PT Control `/votes`, website `/votes`; matters and quorum legal to confirm), ~~regulatory reporting (goAML)~~ (draft done 2026-11-03, migration 0050: goAML STR XML in every STR export; entity values and indicator codes are placeholders until the FMU confirms them; filing stays manual), transaction monitoring (rules that open STR candidates), ~~website information pages~~ (done 2026-11-03: terms, privacy, risks, fees, FAQ, about, reports, contact; legal text is draft).
+
+### Handoff 2026-11-03 (continue on the home laptop)
+
+**Done today (all pushed to `main`, CI green, live on the demo server):**
+- Sponsor portal, website `/sponsor` (migration 0048, ff24099).
+- Mobile app design: interactive flow, 49 screens, 3 looks at `/mockups/app/` (51162ee); five-screen PNG in `docs/design/mobile/`.
+- `docs/PORTALS.md` (10 portals, who and what) and the /docs portals table (7c34cd4).
+- PT Control onboarding desk `/onboarding` (migration 0049) and goAML STR draft (migration 0050) (2efe87b).
+- Website information pages: terms, privacy, risks, fees, FAQ, about, reports, contact (e21790e).
+
+**Tests to run first on the home laptop (not run on the office laptop):**
+1. `cd backend && npm run check`: the full suite after 0049/0050. Targeted runs passed here: property 57/57, service-roles 51/51.
+2. `cd admin && npm run check` and the admin DB tests. Passed here: HTTP matrix 2282/2282, goaml + compliance + rules 39/39. On the office laptop, port 3399 is taken by mysqld, so it ran with `ADMIN_HTTP_PORT=3397`.
+3. `cd admin && npm run test:e2e`. There is no Playwright spec yet for `/onboarding` or the goAML settings; writing them is a follow-up.
+4. `cd web && npm run check` and `npm run test:e2e`. `e2e/layout.spec.ts` now also opens `/faq` and `/legal/terms` and needs the Besu chain.
+5. Rent e2e cycle 2: `cd backend && npm run test:rent-e2e` after 2026-11-04 18:51 UTC.
+6. On the office laptop, 3 website integration tests (invest, market, verify) fail because the shared `property_token_test` database still has the superseded `0020_rent.sql`. Owner decision: reset that database.
+
+**Remaining code, in the agreed order:**
+1. **Transaction monitoring** (PT Control compliance): rules that open STR candidates (structuring below thresholds, rapid in-and-out, amounts above the declared income band, many payout-account changes), with a review queue.
+2. **Monitoring and alerting dashboard** (operations / platform owner): health of services, chain, anchors, backups and reconciliation, with alerts.
+3. **Auto-reinvest** (investor portal).
+4. **Roshan Digital Account** onboarding (investor portal).
+5. Smaller items:
+   - Partial freezes, offboarding steps 2-3 and assisted payout-account changes in PT Control.
+   - Playwright specs for `/onboarding`, the goAML settings and the compliance (6c) screens.
+   - Website main e2e in CI.
+   - Investor wording for `suspended` / PEP (tipping-off).
+6. **Public API** (`/v1`, read-only first, passkey sessions), then the **Flutter app**. The owner first picks one of the three designs (A Night Glass, B Daylight, C Luxe Noir).
+7. Multisig signing console (self-hosted Safe).
+
+**New placeholders for the owner, legal or the FMU:**
+- goAML: reporting entity id, branch, address, transfer and funds codes, and the indicator codes. Change them on `/compliance/str`.
+- Website legal text: terms, privacy, risks, fees, about and contact. The fee schedule, tax rates and the data retention period are still open.
 
 **Remaining, owner decisions / actions:** offline GPG key for backups (backups off until then); public L2 for anchoring, then HSM/MPC; contracts with real providers (NADRA Verisys, liveness, sanctions/PEP, trustee bank Raast + payout API, SMS/e-mail); legal/SECP/GPL-3.0 review, WHT rates (seeded rates are placeholders), KYC retention, 6c wording/SLAs, S-02/S-04 open questions; GitHub branch protection, signed commits, Dependabot, secret scanning.
 
