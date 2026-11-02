@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mobile app screens</title>
+<style>
+@font-face { font-family: "Inter"; src: url("../../../web/src/fonts/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Space Grotesk"; src: url("../../../web/src/fonts/space-grotesk-latin-wght-normal.woff2") format("woff2"); font-weight: 300 700; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../web/src/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 800; }
+:root {
+  --bg: #05070f; --glass: rgba(255,255,255,.045); --stroke: rgba(255,255,255,.09);
+  --text: #e8eef9; --muted: #8b97ad; --dim: #6f7b93;
+  --cyan: #22e3f0; --teal: #2ef2b5; --violet: #8b5cf6; --violet-soft: #d9ccff;
+  --pink: #f472b6; --gold: #f5c46b; --up: #3be89b; --down: #ff6b81; --amber: #ffb547;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Inter", system-ui, sans-serif; color: var(--text); background: #03040a;
+  width: 2360px; padding: 70px 60px 80px;
+  background-image:
+    radial-gradient(40% 50% at 10% 0%, rgba(139,92,246,.22), transparent 70%),
+    radial-gradient(35% 45% at 90% 10%, rgba(34,227,240,.14), transparent 70%),
+    radial-gradient(40% 40% at 50% 100%, rgba(46,242,181,.08), transparent 70%);
+}
+.head { display: flex; align-items: flex-end; justify-content: space-between; margin: 0 10px 50px; }
+.head h1 { font-family: "Space Grotesk"; font-size: 46px; font-weight: 700; letter-spacing: -.02em; }
+.head h1 span { background: linear-gradient(90deg, var(--cyan), var(--violet) 55%, var(--pink)); -webkit-background-clip: text; color: transparent; }
+.head p { color: var(--muted); font-size: 18px; margin-top: 8px; }
+.swatches { display: flex; gap: 10px; }
+.swatches i { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--stroke); }
+.row { display: flex; gap: 44px; justify-content: center; }
+.col { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.cap { font-family: "Space Grotesk"; font-size: 19px; color: var(--muted); letter-spacing: .02em; }
+.cap b { color: var(--text); font-weight: 600; }
+
+/* phone */
+.phone { width: 400px; height: 846px; border-radius: 56px; padding: 11px; background: linear-gradient(160deg, #2a2f45, #0c0f1c 40%, #1b1f33); box-shadow: 0 40px 90px -30px rgba(139,92,246,.45), 0 0 0 1px rgba(255,255,255,.08) inset; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 46px; overflow: hidden; background: var(--bg); }
+.screen::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(60% 35% at 15% 5%, rgba(139,92,246,.32), transparent 70%), radial-gradient(55% 30% at 95% 0%, rgba(34,227,240,.2), transparent 70%), radial-gradient(60% 30% at 60% 100%, rgba(46,242,181,.08), transparent 70%); }
+.screen::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .6;
+  background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px); background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 60%); }
+.in { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; padding: 0 20px; }
+.status { display: flex; justify-content: space-between; align-items: center; height: 46px; padding: 0 12px; font-size: 14px; font-weight: 600; }
+.island { width: 110px; height: 30px; border-radius: 20px; background: #000; }
+.sig { display: flex; gap: 5px; align-items: center; }
+.sig i { display: block; width: 3px; border-radius: 2px; background: var(--text); }
+.bat { width: 24px; height: 12px; border: 1.5px solid var(--text); border-radius: 4px; padding: 1.5px; } .bat i { display: block; width: 70%; height: 100%; background: var(--text); border-radius: 1px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 16px; }
+.hello { font-size: 13px; color: var(--muted); } .name { font-family: "Space Grotesk"; font-size: 21px; font-weight: 600; }
+.ico { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: var(--glass); border: 1px solid var(--stroke); position: relative; }
+.ico svg { width: 19px; height: 19px; stroke: var(--text); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dot { position: absolute; top: 8px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 10px var(--pink); }
+.glass { background: var(--glass); border: 1px solid var(--stroke); border-radius: 20px; backdrop-filter: blur(12px); }
+.mono { font-family: "JetBrains Mono", monospace; }
+.disp { font-family: "Space Grotesk"; }
+.up { color: var(--up); } .muted { color: var(--muted); } .dim { color: var(--dim); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--stroke); }
+.chip.green { color: var(--up); background: rgba(59,232,155,.08); border-color: rgba(59,232,155,.25); }
+.chip.violet { color: var(--violet-soft); background: rgba(139,92,246,.14); border-color: rgba(139,92,246,.35); }
+.chip.gold { color: var(--gold); background: rgba(245,196,107,.1); border-color: rgba(245,196,107,.3); }
+.chip.cyan { color: var(--cyan); background: rgba(34,227,240,.08); border-color: rgba(34,227,240,.3); }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 54px; border-radius: 17px; font-weight: 700; font-size: 16px; color: #05070f; background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 14px 34px -12px rgba(139,92,246,.8); }
+.btn.ghost { color: var(--text); background: var(--glass); border: 1px solid var(--stroke); box-shadow: none; }
+.sect { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 2px 10px; }
+.sect h3 { font-family: "Space Grotesk"; font-size: 17px; font-weight: 600; } .sect a { font-size: 12.5px; color: var(--cyan); }
+
+/* tab bar */
+.tabs { position: absolute; left: 14px; right: 14px; bottom: 16px; height: 70px; border-radius: 26px; display: flex; justify-content: space-around; align-items: center; background: rgba(12,15,28,.82); border: 1px solid var(--stroke); backdrop-filter: blur(16px); }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10.5px; color: var(--dim); font-weight: 600; }
+.tab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab.on { color: var(--text); } .tab.on svg { stroke: var(--cyan); filter: drop-shadow(0 0 6px rgba(34,227,240,.7)); }
+.tab.fab { width: 54px; height: 54px; border-radius: 18px; margin-top: -30px; justify-content: center; color: #05070f; background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 10px 30px -6px rgba(139,92,246,.9); }
+.tab.fab svg { stroke: #05070f; width: 24px; height: 24px; stroke-width: 2.4; }
+
+/* 1 home */
+.hero { padding: 20px; border-radius: 26px; position: relative; overflow: hidden; background: linear-gradient(145deg, rgba(139,92,246,.28), rgba(34,227,240,.08) 60%, rgba(244,114,182,.12)); border: 1px solid rgba(255,255,255,.12); }
+.hero .lbl { font-size: 12.5px; color: var(--violet-soft); }
+.hero .big { font-family: "Space Grotesk"; font-size: 36px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; }
+.hero .big small { font-size: 18px; color: var(--muted); font-weight: 500; margin-right: 4px; }
+.spark { position: absolute; right: 0; bottom: 56px; width: 200px; height: 70px; }
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 18px; }
+.stats div { padding: 10px; border-radius: 14px; background: rgba(5,7,15,.45); border: 1px solid var(--stroke); }
+.stats b { display: block; font-family: "Space Grotesk"; font-size: 15px; } .stats span { font-size: 10.5px; color: var(--muted); }
+.quick { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 16px; }
+.quick div { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+.quick i { width: 52px; height: 52px; border-radius: 17px; display: grid; place-items: center; background: var(--glass); border: 1px solid var(--stroke); }
+.quick svg { width: 21px; height: 21px; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.hold { display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 9px; }
+.thumb { width: 50px; height: 50px; border-radius: 15px; flex: none; position: relative; overflow: hidden; }
+.thumb::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0,0,0,.35)); }
+.t1 { background: linear-gradient(160deg, #22e3f0, #1b2a6b 55%, #8b5cf6); }
+.t2 { background: linear-gradient(160deg, #f472b6, #3a1d5c 55%, #22e3f0); }
+.t3 { background: linear-gradient(160deg, #2ef2b5, #123a44 55%, #f5c46b); }
+.bld { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; align-items: flex-end; z-index: 1; }
+.bld i { display: block; width: 9px; background: rgba(5,7,15,.75); border-radius: 2px 2px 0 0; }
+.hold .meta { flex: 1; } .hold .nm { font-weight: 600; font-size: 14px; } .hold .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.hold .val { text-align: right; } .hold .val b { font-family: "Space Grotesk"; font-size: 14.5px; display: block; } .hold .val span { font-size: 11.5px; }
+
+/* 2 property */
+.cover { margin: 0 -20px; height: 300px; position: relative; overflow: hidden; background: linear-gradient(170deg, #1a1446 0%, #0d2240 45%, #05070f 100%); }
+.cover .sun { position: absolute; width: 260px; height: 260px; border-radius: 50%; top: -60px; right: -50px; background: radial-gradient(circle, rgba(244,114,182,.55), rgba(139,92,246,.2) 50%, transparent 70%); }
+.tower { position: absolute; bottom: 0; display: flex; align-items: flex-end; gap: 8px; left: 50%; transform: translateX(-50%); }
+.tower i { display: block; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, rgba(34,227,240,.5), rgba(139,92,246,.25) 40%, rgba(5,7,15,.9)); border: 1px solid rgba(34,227,240,.35); border-bottom: 0; position: relative; }
+.tower i::before { content: ""; position: absolute; inset: 14px 9px 0; background-image: linear-gradient(rgba(255,255,255,.22) 2px, transparent 2px); background-size: 100% 13px; opacity: .55; }
+.cover .fade { position: absolute; inset: auto 0 0; height: 140px; background: linear-gradient(transparent, var(--bg)); }
+.cover .nav { position: absolute; top: 56px; left: 20px; right: 20px; display: flex; justify-content: space-between; }
+.ptitle { margin-top: -70px; position: relative; }
+.ptitle h2 { font-family: "Space Grotesk"; font-size: 25px; font-weight: 700; letter-spacing: -.01em; margin: 8px 0 3px; }
+.kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 16px 0 12px; }
+.kpis div { padding: 12px 10px; } .kpis b { display: block; font-family: "Space Grotesk"; font-size: 18px; } .kpis span { font-size: 10.5px; color: var(--muted); }
+.raise { padding: 14px; }
+.bar { height: 9px; border-radius: 9px; background: rgba(255,255,255,.07); margin: 10px 0 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 72%; border-radius: 9px; background: linear-gradient(90deg, var(--violet), var(--cyan)); box-shadow: 0 0 14px rgba(34,227,240,.6); }
+.trust { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.sticky { position: absolute; left: 20px; right: 20px; bottom: 28px; display: flex; gap: 10px; }
+.sticky .btn { flex: 1; }
+
+/* 3 invest */
+.stepper { display: flex; gap: 6px; margin: 4px 0 18px; } .stepper i { flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,.1); } .stepper i.on { background: linear-gradient(90deg, var(--cyan), var(--violet)); }
+.amount { text-align: center; padding: 26px 16px 20px; }
+.amount .lbl { font-size: 12.5px; color: var(--muted); }
+.amount .v { font-family: "Space Grotesk"; font-size: 46px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0; }
+.amount .v small { font-size: 22px; color: var(--muted); margin-right: 6px; font-weight: 500; }
+.amount .u { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--violet-soft); }
+.presets { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 14px 0; }
+.presets span { text-align: center; padding: 10px 0; border-radius: 13px; font-size: 13px; font-weight: 600; background: var(--glass); border: 1px solid var(--stroke); }
+.presets span.on { border-color: rgba(34,227,240,.55); color: var(--cyan); background: rgba(34,227,240,.08); }
+.lines { padding: 6px 14px; } .lines div { display: flex; justify-content: space-between; padding: 10px 0; font-size: 13.5px; border-bottom: 1px solid var(--stroke); } .lines div:last-child { border: 0; }
+.lines b { font-weight: 600; }
+.pk { margin-top: 14px; padding: 16px; display: flex; gap: 14px; align-items: center; }
+.ring { width: 64px; height: 64px; border-radius: 50%; flex: none; display: grid; place-items: center; background: conic-gradient(from 0deg, var(--cyan), var(--violet), var(--pink), var(--cyan)); padding: 3px; }
+.ring div { width: 100%; height: 100%; border-radius: 50%; background: var(--bg); display: grid; place-items: center; }
+.ring svg { width: 30px; height: 30px; stroke: var(--cyan); fill: none; stroke-width: 1.6; stroke-linecap: round; }
+.pk b { display: block; font-size: 14.5px; } .pk span { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* 4 rent */
+.payout { padding: 18px; text-align: center; position: relative; overflow: hidden; }
+.payout .big { font-family: "Space Grotesk"; font-size: 34px; font-weight: 700; margin: 6px 0 4px; }
+.chart { display: flex; align-items: flex-end; gap: 9px; height: 120px; padding: 14px 16px 0; }
+.chart i { flex: 1; border-radius: 8px 8px 3px 3px; background: linear-gradient(180deg, var(--cyan), rgba(139,92,246,.35)); position: relative; }
+.chart i.now { background: linear-gradient(180deg, var(--teal), var(--cyan)); box-shadow: 0 0 18px rgba(46,242,181,.55); }
+.months { display: flex; gap: 9px; padding: 6px 16px 14px; } .months span { flex: 1; text-align: center; font-size: 10.5px; color: var(--dim); }
+.tl { position: relative; padding-left: 22px; }
+.tl::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(var(--teal), var(--violet), transparent); }
+.ev { position: relative; padding: 11px 13px; margin-bottom: 9px; }
+.ev::before { content: ""; position: absolute; left: -20px; top: 16px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--teal); box-shadow: 0 0 10px var(--teal); }
+.ev.v::before { border-color: var(--violet); box-shadow: 0 0 10px var(--violet); }
+.ev.g::before { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.ev .r { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; } .ev .s { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.hash { font-family: "JetBrains Mono"; font-size: 10.5px; color: var(--cyan); margin-top: 5px; }
+
+/* 5 urdu */
+.ur { direction: rtl; font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Segoe UI", Tahoma, sans-serif; }
+.vote { padding: 16px; margin-bottom: 12px; }
+.vote h4 { font-size: 15.5px; font-weight: 600; line-height: 1.7; margin: 8px 0 12px; }
+.opt { position: relative; padding: 11px 14px; border-radius: 14px; margin-bottom: 8px; border: 1px solid var(--stroke); overflow: hidden; display: flex; justify-content: space-between; font-size: 14px; }
+.opt .f { position: absolute; inset: 0 0 0 auto; background: linear-gradient(270deg, rgba(139,92,246,.35), rgba(34,227,240,.12)); }
+.opt span { position: relative; } .opt.on { border-color: rgba(34,227,240,.5); }
+.verify { padding: 16px; display: flex; gap: 14px; align-items: center; }
+.seal { width: 58px; height: 58px; border-radius: 18px; flex: none; display: grid; place-items: center; background: linear-gradient(135deg, rgba(46,242,181,.25), rgba(34,227,240,.1)); border: 1px solid rgba(46,242,181,.4); }
+.seal svg { width: 30px; height: 30px; stroke: var(--teal); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div>
+    <h1>Property Token · <span>mobile app</span></h1>
+    <p>Same night-glass theme as the website: deep navy, glass cards, cyan → violet → pink light.</p>
+  </div>
+  <div class="swatches">
+    <i style="background:#05070f"></i><i style="background:#22e3f0"></i><i style="background:#2ef2b5"></i><i style="background:#8b5cf6"></i><i style="background:#f472b6"></i><i style="background:#f5c46b"></i>
+  </div>
+</div>
+
+<div class="row">
+
+<!-- 1 HOME -->
+<div class="col">
+<div class="phone"><div class="screen"><div class="in">
+  <div class="status"><span>9:41</span><div class="island"></div><div class="sig"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i><div class="bat"><i></i></div></div></div>
+  <div class="top">
+    <div><div class="hello">Assalam-o-Alaikum</div><div class="name">Ayesha</div></div>
+    <div style="display:flex;gap:8px">
+      <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+      <div class="ico"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21h4"/></svg><span class="dot"></span></div>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="lbl">Portfolio value</div>
+    <div class="big"><small>Rs</small>1,284,600</div>
+    <div style="font-size:13px"><span class="up">▲ Rs 48,210 · 3.9%</span> <span class="muted">this year</span></div>
+    <svg class="spark" viewBox="0 0 200 70"><defs><linearGradient id="sg" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22e3f0"/></linearGradient><linearGradient id="sf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22e3f0" stop-opacity=".3"/><stop offset="1" stop-color="#22e3f0" stop-opacity="0"/></linearGradient></defs><path d="M0 58 C20 55 30 48 50 50 S80 38 100 40 S130 22 150 26 S180 10 200 8 V70 H0Z" fill="url(#sf)"/><path d="M0 58 C20 55 30 48 50 50 S80 38 100 40 S130 22 150 26 S180 10 200 8" fill="none" stroke="url(#sg)" stroke-width="2.5"/><circle cx="200" cy="8" r="4" fill="#22e3f0"/></svg>
+    <div class="stats">
+      <div><b>3</b><span>Properties</span></div>
+      <div><b class="up">8.4%</b><span>Rent yield</span></div>
+      <div><b>Rs 9,120</b><span>Next rent</span></div>
+    </div>
+  </div>
+  <div class="quick">
+    <div><i><svg viewBox="0 0 24 24" stroke="#22e3f0"><path d="M12 5v14M5 12h14"/></svg></i>Invest</div>
+    <div><i><svg viewBox="0 0 24 24" stroke="#2ef2b5"><path d="M3 10h18M5 10v8m4-8v8m6-8v8m4-8v8M3 20h18M12 3l9 5H3z"/></svg></i>Payouts</div>
+    <div><i><svg viewBox="0 0 24 24" stroke="#8b5cf6"><path d="m9 12 2 2 4-4"/><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg></i>Verify</div>
+    <div><i><svg viewBox="0 0 24 24" stroke="#f472b6"><path d="M4 12h16M4 6h16M4 18h10"/></svg></i>Votes</div>
+  </div>
+  <div class="sect"><h3>My holdings</h3><a>See all</a></div>
+  <div class="glass hold"><div class="thumb t1"><div class="bld"><i style="height:24px"></i><i style="height:36px"></i><i style="height:18px"></i></div></div><div class="meta"><div class="nm">Gulberg Trade Tower</div><div class="sub">Lahore · 420 units</div></div><div class="val"><b>Rs 512,400</b><span class="up">+4.2%</span></div></div>
+  <div class="glass hold"><div class="thumb t2"><div class="bld"><i style="height:30px"></i><i style="height:20px"></i><i style="height:28px"></i></div></div><div class="meta"><div class="nm">Clifton Sea View Offices</div><div class="sub">Karachi · 310 units</div></div><div class="val"><b>Rs 468,900</b><span class="up">+3.1%</span></div></div>
+  <div class="tabs">
+    <div class="tab on"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>Home</div>
+    <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Explore</div>
+    <div class="tab fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg>Rent</div>
+    <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Account</div>
+  </div>
+</div></div></div>
+<div class="cap"><b>1 · Home</b> — portfolio at a glance</div>
+</div>
+
+<!-- 2 PROPERTY -->
+<div class="col">
+<div class="phone"><div class="screen"><div class="in">
+  <div class="status" style="position:relative;z-index:3"><span>9:41</span><div class="island"></div><div class="sig"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i><div class="bat"><i></i></div></div></div>
+  <div class="cover" style="margin-top:-46px;height:330px">
+    <div class="sun"></div>
+    <div class="tower"><i style="width:56px;height:150px"></i><i style="width:78px;height:240px"></i><i style="width:60px;height:190px"></i><i style="width:44px;height:120px"></i></div>
+    <div class="fade"></div>
+    <div class="nav"><div class="ico"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></div><div class="ico"><svg viewBox="0 0 24 24"><path d="M19 21 12 16 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>
+  </div>
+  <div class="ptitle">
+    <span class="chip green">● Open for investment</span>
+    <h2>Gulberg Trade Tower</h2>
+    <div class="muted" style="font-size:13px">Main Boulevard, Gulberg III · Lahore · Commercial</div>
+  </div>
+  <div class="kpis">
+    <div class="glass"><b class="up">8.4%</b><span>Rent yield</span></div>
+    <div class="glass"><b>Rs 1,220</b><span>Per unit</span></div>
+    <div class="glass"><b>96%</b><span>Occupied</span></div>
+  </div>
+  <div class="glass raise">
+    <div style="display:flex;justify-content:space-between;font-size:13px"><span class="muted">Raised</span><span><b>Rs 72.0M</b> <span class="muted">of 100M</span></span></div>
+    <div class="bar"><i></i></div>
+    <div style="display:flex;justify-content:space-between;font-size:11.5px" class="muted"><span>1,284 investors</span><span>Closes in 9 days</span></div>
+  </div>
+  <div class="trust">
+    <span class="chip cyan">⛓ On-chain title</span><span class="chip violet">Trustee held</span><span class="chip gold">Shariah screened</span>
+  </div>
+  <div class="glass" style="padding:12px 14px;display:flex;gap:12px;align-items:center">
+    <div class="seal" style="width:42px;height:42px;border-radius:13px"><svg viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 15l2 2 4-4"/></svg></div>
+    <div style="flex:1"><div style="font-size:13.5px;font-weight:600">Title deed & valuation</div><div class="muted" style="font-size:11.5px">4 documents · hash verified</div></div>
+    <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2"><path d="m9 18 6-6-6-6"/></svg>
+  </div>
+  <div class="sticky"><div class="btn ghost" style="flex:0 0 54px">♡</div><div class="btn">Invest from Rs 1,220</div></div>
+</div></div></div>
+<div class="cap"><b>2 · Property</b> — proof before price</div>
+</div>
+
+<!-- 3 INVEST -->
+<div class="col">
+<div class="phone"><div class="screen"><div class="in">
+  <div class="status"><span>9:41</span><div class="island"></div><div class="sig"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i><div class="bat"><i></i></div></div></div>
+  <div class="top"><div class="ico"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></div><div class="disp" style="font-size:17px;font-weight:600">Invest</div><div style="width:40px"></div></div>
+  <div class="stepper"><i class="on"></i><i class="on"></i><i></i></div>
+  <div class="glass amount">
+    <div class="lbl">Gulberg Trade Tower</div>
+    <div class="v"><small>Rs</small>61,000</div>
+    <div class="u"><span class="chip violet">50 units</span> × Rs 1,220</div>
+  </div>
+  <div class="presets"><span>10</span><span>25</span><span class="on">50</span><span>100</span></div>
+  <div class="glass lines">
+    <div><span class="muted">Expected yearly rent</span><b class="up">Rs 5,124</b></div>
+    <div><span class="muted">Platform fee</span><b>Rs 0</b></div>
+    <div><span class="muted">Pay with</span><b>Raast · HBL ••42</b></div>
+    <div><span class="muted">Cooling-off</span><b>Withdraw within 3 days</b></div>
+  </div>
+  <div class="glass pk">
+    <div class="ring"><div><svg viewBox="0 0 24 24"><path d="M12 11c0 3-1 6-3 8M8 7.5a5 5 0 0 1 9 3c0 2-.3 4-1 6M5 10a7 7 0 0 1 1-3m-1 7c.5-1 .8-2 .9-3M12 15c-.3 2-1 4-2 5.5M16 18.5c-.3.8-.6 1.5-1 2"/></svg></div></div>
+    <div><b>Confirm with your passkey</b><span>Your fingerprint or face signs this order. No password, no SMS code.</span></div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:28px">
+    <div class="btn">Confirm Rs 61,000</div>
+    <div class="dim" style="text-align:center;font-size:11px;margin-top:10px">Units are recorded on-chain after the trustee receives payment.</div>
+  </div>
+</div></div></div>
+<div class="cap"><b>3 · Invest</b> — passkey, no OTP</div>
+</div>
+
+<!-- 4 RENT -->
+<div class="col">
+<div class="phone"><div class="screen"><div class="in">
+  <div class="status"><span>9:41</span><div class="island"></div><div class="sig"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i><div class="bat"><i></i></div></div></div>
+  <div class="top"><div class="name">Rent</div><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg></div></div>
+  <div class="glass payout">
+    <span class="chip green">● Paid to HBL ••42</span>
+    <div class="big">Rs 9,120</div>
+    <div class="muted" style="font-size:12.5px">October rent · after 15% WHT</div>
+    <div class="chart">
+      <i style="height:48%"></i><i style="height:55%"></i><i style="height:52%"></i><i style="height:63%"></i><i style="height:70%"></i><i style="height:74%"></i><i class="now" style="height:88%"></i>
+    </div>
+    <div class="months"><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span style="color:var(--teal)">Oct</span></div>
+  </div>
+  <div class="sect"><h3>Proof trail</h3><a>Tax certificate</a></div>
+  <div class="tl">
+    <div class="glass ev"><div class="r"><span>Paid to your bank</span><span class="up">Rs 9,120</span></div><div class="s">2 Nov · Raast ref RF-88-2041</div></div>
+    <div class="glass ev v"><div class="r"><span>Finalized on-chain</span><span class="muted">Block 1,804,233</span></div><div class="s">After the 48-hour challenge window</div><div class="hash">0x7c1e…a94f ↗ verify</div></div>
+    <div class="glass ev g"><div class="r"><span>Published by trustee</span><span class="muted">31 Oct</span></div><div class="s">Rs 2.14M collected · 96% occupancy</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>Home</div>
+    <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Explore</div>
+    <div class="tab fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+    <div class="tab on"><svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg>Rent</div>
+    <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Account</div>
+  </div>
+</div></div></div>
+<div class="cap"><b>4 · Rent</b> — every rupee traced</div>
+</div>
+
+<!-- 5 URDU -->
+<div class="col">
+<div class="phone"><div class="screen"><div class="in ur">
+  <div class="status" style="direction:ltr"><span>9:41</span><div class="island"></div><div class="sig"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i><div class="bat"><i></i></div></div></div>
+  <div class="top"><div class="name" style="font-family:inherit;font-size:22px">ووٹ اور تصدیق</div><span class="chip cyan" style="direction:ltr">EN | اردو</span></div>
+  <div class="glass vote">
+    <span class="chip violet">گلبرگ ٹریڈ ٹاور · کھلا ہے</span>
+    <h4>کیا عمارت کی چھت پر سولر پینل لگائے جائیں؟</h4>
+    <div class="opt on"><div class="f" style="width:100%"></div><span>ہاں، کرایہ سے ادائیگی</span><span style="color:var(--cyan)">✓ آپ کا انتخاب</span></div>
+    <div class="opt"><span>نہیں</span><span class="dim">○</span></div>
+    <div class="opt"><span>اگلے سال</span><span class="dim">○</span></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">آپ کا وزن: ۵۰ یونٹ · نتیجہ بند ہونے کے بعد · ۲ دن باقی</div>
+  </div>
+  <div class="glass verify">
+    <div class="seal"><svg viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg></div>
+    <div><div style="font-weight:600;font-size:15px">ملکیت کی تصدیق ہو گئی</div><div class="muted" style="font-size:12px">آپ کے ۴۲۰ یونٹ بلاک چین پر درج ہیں</div><div class="hash" style="direction:ltr;text-align:right">anchored · 0x3fa2…c71d</div></div>
+  </div>
+  <div class="glass" style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+    <div><div style="font-weight:600;font-size:14.5px">شکایت درج کریں</div><div class="muted" style="font-size:12px">جواب ۲ دن میں · حوالہ CMP</div></div>
+    <div class="btn" style="height:42px;padding:0 18px;font-size:14px">نئی</div>
+  </div>
+  <div class="tabs" style="direction:rtl">
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>ہوم</div>
+    <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>تلاش</div>
+    <div class="tab fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg>کرایہ</div>
+    <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>اکاؤنٹ</div>
+  </div>
+</div></div></div>
+<div class="cap"><b>5 · Urdu</b> — votes, proof, complaints</div>
+</div>
+
+</div>
+</body>
+</html>
