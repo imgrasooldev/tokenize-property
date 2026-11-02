@@ -251,6 +251,40 @@ export async function SiteFooter() {
               </li>
             </ul>
           </div>
+          <div>
+            <h5>{t.footHelp}</h5>
+            <ul>
+              <li>
+                <Link href="/faq">{t.faqLink}</Link>
+              </li>
+              <li>
+                <Link href="/fees">{t.feesLink}</Link>
+              </li>
+              <li>
+                <Link href="/about">{t.aboutLink}</Link>
+              </li>
+              <li>
+                <Link href="/contact">{t.contactLink}</Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h5>{t.footLegal}</h5>
+            <ul>
+              <li>
+                <Link href="/risks">{t.riskLink}</Link>
+              </li>
+              <li>
+                <Link href="/legal/terms">{t.termsLink}</Link>
+              </li>
+              <li>
+                <Link href="/legal/privacy">{t.privacyLink}</Link>
+              </li>
+              <li>
+                <Link href="/reports">{t.reportsLink}</Link>
+              </li>
+            </ul>
+          </div>
         </div>
         <p className="foot-fine">{t.verifyOnChain}</p>
       </div>

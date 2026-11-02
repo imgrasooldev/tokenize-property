@@ -77,6 +77,16 @@ export function SignUpForm({ t }: { t: Dict }) {
         <span>{t.consent}</span>
       </label>
       {fieldError("consent")}
+      <p className="hint">
+        {t.consentLinks}{" "}
+        <a href="/legal/terms" target="_blank" rel="noopener">
+          {t.termsLink}
+        </a>{" "}
+        ·{" "}
+        <a href="/legal/privacy" target="_blank" rel="noopener">
+          {t.privacyLink}
+        </a>
+      </p>
       <p className="hint">{t.privacyNote}</p>
       <button type="submit" className="btn" disabled={pending}>
         {pending ? t.submitting : t.submit}

@@ -26,7 +26,7 @@ Later, outside the ten: the secondary market (open buy and sell between verified
 ### 1. Public website
 
 - **For:** everyone, no account.
-- **Where:** `/`, `/offerings`, `/properties`, `/search`, offering and property pages.
+- **Where:** `/`, `/offerings`, `/properties`, `/search`, offering and property pages; information pages `/faq`, `/fees`, `/risks`, `/about`, `/reports`, `/contact`, `/legal/terms`, `/legal/privacy` (EN/UR; legal text marked as draft until counsel approves it).
 - **What it does:** how the platform works; live and upcoming properties with a rule-based score; fees and risk disclosure; property details with public documents (downloaded from the vault, hash checked again); search and a grounded AI analyst that cites documents and never gives advice; English and Urdu.
 
 ### 2. Investor portal

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { loginAs } from "./helpers";
 
-const PAGES = ["/", "/market", "/properties/GPF3", "/portfolio", "/account"];
+const PAGES = ["/", "/market", "/properties/GPF3", "/portfolio", "/account", "/faq", "/legal/terms"];
 
 for (const lang of ["en", "ur"] as const) {
   test(`phone width (375 px) without sideways scrolling, ${lang}`, async ({ page, context }) => {
