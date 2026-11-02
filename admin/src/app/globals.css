@@ -218,3 +218,10 @@ textarea { resize: vertical; min-block-size: 54px; inline-size: 100%; }
 
 /* Step 6c: the check that opened a KYC case. */
 .t tr.hl td { background: rgba(255, 181, 71, 0.06); }
+
+/* 0049 onboarding desk: one collapsible form per S-01 action */
+details.act { padding: 8px 12px; }
+details.act > summary { cursor: pointer; list-style: none; }
+details.act > summary::-webkit-details-marker { display: none; }
+details.act > summary::before { content: "▸ "; color: var(--muted); }
+details.act[open] > summary::before { content: "▾ "; }

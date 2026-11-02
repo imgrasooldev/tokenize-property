@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Fragment } from "react";
 import { ComplianceTabs } from "@/components/ComplianceTabs";
 import { Flash } from "@/components/Decision";
 import { Shell } from "@/components/Shell";
 import { pkt } from "@/lib/format";
-import { stateChip, strList } from "@/lib/server/compliance";
+import { StepUpForm } from "@/components/StepUp";
+import { goamlConfig, stateChip, strList } from "@/lib/server/compliance";
 import { requirePage } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "STR cases" };
@@ -16,7 +18,8 @@ export const metadata: Metadata = { title: "STR cases" };
 export default async function StrPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const officer = await requirePage("compliance.read", "/compliance/str");
   const q = await searchParams;
-  const s = await strList(officer.sessionHash);
+  const [s, goaml] = await Promise.all([strList(officer.sessionHash), goamlConfig(officer.sessionHash)]);
+  const pending = [...goaml.settings.filter((x) => x.placeholder), ...goaml.indicators.filter((x) => x.placeholder)].length;
   const canDecide = officer.permissions.has("compliance.decide");
 
   return (
@@ -94,6 +97,73 @@ export default async function StrPage({ searchParams }: { searchParams: Promise<
           </section>
         ) : null}
       </div>
+
+      <section className="card" aria-labelledby="goaml" style={{ marginBlockStart: 12 }} data-testid="goaml">
+        <h2 id="goaml">
+          goAML values <span className="sp" />
+          <span className={pending ? "chip warn" : "chip ok"}>{pending ? `${String(pending)} placeholder(s) to confirm with the FMU` : "confirmed"}</span>
+        </h2>
+        <p className="small mu">
+          Every STR export contains a goAML draft built from these values. The MLRO completes the person fields from the KYC record before filing.
+        </p>
+        <div className="g2">
+          <dl className="kv">
+            {goaml.settings.map((x) => (
+              <Fragment key={x.key}>
+                <dt>{x.key}</dt>
+                <dd>
+                  {x.value} {x.placeholder ? <span className="chip warn">placeholder</span> : null}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+          <dl className="kv">
+            {goaml.indicators.map((x) => (
+              <Fragment key={x.category}>
+                <dt>{x.label}</dt>
+                <dd className="mono">
+                  {x.indicator} {x.placeholder ? <span className="chip warn">placeholder</span> : null}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+        {canDecide ? (
+          <StepUpForm csrf={officer.csrf} action="/api/compliance/goaml">
+            <div className="row" style={{ marginBlockStart: 8 }}>
+              <label className="sr-only" htmlFor="goaml-target">
+                Value
+              </label>
+              <select id="goaml-target" name="target" required defaultValue="">
+                <option value="" disabled>
+                  Value…
+                </option>
+                {goaml.settings.map((x) => (
+                  <option key={x.key} value={`setting:${x.key}`}>
+                    {x.key}
+                  </option>
+                ))}
+                {goaml.indicators.map((x) => (
+                  <option key={x.category} value={`indicator:${x.category}`}>
+                    indicator: {x.label}
+                  </option>
+                ))}
+              </select>
+              <label className="sr-only" htmlFor="goaml-value">
+                New value
+              </label>
+              <input id="goaml-value" name="value" required maxLength={200} placeholder="Value confirmed by the FMU" />
+              <label className="sr-only" htmlFor="goaml-reason">
+                Reason
+              </label>
+              <input id="goaml-reason" name="reason" required minLength={10} maxLength={500} placeholder="Reason (10+ characters)" />
+              <button className="btn prime" type="submit">
+                Save with security key
+              </button>
+            </div>
+          </StepUpForm>
+        ) : null}
+      </section>
     </Shell>
   );
 }

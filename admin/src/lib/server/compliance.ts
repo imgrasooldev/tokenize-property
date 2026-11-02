@@ -287,3 +287,14 @@ export function stateChip(s: string): string {
   if (["superseded"].includes(s)) return "chip";
   return "chip warn";
 }
+
+/** goAML values (migration 0050): reporting entity settings and STR indicator codes, with placeholder flags. */
+export interface GoamlConfig {
+  settings: { key: string; value: string; placeholder: boolean; by: string; at: string }[];
+  indicators: { category: string; label: string; indicator: string; placeholder: boolean }[];
+}
+
+export async function goamlConfig(sessionHash: Buffer): Promise<GoamlConfig> {
+  const { rows } = await db().query<{ v: GoamlConfig | null }>("SELECT admin.goaml_config($1) AS v", [sessionHash]);
+  return rows[0]?.v ?? { settings: [], indicators: [] };
+}

@@ -4,6 +4,7 @@ import { StepUpForm } from "@/components/StepUp";
 import { pkt } from "@/lib/format";
 import { ROLE_CONFLICTS, roleLabel, ROLES, conflicts } from "@/lib/permissions";
 import { listChanges, listOfficers, managerScopes, type ScopeProperty } from "@/lib/server/officers";
+import { DUTIES, dutyPanel } from "@/lib/server/onboarding";
 import { requirePage } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Officers and roles" };
@@ -22,7 +23,12 @@ function describe(c: { kind: string; officerHandle: string | null; role: string 
 export default async function OfficersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const officer = await requirePage("officers.read", "/officers");
   const q = await searchParams;
-  const [officers, changes, scopes] = await Promise.all([listOfficers(officer.sessionHash), listChanges(officer.sessionHash), managerScopes(officer.sessionHash)]);
+  const [officers, changes, scopes, panel] = await Promise.all([
+    listOfficers(officer.sessionHash),
+    listChanges(officer.sessionHash),
+    managerScopes(officer.sessionHash),
+    dutyPanel(officer.sessionHash),
+  ]);
   const manage = officer.permissions.has("officers.manage");
   const ok = typeof q.ok === "string" ? q.ok.slice(0, 300) : null;
   const error = typeof q.error === "string" ? q.error.slice(0, 300) : null;
@@ -372,6 +378,165 @@ export default async function OfficersPage({ searchParams }: { searchParams: Pro
           </div>
         </section>
       </div>
+
+      <section className="card" aria-labelledby="s01" style={{ marginBlockStart: 12 }} data-testid="s01-duties">
+        <h2 id="s01">
+          S-01 duties and valuer panel <span className="sp" />
+          <span className="mu small" style={{ fontWeight: 400 }}>
+            one administrator asks, a different one decides · a duty must fit a role the officer holds
+          </span>
+        </h2>
+        <div className="tbl-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th scope="col">Officer</th>
+                <th scope="col">Duty</th>
+                <th scope="col">Status</th>
+                <th scope="col">Asked by</th>
+                <th scope="col">Decide</th>
+              </tr>
+            </thead>
+            <tbody>
+              {panel.duties.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="empty">
+                    No duty yet.
+                  </td>
+                </tr>
+              ) : (
+                panel.duties.map((d) => (
+                  <tr key={d.id}>
+                    <td className="mono">{d.officer}</td>
+                    <td>{d.duty}</td>
+                    <td>
+                      <span className={d.status === "active" ? "chip ok" : "chip warn"}>{d.status}</span>
+                    </td>
+                    <td className="mono small">{d.requestedBy}</td>
+                    <td>
+                      {manage && (d.status === "active" || d.requestedBy !== officer.handle) ? (
+                        <StepUpForm csrf={officer.csrf} action="/api/onboarding/duties">
+                          <input type="hidden" name="id" value={String(d.id)} />
+                          <div className="row">
+                            <label className="sr-only" htmlFor={`dr-${String(d.id)}`}>
+                              Reason
+                            </label>
+                            <input id={`dr-${String(d.id)}`} name="reason" required minLength={10} maxLength={500} placeholder="Reason (10+ characters)" />
+                            {d.status === "pending" ? (
+                              <>
+                                <button className="btn ok" type="submit" name="action" value="approve_duty">
+                                  Approve
+                                </button>
+                                <button className="btn no" type="submit" name="action" value="reject_duty">
+                                  Reject
+                                </button>
+                              </>
+                            ) : (
+                              <button className="btn no" type="submit" name="action" value="revoke_duty">
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        </StepUpForm>
+                      ) : (
+                        <span className="mu small">–</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {manage ? (
+          <div className="g2" style={{ marginBlockStart: 10 }}>
+            <StepUpForm csrf={officer.csrf} action="/api/onboarding/duties">
+              <input type="hidden" name="action" value="request_duty" />
+              <div className="stack" style={{ gap: 6 }}>
+                <b className="small">Ask for a duty</b>
+                <label className="sr-only" htmlFor="duty-officer">
+                  Officer
+                </label>
+                <select id="duty-officer" name="officer" required defaultValue="">
+                  <option value="" disabled>
+                    Officer…
+                  </option>
+                  {others.map((o) => (
+                    <option key={o.id} value={o.handle}>
+                      {o.handle}
+                    </option>
+                  ))}
+                </select>
+                <label className="sr-only" htmlFor="duty-duty">
+                  Duty
+                </label>
+                <select id="duty-duty" name="duty" required defaultValue="">
+                  <option value="" disabled>
+                    Duty…
+                  </option>
+                  {DUTIES.map((d) => (
+                    <option key={d} value={d}>
+                      {d} (needs {(new Map(Object.entries(panel.dutyRoles)).get(d) ?? []).join(" or ")})
+                    </option>
+                  ))}
+                </select>
+                <label className="sr-only" htmlFor="duty-reason">
+                  Reason
+                </label>
+                <input id="duty-reason" name="reason" required minLength={10} maxLength={500} placeholder="Reason (10+ characters)" />
+                <div className="row">
+                  <button className="btn prime" type="submit">
+                    Ask with security key
+                  </button>
+                </div>
+              </div>
+            </StepUpForm>
+            <div className="stack" style={{ gap: 6 }}>
+              <b className="small">Valuer panel</b>
+              <ul className="small">
+                {panel.valuers.map((v) => (
+                  <li key={v.id}>
+                    #{v.id} <span className="mono">{v.licence}</span> · {v.panel} · added by {v.addedBy} ·{" "}
+                    {v.approvedBy ? (
+                      <span className="chip ok">approved by {v.approvedBy}</span>
+                    ) : v.addedBy !== officer.handle ? (
+                      <StepUpForm csrf={officer.csrf} action="/api/onboarding/duties">
+                        <input type="hidden" name="action" value="approve_valuer" />
+                        <input type="hidden" name="id" value={String(v.id)} />
+                        <button className="btn ok" type="submit">
+                          Approve with security key
+                        </button>
+                      </StepUpForm>
+                    ) : (
+                      <span className="chip warn">awaiting a second administrator</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <StepUpForm csrf={officer.csrf} action="/api/onboarding/duties">
+                <input type="hidden" name="action" value="add_valuer" />
+                <div className="row">
+                  <label className="sr-only" htmlFor="v-licence">
+                    Licence
+                  </label>
+                  <input id="v-licence" name="licence" required maxLength={40} placeholder="Licence no. (e.g. PBA/123)" />
+                  <label className="sr-only" htmlFor="v-panel">
+                    Panel
+                  </label>
+                  <input id="v-panel" name="panel" required maxLength={31} placeholder="Panel (e.g. pba)" />
+                  <label className="sr-only" htmlFor="v-subject">
+                    KYC subject
+                  </label>
+                  <input id="v-subject" name="subject" maxLength={36} placeholder="KYC subject id (natural person, optional)" />
+                  <button className="btn prime" type="submit">
+                    Add with security key
+                  </button>
+                </div>
+              </StepUpForm>
+            </div>
+          </div>
+        ) : null}
+      </section>
     </Shell>
   );
 }

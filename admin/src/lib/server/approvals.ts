@@ -228,6 +228,8 @@ export interface DecisionResult {
   /** Migration 0044: a new rent invoice's payment reference and its one-time link secret. */
   code?: string;
   link?: string;
+  /** Migration 0049: what an onboarding action returned (an id, a new state, ...). */
+  result?: unknown;
 }
 
 export async function decision(sql: string, params: unknown[]): Promise<DecisionResult> {

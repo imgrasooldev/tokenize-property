@@ -82,13 +82,15 @@ Later, outside the ten: the secondary market (open buy and sell between verified
 | Property manager (`property_manager`) | Managers of a building | Only the properties assigned to them and their operating statements; everything else reads as not found. |
 | Investor support (`support_agent`) | Support desk | `/support`: find an investor by the 8-hex support reference (no compliance detail); `/complaints`: acknowledge, reply, resolve, refer to compliance. |
 
-- **Open:** the other S-01 maker actions (create sponsor or property, documents, reviews) are still CLI only; the 14 demo officers need their own security keys to enrol (owner action).
+- **Onboarding desk** (`/onboarding`, since 2026-11-03, migration 0049): every S-01 maker action on sponsor and property files (KYB evidence, people, submissions, reviews, documents from the vault, title chain, encumbrances, valuations, structure) for officers with the matching S-01 duty; administrators manage S-01 duties and the valuer panel on `/officers`.
+- **Open:** creating a sponsor stays on the command line (it seals the name and address with keys the portal does not hold); the 14 demo officers need their own security keys to enrol (owner action).
 
 ### 7. Compliance portal
 
 - **For:** compliance officers (`compliance_officer`).
 - **What it does:** `/compliance`: KYC and AML queue, sanctions and PEP hits, case files, freeze requests and decisions, exports; S-01 property, offering, recovery, exit and transfer decisions where compliance must agree; committee votes; complaints referred to compliance; full audit log.
-- **Open:** suspicious transaction reports to the FMU through goAML.
+- **goAML:** every STR export carries a goAML STR draft (migration 0050); the reporting entity values and indicator codes are placeholders until the FMU confirms them (set on `/compliance/str`). Filing stays manual by the MLRO.
+- **Open:** automatic transaction monitoring (rules that open STR candidates).
 
 ### 8. Trustee portal
 

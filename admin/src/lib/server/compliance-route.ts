@@ -29,8 +29,8 @@ export async function complianceRoute(
   request: NextRequest,
   opts: {
     permission: Permission;
-    /** Page to return to (also on refusal). */
-    back: string;
+    /** Page to return to (also on refusal); a function reads it from the form. */
+    back: string | ((form: Form) => string);
     /** Either an error message for the officer, or the SQL and its parameters. */
     build: (officer: Officer, form: Form) => { sql: string; params: unknown[] } | string | Promise<{ sql: string; params: unknown[] } | string>;
     /** Where to go after success (default: back). */
@@ -42,15 +42,16 @@ export async function complianceRoute(
   const officer = await requireApi(request, opts.permission, form);
   if (!("sessionHash" in officer)) return officer;
   const go = (path: string, key: "ok" | "error", msg: string) => seeOther(`${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(msg.slice(0, 300))}`);
+  const back = typeof opts.back === "function" ? opts.back(form) : opts.back;
   const built = await opts.build(officer, form);
-  if (typeof built === "string") return go(opts.back, "error", built);
+  if (typeof built === "string") return go(back, "error", built);
   try {
     const r = await decision(built.sql, built.params);
-    return r.ok ? go(opts.okPath ? opts.okPath(r) : opts.back, "ok", opts.okMessage(r)) : go(opts.back, "error", r.error ?? "refused");
+    return r.ok ? go(opts.okPath ? opts.okPath(r) : back, "ok", opts.okMessage(r)) : go(back, "error", r.error ?? "refused");
   } catch (e) {
-    if (pgCode(e) === "PTS01") return go(opts.back, "error", "Confirm with your security key first (step-up).");
+    if (pgCode(e) === "PTS01") return go(back, "error", "Confirm with your security key first (step-up).");
     const msg = officerMessage(e);
-    if (msg) return go(opts.back, "error", msg);
+    if (msg) return go(back, "error", msg);
     throw e;
   }
 }

@@ -21,7 +21,7 @@ import { cast, createWorld, invite, type Actor, type Cast, type World } from "..
  * checks on every mutating route; session expiry; security headers. Expectations are written out
  * below, independently of src/lib/routes.ts.
  */
-const PORT = 3399;
+const PORT = Number(process.env.ADMIN_HTTP_PORT ?? 3399);
 const ORIGIN = `http://localhost:${String(PORT)}`;
 const COOKIE = "__Host-pt_admin";
 type Role =
@@ -90,6 +90,10 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/approvals/signer/{signer}", allowed: APPROVALS },
   { path: "/approvals/payouts/{payout}", allowed: APPROVALS },
   { path: "/approvals/unfreeze/{unfreeze}", allowed: APPROVALS },
+  // 0049: the onboarding desk (S-01 maker screens); unknown files are "not found".
+  { path: "/onboarding", allowed: PROPERTY },
+  { path: `/onboarding/sponsor/${NO_PROPERTY}`, allowed: PROPERTY, okStatus: 404 },
+  { path: `/onboarding/property/${NO_PROPERTY}`, allowed: PROPERTY, okStatus: 404 },
   { path: "/approvals/property", allowed: PROPERTY },
   // Authorised readers get "not found" for an unknown request (the database answers NULL).
   { path: "/approvals/property/999999", allowed: PROPERTY, okStatus: 404 },
@@ -200,6 +204,7 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
   // Without the export button (and a fresh step-up, checked by the database) no file is made: 303 back.
   { path: "/api/compliance/str/{str}/export", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/goaml", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   // S-06: makers are operations makers, deciders operations checkers, compliance and legal officers; an
   // incomplete form is answered with a 303 back (nothing changed, the signing service is never called).
   { path: "/api/audit/recovery/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
@@ -232,6 +237,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/operations/collections/1/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   // 0045: an incomplete request is answered with a 303 back (nothing asked).
   { path: "/api/approvals/property/request", allowed: PROPERTY, okStatus: 303, form: {} },
+  { path: "/api/onboarding/act", allowed: PROPERTY, okStatus: 303, form: { action: "nope" } },
+  { path: "/api/onboarding/duties", allowed: ["admin"], okStatus: 303, form: { action: "nope" } },
   // 0046: incomplete polls and decisions are answered with a 303 back (nothing proposed or decided).
   { path: "/api/votes", allowed: ["ops_maker"], okStatus: 303, form: {} },
   { path: "/api/votes/1/act", allowed: OPERATIONS, okStatus: 303, form: { action: "nope" } },
@@ -498,6 +505,7 @@ describe("route coverage", () => {
           .replace(/^\/approvals\/(signer|payouts|unfreeze|property|offering)\/(\{\w+\}|\d+)$/, "/approvals/$1/[id]")
           .replace(/^\/committees\/\d+$/, "/committees/[id]")
           .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
+          .replace(/^\/onboarding\/(sponsor|property)\/[0-9a-f-]{36}$/, "/onboarding/$1/[id]")
           .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
@@ -857,6 +865,15 @@ describe("compliance over HTTP (Step 6c)", () => {
     expect(new TextDecoder().decode(data)).not.toMatch(/\d{13}|name_enc/);
     const rec = await w.su.query<{ sha256: Buffer }>("SELECT sha256 FROM compliance.str_exports WHERE case_id = $1", [resolve("{str}")]);
     expect(rec.rows.map((r) => r.sha256.toString("hex"))).toContain(manifest.files[0]?.sha256);
+    // Migration 0050: a goAML STR draft next to the case data, listed in the manifest, without a CNIC or a name.
+    const xmlName = manifest.files[1]?.name ?? "";
+    expect(xmlName).toMatch(/^goaml-str-\d+-\d{8}T\d{6}Z\.xml$/);
+    const xml = files.get(xmlName) ?? new Uint8Array();
+    expect(sha256Hex(xml)).toBe(manifest.files[1]?.sha256);
+    const xmlText = new TextDecoder().decode(xml);
+    expect(xmlText).toMatch(/<report_code>STR<\/report_code>/);
+    expect(xmlText).toMatch(/Placeholder values still to confirm with the FMU: .*rentity_id/);
+    expect(xmlText).not.toMatch(/\d{13}|name_enc/);
     expect((await w.su.query("SELECT * FROM compliance.verify_audit()")).rows).toEqual([]);
     expect((await w.su.query("SELECT * FROM admin.verify_audit()")).rows).toEqual([]);
   });
