@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Mobile App Flow</title>
+<link rel="stylesheet" href="app.css">
+<style>
+.wrap { position: relative; z-index: 2; max-width: 1240px; margin: 0 auto; padding: 0 max(16px, 2vw) 70px; }
+.hero { padding: 56px 0 30px; display: grid; gap: 18px; }
+.hero h1 { font-size: clamp(34px, 6vw, 62px); max-width: 15ch; }
+.hero .lede { font-size: 18px; max-width: 64ch; color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { padding: 14px 16px; border-radius: 16px; background: var(--glass); border: 1px solid var(--stroke); position: relative; overflow: hidden; }
+.tile::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; background: var(--tc, var(--cyan)); }
+.tile b { display: block; font-family: var(--display); font-size: 28px; letter-spacing: -.02em; } .tile span { font-size: 12.5px; color: var(--muted); }
+h2.sh { font-size: 28px; margin: 46px 0 6px; } p.sub { color: var(--muted); margin-bottom: 18px; max-width: 70ch; }
+.demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.demo { border-radius: 22px; overflow: hidden; border: 1px solid var(--stroke2); background: var(--glass); text-decoration: none; display: flex; flex-direction: column; transition: .2s; }
+.demo:hover { transform: translateY(-3px); border-color: rgba(34,227,240,.6); }
+.demo .pic { height: 230px; background: center/cover no-repeat; position: relative; }
+.demo .pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, var(--ov)); }
+.demo .pic span { position: absolute; left: 16px; bottom: 14px; z-index: 1; font-family: var(--display); font-weight: 700; font-size: 26px; color: #fff; }
+.demo .pic i { position: absolute; left: 16px; top: 14px; z-index: 1; font-style: normal; font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; }
+.demo .body { padding: 16px; display: grid; gap: 10px; }
+.demo .body p { color: var(--muted); font-size: 14px; }
+.demo .sw { display: flex; gap: 6px; } .demo .sw b { width: 22px; height: 22px; border-radius: 7px; border: 1px solid var(--stroke2); }
+.demo .links { display: flex; gap: 8px; flex-wrap: wrap; }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.step { padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--stroke); position: relative; }
+.step .n { font-family: var(--mono); font-size: 12px; color: var(--sc); letter-spacing: 1px; }
+.step h3 { font-size: 19px; margin: 4px 0 6px; }
+.step p { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
+.step .scr { display: flex; flex-wrap: wrap; gap: 6px; }
+.step .scr a { font-size: 12px; padding: 4px 9px; border-radius: 9px; border: 1px solid var(--stroke2); text-decoration: none; color: var(--text); }
+.step .scr a:hover { border-color: var(--sc); color: var(--sc); }
+.step::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--sc); }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rule { padding: 14px 16px; border-radius: 16px; background: var(--glass); border: 1px solid var(--stroke); font-size: 14px; color: #c9d3e6; }
+.rule b { display: block; color: var(--text); font-family: var(--display); font-size: 16px; margin-bottom: 3px; }
+</style>
+</head>
+<body data-theme="a">
+<div class="aurora"></div><div class="gridbg"></div>
+<nav class="pubnav">
+  <a class="logo" href="../"><svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M16 2l12 7v14l-12 7-12-7V9z" stroke="#22E3F0" stroke-width="2"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" fill="#8B5CF6"/></svg>Property Token</a>
+  <span class="pchip hide-s" style="border-color:rgba(139,92,246,.4);color:#d9ccff">Mobile app flow</span>
+  <div class="sp"></div>
+  <a class="pchip hide-s" href="../">All mockups</a>
+  <a class="pchip" href="/docs/">Platform guide</a>
+  <a class="pchip hide-s" href="/">Live demo →</a>
+</nav>
+<div class="wrap">
+  <header class="hero">
+    <div class="kicker">Flutter app · interactive design reference</div>
+    <h1>The investor app, <span class="grad">every screen</span>, clickable.</h1>
+    <p class="lede">Sign-up to rent payout: 49 screens in 8 journeys, in three looks built on the website's colours. Tap inside the phone like a real app; the side panel explains what the investor does and what the platform does behind it.</p>
+    <div class="tiles">
+      <div class="tile" style="--tc:var(--cyan)"><b>49</b><span>Screens</span></div>
+      <div class="tile" style="--tc:var(--violet)"><b>8</b><span>Journeys</span></div>
+      <div class="tile" style="--tc:var(--pink)"><b>3</b><span>Design demos</span></div>
+      <div class="tile" style="--tc:var(--teal)"><b>EN · اردو</b><span>Both languages</span></div>
+      <div class="tile" style="--tc:var(--gold)"><b>0</b><span>Passwords: passkeys only</span></div>
+    </div>
+  </header>
+
+  <h2 class="sh">Three demos</h2>
+  <p class="sub">Same app, same flows, same data. Pick the look; switch at any time from the top bar.</p>
+  <div class="demos">
+    <a class="demo" href="demo-a.html" style="--ov:rgba(5,7,15,.95)"><div class="pic" style="background-image:url('img/night2.jpg')"><i>Demo A</i><span>Night Glass</span></div><div class="body"><p>The website's own theme: deep navy, glass cards, cyan to violet light, floating tab bar with a centre Invest button.</p><div class="sw"><b style="background:#05070f"></b><b style="background:#22e3f0"></b><b style="background:#8b5cf6"></b><b style="background:#f472b6"></b><b style="background:#2ef2b5"></b></div><div class="links"><span class="pchip on">Open the flow</span><span class="pchip" onclick="event.preventDefault();location.href='all-a.html'">All screens</span></div></div></a>
+    <a class="demo" href="demo-b.html" style="--ov:rgba(60,30,140,.9)"><div class="pic" style="background-image:url('img/apt1.jpg')"><i>Demo B</i><span>Daylight</span></div><div class="body"><p>Bright and friendly for daytime: white cards with soft shadows, violet to sky-blue accents, classic docked tab bar.</p><div class="sw"><b style="background:#f4f6fb"></b><b style="background:#7c4dff"></b><b style="background:#1fb8e0"></b><b style="background:#0f9f66"></b><b style="background:#0c1222"></b></div><div class="links"><span class="pchip on">Open the flow</span><span class="pchip" onclick="event.preventDefault();location.href='all-b.html'">All screens</span></div></div></a>
+    <a class="demo" href="demo-c.html" style="--ov:rgba(8,8,10,.96)"><div class="pic" style="background-image:url('img/villa2.jpg')"><i>Demo C</i><span>Luxe Noir</span></div><div class="body"><p>Photo-first and premium: black, gold and full-bleed property pictures, uppercase labels, round icons, slim pill tab bar.</p><div class="sw"><b style="background:#08080a"></b><b style="background:#f5c46b"></b><b style="background:#e0a640"></b><b style="background:#22e3f0"></b><b style="background:#f4efe4"></b></div><div class="links"><span class="pchip on">Open the flow</span><span class="pchip" onclick="event.preventDefault();location.href='all-c.html'">All screens</span></div></div></a>
+  </div>
+
+  <h2 class="sh">The journeys</h2>
+  <p class="sub">Each step opens Demo A at that screen. Inside the app, every button goes to the next screen.</p>
+  <div class="flow">
+    <div class="step" style="--sc:var(--cyan)"><div class="n">01 · START</div><h3>Sign up with a passkey</h3><p>Name and mobile, a one-time SMS code to prove the number, then fingerprint or face as the key. No password ever.</p><div class="scr"><a href="demo-a.html#splash">Splash</a><a href="demo-a.html#welcome">How it works</a><a href="demo-a.html#signup">Create account</a><a href="demo-a.html#otp">Verify mobile</a><a href="demo-a.html#passkey">Passkey</a><a href="demo-a.html#signin">Sign in</a><a href="demo-a.html#recover">Recovery</a></div></div>
+    <div class="step" style="--sc:var(--violet)"><div class="n">02 · VERIFY</div><h3>Identity in 3 minutes</h3><p>CNIC scan, liveness selfie matched with NADRA, four suitability questions, own-name bank account with a 72-hour safety wait.</p><div class="scr"><a href="demo-a.html#kyc-intro">Intro</a><a href="demo-a.html#kyc-cnic">CNIC</a><a href="demo-a.html#kyc-live">Selfie</a><a href="demo-a.html#kyc-q">Suitability</a><a href="demo-a.html#kyc-bank">Bank</a><a href="demo-a.html#kyc-done">Result</a></div></div>
+    <div class="step" style="--sc:var(--pink)"><div class="n">03 · DISCOVER</div><h3>Proof before price</h3><p>Home, explore with filters, map by city, property pages with photo gallery, returns, hash-checked documents and an analyst that cites sources.</p><div class="scr"><a href="demo-a.html#home">Home</a><a href="demo-a.html#explore">Explore</a><a href="demo-a.html#map">Map</a><a href="demo-a.html#property">Property</a><a href="demo-a.html#gallery">Gallery</a><a href="demo-a.html#doc-view">Document</a><a href="demo-a.html#analyst">Analyst</a></div></div>
+    <div class="step" style="--sc:var(--teal)"><div class="n">04 · INVEST</div><h3>Units in four taps</h3><p>Choose units, tick three disclosures, confirm with the passkey, pay by Raast from your own account; withdraw within the cooling-off.</p><div class="scr"><a href="demo-a.html#invest-amount">Amount</a><a href="demo-a.html#invest-review">Review</a><a href="demo-a.html#invest-passkey">Passkey</a><a href="demo-a.html#invest-pay">Raast</a><a href="demo-a.html#invest-done">Done</a><a href="demo-a.html#subscriptions">Subscriptions</a></div></div>
+    <div class="step" style="--sc:var(--gold)"><div class="n">05 · PORTFOLIO</div><h3>Own it, prove it, move it</h3><p>Split by property, on-chain record, public Merkle proof, send units to a verified investor, demo market, exit at NAV.</p><div class="scr"><a href="demo-a.html#portfolio">Portfolio</a><a href="demo-a.html#holding">Holding</a><a href="demo-a.html#verify">Verify</a><a href="demo-a.html#transfer">Send</a><a href="demo-a.html#market">Market</a><a href="demo-a.html#exit">Exit</a></div></div>
+    <div class="step" style="--sc:var(--up)"><div class="n">06 · RENT &amp; TAX</div><h3>Every rupee traced</h3><p>Monthly chart, the full calculation from building rent to your bank, the on-chain proof trail and a verifiable tax certificate.</p><div class="scr"><a href="demo-a.html#rent">Rent</a><a href="demo-a.html#distribution">Payout proof</a><a href="demo-a.html#tax">Tax certificate</a></div></div>
+    <div class="step" style="--sc:var(--amber)"><div class="n">07 · VOICE</div><h3>Votes and complaints</h3><p>Vote with your units (no running totals), file and follow complaints with deadlines, and notifications that jump to the right screen.</p><div class="scr"><a href="demo-a.html#votes">Votes</a><a href="demo-a.html#vote">Cast</a><a href="demo-a.html#complaints">Complaints</a><a href="demo-a.html#complaint-new">New</a><a href="demo-a.html#complaint">Thread</a><a href="demo-a.html#notifications">Notifications</a></div></div>
+    <div class="step" style="--sc:var(--violet-soft)"><div class="n">08 · ACCOUNT</div><h3>You stay in control</h3><p>Passkeys and sessions, bank accounts, nominee, alerts, help with the support reference, the sponsor portal and the full Urdu app.</p><div class="scr"><a href="demo-a.html#account">Account</a><a href="demo-a.html#security">Security</a><a href="demo-a.html#banks">Banks</a><a href="demo-a.html#nominee">Nominee</a><a href="demo-a.html#settings">Alerts</a><a href="demo-a.html#support">Help</a><a href="demo-a.html#sponsor">Sponsor</a><a href="demo-a.html#urdu">اردو</a></div></div>
+  </div>
+
+  <h2 class="sh">Built in, on every screen</h2>
+  <div class="rules">
+    <div class="rule"><b>No keys on the phone</b>The app talks only to the public API. Units sit in a custody wallet; the signing service signs with maker-checker.</div>
+    <div class="rule"><b>Passkey for money moves</b>Invest, withdraw, send, exit, vote and nominee changes each ask for a fresh fingerprint or face check.</div>
+    <div class="rule"><b>Own-name money only</b>Payments in and payouts out use the investor's own verified bank account; a new account waits 72 hours.</div>
+    <div class="rule"><b>Proof you can check</b>Documents, holdings and payouts carry hashes and on-chain anchors that the app re-checks.</div>
+    <div class="rule"><b>Information, not advice</b>The analyst cites documents and never recommends; the demo market is labelled until regulators approve.</div>
+    <div class="rule"><b>Urdu first-class</b>Right-to-left Nastaliq layout with the website's own Urdu wording.</div>
+  </div>
+</div>
+<p class="foot">Design reference for the Flutter app (not the app itself). Figures, people and properties are samples. Photos: Unsplash, under the Unsplash License.</p>
+</body>
+</html>
