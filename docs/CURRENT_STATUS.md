@@ -2,6 +2,10 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## Compliance follow-ups (2026-11-03, on `main`)
+
+- Partial freezes in PT Control (migration 0054): `/compliance/freezes` + `/compliance/partial-freezes/[id]`, signer kinds `compliance.freeze_partial` / `compliance.unfreeze_partial` (`npm run signer:setup` adds their dev policies), recon checks `compliance.partial_unmatched` / `compliance.partial_pending`. Not run on Besu (signer, DB and HTTP tests only).
+
 ## T-028 notification producers (2026-10-23, branch `t-028-producers`, not merged; migration 0030)
 
 - Real events now raise notifications in the same transaction (deferred triggers; reminders via `notify.sweep`, run every minute by `notify:run`): offerings, bank, rent, tax, exit, transfers (officers), KYC/compliance (generic words only, no tipping-off), passkeys and new-device sign-in, officer queues and alerts. Marketing is opt-in. Investor notification centre `/notifications` (EN/UR). ADR 0013 amendment 1 proposes Accepted with documented defaults.

@@ -7,7 +7,7 @@ import { csrfFor } from "@/lib/server/session";
 import { ROUTES } from "@/lib/routes";
 import { sha256Hex, unzipStore } from "@/lib/export";
 import { freezePayouts, passRecon, payoutBatch, pendingMint, startTestSigner, type TestSigner } from "../support/approvals";
-import { caseOf, freezePolicies, investor } from "../support/compliance";
+import { caseOf, freezePolicies, investor, partialHolding } from "../support/compliance";
 import { reversalCase, walletCase } from "../support/recovery";
 import { exitCaseFixture, exitToken, exitWindowFixture, sha64 } from "../support/exit";
 import { operationsWorld } from "../support/operations";
@@ -106,6 +106,7 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/compliance/screening", allowed: COMPLIANCE },
   { path: "/compliance/freezes", allowed: COMPLIANCE },
   { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
+  { path: "/compliance/partial-freezes/{partialFreeze}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
   { path: "/compliance/monitoring", allowed: COMPLIANCE },
@@ -202,6 +203,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/rescreen", allowed: ["compliance_officer"], okStatus: 303, form: { reason: "short" } },
   { path: "/api/compliance/freezes", allowed: ["compliance_officer"], okStatus: 303, form: { kind: "freeze" } },
   { path: "/api/compliance/freezes/{freeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/compliance/partial-freezes", allowed: ["compliance_officer"], okStatus: 303, form: { kind: "freeze" } },
+  { path: "/api/compliance/partial-freezes/{partialFreeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/compliance/str", allowed: ["compliance_officer"], okStatus: 303, form: { summary: "short" } },
   { path: "/api/compliance/str/{str}/notes", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
@@ -410,6 +413,16 @@ beforeAll(async () => {
   ids.set("heldSubject", held.subjectId);
   const fr = await w.su.query<{ id: string }>("SELECT compliance.request_freeze('freeze', $1, 'court_order', 'court order received by the operator', 'operator:night', NULL, NULL) AS id", [held.wallet]);
   ids.set("freeze", fr.rows[0]?.id ?? "");
+  // Migration 0054: a partial freeze request for 5 of 100 units of another investor.
+  const partial = await investor(w.su);
+  await partialHolding(w.su, partial.wallet, 100);
+  ids.set("partialSubject", partial.subjectId);
+  ids.set("partialWallet", partial.wallet);
+  const pf = await w.su.query<{ id: string }>(
+    "SELECT compliance.request_partial_freeze('freeze', $1, 5, NULL, 'court_order', 'court order covers part of the units', 'operator:night', NULL, NULL) AS id",
+    [partial.wallet],
+  );
+  ids.set("partialFreeze", pf.rows[0]?.id ?? "");
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
   // Migration 0051: a monitoring alert as the rules leave it.
@@ -529,7 +542,7 @@ describe("route coverage", () => {
           .replace(/^\/committees\/\d+$/, "/committees/[id]")
           .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
           .replace(/^\/onboarding\/(sponsor|property)\/[0-9a-f-]{36}$/, "/onboarding/$1/[id]")
-          .replace(/^\/compliance\/(kyc|freezes|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
+          .replace(/^\/compliance\/(kyc|freezes|partial-freezes|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
           .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
@@ -552,7 +565,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/compliance\/(kyc|freezes|partial-freezes|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/health\/\{\w+\}\/acknowledge$/, "/api/health/[id]/acknowledge")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
@@ -876,6 +889,32 @@ describe("compliance over HTTP (Step 6c)", () => {
     expect(uid, location(asked)).not.toBe("");
     const udigest = digestOf(await (await req(`/compliance/freezes/${uid}`, { who: "compliance_officer" })).text());
     expect(udigest).toBe(""); // the proposer sees no decision form, only the reason why
+  });
+
+  it("a partial freeze proposed by one officer is approved by another; the investor stays verified", async () => {
+    const path = `/compliance/partial-freezes/${resolve("{partialFreeze}")}`;
+    await fresh(c.compliance_officer);
+    const page = await (await req(path, { who: "compliance_officer" })).text();
+    expect(page).toContain("Free units now");
+    const res = await req(`${path.replace("/compliance/", "/api/compliance/")}/decide`, {
+      method: "POST",
+      who: "compliance_officer",
+      form: { decision: "approve", reason: "court order verified with the registry", digest: digestOf(page) },
+    });
+    expect(location(res)).toMatch(/ok=Approved: the command is in the outbox/);
+    const cmd = await w.su.query<{ kind: string; amount: string }>("SELECT kind, payload->>'amount' AS amount FROM outbox.commands WHERE idempotency_key = $1", [
+      `compliance.freeze_partial:request:${resolve("{partialFreeze}")}`,
+    ]);
+    expect(cmd.rows).toEqual([{ kind: "compliance.freeze_partial", amount: "5" }]);
+    const st = await w.su.query<{ s: string }>("SELECT kyc.subject_status($1) AS s", [ids.get("partialSubject")]);
+    expect(st.rows[0]?.s).toBe("verified");
+    // A release before the freeze is on chain is refused with the reason.
+    const asked = await req("/api/compliance/partial-freezes", {
+      method: "POST",
+      who: "compliance_officer",
+      form: { kind: "unfreeze", wallet: ids.get("partialWallet") ?? "", lifts: resolve("{partialFreeze}"), reasonCode: "court_release", reason: "the court lifted the order today" },
+    });
+    expect(decodeURIComponent(location(asked)).replace(/\+/g, " ")).toMatch(/error=.*not on chain yet/);
   });
 
   it("an STR export is recorded before it is handed out, and its file matches the record", async () => {

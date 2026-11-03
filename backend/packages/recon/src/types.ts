@@ -90,6 +90,10 @@ export const CHECKS = {
   "transfer.escrow_residual": "blocking",
   "transfer.paid_not_executed": "warning",
   "transfer.paid_not_executed_overdue": "blocking",
+  // Compliance partial freezes (migration 0054 PF-5; rules in recon.compliance_partial())
+  "compliance.partial_unmatched": "blocking",
+  // Warning: the outbox and signer retry; a freeze of payouts would not bring the command on chain sooner.
+  "compliance.partial_pending": "warning",
   // Operations and FBR withholding (spec S-03 §8, migration 0021; rules in tax.reconcile())
   "rent.wht_mismatch": "blocking",
   "rent.statement_totals": "blocking",
@@ -270,6 +274,12 @@ export interface TransferData {
   caseRequestIds: bigint[];
 }
 
+/** Compliance partial freezes of this token (migration 0054); absent where it is not applied. */
+export interface CompliancePartialData {
+  /** Rows of recon.compliance_partial(token): the rules, evaluated in the database. */
+  findings: { check: string; subject: string; expected: string; actual: string }[];
+}
+
 /** S-03 operations and tax of this token (migration 0021); absent where it is not applied. */
 export interface TaxData {
   /** Rows of tax.reconcile(token): the consistency rules, evaluated in the database. */
@@ -329,6 +339,7 @@ export interface ReconData {
   tax?: TaxData;
   /** S-04 phase 0 transfers of this token; absent where migration 0028 is not applied. */
   transfers?: TransferData;
+  compliancePartial?: CompliancePartialData;
   /** S-05 exits of this token; absent where migration 0027 is not applied. */
   exit?: ExitData;
   bank: {

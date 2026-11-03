@@ -7,6 +7,7 @@ import {
   evaluateMint,
   evaluateRecordPayout,
   evaluateTransfer,
+  evaluatePartialFreeze,
   evaluateUnfreeze,
   type AnyRule,
   type Decision,
@@ -56,6 +57,11 @@ describe("call preview", () => {
     expect(show("compliance.freeze", freezeRule, freeze)).toMatchObject({ to: f.to, data: f.data, functionName: "freezeAddress" });
     const u = allowed(evaluateUnfreeze(freezeRule, freeze, { chainId: 586586, frozen: true, ownerVerified: true, decided: true, signedToday: 0 }));
     expect(show("compliance.unfreeze", freezeRule, freeze)).toMatchObject({ to: u.to, data: u.data, functionName: "unfreezeAddress" });
+    const partial = { freezeGuard: A(4), account: A(12), amount: "40", caseId: H(10) };
+    const pf = allowed(evaluatePartialFreeze("compliance.freeze_partial", freezeRule, partial, { chainId: 586586, allowed: true, balance: 100n, frozenTokens: 0n, signedToday: 0 }));
+    expect(show("compliance.freeze_partial", freezeRule, partial)).toMatchObject({ to: pf.to, data: pf.data, functionName: "freezePartial" });
+    const pu = allowed(evaluatePartialFreeze("compliance.unfreeze_partial", freezeRule, partial, { chainId: 586586, allowed: true, balance: 100n, frozenTokens: 40n, signedToday: 0 }));
+    expect(show("compliance.unfreeze_partial", freezeRule, partial)).toMatchObject({ to: pu.to, data: pu.data, functionName: "unfreezePartial" });
 
     const payout = { registry: A(5), distributionId: "4", payoutBatchHash: H(77) };
     const p = allowed(evaluateRecordPayout(payoutRule, payout, { chainId: 586586, status: "finalized", token: A(2), bankFileSha256: H(77) }));

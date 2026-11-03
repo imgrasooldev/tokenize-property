@@ -70,6 +70,8 @@ export const KINDS = [
   "issuance.mint",
   "compliance.freeze",
   "compliance.unfreeze",
+  "compliance.freeze_partial",
+  "compliance.unfreeze_partial",
   "rent.record_payout",
   "rent.publish",
   "rent.finalize",
@@ -184,6 +186,54 @@ export function evaluateUnfreeze(rule: UnfreezeRule, payload: unknown, facts: Un
     keyRef: rule.keyRef,
     to: rule.freezeGuard.toLowerCase() as Hex,
     data: encodeFunctionData({ abi: freezeGuardAbi, functionName: "unfreezeAddress", args: [account as Hex, caseId as Hex] }),
+    gas: BigInt(rule.gasLimit),
+  };
+}
+
+// ------------------------------------------------------------------ compliance.freeze_partial / unfreeze_partial (migration 0054)
+
+/**
+ * Freezes an amount of one token in a wallet (FreezeGuard.freezePartial), or releases a partial
+ * hold (unfreezePartial). Only what two different compliance officers approved in the portal: the
+ * database answers compliance.partial_command_allowed(kind, payload) only for the approved request
+ * that enqueued exactly this payload while its caseId is not yet on chain. The chain must show
+ * enough free units (freeze) or frozen units (release); a daily count limits a compromised caller.
+ * Same rule shape as compliance.freeze.
+ */
+export const partialFreezeRule = freezeRule;
+export type PartialFreezeRule = FreezeRule;
+export const partialFreezePayload = z.object({ freezeGuard: address, account: address, amount: uint, caseId: bytes32 });
+
+export interface PartialFreezeFacts {
+  chainId: number;
+  /** compliance.partial_command_allowed(kind, payload): a two-officer decision enqueued exactly this. */
+  allowed: boolean;
+  balance: bigint;
+  frozenTokens: bigint;
+  signedToday: number;
+}
+
+export function evaluatePartialFreeze(kind: "compliance.freeze_partial" | "compliance.unfreeze_partial", rule: PartialFreezeRule, payload: unknown, facts: PartialFreezeFacts): Decision {
+  const p = partialFreezePayload.safeParse(payload);
+  if (!p.success) return { decision: "deny", reason: `malformed payload: ${p.error.issues.map((i) => i.path.join(".")).join(", ")}` };
+  const { freezeGuard, account, caseId } = p.data;
+  const amount = BigInt(p.data.amount);
+  const freeze = kind === "compliance.freeze_partial";
+  if (facts.chainId !== rule.chainId) return { decision: "deny", reason: `wrong chain ${String(facts.chainId)}` };
+  if (freezeGuard.toLowerCase() !== rule.freezeGuard.toLowerCase()) return { decision: "deny", reason: "target is not the approved FreezeGuard" };
+  if (BigInt(caseId) === 0n) return { decision: "deny", reason: "zero caseId" };
+  if (amount === 0n) return { decision: "deny", reason: "zero amount" };
+  if (!facts.allowed) return { decision: "deny", reason: `no approved two-officer partial ${freeze ? "freeze" : "release"} enqueued this command (or it is already on chain)` };
+  if (freeze && facts.balance - facts.frozenTokens < amount) return { decision: "deny", reason: "the wallet's free balance on chain is below the amount" };
+  if (!freeze && facts.frozenTokens < amount) return { decision: "deny", reason: "fewer tokens are frozen on chain than the release amount" };
+  if (facts.signedToday + 1 > rule.maxPerDay) return { decision: "deny", reason: `daily limit of ${String(rule.maxPerDay)} partial ${freeze ? "freezes" : "releases"} would be exceeded` };
+  return {
+    decision: "allow",
+    approvalsNeeded: rule.approvals,
+    amount: null,
+    keyRef: rule.keyRef,
+    to: rule.freezeGuard.toLowerCase() as Hex,
+    data: encodeFunctionData({ abi: freezeGuardAbi, functionName: freeze ? "freezePartial" : "unfreezePartial", args: [account as Hex, amount, caseId as Hex] }),
     gas: BigInt(rule.gasLimit),
   };
 }
@@ -1075,6 +1125,7 @@ export function parseRule(kind: string, rule: unknown): AnyRule {
   if (kind === "issuance.mint") return mintRule.parse(rule);
   if (kind === "compliance.freeze") return freezeRule.parse(rule);
   if (kind === "compliance.unfreeze") return unfreezeRule.parse(rule);
+  if (kind === "compliance.freeze_partial" || kind === "compliance.unfreeze_partial") return partialFreezeRule.parse(rule);
   if (kind === "rent.record_payout") return recordPayoutRule.parse(rule);
   if (kind === "rent.publish" || kind === "rent.finalize") return rentRule.parse(rule);
   if (kind === "token.transfer") return transferRule.parse(rule);

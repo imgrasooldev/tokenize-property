@@ -125,6 +125,9 @@ async function setup(): Promise<void> {
         maxPerCommand: "100000", maxPerDay: "1000000", approvalAbove: "10000", approvals: 2 }],
       ["compliance.freeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["compliance.unfreeze", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
+      // Migration 0054: partial freezes and releases decided by two compliance officers in PT Control.
+      ["compliance.freeze_partial", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
+      ["compliance.unfreeze_partial", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", freezeGuard: lc(d.freezeGuard), token: lc(d.token), maxPerDay: 20, approvals: 0 }],
       ["rent.record_payout", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],
       // T-022 (migration 0032): the payload must be the command ops.request_publish / ops.request_finalize enqueued.
       ["rent.publish", { chainId: LOCAL_DEV_CHAIN_ID, keyRef: "ops", registry: lc(d.distributions), token: lc(d.token), approvals: 0 }],

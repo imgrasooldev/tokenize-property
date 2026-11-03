@@ -19,6 +19,7 @@ import type {
   ReconData,
   TaxData,
   TransferData,
+  CompliancePartialData,
 } from "./types.ts";
 
 export interface LoadOptions {
@@ -195,6 +196,16 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       transfers = { findings, caseRequestIds };
     }
 
+    // Compliance partial freezes of this token (migration 0054), read-only, when the function exists.
+    let compliancePartial: CompliancePartialData | undefined;
+    const hasPartial = (await q<{ ok: boolean }>("SELECT to_regprocedure('recon.compliance_partial(text)') IS NOT NULL AS ok"))[0]?.ok ?? false;
+    if (hasPartial) {
+      const findings = (await q<{ check_name: string; subject: string; expected: string; actual: string }>(
+        "SELECT check_name, subject, expected, actual FROM recon.compliance_partial($1)", [lower(d.contracts.token)]))
+        .map((r) => ({ check: r.check_name, subject: r.subject, expected: r.expected, actual: r.actual }));
+      compliancePartial = { findings };
+    }
+
     // S-05 exits of this token (migration 0027), read-only, when the schema exists.
     let exit: ExitData | undefined;
     const hasExit = (await q<{ ok: boolean }>("SELECT to_regclass('exit.recon_lines') IS NOT NULL AS ok"))[0]?.ok ?? false;
@@ -259,6 +270,7 @@ export async function loadData(pool: pg.Pool, o: LoadOptions): Promise<Loaded> {
       ...(recovery ? { recovery } : {}),
       ...(tax ? { tax } : {}),
       ...(transfers ? { transfers } : {}),
+      ...(compliancePartial ? { compliancePartial } : {}),
       ...(exit ? { exit } : {}),
       bank: { accounts, statements: [...statements.values()], payoutBatches },
       integrity: { ledger: ledgerProblems, ledgerBalances, signerAudit, reconAudit, outbox, halted: cursor.halt_reason },

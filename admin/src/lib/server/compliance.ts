@@ -202,6 +202,47 @@ export async function freezeRequest(sessionHash: Buffer, id: string): Promise<Fr
   return rows[0]?.v ?? null;
 }
 
+/** Partial freezes (migration 0054): an amount of one token, the same two-officer path as a full freeze. */
+export interface PartialFreezeList {
+  policies: { freeze: boolean; unfreeze: boolean };
+  token: string | null;
+  holds: { id: number; wallet: string; token: string; amount: string; subject: string; freezeRequest: number; onChain: boolean; placedAt: string }[];
+  requests: {
+    id: number;
+    kind: "freeze" | "unfreeze";
+    wallet: string;
+    amount: string;
+    reasonCode: string;
+    status: string;
+    requestedBy: string;
+    requestedAt: string;
+    decidedBy: string | null;
+    decidedAt: string | null;
+    command: CommandView | null;
+  }[];
+}
+
+export async function partialFreezeList(sessionHash: Buffer): Promise<PartialFreezeList> {
+  const { rows } = await db().query<{ v: PartialFreezeList }>("SELECT admin.partial_freezes($1) AS v", [sessionHash]);
+  const v = rows[0]?.v;
+  if (!v) throw new Error("no partial freeze list");
+  return v;
+}
+
+export interface PartialFreezeRequest extends Omit<FreezeRequest, "kind"> {
+  kind: "freeze" | "unfreeze";
+  token: string;
+  amount: string;
+  freeUnits: string;
+  onChain: boolean;
+  released: number | null;
+}
+
+export async function partialFreezeRequest(sessionHash: Buffer, id: string): Promise<PartialFreezeRequest | null> {
+  const { rows } = await db().query<{ v: PartialFreezeRequest | null }>("SELECT admin.partial_freeze($1, $2) AS v", [sessionHash, id]);
+  return rows[0]?.v ?? null;
+}
+
 export interface StrList {
   categories: { code: string; label: string }[];
   cases: { id: number; category: string; status: string; subject: string | null; openedBy: string; openedAt: string; updatedAt: string; notes: number; fmuReference: string | null; overdue: boolean }[];

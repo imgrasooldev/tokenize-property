@@ -1,4 +1,5 @@
 function bank.distribution_file_hash(p_token text, p_distribution numeric)
+function compliance.partial_command_allowed(p_kind text, p_payload jsonb)
 function compliance.unfreeze_allowed(p_account text, p_case_id text)
 function exit.burn_allowed(p_payload jsonb)
 function kyc.is_verified(p_wallet text)

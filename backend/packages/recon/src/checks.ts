@@ -567,6 +567,19 @@ export function checkTransfers(d: ReconData): Finding[] {
   return t.findings.map((r) => f(isTransferCheck(r.check) ? r.check : "transfer.settlement_mismatch", r.subject, r.expected, r.actual));
 }
 
+// ------------------------------------------------------------------ compliance partial freezes (migration 0054 PF-5)
+
+/**
+ * Every partial freeze or release on chain is an approved two-officer request, each caseId once;
+ * an approved request not on chain an hour after the decision is pending. Evaluated in the database
+ * (recon.compliance_partial); an unknown rule name is reported as unmatched (blocking).
+ */
+export function checkCompliancePartial(d: ReconData): Finding[] {
+  const x = d.compliancePartial;
+  if (!x) return [];
+  return x.findings.map((r) => f(r.check === "compliance.partial_pending" ? "compliance.partial_pending" : "compliance.partial_unmatched", r.subject, r.expected, r.actual));
+}
+
 // ------------------------------------------------------------------ exit, redemption and closure (S-05 §7, §14.3)
 
 /**
@@ -622,7 +635,7 @@ export function checkExit(d: ReconData): Finding[] {
   return out;
 }
 
-export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax, checkExit, checkTransfers] as const;
+export const ALL_CHECKS = [checkIssuance, checkSupply, checkHoldings, checkCash, checkRent, checkIntegrity, checkOfferings, checkRecovery, checkTax, checkExit, checkTransfers, checkCompliancePartial] as const;
 
 /** Runs every check; findings sorted by check and subject, at most MAX_PER_CHECK listed per check. */
 export function runChecks(d: ReconData): Finding[] {

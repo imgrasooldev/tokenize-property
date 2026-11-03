@@ -42,15 +42,29 @@ export async function investor(su: pg.Client, opts: { screening?: "pass" | "revi
   return { subjectId, wallet, last4 };
 }
 
-/** Active signing policies for compliance.freeze and compliance.unfreeze (approved by two operators). */
+/** The token the test freeze policies target (FreezeGuard 0x…f1). */
+export const FREEZE_TOKEN = `0x${"2".padStart(40, "0")}`;
+
+/** Active signing policies for full and partial freezes and their releases (approved by two operators). */
 export async function freezePolicies(su: pg.Client): Promise<void> {
-  for (const kind of ["compliance.freeze", "compliance.unfreeze"]) {
+  for (const kind of ["compliance.freeze", "compliance.unfreeze", "compliance.freeze_partial", "compliance.unfreeze_partial"]) {
     const active = await su.query("SELECT 1 FROM signer.policies WHERE kind = $1 AND approved_at IS NOT NULL AND retired_at IS NULL", [kind]);
     if (active.rowCount) continue;
-    const rule = { chainId: 586586, keyRef: "ops", freezeGuard: `0x${"f1".padStart(40, "0")}`, token: `0x${"2".padStart(40, "0")}`, maxPerDay: 20, approvals: 0 };
+    const rule = { chainId: 586586, keyRef: "ops", freezeGuard: `0x${"f1".padStart(40, "0")}`, token: FREEZE_TOKEN, maxPerDay: 20, approvals: 0 };
     const p = await su.query<{ id: string }>("SELECT signer.propose_policy($1, $2::jsonb, 'maker') AS id", [kind, JSON.stringify(rule)]);
     await su.query("SELECT signer.approve_policy($1, 'checker')", [p.rows[0]?.id]);
   }
+}
+
+/** `units` of the freeze policies' token in a wallet's read-model balance (registers the token once). */
+export async function partialHolding(su: pg.Client, wallet: string, units: number): Promise<void> {
+  const registered = await su.query("SELECT 1 FROM chain.tokens WHERE token = $1", [FREEZE_TOKEN]);
+  if (!registered.rowCount) {
+    await su.query("SELECT chain.register_deployment('dep-partial', 586586, 0, $1::jsonb, NULL)", [
+      JSON.stringify({ token: FREEZE_TOKEN, issuance: `0x${"3".repeat(40)}`, identityRegistry: `0x${"4".repeat(40)}` }),
+    ]);
+  }
+  await su.query("INSERT INTO chain.holdings (token, holder, balance, updated_block) VALUES ($1, $2, $3, 1)", [FREEZE_TOKEN, wallet, units]);
 }
 
 export async function caseOf(su: pg.Client, subjectId: string): Promise<string> {

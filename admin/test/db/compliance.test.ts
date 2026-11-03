@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { caseOf, freezePolicies, investor } from "../support/compliance";
+import { caseOf, FREEZE_TOKEN, freezePolicies, investor, partialHolding } from "../support/compliance";
 import { cast, createWorld, invite, verify, type Actor, type Cast, type World } from "../support/world";
 
 /**
@@ -141,6 +141,44 @@ describe("freezes through the portal", () => {
       `compliance.freeze:request:${String(req.id)}`,
     ]);
     expect(cmds.rows).toEqual([{ kind: "compliance.freeze", created_by: comp2.handle }]);
+  });
+});
+
+describe("partial freezes through the portal (migration 0054)", () => {
+  it("an amount within the free units; proposer never decides; the investor stays verified; one outbox command", async () => {
+    const inv = await investor(w.su);
+    await partialHolding(w.su, inv.wallet, 100);
+    const propose = async (a: Actor, amount: string) => {
+      await stepUp(a);
+      return one<R>("SELECT admin.request_partial_freeze($1, 'freeze', $2, $3, NULL, 'reversal_review', 'subscription may be reversed, hold units', NULL, NULL) AS r", [
+        a.sessionHash, inv.wallet, amount,
+      ]);
+    };
+    expect((await propose(c.compliance_officer, "101")).error).toMatch(/only 100 units/);
+    const req = await propose(c.compliance_officer, "30");
+    expect(req.ok).toBe(true);
+    const decide = async (a: Actor) => {
+      const d = await one<{ digest: string; blockers: string[]; freeUnits: string }>("SELECT admin.partial_freeze($1, $2) AS r", [a.sessionHash, req.id]);
+      await stepUp(a);
+      return {
+        d,
+        r: await one<R>("SELECT admin.decide_partial_freeze($1, $2, 'approve', 'assessed: hold is proportionate', $3) AS r", [a.sessionHash, req.id, Buffer.from(d.digest, "hex")]),
+      };
+    };
+    const mine = await decide(c.compliance_officer);
+    expect(mine.d.blockers.join(" ")).toMatch(/You proposed/);
+    expect(mine.r.error).toMatch(/maker-checker/);
+    expect((await decide(comp2)).r).toMatchObject({ ok: true, status: "approved" });
+    expect((await w.su.query<{ s: string }>("SELECT kyc.subject_status($1) AS s", [inv.subjectId])).rows[0]?.s).toBe("verified");
+    const cmds = await w.su.query<{ kind: string; created_by: string; amount: string }>(
+      "SELECT kind, created_by, payload->>'amount' AS amount FROM outbox.commands WHERE idempotency_key = $1",
+      [`compliance.freeze_partial:request:${String(req.id)}`],
+    );
+    expect(cmds.rows).toEqual([{ kind: "compliance.freeze_partial", created_by: comp2.handle, amount: "30" }]);
+    const list = await one<{ holds: { amount: string; onChain: boolean }[]; token: string }>("SELECT admin.partial_freezes($1) AS r", [c.auditor.sessionHash]);
+    expect(list.token).toBe(FREEZE_TOKEN);
+    expect(list.holds).toEqual([expect.objectContaining({ amount: "30", onChain: false })]);
+    expect(await code(w.portal.query("SELECT admin.request_partial_freeze($1, 'freeze', $2, 1, NULL, 'court_order', 'auditor probe text', NULL, NULL)", [c.auditor.sessionHash, inv.wallet]))).toBe("42501");
   });
 });
 

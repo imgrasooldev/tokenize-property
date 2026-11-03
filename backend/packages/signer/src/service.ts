@@ -41,8 +41,10 @@ import {
   publishPayload,
   type RentRule,
   evaluateTransfer,
+  evaluatePartialFreeze,
   evaluateUnfreeze,
   freezePayload,
+  partialFreezePayload,
   identityClaimPayload,
   identityCreatePayload,
   identityRegisterPayload,
@@ -61,6 +63,7 @@ import {
   type IdentityRegisterRule,
   type MintRule,
   type OnboardingFacts,
+  type PartialFreezeRule,
   type RecordPayoutRule,
   type TransferRule,
   type UnfreezeRule,
@@ -316,6 +319,9 @@ export class SignerService {
         return this.evaluateFreeze(c, rule as FreezeRule, payload, excludeRequest);
       case "compliance.unfreeze":
         return this.evaluateUnfreeze(c, rule as UnfreezeRule, payload, excludeRequest);
+      case "compliance.freeze_partial":
+      case "compliance.unfreeze_partial":
+        return this.evaluatePartialFreeze(c, kind, rule as PartialFreezeRule, payload, excludeRequest);
       case "rent.record_payout":
         return this.evaluateRecordPayout(c, rule as RecordPayoutRule, payload);
       case "rent.publish":
@@ -458,6 +464,26 @@ export class SignerService {
     };
     const [chainId, frozen, facts] = await Promise.all([this.chain.chainId(), this.chain.isFrozen(rule, account), db()]);
     return evaluateUnfreeze(rule, payload, { chainId, frozen, ...facts });
+  }
+
+  /** Migration 0054: partial freezes and releases only as two compliance officers decided (compliance.partial_command_allowed). */
+  private async evaluatePartialFreeze(c: pg.ClientBase, kind: "compliance.freeze_partial" | "compliance.unfreeze_partial", rule: PartialFreezeRule, payload: unknown, excludeRequest: string | null): Promise<Decision> {
+    const p = partialFreezePayload.safeParse(payload);
+    if (!p.success) return evaluatePartialFreeze(kind, rule, payload, { chainId: 0, allowed: false, balance: 0n, frozenTokens: 0n, signedToday: 0 });
+    const account = p.data.account.toLowerCase() as Hex;
+    const token = rule.token.toLowerCase() as Hex;
+    const db = async () => {
+      const allowed = await c.query<{ ok: boolean }>("SELECT compliance.partial_command_allowed($1, $2::jsonb) AS ok", [kind, JSON.stringify(payload)]);
+      const used = await this.signedToday(c, kind, excludeRequest, false);
+      return { allowed: allowed.rows[0]?.ok === true, signedToday: Number(used) };
+    };
+    const [chainId, balance, freeze, facts] = await Promise.all([
+      this.chain.chainId(),
+      need(this.chain.balanceOf, "balances")(token, account),
+      need(this.chain.holderFreeze, "freezes")(token, account),
+      db(),
+    ]);
+    return evaluatePartialFreeze(kind, rule, payload, { chainId, balance, frozenTokens: freeze.frozenTokens, ...facts });
   }
 
   /** S-06 (0020 RV-6): the case enqueued exactly this command and still needs it. */

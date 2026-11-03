@@ -166,6 +166,23 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
   and the wallet is frozen (daily limit, same rule shape as freeze; policy approvals 0 because the
   two officers decided in the database). `suspended` is not in the offboarding list, so the
   offboarding worker never doubles a compliance freeze.
+- **Partial freeze (amendment 2026-11-03, migration 0054; spec S-06 RC-22 and C1).** A compliance
+  officer may instead freeze an AMOUNT of one token in a wallet (`FreezeGuard.freezePartial`), for
+  example the units of a subscription that may have to be reversed. Same two-officer path as the
+  full freeze (reason code of the right kind, reason, 24 hours, maker <> checker, request digest,
+  step-up), in its own tables `compliance.partial_freeze_requests` and `compliance.partial_holds`.
+  The amount must fit the wallet's free balance in the read model (balance minus frozen units) when
+  it is proposed and when it is approved. A partial hold does **not** change the KYC status (the
+  investor stays verified and keeps the rest of the balance and the rent). A release
+  (`unfreezePartial`) lifts exactly one partial hold and its whole amount. Approval enqueues the new
+  signer kinds **`compliance.freeze_partial`** / **`compliance.unfreeze_partial`** (rule shape of
+  `compliance.freeze`); the signing service signs only when
+  `compliance.partial_command_allowed(kind, payload)` finds the approved request that enqueued
+  exactly this payload and no `PartialFreezeSet` with its caseId is on chain yet, and the chain
+  shows enough free units (freeze) or frozen units (release). Reconciliation: every partial
+  `PartialFreezeSet` on chain must match an approved request (account, amount, direction, caseId)
+  (`compliance.partial_unmatched`, blocking); an approved request not on chain after 1 hour is a
+  warning (`compliance.partial_pending`).
 - **STR cases.** open → under_review → filed | close_proposed → closed (or back to under_review).
   Closing without a report needs a second officer; filing needs an export recorded first and the
   FMU reference. Notes append-only. Export = ZIP (case JSON with masked identifiers, notes,

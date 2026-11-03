@@ -12,6 +12,7 @@ import {
   type RecoveryRule,
   claimData,
   freezePayload,
+  partialFreezePayload,
   identityClaimPayload,
   identityCreatePayload,
   identityRegisterPayload,
@@ -182,6 +183,27 @@ function build(kind: string, rule: AnyRule, payload: unknown, keyAddress: (ref: 
           "only after two different compliance officers approved the unfreeze in the portal (compliance.unfreeze_allowed)",
           "only for a frozen wallet whose owner is KYC-verified",
           `at most ${String(r.maxPerDay)} unfreezes per day`,
+        ],
+      };
+    }
+    case "compliance.freeze_partial":
+    case "compliance.unfreeze_partial": {
+      const r = rule as FreezeRule;
+      const p = partialFreezePayload.safeParse(payload);
+      const freeze = kind === "compliance.freeze_partial";
+      if (!p.success) bad(freeze ? "partial freeze" : "partial release");
+      return {
+        to: r.freezeGuard.toLowerCase() as Hex,
+        data: encodeFunctionData({ abi: freezeGuardAbi, functionName: freeze ? "freezePartial" : "unfreezePartial", args: [p.data.account as Hex, BigInt(p.data.amount), p.data.caseId as Hex] }),
+        abi: freezeGuardAbi,
+        contract: "FreezeGuard",
+        from: keyAddress(r.keyRef),
+        gas: r.gasLimit,
+        rules: [
+          `target is the approved FreezeGuard ${r.freezeGuard.toLowerCase()} (token ${r.token.toLowerCase()})`,
+          "only the command two different compliance officers approved in the portal, once (compliance.partial_command_allowed)",
+          freeze ? "the wallet's free balance on chain covers the amount" : "at least the amount is frozen on chain",
+          `at most ${String(r.maxPerDay)} per day`,
         ],
       };
     }

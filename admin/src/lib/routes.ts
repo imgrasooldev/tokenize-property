@@ -48,6 +48,7 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/compliance/screening", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/freezes", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/partial-freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/monitoring", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
@@ -126,6 +127,9 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/compliance/rescreen", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/freezes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/freezes/[id]/decide", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  // Migration 0054: partial freezes and their releases (same maker-checker path).
+  { path: "/api/compliance/partial-freezes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/partial-freezes/[id]/decide", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/notes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
