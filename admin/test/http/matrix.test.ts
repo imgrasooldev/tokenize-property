@@ -109,6 +109,8 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/compliance/partial-freezes/{partialFreeze}", allowed: COMPLIANCE },
   { path: "/compliance/offboarding", allowed: COMPLIANCE },
   { path: "/compliance/offboarding/{deletion}", allowed: COMPLIANCE },
+  { path: "/compliance/residency", allowed: COMPLIANCE },
+  { path: "/compliance/residency/{residency}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
   { path: "/compliance/monitoring", allowed: COMPLIANCE },
@@ -212,6 +214,7 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/partial-freezes/{partialFreeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/compliance/offboarding", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/offboarding/{deletion}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/compliance/residency/{residency}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "propose", reason: "short" } },
   { path: "/api/operations/payees", allowed: ["ops_maker"], okStatus: 303, form: {} },
   { path: "/api/operations/payees/{assisted}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/compliance/str", allowed: ["compliance_officer"], okStatus: 303, form: { summary: "short" } },
@@ -447,6 +450,11 @@ beforeAll(async () => {
     [tk, randomBytes(32), randomBytes(60), payer.subjectId],
   );
   ids.set("assisted", ap.rows[0]?.id ?? "");
+  // Spec S-08 (migration 0056): an investor living in the UAE waits for the residency review.
+  const nr = await investor(w.su);
+  await w.su.query("SELECT kyc.record_residency($1, 'non_resident', 'nicop', 784::smallint, 'kyc-service')", [nr.subjectId]);
+  const rv = await w.su.query<{ id: string }>("SELECT id FROM compliance.residency_reviews WHERE subject_id = $1", [nr.subjectId]);
+  ids.set("residency", rv.rows[0]?.id ?? "");
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
   // Migration 0051: a monitoring alert as the rules leave it.
@@ -566,7 +574,7 @@ describe("route coverage", () => {
           .replace(/^\/committees\/\d+$/, "/committees/[id]")
           .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
           .replace(/^\/onboarding\/(sponsor|property)\/[0-9a-f-]{36}$/, "/onboarding/$1/[id]")
-          .replace(/^\/compliance\/(kyc|freezes|partial-freezes|offboarding|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
+          .replace(/^\/compliance\/(kyc|freezes|partial-freezes|offboarding|residency|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions|payees)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
           .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
@@ -589,7 +597,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|partial-freezes|offboarding|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/compliance\/(kyc|freezes|partial-freezes|offboarding|residency|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/health\/\{\w+\}\/acknowledge$/, "/api/health/[id]/acknowledge")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
@@ -952,6 +960,21 @@ describe("compliance over HTTP (Step 6c)", () => {
     });
     expect(location(res)).toMatch(/ok=Approved: the Admin Safe schedules/);
     expect(await (await req(path, { who: "compliance_officer" })).text()).toContain("0xa8d29d1d");
+  });
+
+  it("a residency review is proposed by a compliance officer; the investor still reads review (spec S-08)", async () => {
+    const path = `/compliance/residency/${resolve("{residency}")}`;
+    await fresh(c.compliance_officer);
+    const page = await (await req(path, { who: "compliance_officer" })).text();
+    expect(page).toContain("United Arab Emirates");
+    const res = await req(`/api/compliance/residency/${resolve("{residency}")}/act`, {
+      method: "POST",
+      who: "compliance_officer",
+      form: { decision: "propose", reason: "NICOP and residence permit checked", digest: digestOf(page) },
+    });
+    expect(location(res)).toMatch(/ok=Recorded: the review is now proposed/);
+    const st = await w.su.query<{ s: string }>("SELECT kyc.subject_status(subject_id) AS s FROM compliance.residency_reviews WHERE id = $1", [resolve("{residency}")]);
+    expect(st.rows[0]?.s).toBe("review");
   });
 
   it("an assisted payout-account change is approved by an operations checker (migration 0055)", async () => {

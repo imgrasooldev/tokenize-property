@@ -2,6 +2,10 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
+
+- Part 1 on `main`: residency in KYC, two-officer residency review (`/compliance/residency`), RDA-only payout accounts, money in/out only through the RDA. Part 2 (website sign-up, account, invest wording) and a Playwright spec are next. Open for the owner/legal: SBP/SECP permission for RDA funds, partner bank, non-resident WHT, FCY RDAs, POC holders (spec S-08 section 3).
+
 ## Compliance follow-ups (2026-11-03/04, on `main`)
 
 - Offboarding steps 2-3 and assisted payout-account changes (migration 0055): `/compliance/offboarding`, `/operations/payees`; bank service client `admin` (`npm run bank:setup` writes `BANK_CLIENT_SECRET_ADMIN`; restart `bank:payees` and the portal). Identity deletion itself is an Admin Safe timelock call (shown on the page), not run by the platform. Not seen in a browser yet (DB and HTTP tests).

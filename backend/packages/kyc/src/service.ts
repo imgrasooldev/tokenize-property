@@ -24,11 +24,21 @@ export class KycError extends Error {
   }
 }
 
+/** Spec S-08 RD-1: a Pakistani living abroad (NICOP or POC; same 13-digit number, verified like a CNIC). */
+export interface Residency {
+  status: "non_resident";
+  document: "nicop" | "poc";
+  /** ISO 3166-1 numeric country of residence (never 586). */
+  country: number;
+}
+
 export interface OnboardInput {
   cnic: string;
   fullName: string;
   livenessSessionId: string;
   wallet?: string;
+  /** Absent: a resident with a CNIC. */
+  residency?: Residency | undefined;
 }
 
 export interface OnboardResult {
@@ -71,6 +81,10 @@ export class KycService {
     }
     if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.livenessSessionId)) throw new KycError("INVALID_INPUT", "invalid liveness session id");
     if (input.wallet !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(input.wallet)) throw new KycError("INVALID_INPUT", "invalid wallet address");
+    const r = input.residency;
+    if (r && (!["nicop", "poc"].includes(r.document) || !Number.isInteger(r.country) || r.country < 1 || r.country > 999 || r.country === 586)) {
+      throw new KycError("INVALID_INPUT", "invalid residency");
+    }
 
     const hashes = this.peppers.hashAll("cnic", cnic);
     const current = hashes[0];
@@ -105,8 +119,16 @@ export class KycService {
     const checks = await this.runChecks(subjectId, cnic, name, input.livenessSessionId);
     const status = await evaluate(this.db, subjectId, this.actor);
     if (input.wallet && status === "verified") await bindWallet(this.db, subjectId, input.wallet, this.actor);
+    // S-08 RD-1/RD-2: recorded after the wallet is bound; a non-resident then reads "review" until two compliance officers approve.
+    await this.db.query("SELECT kyc.record_residency($1, $2, $3, $4::smallint, $5)", [
+      subjectId,
+      r ? "non_resident" : "resident",
+      r ? r.document : "cnic",
+      r ? r.country : null,
+      this.actor,
+    ]);
     const st = await statusOf(this.db, subjectId);
-    return { subjectId, status, reason: st?.reason ?? "", checks };
+    return { subjectId, status: st?.status ?? status, reason: st?.reason ?? "", checks };
   }
 
   /**

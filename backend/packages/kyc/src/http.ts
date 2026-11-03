@@ -28,6 +28,8 @@ const onboardBody = z.strictObject({
   fullName: z.string().min(2).max(140),
   livenessSessionId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
   wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  /** Spec S-08: a non-resident (NICOP or POC) and the country of residence. */
+  residency: z.strictObject({ status: z.literal("non_resident"), document: z.enum(["nicop", "poc"]), country: z.number().int().min(1).max(999) }).optional(),
 });
 const reverifyBody = z.strictObject({
   cnic: z.string().min(13).max(15),

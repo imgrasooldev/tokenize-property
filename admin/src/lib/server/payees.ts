@@ -30,6 +30,7 @@ const ERRORS: Readonly<Record<string, string>> = {
   unchanged: "This account is already the investor's payout account.",
   pending: "An assisted change for this investor is already waiting for a decision.",
   ticket_invalid: "The one-time ticket expired: enter the account again.",
+  not_rda: "The investor lives abroad: only a Roshan Digital Account can be their payout account.",
 };
 
 export type AssistResult = { ok: true; requestId: string } | { ok: false; error: string };

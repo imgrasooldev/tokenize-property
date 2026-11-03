@@ -4,6 +4,7 @@ const TABS: [string, string][] = [
   ["/compliance/screening", "Sanctions & PEP"],
   ["/compliance/freezes", "Freezes"],
   ["/compliance/offboarding", "Offboarding"],
+  ["/compliance/residency", "Residency (RDA)"],
   ["/compliance/monitoring", "Monitoring"],
   ["/compliance/str", "STR cases"],
   ["/audit/compliance", "Audit trail"],

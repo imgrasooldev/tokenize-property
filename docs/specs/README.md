@@ -14,6 +14,7 @@
 | [S-05](S-05-exit-redemption-and-closure.md) | Exit, redemption and closure | 15, 16 | Sale collapses, partial exit |
 | [S-06](S-06-recovery-inheritance-and-reversals.md) | Recovery, inheritance and reversals | cross-cutting | Lost wallet, deceased investor, payment reversal after allocation, sanctioned wallet |
 | [S-07](S-07-public-verification-page.md) | Public verification page | cross-cutting (product #4) | Indexer halted, public chain unreachable |
+| [S-08](S-08-roshan-digital-account.md) | Roshan Digital Account investors (non-resident Pakistanis) | 6 (investor side), 7, 12 | Payment from a non-RDA account, payout without an active RDA, residency change |
 
 Stage 1 (platform setup: chain, Safes, timelock, signer, indexer, reconciliation, anchor, KYC and bank) is already built in Steps 3–5 and is not re-specified. "Chain outage / contract incident" is handled in each spec's exceptions (outbox retries, PauseGuard, decisions from the chain, ADR 0004) and by the existing runbooks.
 

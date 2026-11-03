@@ -293,6 +293,57 @@ export async function identityDeletion(sessionHash: Buffer, id: string): Promise
   return rows[0]?.v ?? null;
 }
 
+/** Spec S-08 (migration 0056): reviews of non-resident investors and the non-residents themselves. */
+export interface ResidencyList {
+  reviews: { id: number; ref: string; status: string; document: string; country: number; openedAt: string; proposedBy: string | null; decidedBy: string | null }[];
+  investors: { ref: string; status: string; document: string; country: number; payoutKind: string | null; payoutActive: boolean; suspense: number }[];
+}
+
+export async function residencyList(sessionHash: Buffer): Promise<ResidencyList> {
+  const { rows } = await db().query<{ v: ResidencyList }>("SELECT admin.residency_reviews($1) AS v", [sessionHash]);
+  const v = rows[0]?.v;
+  if (!v) throw new Error("no residency list");
+  return v;
+}
+
+export type ResidencyAction = "propose" | "confirm" | "decline" | "reject";
+export const RESIDENCY_ACTIONS: readonly ResidencyAction[] = ["propose", "confirm", "decline", "reject"];
+
+export interface ResidencyReview {
+  id: number;
+  status: string;
+  document: string;
+  country: number;
+  recordedAt: string;
+  openedAt: string;
+  proposedBy: string | null;
+  proposalReason: string | null;
+  decidedBy: string | null;
+  decisionReason: string | null;
+  decidedAt: string | null;
+  payoutKind: string | null;
+  subject: SubjectView;
+  digest: string;
+  blockers: Record<ResidencyAction, string[]>;
+}
+
+export async function residencyReview(sessionHash: Buffer, id: string): Promise<ResidencyReview | null> {
+  const { rows } = await db().query<{ v: ResidencyReview | null }>("SELECT admin.residency_review($1, $2) AS v", [sessionHash, id]);
+  return rows[0]?.v ?? null;
+}
+
+/** ISO 3166-1 numeric codes of the countries most Pakistanis abroad live in; others show as the number. */
+const COUNTRIES = new Map<number, string>([
+  [784, "United Arab Emirates"], [682, "Saudi Arabia"], [826, "United Kingdom"], [840, "United States"], [124, "Canada"], [36, "Australia"],
+  [634, "Qatar"], [414, "Kuwait"], [512, "Oman"], [48, "Bahrain"], [276, "Germany"], [380, "Italy"], [724, "Spain"], [528, "Netherlands"],
+  [752, "Sweden"], [578, "Norway"], [458, "Malaysia"], [156, "China"], [392, "Japan"], [554, "New Zealand"],
+]);
+
+export function countryName(code: number | null): string {
+  if (code === null) return "–";
+  return COUNTRIES.get(code) ?? `country ${String(code)}`;
+}
+
 export interface StrList {
   categories: { code: string; label: string }[];
   cases: { id: number; category: string; status: string; subject: string | null; openedBy: string; openedAt: string; updatedAt: string; notes: number; fmuReference: string | null; overdue: boolean }[];
@@ -355,6 +406,7 @@ const CASE_LABELS = new Map<string, string>([
   ["confirm_close", "Confirm closing (second officer)"],
   ["decline_close", "Decline closing (second officer)"],
   ["mark_filed", "Record the FMU filing"],
+  ["propose", "Propose approval"],
 ]);
 
 export function actionLabel(a: string): string {

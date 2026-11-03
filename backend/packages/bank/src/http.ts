@@ -48,6 +48,7 @@ function refusal(e: unknown): { status: number; error: string } {
   const msg = typeof message === "string" ? message : "";
   if (code === "23514" && msg.includes("does not match the verified name")) return { status: 422, error: "title_mismatch" };
   if (code === "23514" && msg.includes("only a KYC-verified investor")) return { status: 403, error: "not_verified" };
+  if (code === "23514" && msg.includes("registers a Roshan Digital Account")) return { status: 422, error: "not_rda" };
   if (code === "23505" && msg.includes("already the payout account of another investor")) return { status: 409, error: "in_use" };
   if (code === "23505" && msg.includes("already the investor's payout account")) return { status: 409, error: "unchanged" };
   if (code === "23505" && msg.includes("already waiting for a decision")) return { status: 409, error: "pending" };

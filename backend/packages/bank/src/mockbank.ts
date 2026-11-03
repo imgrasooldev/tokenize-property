@@ -64,6 +64,11 @@ export class MockBank implements TitleFetch, BankGateway {
     return Promise.resolve(this.titles.get(parseIban(iban).iban) ?? null);
   }
 
+  /** Spec S-08 RD-5 mock convention: a 16-digit account number starting with 9 is a Roshan Digital Account. */
+  accountKind(iban: string): Promise<"domestic" | "rda"> {
+    return Promise.resolve(parseIban(iban).iban.slice(-16).startsWith("9") ? "rda" : "domestic");
+  }
+
   get balancePaisa(): bigint {
     return this.entries.reduce((s, e) => s + e.amountPaisa, 0n);
   }

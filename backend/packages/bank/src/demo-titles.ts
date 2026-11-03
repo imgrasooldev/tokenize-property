@@ -18,4 +18,9 @@ export class DemoTitleFetch implements TitleFetch {
     const t = claimedTitle?.trim();
     return Promise.resolve(t ? t : null);
   }
+
+  /** Spec S-08 RD-5 mock convention: a 16-digit account number starting with 9 is a Roshan Digital Account. */
+  accountKind(iban: string): Promise<"domestic" | "rda"> {
+    return Promise.resolve(iban.slice(-16).startsWith("9") ? "rda" : "domestic");
+  }
 }

@@ -22,6 +22,8 @@ type Db = pg.Pool | pg.ClientBase;
  */
 export interface TitleFetch {
   accountTitle(iban: string, claimedTitle?: string): Promise<string | null>;
+  /** Spec S-08 RD-5: whether the account is a Roshan Digital Account (default: a domestic account). */
+  accountKind?(iban: string): Promise<"domestic" | "rda">;
 }
 
 /** Where payout files and credit returns go (the bank's API in production, MockBank here). */
@@ -191,9 +193,10 @@ export class BankService implements WebhookHandler {
     }
     const title = await this.titles.accountTitle(iban.iban, claimedTitle);
     if (!title) throw new BankError("TITLE_NOT_FOUND", "the bank did not return a title for this account");
+    const kind = (await this.titles.accountKind?.(iban.iban)) ?? "domestic";
     const version = this.peppers.current.version;
     const { rows } = await this.db.query<{ id: string }>(
-      "SELECT bank.register_payee($1, $2, $3, $4, $5, $6, $7) AS id",
+      "SELECT bank.register_payee($1, $2, $3, $4, $5, $6, $7, $8) AS id",
       [
         subjectId,
         this.peppers.hash(version, "iban", iban.iban),
@@ -202,6 +205,7 @@ export class BankService implements WebhookHandler {
         iban.bankCode,
         this.peppers.hash(version, "name", normalizeName(title)),
         this.actor,
+        kind,
       ],
     );
     return BigInt(rows[0]?.id ?? "0");
@@ -224,14 +228,16 @@ export class BankService implements WebhookHandler {
     if (!subjectId) throw new BankError("TICKET_INVALID", "the ticket is unknown, used or expired");
     const title = await this.titles.accountTitle(iban.iban, claimedTitle);
     if (!title) throw new BankError("TITLE_NOT_FOUND", "the bank did not return a title for this account");
+    const kind = (await this.titles.accountKind?.(iban.iban)) ?? "domestic";
     const version = this.peppers.current.version;
-    const { rows } = await this.db.query<{ id: string }>("SELECT bank.request_assisted_payee($1, $2, $3, $4, $5, $6) AS id", [
+    const { rows } = await this.db.query<{ id: string }>("SELECT bank.request_assisted_payee($1, $2, $3, $4, $5, $6, $7) AS id", [
       ticketHash,
       this.peppers.hash(version, "iban", iban.iban),
       seal(this.dataKey, ibanAad(subjectId), iban.iban),
       iban.last4,
       iban.bankCode,
       this.peppers.hash(version, "name", normalizeName(title)),
+      kind,
     ]);
     return BigInt(rows[0]?.id ?? "0");
   }
