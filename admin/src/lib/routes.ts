@@ -49,6 +49,12 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/compliance/freezes", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/partial-freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  // Migration 0055: offboarding steps 2-3 (identity deletion by two compliance officers).
+  { path: "/compliance/offboarding", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/offboarding/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  // Migration 0055: assisted payout-account changes (operations makers and checkers; the database refuses other operations readers).
+  { path: "/operations/payees", kind: "page", methods: ["GET"], access: "operations.read", mutating: false },
+  { path: "/operations/payees/[id]", kind: "page", methods: ["GET"], access: "operations.read", mutating: false },
   { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/monitoring", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
@@ -130,6 +136,10 @@ export const ROUTES: readonly RouteRule[] = [
   // Migration 0054: partial freezes and their releases (same maker-checker path).
   { path: "/api/compliance/partial-freezes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/partial-freezes/[id]/decide", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/offboarding", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/offboarding/[id]/decide", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/operations/payees", kind: "api", methods: ["POST"], access: "operations.request", mutating: true },
+  { path: "/api/operations/payees/[id]/decide", kind: "api", methods: ["POST"], access: "operations.decide", mutating: true },
   { path: "/api/compliance/str", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/notes", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },

@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-04
+
+- Offboarding steps 2-3 and assisted payout-account changes in PT Control (migration `0055_offboarding_assisted_payee.sql`, OB-1..OB-3, AP-1..AP-4; ADR 0011 amendments, owner approval 2026-11-04). `/compliance/offboarding` lists every investor who is not verified with a bound wallet: freeze, units held in every token, open S-06/S-04 cases, identity. Moving or redeeming units stays with those cases. At zero units one compliance officer requests the identity deletion and a different one approves it (`/compliance/offboarding/[id]`); the page then shows the exact timelock call (`IdentityRegistry.deleteIdentity`, salt = case reference) for the Admin Safe and reads done once the identity is removed. `/operations/payees`: an operations maker enters an investor's IBAN and title (support reference, step-up); the admin database issues a one-time ticket, the bank service (new client `admin`, `POST /v1/payees/assisted`) runs the title inquiry, seals the IBAN and stores a pending request; a different operations checker approves after a call-back and `bank.register_payee` registers it with the 72-hour cooling-off as on the website. The portal shows only the bank code and the last four digits. `npm run bank:setup` writes `BANK_CLIENT_SECRET_ADMIN` to backend and admin `.env.local`. Tests: `backend/packages/bank/test/payees-assisted.test.ts`, `backend/packages/db/test/offboarding-identity.test.ts`, authorisation matrix and HTTP matrix entries and flows.
+
 ## 2026-11-03
 
 - Website main e2e in CI: job `web-e2e-chain` downloads Besu 26.9.0 and Temurin JDK 25 (SHA-256 checked), starts the four-validator network with job-only dev keys, deploys with `chain/flow.py` and runs `npm run test:e2e` (sign-up/invest, market, verify, layout, security) in Chromium. `continue-on-error` (informational, cannot hold up the demo deployment) until it has passed on GitHub several times in a row.

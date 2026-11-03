@@ -1,12 +1,13 @@
 import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { readEnvFile, servicePgAuth, type ServiceName } from "@pt/config";
-import { secretFromEnv } from "@pt/http-auth";
+import { secretFromEnv, type Client } from "@pt/http-auth";
 import { keyFromEnv, Peppers } from "@pt/kyc";
 import pg from "pg";
 import { DemoTitleFetch } from "./demo-titles.ts";
-import { createPayeeServer, WEB_BANK_SCOPE } from "./http.ts";
+import { ADMIN_BANK_SCOPE, createPayeeServer, WEB_BANK_SCOPE } from "./http.ts";
 import { BankService, verifyAudit, type TitleFetch } from "./service.ts";
 import { createWebhookServer, type WebhookKey } from "./webhook.ts";
 
@@ -16,12 +17,14 @@ import { createWebhookServer, type WebhookKey } from "./webhook.ts";
  *                          payee API secret (BANK_CLIENT_SECRET_WEB) in backend/.env.local
  *   npm run bank           serve the webhook endpoint on 127.0.0.1:4910 (POST /v1/bank/events)
  *   npm run bank:payees    DEMO / LOCAL ONLY: the website's payout-account API on 127.0.0.1:4920
- *                          (POST /v1/payees, HMAC client "web"; demo title fetch, refused in production)
+ *                          (POST /v1/payees, client "web"; POST /v1/payees/assisted, client "admin" with a
+ *                          one-time ticket from PT Control; demo title fetch, refused in production)
  *   npm run bank:audit     verify the bank audit hash chain
  * Webhook keys: BANK_WEBHOOK_SECRET_<KID>=<64 hex> (two may be active during a rotation).
  */
 const BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
 const ENV_FILE = `${BACKEND}.env.local`;
+const ADMIN_ENV = fileURLToPath(new URL("../../../../admin/.env.local", import.meta.url));
 const PORT = Number(process.env.BANK_PORT ?? 4910);
 
 function env(): Record<string, string> {
@@ -62,8 +65,21 @@ async function setup(): Promise<void> {
   if (!e.BANK_DATA_KEY) add.push(`BANK_DATA_KEY=${randomBytes(32).toString("hex")}`);
   if (!Object.keys(e).some((k) => k.startsWith("BANK_WEBHOOK_SECRET_"))) add.push(`BANK_WEBHOOK_SECRET_K1=${randomBytes(32).toString("hex")}`);
   if (!e.BANK_CLIENT_SECRET_WEB) add.push(`BANK_CLIENT_SECRET_WEB=${randomBytes(32).toString("base64url")}`);
+  // Migration 0055: PT Control's client for assisted payout-account changes.
+  let admin = e.BANK_CLIENT_SECRET_ADMIN;
+  if (!admin) {
+    admin = randomBytes(32).toString("base64url");
+    add.push(`BANK_CLIENT_SECRET_ADMIN=${admin}`);
+  }
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path inside backend/
   if (add.length) await appendFile(ENV_FILE, `\n# bank service (local dev, generated)\n${add.join("\n")}\n`, { mode: 0o600 });
+  // The portal's copy of its client secret (admin/.env.local, git-ignored); never printed.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path of the admin app
+  const adminEnv = existsSync(ADMIN_ENV) ? readFileSync(ADMIN_ENV, "utf8") : "";
+  if (!/^BANK_CLIENT_SECRET_ADMIN=/m.test(adminEnv)) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path of the admin app
+    await appendFile(ADMIN_ENV, `\n# Bank payout-account client (written by backend npm run bank:setup)\nBANK_CLIENT_SECRET_ADMIN=${admin}\n`, { mode: 0o600 });
+  }
   console.log(add.length ? `added ${String(add.length)} bank secret(s) to backend/.env.local` : "bank secrets already present");
 }
 
@@ -105,7 +121,9 @@ async function servePayees(): Promise<void> {
     actor: "bank-payees",
   });
   const port = Number(e.BANK_PAYEES_PORT ?? 4920);
-  const server = createPayeeServer(service, [{ id: "web", secret: secretFromEnv(e, "BANK_CLIENT_SECRET_WEB"), scope: WEB_BANK_SCOPE }]);
+  const clients: Client[] = [{ id: "web", secret: secretFromEnv(e, "BANK_CLIENT_SECRET_WEB"), scope: WEB_BANK_SCOPE }];
+  if (e.BANK_CLIENT_SECRET_ADMIN) clients.push({ id: "admin", secret: secretFromEnv(e, "BANK_CLIENT_SECRET_ADMIN"), scope: ADMIN_BANK_SCOPE });
+  const server = createPayeeServer(service, clients);
   server.listen(port, "127.0.0.1", () => {
     console.log(`bank payee API listening on 127.0.0.1:${String(port)} (demo title fetch)`);
   });

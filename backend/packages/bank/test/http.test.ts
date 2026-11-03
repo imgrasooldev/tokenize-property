@@ -29,6 +29,7 @@ const api: PayeeApi = {
       default: return Promise.resolve(42n);
     }
   },
+  requestAssistedPayee: () => Promise.resolve(7n),
 };
 
 let server: Server;

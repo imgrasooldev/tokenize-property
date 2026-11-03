@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { HmacAuthenticator, readBody, sendJson, type Client } from "@pt/http-auth";
 import { z } from "zod";
@@ -14,10 +15,20 @@ import { BankError } from "./service.ts";
  */
 export interface PayeeApi {
   registerPayee(subjectId: string, iban: string, claimedTitle: string): Promise<bigint>;
+  /** Migration 0055: an assisted change entered in PT Control, stored as a pending request. */
+  requestAssistedPayee(ticketHash: Buffer, iban: string, claimedTitle: string): Promise<bigint>;
 }
 
 export const WEB_BANK_SCOPE = ["/v1/payees"] as const;
+/** PT Control (client "admin"): only the assisted change, with a one-time ticket from the admin database. */
+export const ADMIN_BANK_SCOPE = ["/v1/payees/assisted"] as const;
 const MAX_BODY = 2 * 1024;
+
+const assistedBody = z.strictObject({
+  ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  iban: z.string().max(40),
+  title: z.string().min(2).max(140),
+});
 
 const payeeBody = z.strictObject({
   subjectId: z.uuid(),
@@ -30,6 +41,7 @@ function refusal(e: unknown): { status: number; error: string } {
   if (e instanceof BankError) {
     if (e.code === "INVALID_INPUT") return { status: 400, error: "invalid_iban" };
     if (e.code === "TITLE_NOT_FOUND") return { status: 422, error: "title_not_found" };
+    if (e.code === "TICKET_INVALID") return { status: 403, error: "ticket_invalid" };
     return { status: 500, error: "internal" };
   }
   const { code, message } = e as { code?: unknown; message?: unknown };
@@ -37,6 +49,9 @@ function refusal(e: unknown): { status: number; error: string } {
   if (code === "23514" && msg.includes("does not match the verified name")) return { status: 422, error: "title_mismatch" };
   if (code === "23514" && msg.includes("only a KYC-verified investor")) return { status: 403, error: "not_verified" };
   if (code === "23505" && msg.includes("already the payout account of another investor")) return { status: 409, error: "in_use" };
+  if (code === "23505" && msg.includes("already the investor's payout account")) return { status: 409, error: "unchanged" };
+  if (code === "23505" && msg.includes("already waiting for a decision")) return { status: 409, error: "pending" };
+  if (code === "42501" && msg.includes("assist ticket is not valid")) return { status: 403, error: "ticket_invalid" };
   return { status: 500, error: "internal" };
 }
 
@@ -50,7 +65,7 @@ export function createPayeeServer(api: PayeeApi, clients: Client[], opts: { now?
           sendJson(res, 200, { ok: true });
           return;
         }
-        if (req.method !== "POST" || path !== "/v1/payees") {
+        if (req.method !== "POST" || (path !== "/v1/payees" && path !== "/v1/payees/assisted")) {
           sendJson(res, 404, { error: "not_found" });
           return;
         }
@@ -73,6 +88,17 @@ export function createPayeeServer(api: PayeeApi, clients: Client[], opts: { now?
           json = JSON.parse(body);
         } catch {
           sendJson(res, 400, { error: "bad_json" });
+          return;
+        }
+        if (path === "/v1/payees/assisted") {
+          const assisted = assistedBody.safeParse(json);
+          if (!assisted.success) {
+            sendJson(res, 400, { error: "invalid" });
+            return;
+          }
+          const ticketHash = createHash("sha256").update(Buffer.from(assisted.data.ticket, "base64url")).digest();
+          const id = await api.requestAssistedPayee(ticketHash, assisted.data.iban, assisted.data.title);
+          sendJson(res, 200, { requestId: id.toString() });
           return;
         }
         const parsed = payeeBody.safeParse(json);

@@ -2,7 +2,9 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
-## Compliance follow-ups (2026-11-03, on `main`)
+## Compliance follow-ups (2026-11-03/04, on `main`)
+
+- Offboarding steps 2-3 and assisted payout-account changes (migration 0055): `/compliance/offboarding`, `/operations/payees`; bank service client `admin` (`npm run bank:setup` writes `BANK_CLIENT_SECRET_ADMIN`; restart `bank:payees` and the portal). Identity deletion itself is an Admin Safe timelock call (shown on the page), not run by the platform. Not seen in a browser yet (DB and HTTP tests).
 
 - Partial freezes in PT Control (migration 0054): `/compliance/freezes` + `/compliance/partial-freezes/[id]`, signer kinds `compliance.freeze_partial` / `compliance.unfreeze_partial` (`npm run signer:setup` adds their dev policies), recon checks `compliance.partial_unmatched` / `compliance.partial_pending`. Not run on Besu (signer, DB and HTTP tests only).
 - Playwright `admin/e2e/compliance.spec.ts` (KYC review, freeze, partial freeze, STR flow); admin e2e 19 + 1 skipped.

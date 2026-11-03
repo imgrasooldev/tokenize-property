@@ -3,6 +3,7 @@ const TABS: [string, string][] = [
   ["/compliance/kyc", "KYC reviews"],
   ["/compliance/screening", "Sanctions & PEP"],
   ["/compliance/freezes", "Freezes"],
+  ["/compliance/offboarding", "Offboarding"],
   ["/compliance/monitoring", "Monitoring"],
   ["/compliance/str", "STR cases"],
   ["/audit/compliance", "Audit trail"],

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -107,6 +107,8 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/compliance/freezes", allowed: COMPLIANCE },
   { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
   { path: "/compliance/partial-freezes/{partialFreeze}", allowed: COMPLIANCE },
+  { path: "/compliance/offboarding", allowed: COMPLIANCE },
+  { path: "/compliance/offboarding/{deletion}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
   { path: "/compliance/monitoring", allowed: COMPLIANCE },
@@ -127,6 +129,9 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/operations/policies", allowed: OPERATIONS },
   { path: "/documents", allowed: OPERATIONS },
   { path: "/operations/invoices", allowed: OPERATIONS },
+  // Migration 0055: payout accounts are for operations makers and checkers; other operations readers get "not found".
+  { path: "/operations/payees", allowed: OPERATIONS, notFoundFor: ["trustee_officer", "tax_officer", "auditor", "platform_owner", "property_manager"] },
+  { path: "/operations/payees/{assisted}", allowed: OPERATIONS, notFoundFor: ["trustee_officer", "tax_officer", "auditor", "platform_owner", "property_manager"] },
   { path: "/votes", allowed: OPERATIONS },
   // 0040: complaints for support, operations, compliance, auditors and the platform owner; unknown items are "not found".
   { path: "/complaints", allowed: COMPLAINTS },
@@ -205,6 +210,10 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/freezes/{freeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/compliance/partial-freezes", allowed: ["compliance_officer"], okStatus: 303, form: { kind: "freeze" } },
   { path: "/api/compliance/partial-freezes/{partialFreeze}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/compliance/offboarding", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/offboarding/{deletion}/decide", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "approve", reason: "short" } },
+  { path: "/api/operations/payees", allowed: ["ops_maker"], okStatus: 303, form: {} },
+  { path: "/api/operations/payees/{assisted}/decide", allowed: ["ops_checker"], okStatus: 303, form: { decision: "approve", reason: "short" } },
   { path: "/api/compliance/str", allowed: ["compliance_officer"], okStatus: 303, form: { summary: "short" } },
   { path: "/api/compliance/str/{str}/notes", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/str/{str}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "start_review", reason: "short" } },
@@ -423,6 +432,21 @@ beforeAll(async () => {
     [partial.wallet],
   );
   ids.set("partialFreeze", pf.rows[0]?.id ?? "");
+  // Migration 0055: an identity deletion for a revoked investor at zero units, and an assisted payout-account change.
+  const gone = await investor(w.su);
+  await partialHolding(w.su, gone.wallet, 0);
+  await w.su.query("SELECT kyc.revoke($1, 'operator:night', 'revoked after the sanctions review')", [gone.subjectId]);
+  await w.su.query("INSERT INTO chain.investors (registry, wallet, identity, registered, updated_block) VALUES ($1, $2, $3, true, 1)", [`0x${"4".repeat(40)}`, gone.wallet, `0x${"5".repeat(40)}`]);
+  const del = await w.su.query<{ id: string }>("SELECT compliance.request_identity_deletion($1, 'units moved under the court order', 'operator:night') AS id", [gone.wallet]);
+  ids.set("deletion", del.rows[0]?.id ?? "");
+  const payer = await investor(w.su);
+  const tk = randomBytes(32);
+  await w.su.query("INSERT INTO bank.assist_tickets (token_hash, subject_id, handle, reason, created_at, expires_at) VALUES ($1, $2, 'operator:night', 'investor called the desk today', now(), now() + interval '2 minutes')", [tk, payer.subjectId]);
+  const ap = await w.su.query<{ id: string }>(
+    "SELECT bank.request_assisted_payee($1, $2, $3, '0001', 'MEZN', (SELECT name_hash FROM kyc.subjects WHERE id = $4)) AS id",
+    [tk, randomBytes(32), randomBytes(60), payer.subjectId],
+  );
+  ids.set("assisted", ap.rows[0]?.id ?? "");
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
   // Migration 0051: a monitoring alert as the rules leave it.
@@ -542,9 +566,9 @@ describe("route coverage", () => {
           .replace(/^\/committees\/\d+$/, "/committees/[id]")
           .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
           .replace(/^\/onboarding\/(sponsor|property)\/[0-9a-f-]{36}$/, "/onboarding/$1/[id]")
-          .replace(/^\/compliance\/(kyc|freezes|partial-freezes|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
+          .replace(/^\/compliance\/(kyc|freezes|partial-freezes|offboarding|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
-          .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
+          .replace(/^\/operations\/(charges|distributions|payees)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
           .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
           .replace(/^\/transfers\/(\{\w+\}|\d+)$/, "/transfers/[id]")
           .replace(/^\/complaints\/\d+$/, "/complaints/[id]"),
@@ -565,11 +589,11 @@ describe("route coverage", () => {
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|partial-freezes|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/compliance\/(kyc|freezes|partial-freezes|offboarding|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/health\/\{\w+\}\/acknowledge$/, "/api/health/[id]/acknowledge")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
-          .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")
+          .replace(/^\/api\/operations\/(charges|distributions|payees)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")
           .replace(/^\/api\/operations\/distributions\/\{\w+\}\/rent$/, "/api/operations/distributions/[id]/rent")
           .replace(/^\/api\/tax\/(rates|exports)\/\{\w+\}\/(decide|generate)$/, "/api/tax/$1/[id]/$2")
           .replace(/^\/api\/trustee\/register\/adjustments\/\{\w+\}\/decide$/, "/api/trustee/register/adjustments/[id]/decide")
@@ -915,6 +939,34 @@ describe("compliance over HTTP (Step 6c)", () => {
       form: { kind: "unfreeze", wallet: ids.get("partialWallet") ?? "", lifts: resolve("{partialFreeze}"), reasonCode: "court_release", reason: "the court lifted the order today" },
     });
     expect(decodeURIComponent(location(asked)).replace(/\+/g, " ")).toMatch(/error=.*not on chain yet/);
+  });
+
+  it("an identity deletion at zero units is approved and shows the timelock call (migration 0055)", async () => {
+    const path = `/compliance/offboarding/${resolve("{deletion}")}`;
+    await fresh(c.compliance_officer);
+    const page = await (await req(path, { who: "compliance_officer" })).text();
+    const res = await req(`${path.replace("/compliance/", "/api/compliance/")}/decide`, {
+      method: "POST",
+      who: "compliance_officer",
+      form: { decision: "approve", reason: "zero units checked on the read model", digest: digestOf(page) },
+    });
+    expect(location(res)).toMatch(/ok=Approved: the Admin Safe schedules/);
+    expect(await (await req(path, { who: "compliance_officer" })).text()).toContain("0xa8d29d1d");
+  });
+
+  it("an assisted payout-account change is approved by an operations checker (migration 0055)", async () => {
+    const path = `/operations/payees/${resolve("{assisted}")}`;
+    await fresh(c.ops_checker);
+    const page = await (await req(path, { who: "ops_checker" })).text();
+    expect(page).toMatch(/data-testid="payee-account">MEZN.*0001</);
+    const res = await req(`/api/operations/payees/${resolve("{assisted}")}/decide`, {
+      method: "POST",
+      who: "ops_checker",
+      form: { decision: "approve", reason: "called the investor back, account confirmed", digest: digestOf(page) },
+    });
+    expect(location(res)).toMatch(/ok=Approved: the account is registered/);
+    const st = await w.su.query<{ status: string; payee: string | null }>("SELECT status, payee_id::text AS payee FROM bank.assisted_payee_requests WHERE id = $1", [resolve("{assisted}")]);
+    expect(st.rows[0]).toMatchObject({ status: "approved" });
   });
 
   it("an STR export is recorded before it is handed out, and its file matches the record", async () => {

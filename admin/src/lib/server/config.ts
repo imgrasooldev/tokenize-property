@@ -65,6 +65,16 @@ export const config = {
     url: setting("VAULT_SERVICE_URL", "http://127.0.0.1:4950") ?? "http://127.0.0.1:4950",
     secret: setting("VAULT_CLIENT_SECRET_ADMIN", "") ?? "",
   },
+  /**
+   * The bank service's payout-account API (migration 0055) and the portal's client (scope: an
+   * assisted payout-account change with a one-time ticket, nothing else). Without a secret no
+   * assisted change can be entered.
+   */
+  bankPayees: {
+    url: setting("BANK_PAYEES_URL", "http://127.0.0.1:4920") ?? "http://127.0.0.1:4920",
+    clientId: "admin",
+    secret: setting("BANK_CLIENT_SECRET_ADMIN", "") ?? "",
+  },
   taxService: {
     url: setting("TAX_SERVICE_URL", "http://127.0.0.1:4940") ?? "http://127.0.0.1:4940",
     clientId: "admin-portal",

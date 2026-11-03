@@ -183,6 +183,30 @@ merged the backend runner refuses the gap; tests use `contiguousMigrations()`.
   `PartialFreezeSet` on chain must match an approved request (account, amount, direction, caseId)
   (`compliance.partial_unmatched`, blocking); an approved request not on chain after 1 hour is a
   warning (`compliance.partial_pending`).
+- **Offboarding steps 2 and 3 (amendment 2026-11-04, migration 0055; contract-spec offboarding
+  order, findings F-01/F-02, owner approval 2026-11-04).** `/compliance/offboarding` lists every
+  investor who is not verified and has a bound wallet: freeze on chain, units still held (all
+  tokens, read model), open S-06 recovery and S-04 transfer cases, identity registration. Step 2
+  (moving or redeeming the units) is never automatic: it happens only through an S-06 case (forced
+  transfer or burn per an order, RC-31/RC-33) or an S-04 transfer; the page links them. Step 3:
+  once the read model shows **zero units in every token**, one compliance officer requests the
+  deletion of the wallet's identity and a different one approves it (24 hours, reason, digest,
+  step-up; both checks repeated at approval). No signing key can do it: the page then shows the
+  exact timelock call (`IdentityRegistry.deleteIdentity(wallet)`, salt = the request's case
+  reference) for the Admin Safe to schedule on the timelock; the request reads `done` when the
+  indexer sees the identity removed. Verified investors are never listed.
+- **Assisted payout-account change (amendment 2026-11-04, migration 0055; ADR 0009 B-4, owner
+  approval 2026-11-04).** An operations maker (`operations.request`) enters the investor's
+  support reference, the IBAN and the account title for an investor who cannot do it on the
+  website. The admin database issues a one-time ticket (2 minutes, step-up, verified investor, no
+  open request); the portal server hands the IBAN with the ticket to the bank service (HMAC client
+  `admin`, path `/v1/payees/assisted` only), which runs the title inquiry, hashes and seals the IBAN
+  and stores a **pending** request (`bank.assisted_payee_requests`: hash, sealed IBAN, last four
+  digits, bank code; the title must already match the verified name). The portal never stores or
+  logs the IBAN. A different operations checker (`operations.decide`) approves after calling the
+  investor back on the number on file; approval runs `bank.register_payee` unchanged (72-hour
+  cooling-off, the investor is alerted on every channel, transaction monitoring sees the change).
+  Pending requests expire after 24 hours.
 - **STR cases.** open → under_review → filed | close_proposed → closed (or back to under_review).
   Closing without a report needs a second officer; filing needs an export recorded first and the
   FMU reference. Notes append-only. Export = ZIP (case JSON with masked identifiers, notes,

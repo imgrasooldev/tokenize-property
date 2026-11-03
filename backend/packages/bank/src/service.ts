@@ -32,7 +32,7 @@ export interface BankGateway {
 
 export class BankError extends Error {
   constructor(
-    readonly code: "INVALID_INPUT" | "TITLE_NOT_FOUND" | "TAMPERED",
+    readonly code: "INVALID_INPUT" | "TITLE_NOT_FOUND" | "TAMPERED" | "TICKET_INVALID",
     message: string,
   ) {
     super(message);
@@ -204,6 +204,35 @@ export class BankService implements WebhookHandler {
         this.actor,
       ],
     );
+    return BigInt(rows[0]?.id ?? "0");
+  }
+
+  /**
+   * Migration 0055 AP-2: an operations maker entered the account in PT Control for the investor of
+   * a one-time ticket (`ticketHash` = SHA-256 of the ticket). Same title inquiry, hash and seal as
+   * registerPayee, but the account is only stored as a PENDING request for a second officer.
+   */
+  async requestAssistedPayee(ticketHash: Buffer, ibanInput: string, claimedTitle?: string): Promise<bigint> {
+    let iban: ReturnType<typeof parseIban>;
+    try {
+      iban = parseIban(ibanInput);
+    } catch (e) {
+      throw new BankError("INVALID_INPUT", (e as Error).message);
+    }
+    const { rows: t } = await this.db.query<{ subject: string | null }>("SELECT bank.assist_ticket_subject($1) AS subject", [ticketHash]);
+    const subjectId = t[0]?.subject;
+    if (!subjectId) throw new BankError("TICKET_INVALID", "the ticket is unknown, used or expired");
+    const title = await this.titles.accountTitle(iban.iban, claimedTitle);
+    if (!title) throw new BankError("TITLE_NOT_FOUND", "the bank did not return a title for this account");
+    const version = this.peppers.current.version;
+    const { rows } = await this.db.query<{ id: string }>("SELECT bank.request_assisted_payee($1, $2, $3, $4, $5, $6) AS id", [
+      ticketHash,
+      this.peppers.hash(version, "iban", iban.iban),
+      seal(this.dataKey, ibanAad(subjectId), iban.iban),
+      iban.last4,
+      iban.bankCode,
+      this.peppers.hash(version, "name", normalizeName(title)),
+    ]);
     return BigInt(rows[0]?.id ?? "0");
   }
 

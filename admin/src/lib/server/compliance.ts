@@ -243,6 +243,56 @@ export async function partialFreezeRequest(sessionHash: Buffer, id: string): Pro
   return rows[0]?.v ?? null;
 }
 
+/** Migration 0055 OB-1: investors who are not verified, with a bound wallet. */
+export interface OffboardingList {
+  investors: {
+    ref: string;
+    status: string;
+    wallet: string;
+    since: string;
+    frozen: boolean;
+    units: string;
+    registered: boolean;
+    recoveryCases: number;
+    transferCases: number;
+    deletion: { id: number; status: string } | null;
+  }[];
+}
+
+export async function offboardingList(sessionHash: Buffer): Promise<OffboardingList> {
+  const { rows } = await db().query<{ v: OffboardingList }>("SELECT admin.offboarding($1) AS v", [sessionHash]);
+  const v = rows[0]?.v;
+  if (!v) throw new Error("no offboarding list");
+  return v;
+}
+
+export interface IdentityDeletion {
+  id: number;
+  wallet: string;
+  registry: string;
+  reason: string;
+  caseRef: string;
+  requestedBy: string;
+  requestedAt: string;
+  expiresAt: string;
+  status: string;
+  decidedBy: string | null;
+  decisionReason: string | null;
+  decidedAt: string | null;
+  units: string;
+  timelock: string | null;
+  callData: string | null;
+  subject: SubjectView;
+  digest: string;
+  blockers: string[];
+  approveBlockers: string[];
+}
+
+export async function identityDeletion(sessionHash: Buffer, id: string): Promise<IdentityDeletion | null> {
+  const { rows } = await db().query<{ v: IdentityDeletion | null }>("SELECT admin.identity_deletion($1, $2) AS v", [sessionHash, id]);
+  return rows[0]?.v ?? null;
+}
+
 export interface StrList {
   categories: { code: string; label: string }[];
   cases: { id: number; category: string; status: string; subject: string | null; openedBy: string; openedAt: string; updatedAt: string; notes: number; fmuReference: string | null; overdue: boolean }[];

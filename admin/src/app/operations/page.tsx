@@ -42,6 +42,9 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
           <a className="btn" href="/operations/invoices">
             Rent invoices
           </a>
+          <a className="btn" href="/operations/payees">
+            Payout accounts
+          </a>
         </span>
       }
     >
