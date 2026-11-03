@@ -16,6 +16,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Operations",
     items: [
       { href: "/", label: "Overview", icon: "◉", need: "ops.read" },
+      { href: "/health", label: "Health & alerts", icon: "♥", need: "ops.read" },
       { href: "/approvals", label: "Approvals", icon: "✓", need: "approvals.read" },
       { href: "/onboarding", label: "Onboarding desk", icon: "✎", need: "property.read" },
       { href: "/approvals/property", label: "Property & KYB", icon: "⌂", need: "property.read" },

@@ -75,6 +75,10 @@ const EXPECT: Record<string, Who[]> = {
   str_cases: ["compliance_officer", "auditor"],
   str_case: ["compliance_officer", "auditor"],
   str_export_data: ["compliance_officer"],
+  // Migration 0052: health and alerts (ops.read reads and checks; makers, checkers and the platform owner acknowledge).
+  health: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  health_refresh: ["ops_maker", "ops_checker", "compliance_officer", "auditor", "platform_owner"],
+  health_acknowledge: ["ops_maker", "ops_checker", "platform_owner"],
   // Migration 0051: transaction monitoring (compliance officers act, auditors read).
   tm_desk: ["compliance_officer", "auditor"],
   tm_alert: ["compliance_officer", "auditor"],
@@ -221,6 +225,9 @@ const CALLS: Record<string, string> = {
   str_cases: "SELECT admin.str_cases($1)",
   str_case: "SELECT admin.str_case($1, 999999)",
   str_export_data: "SELECT admin.str_export_data($1, 999999)",
+  health: "SELECT admin.health($1)",
+  health_refresh: "SELECT admin.health_refresh($1)",
+  health_acknowledge: "SELECT admin.health_acknowledge($1, 999999, 'matrix probe note')",
   tm_desk: "SELECT admin.tm_desk($1)",
   tm_alert: "SELECT admin.tm_alert($1, 999999)",
   tm_alert_act: "SELECT admin.tm_alert_act($1, 999999, 'propose_dismiss', 'matrix probe reason', NULL)",

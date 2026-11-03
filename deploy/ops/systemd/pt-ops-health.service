@@ -9,7 +9,7 @@ Type=oneshot
 User=ubuntu
 Group=ubuntu
 EnvironmentFile=-/etc/pt-ops/ops.env
-ExecStart=/usr/local/lib/pt-ops/pt-health.sh --alert
+ExecStart=/usr/local/lib/pt-ops/pt-health.sh --alert --record
 # 1 = WARN and 2 = CRIT are results, not failures: pt-health.sh alerts itself (de-duplicated).
 # Only 3 (the check itself broke) or a crash fails the unit and triggers OnFailure.
 SuccessExitStatus=1 2

@@ -5,6 +5,9 @@
 #   pt-health.sh --alert    also send a de-duplicated alert through pt-alert.sh when the state
 #                           changes (or every PT_ALERT_REPEAT_MIN minutes while not OK), and a
 #                           RESOLVED message when it returns to OK
+#   pt-health.sh --record   also hand the lines to the database (monitor.record_report, migration
+#                           0052) so PT Control /health shows them and opens or resolves alerts;
+#                           combine with --alert. A failed record is one more CRIT line.
 #
 # Checks: validators (height progress, peers, lag), indexer (lag, halt), outbox (stuck, review),
 # signer (pending approvals), reconciliation (gate, last run age and result), anchoring (last
@@ -20,8 +23,14 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 pt_init
 trap 'echo "CRIT health: check script error at line $LINENO"; exit 3' ERR
 
-ALERT=0
-[[ ${1:-} == --alert ]] && ALERT=1
+ALERT=0 RECORD=0
+for arg in "$@"; do
+  case $arg in
+    --alert) ALERT=1 ;;
+    --record) RECORD=1 ;;
+    *) echo "CRIT health: unknown option $arg"; exit 3 ;;
+  esac
+done
 
 RPC_URLS=${PT_RPC_URLS:-http://127.0.0.1:8545 http://127.0.0.1:8546 http://127.0.0.1:8547 http://127.0.0.1:8548}
 SAMPLE_S=${PT_CHAIN_SAMPLE_SECONDS:-6}
@@ -338,6 +347,15 @@ check_host
 check_units
 check_http
 trap - ERR
+
+# ------------------------------------------------------------------ record for PT Control /health
+if ((RECORD)); then
+  # psql variables are quoted by psql itself (:'name'), so no line can break out of the literal.
+  if ! printf "SELECT monitor.record_report(:'host', :'lines');\n" |
+    pt_psql "$DB" -v host="$(hostname | cut -d. -f1)" -v lines="$(printf '%s\n' "${LINES[@]}")" >/dev/null 2>&1; then
+    add CRIT "health: could not record the report in $DB (migration 0052 applied?)"
+  fi
+fi
 
 crit=0 warn=0 ok=0 na=0
 for l in "${LINES[@]}"; do

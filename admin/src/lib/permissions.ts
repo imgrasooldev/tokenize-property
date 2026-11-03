@@ -2,7 +2,7 @@
  * The portal's copy of the role matrix in the admin portal migrations (admin.role_permissions and
  * admin.role_conflicts: 0013, plus the Step 6b permissions of 0016, the Step 6c ones of 0019, the
  * S-06 role and permissions of 0020, the S-03 role and permissions of 0021, the Step 6d ones of
- * 0023, the committee and offering votes of 0026, the S-05 exit permissions of 0027, the S-04 transfers of 0028 and the platform roles of 0031). The database is the authority and checks every request itself; this copy only drives
+ * 0023, the committee and offering votes of 0026, the S-05 exit permissions of 0027, the S-04 transfers of 0028, the platform roles of 0031 and ops.acknowledge of 0052). The database is the authority and checks every request itself; this copy only drives
  * menus and early, friendly checks.
  * test/db/rules.test.ts asserts both are identical.
  */
@@ -11,6 +11,7 @@ export type Role = (typeof ROLES)[number];
 
 export const PERMISSIONS = [
   "ops.read",
+  "ops.acknowledge",
   "audit.read.ops",
   "audit.read.admin",
   "audit.export",
@@ -57,6 +58,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   ops_maker: [
     "ops.read",
+    "ops.acknowledge",
     "audit.read.ops",
     "approvals.read",
     "approvals.request",
@@ -77,6 +79,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   ],
   ops_checker: [
     "ops.read",
+    "ops.acknowledge",
     "audit.read.ops",
     "approvals.read",
     "approvals.decide",
@@ -142,6 +145,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   admin: ["audit.read.admin", "officers.read", "officers.manage"],
   platform_owner: [
     "ops.read",
+    "ops.acknowledge",
     "audit.read.ops",
     "audit.read.admin",
     "officers.read",

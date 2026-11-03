@@ -109,6 +109,7 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
   { path: "/compliance/monitoring", allowed: COMPLIANCE },
+  { path: "/health", allowed: OPS },
   { path: "/compliance/monitoring/{tmAlert}", allowed: COMPLIANCE },
   // S-06 (migration 0020): recovery, succession and reversal cases.
   { path: "/recovery", allowed: RECOVERY },
@@ -211,6 +212,8 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   { path: "/api/compliance/monitoring/rules", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/monitoring/income", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/monitoring/sweep", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/health/refresh", allowed: OPS, okStatus: 303, form: {} },
+  { path: "/api/health/{healthAlert}/acknowledge", allowed: ["ops_maker", "ops_checker", "platform_owner"], okStatus: 303, form: { note: "x" } },
   // S-06: makers are operations makers, deciders operations checkers, compliance and legal officers; an
   // incomplete form is answered with a 303 back (nothing changed, the signing service is never called).
   { path: "/api/audit/recovery/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
@@ -420,6 +423,9 @@ beforeAll(async () => {
     [tmSubject.rows[0]?.id],
   );
   ids.set("tmAlert", tm.rows[0]?.id ?? "");
+  // Migration 0052: an open health alert as monitor.evaluate leaves it.
+  const ha = await w.su.query<{ id: string }>("INSERT INTO monitor.alerts (check_key, level, detail) VALUES ('host:http-matrix:disk /', 'WARN', 'disk /: 85% used') RETURNING id");
+  ids.set("healthAlert", ha.rows[0]?.id ?? "");
   compliance2 = await invite(w, c.admin, c.admin2, "http.compliance.two", "compliance_officer");
   // S-06 items: a reversal case of a duplicated booking and a wallet-recovery case (command-line names).
   ids.set("reversalCase", await reversalCase(w.su));
@@ -547,6 +553,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
           .replace(/^\/api\/compliance\/(kyc|freezes|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/health\/\{\w+\}\/acknowledge$/, "/api/health/[id]/acknowledge")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
           .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")

@@ -26,6 +26,7 @@ export interface RouteRule {
 
 export const ROUTES: readonly RouteRule[] = [
   { path: "/", kind: "page", methods: ["GET"], access: "ops.read", mutating: false },
+  { path: "/health", kind: "page", methods: ["GET"], access: "ops.read", mutating: false },
   { path: "/login", kind: "page", methods: ["GET"], access: "anonymous", mutating: false },
   { path: "/enrol", kind: "page", methods: ["GET"], access: "anonymous", mutating: false },
   { path: "/account", kind: "page", methods: ["GET"], access: "officer", mutating: false },
@@ -130,6 +131,9 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/export", kind: "api", methods: ["POST"], access: "compliance.export", mutating: true },
   { path: "/api/compliance/goaml", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  // Migration 0052: health and alerts ("Check now" only evaluates; acknowledging is audited).
+  { path: "/api/health/refresh", kind: "api", methods: ["POST"], access: "ops.read", mutating: true },
+  { path: "/api/health/[id]/acknowledge", kind: "api", methods: ["POST"], access: "ops.acknowledge", mutating: true },
   // Migration 0051: transaction monitoring (decisions, thresholds and income need a step-up, checked by the database).
   { path: "/api/compliance/monitoring/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/monitoring/rules", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },

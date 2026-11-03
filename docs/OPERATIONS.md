@@ -115,6 +115,8 @@ other unit alerts through `OnFailure=`. Without a webhook, alerts are only in th
 `journalctl -t pt-alert` is not enough for anyone to be woken up, so **choosing the alert channel is
 an owner decision (section 10)**.
 
+PT Control `/health` (migration 0052): the timer runs `pt-health.sh --alert --record`; `--record` hands the lines to `monitor.record_report`, which keeps the server-only checks (validators, disk, memory, swap, units, HTTP, backups) and evaluates the alerts. The database checks (indexer, outbox, signer, recon, anchor, notify) are computed live on the page with the thresholds in `monitor.settings` (the script's defaults). One alert per failing check: opened on WARN or CRIT, raised to CRIT (the acknowledgement is cleared), resolved when OK again; a server report older than 15 minutes is a warning of its own. Operations makers and checkers and the platform owner acknowledge with a note (`ops.acknowledge`, audited); auditors and compliance officers read. The webhook (`pt-alert.sh`) stays the way someone is woken up.
+
 Alert content rule: states, counts, ages, block numbers, unit names. Never secrets, never CNIC,
 names, IBANs or wallet-to-person links. The scripts are written to that rule; keep it when editing.
 
