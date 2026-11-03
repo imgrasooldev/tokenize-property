@@ -196,13 +196,25 @@ Updated 2026-10-24 (owner asked for a plain "done / remaining" list).
 - PT Control onboarding desk `/onboarding` (migration 0049) and goAML STR draft (migration 0050) (2efe87b).
 - Website information pages: terms, privacy, risks, fees, FAQ, about, reports, contact (e21790e).
 
-**Tests to run first on the home laptop (not run on the office laptop):**
-1. `cd backend && npm run check`: the full suite after 0049/0050. Targeted runs passed here: property 57/57, service-roles 51/51.
-2. `cd admin && npm run check` and the admin DB tests. Passed here: HTTP matrix 2282/2282, goaml + compliance + rules 39/39. On the office laptop, port 3399 is taken by mysqld, so it ran with `ADMIN_HTTP_PORT=3397`.
-3. `cd admin && npm run test:e2e`. There is no Playwright spec yet for `/onboarding` or the goAML settings; writing them is a follow-up.
-4. `cd web && npm run check` and `npm run test:e2e`. `e2e/layout.spec.ts` now also opens `/faq` and `/legal/terms` and needs the Besu chain.
-5. Rent e2e cycle 2: `cd backend && npm run test:rent-e2e` after 2026-11-04 18:51 UTC.
-6. On the office laptop, 3 website integration tests (invest, market, verify) fail because the shared `property_token_test` database still has the superseded `0020_rent.sql`. Owner decision: reset that database.
+**Tests to run first on the home laptop (owner relies on Claude to run them; none of these full runs happened on the office laptop).**
+Claude: when the owner continues at home, run these in order BEFORE any new feature. Run them one at a time (parallel runs make the DB tests flaky) and long ones in the background. Fix what fails, then record each result (pass counts, any fix, commit hash) in the communication log below.
+
+0. Prepare (after `git pull`):
+   - `cd backend && npm ci --ignore-scripts`, then the same in `admin/` and `web/`.
+   - `python backend/scripts/pg.py start` (PostgreSQL 18 on 127.0.0.1:5433; without it about 15 test files fail with ECONNREFUSED).
+   - `python chain/net.py start` (4 Besu validators; needed by the website integration tests, the website e2e and the rent e2e).
+   - Check whether port 3399 is free (`netstat -ano | findstr :3399`). If another program holds it, add `ADMIN_HTTP_PORT=3397` to the admin HTTP run.
+1. Backend: `cd backend && npm run check` (typecheck, lint, all tests; about 10+ minutes). Already passed on the office laptop: property 57/57, service-roles 51/51 (inventory updated for 0049/0050).
+2. Admin:
+   - `cd admin && npm run check` (typecheck, lint, unit and DB tests).
+   - `npm run build && npm run test:http` (the HTTP matrix needs the build; it passed 2282/2282 on the office laptop).
+   - `npm run test:e2e` (Playwright in Edge with virtual FIDO2 keys). There is no spec yet for `/onboarding` or the goAML settings: write `admin/e2e/onboarding.spec.ts` afterwards (desk lists, a sponsor action with step-up, a refusal message, the goAML setting form).
+3. Website:
+   - `cd web && npm run check`.
+   - `npm run test:e2e` (needs the chain; `layout.spec.ts` now also opens `/faq` and `/legal/terms`). The first run after `npm ci` is cold (about 20 minutes of compiles) and the market specs can time out; rerun before suspecting a regression.
+   - If invest, market and verify integration tests fail with "Applied migration 0020_rent.sql is missing on disk", the shared `property_token_test` database is stale (office laptop issue). Ask the owner before dropping and recreating it.
+4. Rent e2e cycle 2, only after 2026-11-04 18:51 UTC: `cd backend && npm run test:rent-e2e` (Besu running). It finalizes distribution 3 / calculation 2 through outbox and signer and books it.
+5. After everything is green: update this handoff (mark the tests done) and push.
 
 **Remaining code, in the agreed order:**
 1. **Transaction monitoring** (PT Control compliance): rules that open STR candidates (structuring below thresholds, rapid in-and-out, amounts above the declared income band, many payout-account changes), with a review queue.
