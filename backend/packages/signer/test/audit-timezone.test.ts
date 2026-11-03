@@ -32,7 +32,7 @@ async function append(zone: string, n: number, label: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  ({ client: admin, drop } = await scratchDatabase());
+  ({ client: admin, drop } = await scratchDatabase({ empty: true }));
   dir = migrationsUpTo("0007");
   await migrate(admin, dir);
 });

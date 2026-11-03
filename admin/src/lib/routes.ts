@@ -49,6 +49,8 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/compliance/freezes/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   { path: "/compliance/str/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/monitoring", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
+  { path: "/compliance/monitoring/[id]", kind: "page", methods: ["GET"], access: "compliance.read", mutating: false },
   // S-06 (migration 0020): recovery, succession and reversal cases.
   { path: "/recovery", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
   { path: "/recovery/[id]", kind: "page", methods: ["GET"], access: "recovery.read", mutating: false },
@@ -128,6 +130,11 @@ export const ROUTES: readonly RouteRule[] = [
   { path: "/api/compliance/str/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   { path: "/api/compliance/str/[id]/export", kind: "api", methods: ["POST"], access: "compliance.export", mutating: true },
   { path: "/api/compliance/goaml", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  // Migration 0051: transaction monitoring (decisions, thresholds and income need a step-up, checked by the database).
+  { path: "/api/compliance/monitoring/[id]/act", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/monitoring/rules", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/monitoring/income", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
+  { path: "/api/compliance/monitoring/sweep", kind: "api", methods: ["POST"], access: "compliance.decide", mutating: true },
   // S-06: makers prepare (operations maker), deciders decide in their capacity; step-up checked by the database.
   { path: "/api/recovery/cases", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },
   { path: "/api/recovery/cases/[id]/evidence", kind: "api", methods: ["POST"], access: "recovery.request", mutating: true },

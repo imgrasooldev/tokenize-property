@@ -89,6 +89,7 @@ Later, outside the ten: the secondary market (open buy and sell between verified
 
 - **For:** compliance officers (`compliance_officer`).
 - **What it does:** `/compliance`: KYC and AML queue, sanctions and PEP hits, case files, freeze requests and decisions, exports; S-01 property, offering, recovery, exit and transfer decisions where compliance must agree; committee votes; complaints referred to compliance; full audit log.
+- **Transaction monitoring:** `/compliance/monitoring` (migration 0051): rules for structuring, rapid in-and-out, payments above the declared income and many payout-account changes open alerts in a review queue; one officer opens an STR case from an alert, dismissing needs two. Thresholds are placeholders until the MLRO confirms them.
 - **goAML:** every STR export carries a goAML STR draft (migration 0050); the reporting entity values and indicator codes are placeholders until the FMU confirms them (set on `/compliance/str`). Filing stays manual by the MLRO.
 - **Open:** automatic transaction monitoring (rules that open STR candidates).
 

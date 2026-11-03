@@ -15,7 +15,7 @@ describe("migrate", () => {
   let dir: string;
 
   beforeEach(async () => {
-    ({ client, drop } = await scratchDatabase());
+    ({ client, drop } = await scratchDatabase({ empty: true }));
     dir = mkdtempSync(join(tmpdir(), "pt-migrations-"));
   });
 

@@ -202,6 +202,9 @@ describe("operations and tax producers (S-03)", () => {
   });
 
   it("no producer failed and the notify audit chain verifies", async () => {
+    // On a failure, show which producer failed and why (kind, SQLSTATE, message).
+    const failures = (await w.pool.query<{ kind: string; sqlstate: string; error: string }>("SELECT kind, sqlstate, error FROM notify.producer_failures ORDER BY id")).rows;
+    expect(failures).toEqual([]);
     expect(await producerFailureCount(w.pool)).toBe(0);
     expect(await verifyAudit(w.pool)).toEqual([]);
   });

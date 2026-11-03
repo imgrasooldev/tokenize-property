@@ -15,7 +15,8 @@ export default defineConfig({
       { resolve: { alias }, test: { name: "unit", include: ["test/unit/**/*.test.ts"] } },
       {
         resolve: { alias },
-        test: { name: "db", include: ["test/db/**/*.test.ts"], fileParallelism: false, testTimeout: 60_000, hookTimeout: 180_000 },
+        // Each file builds a world of its own (scratch database, portal login per process): four at once.
+        test: { name: "db", include: ["test/db/**/*.test.ts"], fileParallelism: true, maxWorkers: 4, testTimeout: 60_000, hookTimeout: 180_000 },
       },
       {
         // Needs a production build (npm run build) and PostgreSQL; starts `next start` itself.

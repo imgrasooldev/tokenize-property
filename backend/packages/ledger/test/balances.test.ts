@@ -37,7 +37,7 @@ async function verifyBalances(): Promise<{ code: string; cached: string | null; 
 }
 
 beforeAll(async () => {
-  ({ client: db, drop } = await scratchDatabase());
+  ({ client: db, drop } = await scratchDatabase({ empty: true }));
   dir = migrationsUpTo("0007");
   await migrate(db, dir);
   await openAccount(db, { code: "bank:escrow", kind: "asset", asset: "PKR" });
@@ -131,7 +131,7 @@ describe("RF-2 running balances", () => {
 
   // Builds and drops its own database: on Windows the drop's checkpoint fsyncs every new file (~25 s here).
   it("verify_balances() exposes a tampered running balance (rogue DBA)", async () => {
-    const scratch = await scratchDatabase();
+    const scratch = await scratchDatabase({ empty: true });
     try {
       await migrate(scratch.client, dir);
       await openAccount(scratch.client, { code: "x:bank", kind: "asset", asset: "PKR", allowOverdraft: true });

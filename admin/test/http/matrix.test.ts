@@ -108,6 +108,8 @@ const PAGES: { path: string; allowed: Role[]; okStatus?: number; notFoundFor?: R
   { path: "/compliance/freezes/{freeze}", allowed: COMPLIANCE },
   { path: "/compliance/str", allowed: COMPLIANCE },
   { path: "/compliance/str/{str}", allowed: COMPLIANCE },
+  { path: "/compliance/monitoring", allowed: COMPLIANCE },
+  { path: "/compliance/monitoring/{tmAlert}", allowed: COMPLIANCE },
   // S-06 (migration 0020): recovery, succession and reversal cases.
   { path: "/recovery", allowed: RECOVERY },
   { path: "/recovery/{reversalCase}", allowed: RECOVERY },
@@ -205,6 +207,10 @@ const APIS: { path: string; allowed: Role[]; okStatus: number; form?: Record<str
   // Without the export button (and a fresh step-up, checked by the database) no file is made: 303 back.
   { path: "/api/compliance/str/{str}/export", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   { path: "/api/compliance/goaml", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/monitoring/{tmAlert}/act", allowed: ["compliance_officer"], okStatus: 303, form: { decision: "propose_dismiss", reason: "short" } },
+  { path: "/api/compliance/monitoring/rules", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/monitoring/income", allowed: ["compliance_officer"], okStatus: 303, form: {} },
+  { path: "/api/compliance/monitoring/sweep", allowed: ["compliance_officer"], okStatus: 303, form: {} },
   // S-06: makers are operations makers, deciders operations checkers, compliance and legal officers; an
   // incomplete form is answered with a 303 back (nothing changed, the signing service is never called).
   { path: "/api/audit/recovery/export", allowed: ["compliance_officer", "auditor"], okStatus: 200, form: { format: "csv" } },
@@ -403,6 +409,17 @@ beforeAll(async () => {
   ids.set("freeze", fr.rows[0]?.id ?? "");
   const st = await w.su.query<{ id: string }>("SELECT compliance.open_str(NULL, 'unusual_pattern', 'Pattern of deposits inconsistent with the declared income', 'operator:night') AS id");
   ids.set("str", st.rows[0]?.id ?? "");
+  // Migration 0051: a monitoring alert as the rules leave it.
+  const tmSubject = await w.su.query<{ id: string }>(
+    "INSERT INTO kyc.subjects (name_hash, name_enc, pepper_version, cnic_last4, created_by) VALUES (sha256('http-tm'::bytea), sha256('http-tm-name'::bytea) || sha256('x'::bytea), 1, '2468', 'test') RETURNING id",
+  );
+  const tm = await w.su.query<{ id: string }>(
+    `INSERT INTO compliance.tm_alerts (rule, subject_id, window_from, window_to, amount_paisa, evidence, params, summary, opened_by)
+     VALUES ('structuring', $1, now() - interval '2 days', now(), 570000000, '[{"kind": "credit", "ref": "RAAST-HTTP-1", "amountPaisa": "190000000"}]',
+             '{"thresholdPaisa": 200000000, "bandPercent": 80, "minCount": 3, "windowDays": 7}', '3 payments just below the threshold within 7 days', 'monitor:test') RETURNING id`,
+    [tmSubject.rows[0]?.id],
+  );
+  ids.set("tmAlert", tm.rows[0]?.id ?? "");
   compliance2 = await invite(w, c.admin, c.admin2, "http.compliance.two", "compliance_officer");
   // S-06 items: a reversal case of a duplicated booking and a wallet-recovery case (command-line names).
   ids.set("reversalCase", await reversalCase(w.su));
@@ -506,7 +523,7 @@ describe("route coverage", () => {
           .replace(/^\/committees\/\d+$/, "/committees/[id]")
           .replace(/^\/trustee\/properties\/[0-9a-f-]{36}$/, "/trustee/properties/[id]")
           .replace(/^\/onboarding\/(sponsor|property)\/[0-9a-f-]{36}$/, "/onboarding/$1/[id]")
-          .replace(/^\/compliance\/(kyc|freezes|str)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
+          .replace(/^\/compliance\/(kyc|freezes|str|monitoring)\/(\{\w+\}|\d+)$/, "/compliance/$1/[id]")
           .replace(/^\/recovery\/(\{\w+\}|\d+)$/, "/recovery/[id]")
           .replace(/^\/operations\/(charges|distributions)\/(\{\w+\}|\d+)$/, "/operations/$1/[id]")
           .replace(/^\/tax\/exports\/(\{\w+\}|\d+)$/, "/tax/exports/[id]")
@@ -529,7 +546,7 @@ describe("route coverage", () => {
           .replace(/^\/api\/approvals\/offering\/\d+\/return$/, "/api/approvals/offering/[id]/return")
           .replace(/^\/api\/committees\/\d+\/(vote|close)$/, "/api/committees/[id]/$1")
           .replace(/^\/api\/trustee\/properties\/[0-9a-f-]{36}\/decide$/, "/api/trustee/properties/[id]/decide")
-          .replace(/^\/api\/compliance\/(kyc|freezes|str)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
+          .replace(/^\/api\/compliance\/(kyc|freezes|str|monitoring)\/\{\w+\}\/(act|decide|notes|export)$/, "/api/compliance/$1/[id]/$2")
           .replace(/^\/api\/recovery\/cases\/\{\w+\}\/(evidence|wallet|act)$/, "/api/recovery/cases/[id]/$1")
           .replace(/^\/api\/exit\/cases\/\{\w+\}\/request$/, "/api/exit/cases/[id]/request")
           .replace(/^\/api\/operations\/(charges|distributions)\/\{\w+\}\/decide$/, "/api/operations/$1/[id]/decide")

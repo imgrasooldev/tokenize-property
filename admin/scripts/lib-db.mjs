@@ -71,15 +71,69 @@ export async function applyMigrations(client) {
   return applied;
 }
 
-/** Creates (or re-creates) a database and applies all migrations. */
-export async function createMigratedDatabase(name, { recreate = false } = {}) {
+/** Arbitrary constant: serialises building the template across processes. */
+const TEMPLATE_LOCK = 586_586_003;
+
+/** Name of the migrated template for the migrations on disk: a new or changed file gives a new name. */
+function templateName() {
+  const h = createHash("sha256");
+  for (const f of readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith(".sql")).sort()) {
+    h.update(f).update("\0").update(readFileSync(join(MIGRATIONS_DIR, f))).update("\0");
+  }
+  return `pt_tpl_admin_${h.digest("hex").slice(0, 16)}`;
+}
+
+/**
+ * A database with every migration applied, built once and kept between test runs until a migration
+ * changes; copying it is much faster than applying every migration to each scratch database. Older
+ * templates are dropped when a new one is built; nobody connects to it after the build.
+ */
+async function migratedTemplate(admin) {
+  const name = templateName();
+  const exists = async () => (await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [name])).rowCount === 1;
+  if (await exists()) return name;
+  await admin.query("SELECT pg_advisory_lock($1)", [TEMPLATE_LOCK]);
+  try {
+    if (await exists()) return name;
+    const wip = `${name}_wip`;
+    await admin.query(`DROP DATABASE IF EXISTS ${wip} WITH (FORCE)`);
+    await admin.query(`CREATE DATABASE ${wip}`);
+    const client = new pg.Client(adminSettings(wip));
+    await client.connect();
+    try {
+      await applyMigrations(client);
+    } finally {
+      await client.end();
+    }
+    for (let i = 0; ; i++) {
+      try {
+        await admin.query(`ALTER DATABASE ${wip} RENAME TO ${name}`);
+        break;
+      } catch (e) {
+        if (e.code !== "55006" || i >= 40) throw e; // object_in_use: the build session is still closing
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
+    const old = await admin.query("SELECT datname FROM pg_database WHERE datname LIKE 'pt\\_tpl\\_admin\\_%' AND datname <> $1", [name]);
+    for (const r of old.rows) await admin.query(`DROP DATABASE IF EXISTS ${r.datname} WITH (FORCE)`);
+    return name;
+  } finally {
+    await admin.query("SELECT pg_advisory_unlock($1)", [TEMPLATE_LOCK]);
+  }
+}
+
+/**
+ * Creates (or re-creates) a database and applies all migrations. With `template` a new database is
+ * a copy of the migrated template (tests), so nothing is left to apply.
+ */
+export async function createMigratedDatabase(name, { recreate = false, template = false } = {}) {
   checkName(name);
   const admin = new pg.Client(adminSettings());
   await admin.connect();
   try {
     const exists = (await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [name])).rowCount === 1;
     if (exists && recreate) await dropDatabase(name, admin);
-    if (!exists || recreate) await admin.query(`CREATE DATABASE ${name}`);
+    if (!exists || recreate) await admin.query(template ? `CREATE DATABASE ${name} TEMPLATE ${await migratedTemplate(admin)}` : `CREATE DATABASE ${name}`);
   } finally {
     await admin.end();
   }

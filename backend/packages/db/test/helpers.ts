@@ -1,14 +1,19 @@
-import { randomBytes } from "node:crypto";
-import { copyFileSync, mkdtempSync, readdirSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readEnvFile, serviceRole, type ServiceName } from "@pt/config";
 import pg from "pg";
+import { migrate } from "../src/migrate.ts";
 
 const local = readEnvFile(fileURLToPath(new URL("../../../.env.local", import.meta.url)));
 
-/** Admin connection settings: CI provides PG_* env vars; locally they come from backend/.env.local. */
+/**
+ * Admin connection settings: CI provides PG_* env vars; locally they come from backend/.env.local.
+ * Test sessions commit without waiting for the WAL flush (synchronous_commit off): a crash can lose
+ * the last commits of a throw-away database, never corrupt it, and every commit is much faster.
+ */
 export function adminSettings(database = "postgres"): pg.ClientConfig {
   const password = process.env.PG_ADMIN_PASSWORD ?? local.PG_ADMIN_PASSWORD;
   if (!password) throw new Error("No admin password: run `python backend/scripts/pg.py setup` or set PG_ADMIN_PASSWORD");
@@ -18,6 +23,7 @@ export function adminSettings(database = "postgres"): pg.ClientConfig {
     user: process.env.PG_ADMIN_USER ?? local.PG_ADMIN_USER ?? "pt_admin",
     password,
     database,
+    options: "-c synchronous_commit=off",
   };
 }
 
@@ -71,8 +77,59 @@ export async function servicePool(service: ServiceName, database: string, max = 
   };
 }
 
-/** Creates a throw-away database and returns a connected client plus a cleanup function. */
-export async function scratchDatabase(): Promise<{
+const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta.url));
+/** Arbitrary constant: serialises building the template across processes. */
+const TEMPLATE_LOCK = 586_586_002;
+
+/** Name of the migrated template for the migrations on disk: a new or changed file gives a new name. */
+function templateName(): string {
+  const h = createHash("sha256");
+  for (const f of readdirSync(MIGRATIONS_DIR)
+    .filter((x) => x.endsWith(".sql"))
+    .sort()) {
+    h.update(f).update("\0").update(readFileSync(join(MIGRATIONS_DIR, f))).update("\0");
+  }
+  return `pt_template_${h.digest("hex").slice(0, 16)}`;
+}
+
+/**
+ * A database with every migration applied, built once and kept between runs until a migration
+ * changes: copying it takes a fraction of applying every migration to each scratch database. Older
+ * templates are dropped when a new one is built. Nobody connects to it after the build, so
+ * CREATE DATABASE ... TEMPLATE never waits for its sessions.
+ */
+async function migratedTemplate(admin: pg.Client): Promise<string> {
+  const name = templateName();
+  const exists = async () => (await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [name])).rowCount === 1;
+  if (await exists()) return name;
+  await admin.query("SELECT pg_advisory_lock($1)", [TEMPLATE_LOCK]);
+  try {
+    if (await exists()) return name;
+    const wip = `${name}_wip`;
+    await admin.query(`DROP DATABASE IF EXISTS ${wip} WITH (FORCE)`);
+    await admin.query(`CREATE DATABASE ${wip}`);
+    const client = new pg.Client(adminSettings(wip));
+    await client.connect();
+    try {
+      await migrate(client, MIGRATIONS_DIR);
+    } finally {
+      await client.end();
+    }
+    await dropWhenFree(admin, wip, `ALTER DATABASE ${wip} RENAME TO ${name}`);
+    const old = await admin.query<{ datname: string }>("SELECT datname FROM pg_database WHERE datname LIKE 'pt\\_template\\_%' AND datname <> $1", [name]);
+    for (const r of old.rows) await admin.query(`DROP DATABASE IF EXISTS ${r.datname} WITH (FORCE)`);
+    return name;
+  } finally {
+    await admin.query("SELECT pg_advisory_unlock($1)", [TEMPLATE_LOCK]);
+  }
+}
+
+/**
+ * Creates a throw-away database and returns a connected client plus a cleanup function. It is a
+ * copy of the migrated template (a later `migrate()` finds everything applied); `empty: true` gives
+ * a database without migrations, for the migration runner and upgrades from an older schema.
+ */
+export async function scratchDatabase(opts: { empty?: boolean } = {}): Promise<{
   client: pg.Client;
   settings: pg.ClientConfig;
   drop: () => Promise<void>;
@@ -80,7 +137,7 @@ export async function scratchDatabase(): Promise<{
   const name = `pt_scratch_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const admin = new pg.Client(adminSettings());
   await admin.connect();
-  await admin.query(`CREATE DATABASE ${name}`);
+  await admin.query(opts.empty ? `CREATE DATABASE ${name}` : `CREATE DATABASE ${name} TEMPLATE ${await migratedTemplate(admin)}`);
   const settings = adminSettings(name);
   const client = new pg.Client(settings);
   await client.connect();
@@ -103,18 +160,19 @@ function ignoreTerminated(e: Error & { code?: string }): void {
   if (e.code !== "57P01") throw e;
 }
 
-/** Drops the database once its sessions have closed; FORCE only as a last resort. */
-async function dropWhenFree(admin: pg.Client, name: string): Promise<void> {
+/** Drops the database (or runs `statement` on it) once its sessions have closed; FORCE only as a last resort. */
+async function dropWhenFree(admin: pg.Client, name: string, statement = `DROP DATABASE ${name}`): Promise<void> {
   for (let i = 0; i < 40; i++) {
     try {
-      await admin.query(`DROP DATABASE ${name}`);
+      await admin.query(statement);
       return;
     } catch (e) {
       if ((e as { code?: string }).code !== "55006") throw e; // 55006 = object_in_use
       await new Promise((r) => setTimeout(r, 50));
     }
   }
-  await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
+  if (statement.startsWith("DROP")) await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
+  else await admin.query(statement);
 }
 
 /**

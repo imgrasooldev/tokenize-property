@@ -31,6 +31,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/compliance/kyc", label: "KYC reviews", icon: "☑", need: "compliance.read" },
       { href: "/compliance/screening", label: "Sanctions & PEP", icon: "⚑", need: "compliance.read" },
       { href: "/compliance/freezes", label: "Freezes", icon: "⏸", need: "compliance.read" },
+      { href: "/compliance/monitoring", label: "Monitoring", icon: "⌁", need: "compliance.read" },
       { href: "/compliance/str", label: "STR cases", icon: "✉", need: "compliance.read" },
     ],
   },

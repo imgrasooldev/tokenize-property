@@ -34,21 +34,45 @@ export const sha = (s: string): Buffer => createHash("sha256").update(s, "utf8")
 export const token = (): string => randomBytes(32).toString("base64url");
 
 /**
+ * pg.Pool.query() closes the connection after ANY error, and a new PostgreSQL connection costs
+ * ~100 ms on Windows (a process per backend, SCRAM). Refusals are what most tests expect, so the
+ * world's pool keeps a connection after an ordinary SQL error and only drops it after a connection
+ * error (class 08 or 57P, or no SQLSTATE).
+ */
+function keepOnSqlErrors(pool: pg.Pool): pg.Pool {
+  const query = async (text: string, values?: unknown[]): Promise<pg.QueryResult> => {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(text, values);
+      client.release();
+      return result;
+    } catch (e) {
+      const code = (e as { code?: unknown }).code;
+      client.release(typeof code === "string" && !/^(08|57P)/.test(code) ? undefined : (e as Error));
+      throw e;
+    }
+  };
+  pool.query = query as unknown as pg.Pool["query"];
+  return pool;
+}
+
+/**
  * The portal login is a cluster-wide role, and createWorld resets its password. A fixed name let two
  * test runs on one PostgreSQL (two worktrees, 2026-10-22) reset each other's password mid-run (28P01
  * in hundreds of tests), so the default name is unique to this process and dropped with the world.
  */
 export async function createWorld(portalUser = `pt_admin_testdb_${String(process.pid)}`): Promise<World> {
   const name = `pt_scratch_admin_${String(Date.now())}_${String(Math.floor(Math.random() * 1e6))}`;
-  await createMigratedDatabase(name);
+  await createMigratedDatabase(name, { template: true });
   const portalPassword = await ensurePortalLogin(portalUser);
-  const base = adminSettings(name);
+  // Throw-away database: commits need not wait for the WAL flush (a crash loses, never corrupts).
+  const base = { ...adminSettings(name), options: "-c synchronous_commit=off" };
   const su = new pg.Client(base);
   await su.connect();
   const cli = new pg.Client(base);
   await cli.connect();
   await cli.query("SET ROLE pt_admin_cli");
-  const portal = new pg.Pool({ ...base, user: portalUser, password: portalPassword, max: 6 });
+  const portal = keepOnSqlErrors(new pg.Pool({ ...base, user: portalUser, password: portalPassword, max: 6 }));
   return {
     name,
     su,

@@ -230,6 +230,9 @@ export interface DecisionResult {
   link?: string;
   /** Migration 0049: what an onboarding action returned (an id, a new state, ...). */
   result?: unknown;
+  /** Migration 0051: the STR case an escalated monitoring alert opened, and alerts a sweep opened. */
+  strCase?: number;
+  opened?: number;
 }
 
 export async function decision(sql: string, params: unknown[]): Promise<DecisionResult> {

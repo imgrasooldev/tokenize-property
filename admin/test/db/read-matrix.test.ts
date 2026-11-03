@@ -75,6 +75,13 @@ const EXPECT: Record<string, Who[]> = {
   str_cases: ["compliance_officer", "auditor"],
   str_case: ["compliance_officer", "auditor"],
   str_export_data: ["compliance_officer"],
+  // Migration 0051: transaction monitoring (compliance officers act, auditors read).
+  tm_desk: ["compliance_officer", "auditor"],
+  tm_alert: ["compliance_officer", "auditor"],
+  tm_alert_act: ["compliance_officer"],
+  tm_rule_set: ["compliance_officer"],
+  tm_set_income: ["compliance_officer"],
+  tm_sweep: ["compliance_officer"],
   open_kyc_case: ["compliance_officer"],
   kyc_case_act: ["compliance_officer"],
   request_rescreen: ["compliance_officer"],
@@ -214,6 +221,12 @@ const CALLS: Record<string, string> = {
   str_cases: "SELECT admin.str_cases($1)",
   str_case: "SELECT admin.str_case($1, 999999)",
   str_export_data: "SELECT admin.str_export_data($1, 999999)",
+  tm_desk: "SELECT admin.tm_desk($1)",
+  tm_alert: "SELECT admin.tm_alert($1, 999999)",
+  tm_alert_act: "SELECT admin.tm_alert_act($1, 999999, 'propose_dismiss', 'matrix probe reason', NULL)",
+  tm_rule_set: "SELECT admin.tm_rule_set($1, 'structuring', '{}'::jsonb, true, 'matrix probe reason')",
+  tm_set_income: "SELECT admin.tm_set_income($1, '00000000-0000-0000-0000-000000000000', 100, 'matrix probe reason')",
+  tm_sweep: "SELECT admin.tm_sweep($1)",
   // Unknown subjects, wallets and cases: refusals are audited and returned, so only the permission decides.
   open_kyc_case: "SELECT admin.open_kyc_case($1, gen_random_uuid(), 'standard', 'matrix permission probe')",
   kyc_case_act: `SELECT admin.kyc_case_act($1, 999999, 'approve', 'matrix permission probe', '\\x${"a".repeat(64)}')`,
@@ -316,6 +329,9 @@ const CALLS: Record<string, string> = {
 };
 
 const DECISIONS = new Set([
+  "tm_alert_act",
+  "tm_rule_set",
+  "tm_set_income",
   "issue_signer_ticket",
   "decide_payout_batch",
   "decide_unfreeze",
