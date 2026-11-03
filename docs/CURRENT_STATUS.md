@@ -5,6 +5,8 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 ## Compliance follow-ups (2026-11-03, on `main`)
 
 - Partial freezes in PT Control (migration 0054): `/compliance/freezes` + `/compliance/partial-freezes/[id]`, signer kinds `compliance.freeze_partial` / `compliance.unfreeze_partial` (`npm run signer:setup` adds their dev policies), recon checks `compliance.partial_unmatched` / `compliance.partial_pending`. Not run on Besu (signer, DB and HTTP tests only).
+- Playwright `admin/e2e/compliance.spec.ts` (KYC review, freeze, partial freeze, STR flow); admin e2e 19 + 1 skipped.
+- CI job `web-e2e-chain` (website main e2e on Besu); informational (`continue-on-error`) until it has passed on GitHub several times.
 
 ## T-028 notification producers (2026-10-23, branch `t-028-producers`, not merged; migration 0030)
 

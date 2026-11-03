@@ -176,7 +176,7 @@ process (about 200–300 MB) once a day. None overlap by schedule.
 ## 5b. End-to-end tests in CI (T-011)
 
 - CI jobs `admin-e2e` (PT Control: auth, approvals, screens; virtual FIDO2 keys; test signing service) and `web-e2e` (website passkeys; virtual authenticator) run Playwright's Chromium (`PW_BROWSER=chromium`) on Ubuntu with a PostgreSQL 18 service container; browsers are cached per lockfile; traces of failed tests are uploaded (`*-e2e-traces`, 7 days).
-- **Local only:** the website's main e2e (`npm run test:e2e`: sign-up/invest, market, verify, layout, security) needs the four-validator Besu chain and `chain/flow.py`'s deployment (timelock waits, a validator outage check) and cold dev-server compiles; it does not fit a CI job. Run it locally after chain-affecting changes.
+- **Website main e2e in CI (2026-11-03):** job `web-e2e-chain` downloads Besu 26.9.0 and Temurin JDK 25 (SHA-256 checked), runs `chain/net.py setup/start` and `chain/flow.py` with job-only dev keys, then `npm run test:e2e` (sign-up/invest, market, verify, layout, security) in Chromium. It is `continue-on-error` (informational, cannot hold up the demo deployment) until it has passed on GitHub several times in a row; then remove that line. Still run it locally after chain-affecting changes.
 
 ## 6. Secrets and keys: what is backed up where
 

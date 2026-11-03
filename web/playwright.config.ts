@@ -4,8 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
  * End-to-end tests in a real browser (the installed Microsoft Edge, so no browser download).
  * They start their own dev server on port 3101 against the TEST database (property_token_test),
  * next to the demo server on 3100. Needs the local Besu chain (net.py + flow.py deployment) and
- * PostgreSQL running; LOCAL ONLY (T-011: the four-validator chain, flow.py's timelock waits and the
- * cold dev-server compiles do not fit a CI job; CI runs the chain-independent passkey e2e instead).
+ * PostgreSQL running. CI runs it too (job web-e2e-chain: Besu, flow.py and Chromium on Linux;
+ * informational until it has passed there several times in a row).
  * PW_BROWSER=chromium uses Playwright's Chromium instead of the installed Edge.
  */
 const chromium = process.env.PW_BROWSER === "chromium";

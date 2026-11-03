@@ -146,9 +146,8 @@ jobs:
 
   # T-011: Playwright end-to-end tests on Linux with Playwright's Chromium (PW_BROWSER=chromium; the
   # configs use the installed Edge locally) and the Chrome DevTools Protocol virtual authenticator.
-  # Only the chain-independent suites run here: the website's main e2e (sign-up/invest, market,
-  # verify, layout, security) needs the four-validator Besu chain and flow.py's deployment and stays
-  # local-only (docs/OPERATIONS.md). Traces of failed tests are uploaded as artefacts.
+  # The passkey suite runs here without a chain; the website's main e2e runs in web-e2e-chain below.
+  # Traces of failed tests are uploaded as artefacts.
   admin-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -277,6 +276,111 @@ jobs:
         with:
           name: web-e2e-traces
           path: web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The website's main e2e (sign-up/invest, market, verify, layout, security) on a real four-validator
+  # Besu QBFT network, deployed by chain/flow.py through DeployLib (60 s timelocks on the dev chain ID
+  # 586586, a validator outage check), with the backend services the website needs (web/test/stack.ts).
+  # Besu and the JDK are the versions of chain/README.md, SHA-256 checked before use; dev keys are made
+  # in the job and thrown away with it. INFORMATIONAL until it has passed on GitHub several times in a
+  # row (continue-on-error: a failure is shown on the run but does not fail CI, so it cannot hold up
+  # the demo deployment); then remove continue-on-error.
+  web-e2e-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pt_admin
+          # Throw-away CI container only; not a real credential.
+          POSTGRES_PASSWORD: ci_only_not_a_secret_0000
+          POSTGRES_DB: property_token_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pt_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_ADMIN_USER: pt_admin
+      PG_ADMIN_PASSWORD: ci_only_not_a_secret_0000
+      PW_BROWSER: chromium
+      NEXT_TELEMETRY_DISABLED: 1
+      BESU_URL: https://github.com/besu-eth/besu/releases/download/26.9.0/besu-26.9.0.zip
+      BESU_SHA256: 749f90b0b29b8138f5d58b949d19eed721826cab66bfb8d983f86e15831d22b2
+      JDK_URL: https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            backend/package-lock.json
+      - name: Besu 26.9.0 and Temurin JDK 25 (SHA-256 checked, as chain/README.md and provision.sh)
+        working-directory: chain
+        run: |
+          mkdir -p tools && cd tools
+          curl -fsSL -o besu.zip "$BESU_URL"
+          echo "$BESU_SHA256  besu.zip" | sha256sum -c -
+          unzip -q besu.zip && rm besu.zip
+          curl -fsSL -o jdk.tgz "$JDK_URL"
+          curl -fsSL -o jdk.sha "$JDK_URL.sha256.txt"
+          echo "$(cut -d' ' -f1 jdk.sha)  jdk.tgz" | sha256sum -c -
+          mkdir -p jdk-25 && tar -xzf jdk.tgz -C jdk-25 --strip-components=1 && rm jdk.tgz jdk.sha
+      - name: Install (exact lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+      - name: Backend install (migrations, services and the website's database role come from backend/)
+        working-directory: backend
+        run: npm ci --ignore-scripts
+      - name: Throw-away settings for this job (CI-only values, never real secrets)
+        run: |
+          printf 'PG_HOST=%s\nPG_PORT=%s\nPG_ADMIN_USER=%s\nPG_ADMIN_PASSWORD=%s\n' "$PG_HOST" "$PG_PORT" "$PG_ADMIN_USER" "$PG_ADMIN_PASSWORD" > ../backend/.env.local
+          npm run setup:demo
+      - name: Local chain (job-only dev keys) and the deployment with the 50-check flow
+        working-directory: .
+        run: |
+          python3 chain/net.py setup
+          python3 chain/net.py start
+          python3 -u chain/flow.py
+      - name: Test database and the website's database login
+        working-directory: backend
+        run: |
+          npm run migrate -- --test
+          npm run db:web-role -- --test
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+      - name: Chromium (download only on a cache miss) and its system libraries
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then npx playwright install chromium; fi
+          npx playwright install-deps chromium
+      - name: End-to-end on the chain (indexer, signing service, outbox and KYC service for property_token_test)
+        run: npm run test:e2e
+      - name: Validator logs and traces of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-chain-traces
+          path: |
+            web/test-results/
+            chain/data/*/besu.log
           retention-days: 7
           if-no-files-found: ignore
 
