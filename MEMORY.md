@@ -222,14 +222,15 @@ Claude: when the owner continues at home, run these in order BEFORE any new feat
 
 **Remaining code, in the agreed order:**
 1. ~~**Transaction monitoring**~~ built 2026-11-03 on the home laptop (migration 0051, `/compliance/monitoring`): four rules (structuring, rapid in-and-out, above the declared income, payout-account changes) open alerts with the money movement; one officer opens an STR case from an alert, dismissing needs two. All thresholds are PLACEHOLDERS for the MLRO to confirm on the page. Follow-ups: a Playwright spec for the monitoring pages; exit requests and transfers as outflows are covered, rent payouts are not (rent is income, not a monitoring signal yet).
-2. **Monitoring and alerting dashboard** (operations / platform owner): health of services, chain, anchors, backups and reconciliation, with alerts.
-3. **Auto-reinvest** (investor portal).
+2. ~~**Monitoring and alerting dashboard**~~ built 2026-11-03 (migration 0052, PT Control `/health`, `pt-health.sh --record`, permission `ops.acknowledge`). On the demo server the health unit must be re-installed (`install.sh`) to pick up `--record`; until then `/health` shows the database checks only and "no server report".
+3. **Auto-reinvest** (investor portal): ON HOLD (2026-11-03). Owner chose "rent into a new offering of the same property, else bank payout", but the schema allows ONE offering per property for its life (`offering.offerings_one_per_property`, 0015:412) and `mark_ready` needs a token with zero supply (0015:1569): a property with rent can never open another offering. Needs a follow-on (tranche) offering design in S-02 first (new issuance of the same token: SECP/legal), plus an internal funding path (today every subscription is funded by a Raast credit and refunded to its sender). The payout batch is the natural diversion point (items are built by `BankService.createPayoutBatch`; a diverted line must stay in the batch, e.g. as held, because the batch total must equal the on-chain total).
 4. **Roshan Digital Account** onboarding (investor portal).
 5. Smaller items:
    - Partial freezes, offboarding steps 2-3 and assisted payout-account changes in PT Control.
-   - Playwright specs for `/onboarding`, the goAML settings and the compliance (6c) screens.
+   - Playwright specs: ~~`/onboarding` and the goAML settings~~ (onboarding.spec.ts), ~~monitoring and health~~ (monitoring.spec.ts) done 2026-11-03; the compliance (6c) screens (KYC reviews, freezes, STR flow) still open.
    - Website main e2e in CI.
-   - Investor wording for `suspended` / PEP (tipping-off).
+   - ~~Investor wording for `suspended` / PEP (tipping-off)~~ done 2026-11-03 (migration 0053 `webnotice.account_notice`).
+   - Offering document download: already there (offering page and property page link `/api/documents/<sha>` from the vault).
 6. **Public API** (`/v1`, read-only first, passkey sessions), then the **Flutter app**. The owner first picks one of the three designs (A Night Glass, B Daylight, C Luxe Noir).
 7. Multisig signing console (self-hosted Safe).
 
