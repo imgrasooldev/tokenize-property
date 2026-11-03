@@ -62,8 +62,16 @@ function runOnce(label: string, args: string[]): void {
   if (r.status !== 0) throw new Error(`${label} failed: ${(r.stderr || r.stdout).slice(-800)}`);
 }
 
-/** Idempotent setup of the test database and the services' secrets and keys. */
+/**
+ * Set by the vitest global setup (test/global-setup.ts): the preparation ran once for the whole run,
+ * and the indexer, signing service and KYC service are shared by every test file.
+ */
+const PREPARED = () => process.env.WEB_STACK_PREPARED === "1";
+const SHARED = () => process.env.WEB_STACK_SHARED === "1";
+
+/** Idempotent setup of the test database and the services' secrets and keys (once per vitest run). */
 export function prepare(): void {
+  if (PREPARED()) return;
   runOnce("migrate (test database)", tsx("packages/db/src/cli.ts", ["--test"]));
   runOnce("db:web-role", tsx("packages/db/src/web-role.ts", ["--test"]));
   // T-012: the indexer, signer, outbox worker and KYC service connect as their own logins (never the admin).
@@ -124,20 +132,18 @@ async function waitFor(what: string, check: () => Promise<boolean>, ms: number):
   throw new Error(`timed out waiting for ${what}`);
 }
 
-/** Starts the services and waits until they answer and the read model has caught up with the chain. */
-export async function start(): Promise<Stack> {
-  const procs: { indexer: ChildProcess; signer: ChildProcess; kyc: ChildProcess; worker: ChildProcess | null } = {
-    indexer: service("indexer", "packages/indexer/src/cli.ts", ["run"]),
-    signer: service("signer", "packages/signer/src/cli.ts", ["serve"]),
-    kyc: service("kyc", "packages/kyc/src/cli.ts", ["serve"]),
-    worker: null,
-  };
-  const startWorker = (): void => {
-    procs.worker = service("outbox", "packages/signer/src/outbox-worker.ts", []);
-  };
-  startWorker();
+/**
+ * The long-running services (indexer, signing service, KYC service), started and waited for until they
+ * answer and the read model has caught up with the chain. `stop()` ends them.
+ */
+export async function startServices(): Promise<{ stop: () => Promise<void> }> {
+  const procs = [
+    service("indexer", "packages/indexer/src/cli.ts", ["run"]),
+    service("signer", "packages/signer/src/cli.ts", ["serve"]),
+    service("kyc", "packages/kyc/src/cli.ts", ["serve"]),
+  ];
   const stop = async (): Promise<void> => {
-    await Promise.all([kill(procs.worker), kill(procs.indexer), kill(procs.signer), kill(procs.kyc)]);
+    await Promise.all(procs.map((p) => kill(p)));
   };
   try {
     await waitFor("signing service", async () => (await fetch(`${STACK.signerUrl}/v1/health`)).ok, 60_000);
@@ -167,5 +173,25 @@ export async function start(): Promise<Stack> {
     await stop();
     throw e;
   }
-  return { stop, stopWorker: () => kill(procs.worker), startWorker };
+  return { stop };
+}
+
+/**
+ * The services plus this file's own outbox worker (tests stop and restart it). Under the vitest
+ * global setup the services are shared and only the worker belongs to the file.
+ */
+export async function start(): Promise<Stack> {
+  const services = SHARED() ? null : await startServices();
+  let worker: ChildProcess | null = null;
+  const startWorker = (): void => {
+    worker = service("outbox", "packages/signer/src/outbox-worker.ts", []);
+  };
+  startWorker();
+  return {
+    stop: async () => {
+      await Promise.all([kill(worker), services?.stop()]);
+    },
+    stopWorker: () => kill(worker),
+    startWorker,
+  };
 }

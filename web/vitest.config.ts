@@ -10,6 +10,8 @@ export default defineConfig({
     // their own signing service (4901) and KYC service (4911) for the test database (test/stack.ts).
     env: { WEB_DB_NAME: "property_token_test", SIGNER_URL: "http://127.0.0.1:4901", KYC_URL: "http://127.0.0.1:4911" },
     fileParallelism: false,
+    // Prepares the test database and starts the shared indexer, signing and KYC services once.
+    globalSetup: ["test/global-setup.ts"],
     testTimeout: 180_000,
     hookTimeout: 400_000,
   },
