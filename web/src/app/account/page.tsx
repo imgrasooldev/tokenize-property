@@ -17,7 +17,8 @@ import { maskedIban, payeeState, payoutAccounts } from "@/lib/server/payees";
 import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
 import { passkeyAvailability } from "@/lib/server/passkey-config";
 import { listPasskeys } from "@/lib/server/passkeys";
-import { accountNotice, currentSession, sessionExpiresAt } from "@/lib/server/session";
+import { accountNotice, accountResidency, currentSession, sessionExpiresAt } from "@/lib/server/session";
+import { countryName, rdaDict } from "@/lib/i18n-rda";
 import { PasskeyPanel } from "@/components/passkey/PasskeyPanel";
 import { passkeyDict } from "@/lib/i18n-passkey";
 
@@ -45,6 +46,10 @@ export default async function AccountPage() {
   const sponsors = await sponsorOverview(session.hash);
   const now = Date.now();
   const notice = await accountNotice();
+  // Spec S-08: a Pakistani living abroad (NICOP or POC) is paid only to their Roshan Digital Account.
+  const residency = await accountResidency();
+  const rda = rdaDict(lang);
+  const abroad = residency?.status === "non_resident" ? residency : null;
   const status =
     notice === "review" ? t.accountReviewShort : notice === "expired" ? t.kycExpiredShort : investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
   const chainSteps = [t.stepIdentity, t.stepClaims, t.stepRegistered];
@@ -123,6 +128,15 @@ export default async function AccountPage() {
                 </dd>
               </>
             )}
+            {abroad ? (
+              <>
+                <dt>{rda.residency}</dt>
+                <dd data-testid="residency">
+                  {rda.livesAbroad.replace("{c}", countryName(abroad.country, lang)).replace("{d}", abroad.document === "poc" ? rda.poc : rda.nicop)}
+                  <p className="note">{abroad.payoutKind === "rda" ? rda.rdaNote : rda.rdaMissing}</p>
+                </dd>
+              </>
+            ) : null}
             <dt>{t.holdings}</dt>
             <dd>{balance === null ? "—" : formatNumber(balance, lang)}</dd>
             <dt>{t.wallet}</dt>

@@ -48,7 +48,14 @@ export type KycResult =
   | { ok: false; error: "duplicate" | "invalid" | "unavailable" };
 
 /** Sign-up KYC through the KYC service (ADR 0009): the website keeps none of what it sends. */
-export async function kycOnboard(input: { cnic: string; fullName: string; livenessSessionId: string; wallet: Address }): Promise<KycResult> {
+/** Spec S-08: a Pakistani living abroad (NICOP or POC) and the ISO 3166-1 numeric country of residence. */
+export interface Residency {
+  status: "non_resident";
+  document: "nicop" | "poc";
+  country: number;
+}
+
+export async function kycOnboard(input: { cnic: string; fullName: string; livenessSessionId: string; wallet: Address; residency?: Residency }): Promise<KycResult> {
   let r: { status: number; json: unknown };
   try {
     r = await post(kycUrl(), "/v1/onboard", secret("KYC_CLIENT_SECRET_WEB"), input);
@@ -64,8 +71,8 @@ export async function kycOnboard(input: { cnic: string; fullName: string; livene
 
 const bankPayeesUrl = (): string => process.env.BANK_PAYEES_URL ?? "http://127.0.0.1:4920";
 
-export type PayoutAccountError = "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "unavailable";
-const PAYOUT_ERRORS: readonly string[] = ["invalid_iban", "title_not_found", "title_mismatch", "not_verified", "in_use"];
+export type PayoutAccountError = "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "not_rda" | "unavailable";
+const PAYOUT_ERRORS: readonly string[] = ["invalid_iban", "title_not_found", "title_mismatch", "not_verified", "in_use", "not_rda"];
 
 /**
  * Registers or changes the signed-in investor's payout account through the bank service (T-045).

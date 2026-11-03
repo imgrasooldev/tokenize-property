@@ -12,7 +12,8 @@ import { canCancel, formatPaisa, formatPkt, isUuid } from "@/lib/offering-rules"
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { disclosures, mySubscriptions, offeringById, type PublicOffering } from "@/lib/server/offerings";
-import { accountNotice, currentInvestorId } from "@/lib/server/session";
+import { accountNotice, accountResidency, currentInvestorId } from "@/lib/server/session";
+import { rdaDict } from "@/lib/i18n-rda";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Offering · Property Token" };
@@ -32,6 +33,8 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
   const investorId = await currentInvestorId();
   const investor = investorId ? await investorById(investorId) : null;
   const notice = investor ? await accountNotice() : null;
+  // Spec S-08 RD-3: a Pakistani living abroad pays only from their Roshan Digital Account.
+  const rdaNote = investor && (await accountResidency())?.status === "non_resident" ? rdaDict(lang).investRda : null;
   const open = investor ? (await mySubscriptions(investor)).find((s) => s.offeringId === o.offeringId && (canCancel(s.state) || s.state === "initiated")) : undefined;
   const short = (h: string | null) => (h ? `${h.slice(0, 16)}…${h.slice(-8)}` : "—");
   const total = o.useOfProceeds.reduce((a, x) => a + x.paisa, 0n);
@@ -186,7 +189,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
           <aside className="stack sticky">
             <section className="panel" aria-labelledby="reserve-h">
               <h2 id="reserve-h">{l.reserveTitle}</h2>
-              <ReservePanel o={o} l={l} lang={lang} investor={investor} openSubscription={open?.subscriptionId ?? null} notice={notice} notices={t} />
+              <ReservePanel o={o} l={l} lang={lang} investor={investor} openSubscription={open?.subscriptionId ?? null} notice={notice} notices={t} rdaNote={rdaNote} />
             </section>
           </aside>
         </div>
@@ -203,6 +206,7 @@ function ReservePanel({
   openSubscription,
   notice,
   notices,
+  rdaNote,
 }: {
   o: PublicOffering;
   l: OfferingDict;
@@ -211,6 +215,7 @@ function ReservePanel({
   openSubscription: string | null;
   notice: "review" | "expired" | null;
   notices: Pick<Dict, "accountReview" | "kycExpiredNote">;
+  rdaNote: string | null;
 }) {
   if (o.state !== "live") return <p className="note">{l.notOpenNow}</p>;
   if (!investor)
@@ -236,7 +241,13 @@ function ReservePanel({
     );
   if (!o.docEnSha || !o.docUrSha || !o.riskSha) return <p className="note">{l.notOpenNow}</p>;
   return (
-    <ReserveForm
+    <>
+      {rdaNote ? (
+        <p className="note" data-testid="rda-note">
+          {rdaNote}
+        </p>
+      ) : null}
+      <ReserveForm
       l={l}
       lang={lang}
       offeringId={o.offeringId}
@@ -247,6 +258,7 @@ function ReservePanel({
       docEnSha={o.docEnSha}
       docUrSha={o.docUrSha}
       riskSha={o.riskSha}
-    />
+      />
+    </>
   );
 }

@@ -16,7 +16,7 @@ async function signedIn(): Promise<InvestorRow> {
   return investor;
 }
 
-export type PayeeError = "input" | "rate" | "noKyc" | "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "unavailable" | "stepup" | "enrolPasskey";
+export type PayeeError = "input" | "rate" | "noKyc" | "invalid_iban" | "title_not_found" | "title_mismatch" | "not_verified" | "in_use" | "not_rda" | "unavailable" | "stepup" | "enrolPasskey";
 
 export interface PayeeState {
   ok?: boolean;

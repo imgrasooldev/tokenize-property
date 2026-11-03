@@ -29,7 +29,7 @@ export async function logout(): Promise<void> {
 
 export interface SignUpState {
   error?: string;
-  fields?: Partial<Record<"fullName" | "cnic" | "phone" | "liveness" | "consent", string>>;
+  fields?: Partial<Record<"fullName" | "cnic" | "phone" | "liveness" | "consent" | "country", string>>;
 }
 
 const signUpSchema = z.object({
@@ -46,6 +46,12 @@ const signUpSchema = z.object({
     .regex(/^03\d{2}-?\d{7}$/, "format 0300-1234567"),
   liveness: z.literal("on", "complete the liveness check"),
   consent: z.literal("on", "accept the terms to continue"),
+});
+
+/** Spec S-08: a Pakistani living abroad signs up with a NICOP or POC and the country of residence. */
+const abroadSchema = z.object({
+  document: z.enum(["nicop", "poc"]),
+  country: z.coerce.number().int().min(1).max(999).refine((c) => c !== 586, "choose the country you live in"),
 });
 
 /**
@@ -75,6 +81,13 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
     return { fields: Object.fromEntries(first) };
   }
   const { fullName, cnic, phone } = parsed.data;
+  const abroad = formData.get("abroad") === "on";
+  let residency: { status: "non_resident"; document: "nicop" | "poc"; country: number } | undefined;
+  if (abroad) {
+    const a = abroadSchema.safeParse({ document: formData.get("document"), country: formData.get("country") });
+    if (!a.success) return { fields: { country: "choose the country you live in" } };
+    residency = { status: "non_resident", ...a.data };
+  }
 
   const pool = await db();
   const cnicHmac = hmac("cnic", cnic.replaceAll("-", ""));
@@ -91,9 +104,11 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
   }
 
   // 2. KYC by the KYC service (mock NADRA: CNIC ending 0 = not found, 8 = name mismatch, 9 = down).
-  const kyc = await kycOnboard({ cnic, fullName, livenessSessionId: `web-${randomUUID()}`, wallet });
+  const kyc = await kycOnboard({ cnic, fullName, livenessSessionId: `web-${randomUUID()}`, wallet, ...(residency ? { residency } : {}) });
   if (!kyc.ok) return { error: kyc.error === "duplicate" ? "duplicate" : kyc.error === "invalid" ? "generic" : "kycDown" };
-  if (kyc.status !== "verified") {
+  // S-08 RD-2: a non-resident whose checks all passed waits for two compliance officers (status review).
+  const waiting = residency !== undefined && kyc.status === "review" && kyc.checks.every((c) => c.outcome === "pass");
+  if (kyc.status !== "verified" && !waiting) {
     const nadra = kyc.checks.find((c) => c.kind === "nadra");
     if (nadra?.outcome === "fail") return { error: "nadra" };
     if (nadra?.outcome === "error") return { error: "kycDown" };
@@ -106,12 +121,15 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
     id = await tx(async (c) => {
       const { rows } = await c.query<{ id: string }>(
         `INSERT INTO webdemo.investors (display_name, cnic_last4, cnic_hmac, phone_last3, wallet_address, kyc_status, kyc_note, kyc_subject)
-         VALUES ($1, $2, $3, $4, $5, 'pending', 'KYC service verified (mock providers); registering on chain', $6) RETURNING id`,
-        [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), wallet, kyc.subjectId],
+         VALUES ($1, $2, $3, $4, $5, 'pending', $7, $6) RETURNING id`,
+        [fullName, cnic.replaceAll("-", "").slice(-4), cnicHmac, phone.replaceAll("-", "").slice(-3), wallet, kyc.subjectId,
+          waiting ? "being reviewed before registration on chain" : "KYC service verified (mock providers); registering on chain"],
       );
       const newId = rows[0]?.id;
       if (!newId) throw new Error("insert failed");
-      await startOnboarding(c, newId, wallet);
+      // Migration 0057 WR-1: the follower starts the on-chain onboarding once the review is approved.
+      if (waiting) await c.query("UPDATE webdemo.investors SET onboard_step = 'waiting' WHERE id = $1", [newId]);
+      else await startOnboarding(c, newId, wallet);
       return newId;
     });
   } catch (e) {

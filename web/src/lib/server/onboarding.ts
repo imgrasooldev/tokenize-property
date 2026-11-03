@@ -64,8 +64,30 @@ async function retryOrFail(p: Pending, what: string, again: (c: pg.ClientBase, a
   });
 }
 
+/**
+ * Spec S-08 (migration 0057 WR-1): a non-resident's sign-up waits until two compliance officers
+ * approved the residency review; then the on-chain onboarding starts like any other sign-up.
+ */
+async function startWaiting(): Promise<void> {
+  const pool = await db();
+  const { rows } = await pool.query<{ investor_id: string }>("SELECT investor_id FROM webnotice.waiting_onboard()");
+  for (const r of rows) {
+    await tx(async (c) => {
+      const { rows: w } = await c.query<{ wallet_address: Address }>(
+        "SELECT wallet_address FROM webdemo.investors WHERE id = $1 AND onboard_step = 'waiting' FOR UPDATE",
+        [r.investor_id],
+      );
+      const wallet = w[0]?.wallet_address;
+      if (!wallet) return;
+      await startOnboarding(c, r.investor_id, wallet);
+      await c.query("UPDATE webdemo.investors SET kyc_note = 'KYC service verified (mock providers); registering on chain' WHERE id = $1", [r.investor_id]);
+    });
+  }
+}
+
 /** One pass over every investor still being onboarded (called by the settlement follower). */
 export async function advanceOnboarding(): Promise<void> {
+  await startWaiting();
   const pool = await db();
   const { rows } = await pool.query<Pending>(
     "SELECT id, wallet_address, identity_address, onboard_step, onboard_attempt FROM webdemo.investors WHERE onboard_step IN ('identity', 'claims', 'register') ORDER BY created_at LIMIT 100",

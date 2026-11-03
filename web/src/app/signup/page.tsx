@@ -1,11 +1,12 @@
 import { PublicPage } from "@/components/Shell";
 import { SignUpForm } from "@/components/SignUpForm";
+import { rdaDict } from "@/lib/i18n-rda";
 import { getDict } from "@/lib/server/lang";
 
 export const dynamic = "force-dynamic";
 
 export default async function SignUpPage() {
-  const { t } = await getDict();
+  const { lang, t } = await getDict();
   const steps = [t.suStep1, t.suStep2, t.suStep3, t.suStep4];
   return (
     <PublicPage active="none" minimal>
@@ -22,7 +23,7 @@ export default async function SignUpPage() {
           <div className="glass pad-lg">
             <h1 className="page-title">{t.signupTitle}</h1>
             <p className="mu lead-sm">{t.signupBody}</p>
-            <SignUpForm t={t} />
+            <SignUpForm t={t} r={rdaDict(lang)} lang={lang} />
           </div>
           <div className="stack">
             <section className="panel">

@@ -24,6 +24,7 @@ export function PayoutForm({ l, hasAccount }: { l: CatalogDict; hasAccount: bool
     title_mismatch: l.err_title_mismatch,
     not_verified: l.err_not_verified,
     in_use: l.err_in_use,
+    not_rda: l.err_not_rda,
     unavailable: l.err_unavailable,
   };
   return (

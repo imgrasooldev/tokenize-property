@@ -1,11 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { signUp, type SignUpState } from "@/app/actions/auth";
-import type { Dict } from "@/lib/i18n";
+import type { Dict, Lang } from "@/lib/i18n";
+import { COUNTRIES, type RdaDict } from "@/lib/i18n-rda";
 
-export function SignUpForm({ t }: { t: Dict }) {
+export function SignUpForm({ t, r, lang }: { t: Dict; r: RdaDict; lang: Lang }) {
   const [state, action, pending] = useActionState<SignUpState, FormData>(signUp, {});
+  // Controlled: React resets uncontrolled fields after a server action (gotcha of T-030).
+  const [abroad, setAbroad] = useState(false);
   const errorText =
     state.error === "nadra"
       ? t.errNadra
@@ -59,6 +62,43 @@ export function SignUpForm({ t }: { t: Dict }) {
         </span>
         {fieldError("phone")}
       </label>
+      <label className="check">
+        <input type="checkbox" name="abroad" checked={abroad} onChange={(e) => {
+          setAbroad(e.target.checked);
+        }} />
+        <span>{r.abroad}</span>
+      </label>
+      {abroad && (
+        <fieldset className="form" data-testid="abroad-fields">
+          <p className="hint">{r.abroadHint}</p>
+          <label>
+            {r.document}
+            <select name="document" defaultValue="nicop">
+              <option value="nicop">{r.nicop}</option>
+              <option value="poc">{r.poc}</option>
+            </select>
+            <span className="hint">{r.documentHint}</span>
+          </label>
+          <label>
+            {r.country}
+            <select name="country" defaultValue="" aria-describedby="country-error">
+              <option value="" disabled>
+                {r.countryPick}
+              </option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {lang === "ur" ? c.ur : c.en}
+                </option>
+              ))}
+            </select>
+            {state.fields?.country ? (
+              <span className="field-error" id="country-error">
+                {r.errCountry}
+              </span>
+            ) : null}
+          </label>
+        </fieldset>
+      )}
       <div className="selfie" aria-hidden="true">
         <div className="scan" />
         <svg width="90" height="110" viewBox="0 0 90 110" fill="none" stroke="#22E3F0" strokeOpacity=".7" strokeWidth="1.5">

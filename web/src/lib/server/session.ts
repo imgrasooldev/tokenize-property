@@ -129,6 +129,26 @@ export async function currentSession(): Promise<SessionInfo | null> {
  * compliance looks at the account (never why), 'expired' when the verification lapsed, else null.
  * Fails closed to null: the database still refuses every action that needs a verified investor.
  */
+/** Spec S-08: the signed-in investor's own residency and payout account kind (webnotice.residency, migration 0056). */
+export interface AccountResidency {
+  status: "resident" | "non_resident";
+  document: "cnic" | "nicop" | "poc";
+  country: number | null;
+  payoutKind: "domestic" | "rda" | null;
+}
+
+export const accountResidency = cache(async (): Promise<AccountResidency | null> => {
+  const session = await currentSession();
+  if (!session) return null;
+  try {
+    const { rows } = await (await db()).query<{ r: AccountResidency | null }>("SELECT webnotice.residency($1) AS r", [session.hash]);
+    return rows[0]?.r ?? null;
+  } catch (e) {
+    logError("account residency", e);
+    return null;
+  }
+});
+
 export const accountNotice = cache(async (): Promise<"review" | "expired" | null> => {
   const session = await currentSession();
   if (!session) return null;

@@ -4,7 +4,7 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 
 ## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
 
-- Part 1 on `main`: residency in KYC, two-officer residency review (`/compliance/residency`), RDA-only payout accounts, money in/out only through the RDA. Part 2 (website sign-up, account, invest wording) and a Playwright spec are next. Open for the owner/legal: SBP/SECP permission for RDA funds, partner bank, non-resident WHT, FCY RDAs, POC holders (spec S-08 section 3).
+- Part 1 on `main`: residency in KYC, two-officer residency review (`/compliance/residency`), RDA-only payout accounts, money in/out only through the RDA. Part 2 (migration 0057): website sign-up abroad, account residency, RDA wording, onboarding waits for the review; Playwright `web/e2e/rda.spec.ts`. Not built: an admin Playwright spec for `/compliance/residency` (DB and HTTP tests only). Open for the owner/legal: SBP/SECP permission for RDA funds, partner bank, non-resident WHT, FCY RDAs, POC holders (spec S-08 section 3).
 
 ## Compliance follow-ups (2026-11-03/04, on `main`)
 
