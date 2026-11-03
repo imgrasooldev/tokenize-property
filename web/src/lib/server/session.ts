@@ -124,6 +124,24 @@ export async function currentSession(): Promise<SessionInfo | null> {
   return token ? lookup(token) : null;
 }
 
+/**
+ * The signed-in investor's own review state in one neutral word (migration 0053): 'review' while
+ * compliance looks at the account (never why), 'expired' when the verification lapsed, else null.
+ * Fails closed to null: the database still refuses every action that needs a verified investor.
+ */
+export const accountNotice = cache(async (): Promise<"review" | "expired" | null> => {
+  const session = await currentSession();
+  if (!session) return null;
+  try {
+    const { rows } = await (await db()).query<{ n: string | null }>("SELECT webnotice.account_notice($1) AS n", [session.hash]);
+    const n = rows[0]?.n;
+    return n === "review" || n === "expired" ? n : null;
+  } catch (e) {
+    logError("account notice", e);
+    return null;
+  }
+});
+
 /** The signed-in investor id, or null if the cookie is missing, unknown, ended or past a limit. */
 export async function currentInvestorId(): Promise<string | null> {
   return (await currentSession())?.investorId ?? null;

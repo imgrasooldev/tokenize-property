@@ -5,14 +5,14 @@ import { randomUUID } from "node:crypto";
 import { OfferingState, offeringTitle, RaiseProgress } from "@/components/offering/OfferingParts";
 import { ReserveForm } from "@/components/offering/ReserveForm";
 import { PublicPage } from "@/components/Shell";
-import { formatNumber } from "@/lib/i18n";
+import { formatNumber, type Dict } from "@/lib/i18n";
 import { fill } from "@/lib/i18n-verify";
 import { label, offeringDict, type OfferingDict } from "@/lib/i18n-offering";
 import { canCancel, formatPaisa, formatPkt, isUuid } from "@/lib/offering-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { getDict } from "@/lib/server/lang";
 import { disclosures, mySubscriptions, offeringById, type PublicOffering } from "@/lib/server/offerings";
-import { currentInvestorId } from "@/lib/server/session";
+import { accountNotice, currentInvestorId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Offering · Property Token" };
@@ -27,10 +27,11 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
   const o = await offeringById(id);
   const discl = o ? await disclosures(o.offeringId) : [];
   if (!o) notFound();
-  const { lang } = await getDict();
+  const { lang, t } = await getDict();
   const l = offeringDict(lang);
   const investorId = await currentInvestorId();
   const investor = investorId ? await investorById(investorId) : null;
+  const notice = investor ? await accountNotice() : null;
   const open = investor ? (await mySubscriptions(investor)).find((s) => s.offeringId === o.offeringId && (canCancel(s.state) || s.state === "initiated")) : undefined;
   const short = (h: string | null) => (h ? `${h.slice(0, 16)}…${h.slice(-8)}` : "—");
   const total = o.useOfProceeds.reduce((a, x) => a + x.paisa, 0n);
@@ -185,7 +186,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ id: s
           <aside className="stack sticky">
             <section className="panel" aria-labelledby="reserve-h">
               <h2 id="reserve-h">{l.reserveTitle}</h2>
-              <ReservePanel o={o} l={l} lang={lang} investor={investor} openSubscription={open?.subscriptionId ?? null} />
+              <ReservePanel o={o} l={l} lang={lang} investor={investor} openSubscription={open?.subscriptionId ?? null} notice={notice} notices={t} />
             </section>
           </aside>
         </div>
@@ -200,12 +201,16 @@ function ReservePanel({
   lang,
   investor,
   openSubscription,
+  notice,
+  notices,
 }: {
   o: PublicOffering;
   l: OfferingDict;
   lang: "en" | "ur";
   investor: InvestorRow | null;
   openSubscription: string | null;
+  notice: "review" | "expired" | null;
+  notices: Pick<Dict, "accountReview" | "kycExpiredNote">;
 }) {
   if (o.state !== "live") return <p className="note">{l.notOpenNow}</p>;
   if (!investor)
@@ -215,6 +220,9 @@ function ReservePanel({
       </Link>
     );
   // KYC gate for the message only; the database refuses anyone not verified (migration 0018 WO-2).
+  // Under review (0053): the same neutral words as everywhere, never the reason.
+  if (notice === "review") return <p className="note">{notices.accountReview}</p>;
+  if (notice === "expired") return <p className="note">{notices.kycExpiredNote}</p>;
   if (investor.kyc_status !== "verified") return <p className="note">{l.kycNeeded}</p>;
   if (!investor.kyc_subject) return <p className="note">{l.kycRecordMissing}</p>;
   if (openSubscription)

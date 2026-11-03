@@ -13,7 +13,7 @@ import { getDict } from "@/lib/server/lang";
 import { unreadCount } from "@/lib/server/notifications";
 import { complaintsDict } from "@/lib/i18n-complaints";
 import { votesDict } from "@/lib/i18n-votes";
-import { currentInvestorId, currentSession } from "@/lib/server/session";
+import { accountNotice, currentInvestorId, currentSession } from "@/lib/server/session";
 import { SearchShortcut } from "./analyst/SearchShortcut";
 import { LangToggle } from "./LangToggle";
 import { BlockHeight, ChainRail, type RailLabels } from "./live/Live";
@@ -324,6 +324,7 @@ export async function PortalShell({
   children: ReactNode;
 }) {
   const { lang, t, investor } = await viewer();
+  const notice = investor ? await accountNotice() : null;
   const session = investor ? await currentSession() : null;
   const unread = session ? await unreadCount(session.hash) : 0;
   const items: { key: PortalKey; href: string; icon: string; label: string }[] = [
@@ -383,8 +384,8 @@ export async function PortalShell({
             </div>
             <div style={{ minInlineSize: 0 }}>
               <b className="who-name">{investor.display_name}</b>
-              <div className={investor.kyc_status === "verified" ? "up" : "am"} style={{ fontSize: 11.5 }}>
-                {investor.kyc_status === "verified" ? `✓ ${t.kycVerified}` : t.pending}
+              <div className={investor.kyc_status === "verified" && !notice ? "up" : "am"} style={{ fontSize: 11.5 }} data-testid="kyc-state">
+                {notice === "review" ? t.accountReviewShort : notice === "expired" ? t.kycExpiredShort : investor.kyc_status === "verified" ? `✓ ${t.kycVerified}` : t.pending}
               </div>
               <form action={logout}>
                 <button type="submit" className="linklike">

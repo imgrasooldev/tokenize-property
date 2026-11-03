@@ -17,7 +17,7 @@ import { maskedIban, payeeState, payoutAccounts } from "@/lib/server/payees";
 import { holdingOf, indexStatus, registeredOnChain } from "@/lib/server/readmodel";
 import { passkeyAvailability } from "@/lib/server/passkey-config";
 import { listPasskeys } from "@/lib/server/passkeys";
-import { currentSession, sessionExpiresAt } from "@/lib/server/session";
+import { accountNotice, currentSession, sessionExpiresAt } from "@/lib/server/session";
 import { PasskeyPanel } from "@/components/passkey/PasskeyPanel";
 import { passkeyDict } from "@/lib/i18n-passkey";
 
@@ -44,7 +44,9 @@ export default async function AccountPage() {
   ]);
   const sponsors = await sponsorOverview(session.hash);
   const now = Date.now();
-  const status = investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
+  const notice = await accountNotice();
+  const status =
+    notice === "review" ? t.accountReviewShort : notice === "expired" ? t.kycExpiredShort : investor.kyc_status === "verified" ? t.verified : investor.kyc_status === "rejected" ? t.rejected : t.pending;
   const chainSteps = [t.stepIdentity, t.stepClaims, t.stepRegistered];
   const steps = investor.persona ? chainSteps : [t.stepNadra, t.stepLiveness, ...chainSteps];
   // How many of the steps are done: KYC steps are done once the account exists (the KYC service
@@ -96,7 +98,12 @@ export default async function AccountPage() {
           <dl className="kv" style={{ marginBlockStart: 12 }}>
             <dt>{t.kycStatus}</dt>
             <dd>
-              <span className={`chip ${investor.kyc_status === "verified" ? "green" : "amber"}`}>{status}</span>
+              <span className={`chip ${investor.kyc_status === "verified" && !notice ? "green" : "amber"}`}>{status}</span>
+              {notice ? (
+                <p className="note" data-testid="account-notice">
+                  {notice === "review" ? t.accountReview : t.kycExpiredNote}
+                </p>
+              ) : null}
             </dd>
             <dt>{t.onChainVerified}</dt>
             <dd>
