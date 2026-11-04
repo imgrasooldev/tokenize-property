@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { render } from "@pt/notify";
+import { buildTree, rentLeaf } from "@pt/tax";
+import { keccak256, stringToBytes, type Address } from "viem";
 import type { CatalogueRepository, GrantRepository, InvestorRepository, OfferingRow } from "./repositories.ts";
 
 /**
@@ -169,6 +171,58 @@ export class InvestorService {
   async certificates(h: Buffer) {
     return {
       data: (await this.repo.certificates(h)).map((c) => ({ id: c.id, fiscal_year: c.fiscal_year, issued_at: c.issued_at.toISOString(), sha256: c.sha256, superseded_by: c.superseded_by })),
+    };
+  }
+
+  async distributions(h: Buffer, cursor: string | null, limit: number) {
+    const rows = (await this.repo.distributions(h)).map((d) => ({
+      token: d.token.toLowerCase(),
+      distribution_id: d.onchain_id,
+      period: d.period,
+      record_date: d.record_date,
+      status: d.status,
+      units: d.units,
+      gross: money(d.gross),
+      withheld: money(d.wht),
+      net: money(d.net),
+      statement_hash: d.statement_hash.toLowerCase(),
+      merkle_root: d.merkle_root.toLowerCase(),
+    }));
+    return page(rows, cursor, limit);
+  }
+
+  /**
+   * The investor's proof, built from the published statement's own entitlements (in statement order,
+   * as the reconciliation checks them); null when the investor has no paid line. The statement hash
+   * is compared with the chain's, and the rebuilt root with the root on chain.
+   */
+  async proof(h: Buffer, token: string, onchainId: string) {
+    const s = await this.repo.statement(h, token.toLowerCase(), onchainId);
+    if (!s) return null;
+    let entitlements: { wallet: string; netPaisa: string }[];
+    try {
+      const parsed = JSON.parse(s.statement) as { entitlements?: { wallet?: unknown; netPaisa?: unknown }[] };
+      entitlements = (parsed.entitlements ?? []).map((e) => ({ wallet: String(e.wallet).toLowerCase(), netPaisa: String(e.netPaisa) }));
+    } catch {
+      return null;
+    }
+    const index = entitlements.findIndex((e) => e.wallet === s.wallet);
+    const mine = entitlements.at(index);
+    if (index < 0 || !mine) return null;
+    const leaves = entitlements.map((e) => rentLeaf(e.wallet as Address, BigInt(e.netPaisa)));
+    const { root, proofs } = buildTree(leaves);
+    if (root.toLowerCase() !== s.merkle_root.toLowerCase()) throw new Error("the statement's entitlements do not rebuild the root on chain");
+    return {
+      token: token.toLowerCase(),
+      distribution_id: onchainId,
+      registry: s.registry.toLowerCase(),
+      wallet: s.wallet,
+      amount: money(mine.netPaisa),
+      leaf: leaves.at(index) ?? "0x",
+      proof: (proofs.at(index) ?? []).map((p) => p.toLowerCase()),
+      merkle_root: root.toLowerCase(),
+      statement_hash: s.statement_hash.toLowerCase(),
+      statement_matches: keccak256(stringToBytes(s.statement)) === s.statement_hash.toLowerCase(),
     };
   }
 

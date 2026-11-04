@@ -22,6 +22,9 @@ import 'package:property_token_app/features/offerings/presentation/offerings_pag
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
 import 'package:property_token_app/features/portfolio/presentation/portfolio_bloc.dart';
 import 'package:property_token_app/features/portfolio/presentation/portfolio_page.dart';
+import 'package:property_token_app/features/rent/domain/rent.dart';
+import 'package:property_token_app/features/rent/presentation/rent_bloc.dart';
+import 'package:property_token_app/features/rent/presentation/rent_page.dart';
 import 'package:property_token_app/features/settings/settings_cubit.dart';
 import 'package:property_token_app/l10n/gen/app_localizations.dart';
 
@@ -33,6 +36,7 @@ class AppRepositories {
     required this.portfolio,
     required this.inbox,
     required this.account,
+    required this.rent,
     this.api,
   });
 
@@ -41,6 +45,7 @@ class AppRepositories {
   final PortfolioRepository portfolio;
   final InboxRepository inbox;
   final AccountRepository account;
+  final RentRepository rent;
 
   /// The HTTP client, told the language for Accept-Language (absent in widget tests).
   final ApiClient? api;
@@ -82,6 +87,7 @@ class _PropertyTokenAppState extends State<PropertyTokenApp> {
         RepositoryProvider.value(value: r.portfolio),
         RepositoryProvider.value(value: r.inbox),
         RepositoryProvider.value(value: r.account),
+        RepositoryProvider.value(value: r.rent),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -140,6 +146,13 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
   },
   routes: [
     GoRoute(path: '/sign-in', builder: (_, _) => const SignInPage()),
+    GoRoute(
+      path: '/rent',
+      builder: (c, _) => BlocProvider(
+        create: (_) => RentBloc(c.read<RentRepository>())..add(const LoadRequested()),
+        child: const RentPage(),
+      ),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => _HomeShell(shell: shell),
       branches: [

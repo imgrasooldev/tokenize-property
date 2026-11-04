@@ -7,6 +7,7 @@ import 'package:property_token_app/features/auth/data/auth_repository_impl.dart'
 import 'package:property_token_app/features/inbox/data/inbox_repository_impl.dart';
 import 'package:property_token_app/features/offerings/data/offerings_repository_impl.dart';
 import 'package:property_token_app/features/portfolio/data/portfolio_repository_impl.dart';
+import 'package:property_token_app/features/rent/data/rent_repository_impl.dart';
 
 /// The API base URL comes from the build: `--dart-define=API_BASE_URL=https://.../v1`.
 /// The default is the demo server (plain HTTP, demo only: production needs TLS, ADR 0018).
@@ -24,6 +25,7 @@ void main() {
         portfolio: PortfolioRepositoryImpl(api),
         inbox: InboxRepositoryImpl(api),
         account: AccountRepositoryImpl(api),
+        rent: RentRepositoryImpl(api),
         api: api,
       ),
     ),

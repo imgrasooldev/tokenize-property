@@ -7,6 +7,7 @@ import 'package:property_token_app/features/auth/presentation/auth_bloc.dart';
 import 'package:property_token_app/features/inbox/domain/message.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
+import 'package:property_token_app/features/rent/domain/rent.dart';
 
 /// The whole app with in-memory repositories (the repository pattern's seam): sign-in with the
 /// device code, the four tabs, the theme switch and Urdu right-to-left.
@@ -82,6 +83,30 @@ class _FakeAccount implements AccountRepository {
   );
 }
 
+class _FakeRent implements RentRepository {
+  static const d = RentDistribution(
+    token: '0x1111111111111111111111111111111111111111',
+    distributionId: '7',
+    period: '2026-10',
+    status: 'finalized',
+    units: '20',
+    grossPaisa: '100000',
+    withheldPaisa: '15000',
+    netPaisa: '85000',
+  );
+  @override
+  Future<List<RentDistribution>> distributions() async => [d];
+  @override
+  Future<RentProof> proof(RentDistribution d) async => const RentProof(
+    registry: '0x2222222222222222222222222222222222222222',
+    leaf: '0xaa',
+    proof: ['0xbb'],
+    merkleRoot: '0xcc',
+    statementMatches: true,
+    netPaisa: '85000',
+  );
+}
+
 Widget _app({required bool signedIn}) {
   final auth = _FakeAuth(signedIn: signedIn);
   return PropertyTokenApp(
@@ -92,6 +117,7 @@ Widget _app({required bool signedIn}) {
       portfolio: _FakePortfolio(),
       inbox: _FakeInbox(),
       account: _FakeAccount(),
+      rent: _FakeRent(),
     ),
   );
 }
@@ -113,6 +139,17 @@ void main() {
     await tester.tap(find.text('Portfolio').last);
     await tester.pumpAndSettle();
     expect(find.text('20 units'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open-rent')));
+    await tester.pumpAndSettle();
+    expect(find.text('2026-10 · Rs 850.00'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('rent-7')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('proof-result')), findsOneWidget);
+    expect(find.text('Your share is in the statement recorded on the blockchain.'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Inbox').last);
     await tester.pumpAndSettle();
     expect(find.text('Your verification status changed'), findsOneWidget);

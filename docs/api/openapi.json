@@ -3,7 +3,7 @@
   "info": {
     "title": "Property Token public API",
     "version": "1.0.0",
-    "summary": "Read-only API for the investor mobile app (phase 1, ADR 0018). Rent distributions with Merkle proofs follow in phase 1b.",
+    "summary": "Read-only API for the investor mobile app (phases 1 and 1b, ADR 0018).",
     "description": "Contract first: this document is the source of truth; the service validates every response\nagainst it in its tests. Errors are RFC 9457 Problem Details; OAuth endpoints answer with the\nRFC 6749 error object. Timestamps are RFC 3339 in UTC. Money is an integer amount of minor units\nas a string with an ISO 4217 currency. Investor resources are never cached by intermediaries.\n",
     "license": {
       "name": "Proprietary"
@@ -691,6 +691,138 @@
           }
         }
       }
+    },
+    "/me/distributions": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "listDistributions",
+        "summary": "Rent distributions the investor takes part in, newest first",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of distributions",
+            "headers": {
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Distribution"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/distributions/{token}/{distributionId}/proof": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getDistributionProof",
+        "summary": "The investor's Merkle proof, from the statement whose hash is recorded on chain; verifiable with DistributionRegistry.verify",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "name": "distributionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,30}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The proof",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DistributionProof"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1319,6 +1451,127 @@
           },
           "read": {
             "type": "boolean"
+          }
+        }
+      },
+      "Distribution": {
+        "type": "object",
+        "required": [
+          "token",
+          "distribution_id",
+          "period",
+          "record_date",
+          "status",
+          "units",
+          "gross",
+          "withheld",
+          "net",
+          "statement_hash",
+          "merkle_root"
+        ],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "distribution_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "The id in the DistributionRegistry"
+          },
+          "period": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "record_date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "finalized",
+              "paid"
+            ]
+          },
+          "units": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "gross": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "withheld": {
+            "$ref": "#/components/schemas/Money",
+            "description": "Withholding tax (FBR)"
+          },
+          "net": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "statement_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "merkle_root": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        }
+      },
+      "DistributionProof": {
+        "type": "object",
+        "required": [
+          "token",
+          "distribution_id",
+          "registry",
+          "wallet",
+          "amount",
+          "leaf",
+          "proof",
+          "merkle_root",
+          "statement_hash",
+          "statement_matches"
+        ],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "distribution_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "registry": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money",
+            "description": "The net entitlement in the leaf"
+          },
+          "leaf": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "description": "keccak256(bytes.concat(keccak256(abi.encode(wallet, amountPaisa))))"
+          },
+          "proof": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{64}$"
+            }
+          },
+          "merkle_root": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "statement_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "statement_matches": {
+            "type": "boolean",
+            "description": "keccak256 of the published statement equals the statement hash on chain"
           }
         }
       }

@@ -18,16 +18,43 @@
   "offeringsEmpty": "No offering is open right now.",
   "pricePerUnit": "Price per unit",
   "unitsAvailable": "{available} of {cap} units available",
-  "@unitsAvailable": { "placeholders": { "available": { "type": "String" }, "cap": { "type": "String" } } },
+  "@unitsAvailable": {
+    "placeholders": {
+      "available": {
+        "type": "String"
+      },
+      "cap": {
+        "type": "String"
+      }
+    }
+  },
   "stateLabel": "{state, select, live{Open} ready{Opening soon} closing{Closing} funded{Funded} completed{Completed} failed{Did not reach its minimum} other{{state}}}",
-  "@stateLabel": { "placeholders": { "state": { "type": "String" } } },
+  "@stateLabel": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "portfolioTitle": "Portfolio",
   "holdings": "Holdings",
   "noHoldings": "You hold no tokens yet.",
   "units": "{n} units",
-  "@units": { "placeholders": { "n": { "type": "String" } } },
+  "@units": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "frozenUnits": "{n} frozen",
-  "@frozenUnits": { "placeholders": { "n": { "type": "String" } } },
+  "@frozenUnits": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "subscriptions": "Subscriptions",
   "noSubscriptions": "No subscription yet.",
   "inboxTitle": "Inbox",
@@ -36,10 +63,22 @@
   "accountTitle": "Account",
   "kycStatus": "Verification",
   "kycState": "{state, select, verified{Verified} pending{Pending} review{Being reviewed} expired{Expired, verify again} rejected{Not verified} other{{state}}}",
-  "@kycState": { "placeholders": { "state": { "type": "String" } } },
+  "@kycState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "supportReference": "Support reference",
   "livesAbroad": "Lives outside Pakistan ({document})",
-  "@livesAbroad": { "placeholders": { "document": { "type": "String" } } },
+  "@livesAbroad": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
   "theme": "Appearance",
   "themeSystem": "Like the phone",
   "themeDark": "Night",
@@ -48,5 +87,30 @@
   "signOut": "Sign out",
   "retry": "Try again",
   "errorGeneric": "Something went wrong.",
-  "readOnlyNote": "This app shows your account. Investing stays on the website for now."
+  "readOnlyNote": "This app shows your account. Investing stays on the website for now.",
+  "rentTitle": "Rent",
+  "rentEmpty": "No rent distribution yet.",
+  "rentGross": "Gross",
+  "rentWithheld": "Tax withheld",
+  "rentNet": "Your rent",
+  "rentStatus": "{status, select, published{Published, objection window open} finalized{Finalized} paid{Paid to your account} other{{status}}}",
+  "@rentStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "proofOk": "Your share is in the statement recorded on the blockchain.",
+  "proofMismatch": "The statement does not match the blockchain. Contact support.",
+  "proofSteps": "Merkle proof: {n} steps",
+  "@proofSteps": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "proofHow": "Anyone can check this with DistributionRegistry.verify on the blockchain, or on the website's /verify page.",
+  "openRent": "Rent and proofs"
 }

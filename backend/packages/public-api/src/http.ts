@@ -188,6 +188,25 @@ export function createApiServer(deps: ApiDeps): Server {
         return { status: 200, body, cache: "private, no-store", link: nextLink(url, body.next_cursor) };
       },
     ],
+    [
+      "GET",
+      /^\/v1\/me\/distributions$/,
+      async (req, url) => {
+        const h = await signedIn(req);
+        const { cursor, limit } = pageParams(url);
+        const body = await deps.investors.distributions(h, cursor, limit);
+        return { status: 200, body, cache: "private, no-store", link: nextLink(url, body.next_cursor) };
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/distributions\/(0x[0-9a-f]{40})\/([0-9]{1,30})\/proof$/,
+      async (req, _url, [token = "", id = ""]) => {
+        const body = await deps.investors.proof(await signedIn(req), token, id);
+        if (!body) throw new Problem(404, "not_found", "No entitlement of yours in this distribution");
+        return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
     ["GET", /^\/v1\/me\/tax-certificates$/, async (req) => ({ status: 200, body: await deps.investors.certificates(await signedIn(req)), cache: "private, no-store" })],
     [
       "GET",

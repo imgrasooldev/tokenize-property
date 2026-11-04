@@ -91,6 +91,28 @@ export interface NotificationRow {
   body: string | null;
 }
 
+export interface DistributionRow {
+  token: string;
+  onchain_id: string;
+  period: string;
+  record_date: string;
+  status: "published" | "finalized" | "paid";
+  units: string;
+  gross: string;
+  wht: string;
+  net: string;
+  statement_hash: string;
+  merkle_root: string;
+}
+
+export interface StatementRow {
+  wallet: string;
+  registry: string;
+  statement: string;
+  statement_hash: string;
+  merkle_root: string;
+}
+
 /** Every method takes the SHA-256 of the access token; the database checks it and scopes the data. */
 export interface InvestorRepository {
   investorOf(accessHash: Buffer): Promise<string | null>;
@@ -99,6 +121,8 @@ export interface InvestorRepository {
   subscriptions(accessHash: Buffer): Promise<SubscriptionRow[]>;
   certificates(accessHash: Buffer): Promise<CertificateRow[]>;
   notifications(accessHash: Buffer, locale: "en" | "ur", before: bigint | null, limit: number): Promise<NotificationRow[]>;
+  distributions(accessHash: Buffer): Promise<DistributionRow[]>;
+  statement(accessHash: Buffer, token: string, onchainId: string): Promise<StatementRow | null>;
 }
 
 export interface Repositories {
@@ -146,6 +170,15 @@ export function pgRepositories(db: pg.Pool): Repositories {
             limit,
           ])
         ).rows,
+      distributions: async (h) =>
+        (
+          await db.query<DistributionRow>(
+            "SELECT token, onchain_id, period, to_char(record_date, 'YYYY-MM-DD') AS record_date, status, units, gross::text, wht::text, net::text, statement_hash, merkle_root FROM papi.distributions($1)",
+            [h],
+          )
+        ).rows,
+      statement: async (h, token, onchainId) =>
+        (await one<StatementRow>("SELECT wallet, registry, statement, statement_hash, merkle_root FROM papi.distribution_statement($1, $2, $3)", [h, token, onchainId])) ?? null,
     },
   };
 }

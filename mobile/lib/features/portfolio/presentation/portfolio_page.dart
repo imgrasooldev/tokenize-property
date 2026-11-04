@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:property_token_app/core/bloc/loader_view.dart';
 import 'package:property_token_app/core/format/money.dart';
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
@@ -18,6 +19,13 @@ class PortfolioPage extends StatelessWidget {
         builder: (context, p) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            FilledButton.tonalIcon(
+              key: const Key('open-rent'),
+              icon: const Icon(Icons.receipt_long_rounded),
+              label: Text(l.openRent),
+              onPressed: () => context.push('/rent'),
+            ),
+            const SizedBox(height: 16),
             Text(l.holdings, style: Theme.of(context).textTheme.titleMedium),
             if (p.holdings.isEmpty)
               Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(l.noHoldings)),

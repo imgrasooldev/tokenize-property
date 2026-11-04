@@ -5,6 +5,8 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../../db/src/migrate.ts";
 import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
+import { buildTree, processProof, rentLeaf } from "@pt/tax";
+import { keccak256, stringToBytes, type Address } from "viem";
 import { createApiServer } from "../src/http.ts";
 import { pgRepositories } from "../src/repositories.ts";
 import { AuthService, CatalogueService, InvestorService } from "../src/services.ts";
@@ -174,6 +176,57 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/oauth/revoke", "/oauth/revoke", formPost({ token: "nope", client_id: "pt-mobile" }))).status).toBe(200);
     const audit = await admin.query<{ action: string }>("SELECT DISTINCT action FROM webauth.audit WHERE action LIKE 'device.%'");
     expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(["device.approved", "device.linked", "device.token_reuse", "device.revoked"]));
+  });
+
+  it("phase 1b: the investor's distributions and a Merkle proof that rebuilds the root on chain", async () => {
+    const who = await investor();
+    const t = await signIn(who);
+    const wallet = (await admin.query<{ w: string }>("SELECT lower(wallet_address) AS w FROM webdemo.investors WHERE id = $1", [who.id])).rows[0]?.w ?? "";
+    const other = `0x${"9".repeat(40)}`;
+    const token = `0x${randomBytes(20).toString("hex")}`;
+    const registry = `0x${randomBytes(20).toString("hex")}`;
+    // Two entitlements in statement order; WHT 15 % (rate seeded by 0021).
+    const ents = [{ wallet, netPaisa: "850" }, { wallet: other, netPaisa: "425" }].sort((a, b) => (a.wallet < b.wallet ? -1 : 1));
+    const statement = JSON.stringify({ kind: "pt-rent-statement-v2", entitlements: ents.map((e) => ({ ...e, units: "1" })) });
+    const statementHash = keccak256(stringToBytes(statement));
+    const { root } = buildTree(ents.map((e) => rentLeaf(e.wallet as Address, BigInt(e.netPaisa))));
+    const rate = (await admin.query<{ id: string }>("SELECT id FROM tax.rates WHERE income_type = 'reit_dividend' AND status = 'filer' AND state = 'active' LIMIT 1")).rows[0]?.id;
+    await admin.query("SET session_replication_role = replica"); // test only: a calculation as the S-03 pipeline leaves it
+    const d = await admin.query<{ id: string }>(
+      `INSERT INTO ops.distributions (token, period, record_date, record_block, income_type, collected, expenses, fees, reserve_contribution, reserve_release,
+         distributable_gross, holders, total_units, sum_gross, sum_wht, sum_net, flagged_lines, placeholder_lines, status, calculated_by,
+         merkle_root, statement, statement_hash, tax_schedule, tax_schedule_hash, attached_by, attached_at)
+       VALUES ($1, '2026-10', '2026-10-31', 1, 'reit_dividend', 1500, 0, 0, 0, 0, 1500, 2, 2, 1500, 225, 1275, 0, 0, 'attached', 'ops:a',
+         $2, $3, $4, '{}', $5, 'ops:b', now()) RETURNING id`,
+      [token, root, statement, statementHash, keccak256(stringToBytes("{}"))],
+    );
+    for (const [w, gross, wht, net] of [[wallet, 1000, 150, 850], [other, 500, 75, 425]] as const) {
+      await admin.query(
+        `INSERT INTO ops.distribution_lines (distribution_id, wallet, units, gross, filer_status, flagged, rate_id, rate_ppm, placeholder_rate, wht, net)
+         VALUES ($1, $2, 1, $3, 'filer', false, $4, 150000, true, $5, $6)`,
+        [d.rows[0]?.id, w, gross, rate, wht, net],
+      );
+    }
+    await admin.query(
+      `INSERT INTO chain.distributions (registry, id, token, record_block, merkle_root, total_paisa, statement_hash, status, published_block, updated_block)
+       VALUES ($1, 7, $2, 1, $3, 1275, $4, 'finalized', 2, 3)`,
+      [registry, token, root, statementHash],
+    );
+    await admin.query("SET session_replication_role = DEFAULT");
+
+    const list = (await call("/me/distributions", "/me/distributions", bearer(t.access_token))).body as { data: { distribution_id: string; net: { amount: string } }[] };
+    expect(list.data).toEqual([expect.objectContaining({ distribution_id: "7", status: "finalized", period: "2026-10", net: { amount: "850", currency: "PKR" } })]);
+    const proof = (await call("/me/distributions/{token}/{distributionId}/proof", `/me/distributions/${token}/7/proof`, bearer(t.access_token))).body as {
+      leaf: string; proof: string[]; merkle_root: string; statement_matches: boolean; amount: { amount: string };
+    };
+    expect(proof).toMatchObject({ merkle_root: root, statement_matches: true, amount: { amount: "850" } });
+    // The proof leads from the investor's leaf to the root on chain.
+    expect(processProof(proof.leaf as `0x${string}`, proof.proof as `0x${string}`[])).toBe(root);
+    expect(proof.proof).toHaveLength(1);
+    // Another investor's distribution, or one without a line of theirs, is "not found".
+    expect((await call("/me/distributions/{token}/{distributionId}/proof", `/me/distributions/${token}/8/proof`, bearer(t.access_token))).status).toBe(404);
+    const stranger = await signIn(await investor());
+    expect((await call("/me/distributions/{token}/{distributionId}/proof", `/me/distributions/${token}/7/proof`, bearer(stranger.access_token))).status).toBe(404);
   });
 
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {

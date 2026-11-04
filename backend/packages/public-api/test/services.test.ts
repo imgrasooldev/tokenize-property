@@ -71,6 +71,8 @@ describe("InvestorService", () => {
       holdings: () => Promise.resolve([]),
       subscriptions: () => Promise.resolve([]),
       certificates: () => Promise.resolve([]),
+      distributions: () => Promise.resolve([]),
+      statement: () => Promise.resolve(null),
       notifications: () => Promise.resolve([{ id: "9", kind: "unknown.kind", params: { cnic: "should-not-appear" }, created_at: new Date(0), read: false, subject: "x", body: "y" }]),
     };
     const s = new InvestorService(repo);
