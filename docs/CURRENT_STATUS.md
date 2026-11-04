@@ -4,7 +4,7 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 
 ## Public API v1 + mobile app (2026-11-04, ADR 0018)
 
-- Phase 1 API on `main` (migration 0058, `pt-public-api`, `/v1/`, website `/device`). Next: the Flutter app in `mobile/` (BLoC + repository, Night Glass dark + Daylight-style light, EN/UR). Phase 1b: rent distributions with proofs. Phase 2: invest/market writes with Idempotency-Key, passkey step-up in the app, DPoP.
+- Phase 1 API on `main` and live on the demo (`http://51.79.144.40/v1/status`); website `/device`. Flutter app `mobile/` phase 1 (read-only, BLoC + repository, Night Glass dark + Daylight-style light, EN/UR); not yet run on a phone or emulator (analyze and 15 tests only; no APK built on this laptop). Phase 1b: rent distributions with proofs. Phase 2: invest/market writes with Idempotency-Key, passkey step-up in the app, DPoP.
 
 ## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
 

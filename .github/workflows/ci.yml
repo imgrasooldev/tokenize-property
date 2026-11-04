@@ -384,6 +384,31 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # ADR 0018: the Flutter investor app (BLoC + repository pattern): analyzer and all tests.
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.5
+          channel: stable
+          cache: true
+      - name: Dependencies (exact versions from pubspec.lock)
+        run: flutter pub get --enforce-lockfile
+      - name: Generated translations (lib/l10n/gen from the ARB files)
+        run: flutter gen-l10n
+      - name: Formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyzer (very_good_analysis, strict)
+        run: flutter analyze
+      - name: Tests (blocs, repositories, widgets)
+        run: flutter test
+
   backend:
     runs-on: ubuntu-latest
     services:
