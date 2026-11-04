@@ -87,7 +87,7 @@
   "signOut": "Sign out",
   "retry": "Try again",
   "errorGeneric": "Something went wrong.",
-  "readOnlyNote": "This app shows your account. Investing stays on the website for now.",
+  "readOnlyNote": "Investing: ask here, then confirm on the website (documents and passkey there).",
   "rentTitle": "Rent",
   "rentEmpty": "No rent distribution yet.",
   "rentGross": "Gross",
@@ -112,5 +112,57 @@
     }
   },
   "proofHow": "Anyone can check this with DistributionRegistry.verify on the blockchain, or on the website's /verify page.",
-  "openRent": "Rent and proofs"
+  "openRent": "Rent and proofs",
+  "investTitle": "Invest",
+  "investButton": "Invest",
+  "investUnits": "Units",
+  "investYouPay": "You pay {amount}",
+  "@investYouPay": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "investAsk": "Ask to reserve",
+  "investHow": "You confirm on the website: sign in there, accept the documents and confirm. Nothing is reserved until you do.",
+  "investWaiting": "Waiting for you to confirm on the website",
+  "investCode": "Code",
+  "investOpen": "Open this address in your browser, signed in:",
+  "investCopy": "Copy link",
+  "investCopied": "Link copied",
+  "investConfirmBefore": "Confirm before {time}",
+  "@investConfirmBefore": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "investConfirmed": "Reserved. Pay this from your own bank account:",
+  "investPayCode": "Payment code",
+  "investPayTo": "Pay to",
+  "investPayBefore": "Pay before {time}",
+  "@investPayBefore": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "investAmount": "Amount",
+  "investPayNote": "Pay by Raast from an account in your own name. Units are issued after the trustee receives the money.",
+  "investEnded": "This request was {status}. Nothing was reserved.",
+  "@investEnded": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "investAgain": "Start again",
+  "investErr_invalid_units": "Enter a whole number of units.",
+  "investErr_offering_not_open": "This offering is not open for reservations.",
+  "investErr_too_many_pending": "Confirm or let a waiting request expire first.",
+  "investErr_other": "Could not send the request. Please try again."
 }

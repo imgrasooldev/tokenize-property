@@ -80,6 +80,37 @@ class ApiClient {
     return body;
   }
 
+  /// A signed-in JSON POST that creates something (phase 2a). The same
+  /// [idempotencyKey] makes a retry return the first answer instead of a
+  /// second request (IETF Idempotency-Key header); 200 and 201 are both success.
+  Future<Map<String, dynamic>> postJson(String path, Map<String, Object?> body, {required String idempotencyKey}) async {
+    Future<http.Response> send() async {
+      final access = (await tokens.read())?.accessToken;
+      try {
+        return await _http.post(
+          _uri(path),
+          headers: {
+            ..._headers,
+            'content-type': 'application/json',
+            'idempotency-key': idempotencyKey,
+            if (access != null) 'authorization': 'Bearer $access',
+          },
+          body: jsonEncode(body),
+        );
+      } on Exception {
+        throw const ApiException(0, 'unreachable');
+      }
+    }
+
+    var res = await send();
+    if (res.statusCode == 401 && await _refresh()) res = await send();
+    final json = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw ApiException(res.statusCode, (json['code'] ?? 'error') as String, json['detail'] as String?);
+    }
+    return json;
+  }
+
   Future<http.Response> _send(String path, Map<String, String>? query, {required bool auth}) async {
     final access = auth ? (await tokens.read())?.accessToken : null;
     try {

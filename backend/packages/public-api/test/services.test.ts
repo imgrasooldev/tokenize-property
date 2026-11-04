@@ -74,11 +74,73 @@ describe("InvestorService", () => {
       distributions: () => Promise.resolve([]),
       statement: () => Promise.resolve(null),
       notifications: () => Promise.resolve([{ id: "9", kind: "unknown.kind", params: { cnic: "should-not-appear" }, created_at: new Date(0), read: false, subject: "x", body: "y" }]),
+      requestReserve: () => Promise.resolve({ error: "token" as const }),
+      request: () => Promise.resolve(null),
+      subscription: () => Promise.resolve(null),
     };
     const s = new InvestorService(repo);
     expect(await s.authenticate("t".repeat(43))).toEqual(sha256("t".repeat(43)));
     expect(seen[0]).toEqual(sha256("t".repeat(43)));
     const n = await s.notifications(Buffer.alloc(32), "en", null, 20);
     expect(n.data[0]).toEqual({ id: "9", event: "unknown.kind", title: "unknown.kind", body: "", created_at: "1970-01-01T00:00:00.000Z", read: false });
+  });
+});
+
+describe("InvestorService phase 2a requests", () => {
+  const base: InvestorRepository = {
+    investorOf: () => Promise.resolve("i-1"),
+    me: () => Promise.resolve(null),
+    holdings: () => Promise.resolve([]),
+    subscriptions: () => Promise.resolve([]),
+    certificates: () => Promise.resolve([]),
+    distributions: () => Promise.resolve([]),
+    statement: () => Promise.resolve(null),
+    notifications: () => Promise.resolve([]),
+    requestReserve: () => Promise.resolve({ error: "token" as const }),
+    request: () => Promise.resolve(null),
+    subscription: () => Promise.resolve(null),
+  };
+  const row = (code: string, replayed: boolean) => ({
+    id: "00000000-0000-4000-8000-000000000001",
+    kind: "reserve" as const,
+    offering_id: "00000000-0000-4000-8000-000000000002",
+    units: "10",
+    amount_paisa: "1000000",
+    status: "pending" as const,
+    code,
+    created_at: "2026-11-05T00:00:00Z",
+    expires_at: "2026-11-05T00:15:00Z",
+    subscription_id: null,
+    replayed,
+  });
+
+  it("draws a new code when one collides, formats it, and links the website's confirmation page", async () => {
+    const codes: string[] = [];
+    const s = new InvestorService(
+      {
+        ...base,
+        requestReserve: (_h, _o, _u, _k, code) => {
+          codes.push(code);
+          return Promise.resolve(codes.length === 1 ? { error: "code" as const } : row(code, false));
+        },
+      },
+      "https://site.example/confirm",
+    );
+    const r = await s.requestReservation(Buffer.alloc(32), { offeringId: "x", units: 10n, idempotencyKey: "key-12345" });
+    expect(codes).toHaveLength(2);
+    expect(codes[1]).toMatch(/^[BCDFGHJKLMNPQRSTVWXZ]{8}$/);
+    expect(r.created).toBe(true);
+    expect(r.body).toMatchObject({ amount: { amount: "1000000", currency: "PKR" }, status: "pending", confirmation_uri: "https://site.example/confirm" });
+    expect(r.body.confirmation_code).toBe(`${(codes[1] ?? "").slice(0, 4)}-${(codes[1] ?? "").slice(4)}`);
+    expect(r.body.confirmation_uri_complete).toBe(`https://site.example/confirm?code=${r.body.confirmation_code}`);
+  });
+
+  it("a replayed key is not created again; refusals become typed errors", async () => {
+    const replay = new InvestorService({ ...base, requestReserve: () => Promise.resolve(row("BCDFGHJK", true)) });
+    expect((await replay.requestReservation(Buffer.alloc(32), { offeringId: "x", units: 1n, idempotencyKey: "key-12345" })).created).toBe(false);
+    for (const reason of ["offering", "conflict", "limit"] as const) {
+      const s = new InvestorService({ ...base, requestReserve: () => Promise.resolve({ error: reason }) });
+      await expect(s.requestReservation(Buffer.alloc(32), { offeringId: "x", units: 1n, idempotencyKey: "key-12345" })).rejects.toMatchObject({ reason });
+    }
   });
 });

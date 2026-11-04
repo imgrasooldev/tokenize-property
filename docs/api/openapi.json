@@ -3,7 +3,7 @@
   "info": {
     "title": "Property Token public API",
     "version": "1.0.0",
-    "summary": "Read-only API for the investor mobile app (phases 1 and 1b, ADR 0018).",
+    "summary": "API for the investor mobile app: reads (phases 1 and 1b) and reservations confirmed on the website (phase 2a, ADR 0018 amendment 1).",
     "description": "Contract first: this document is the source of truth; the service validates every response\nagainst it in its tests. Errors are RFC 9457 Problem Details; OAuth endpoints answer with the\nRFC 6749 error object. Timestamps are RFC 3339 in UTC. Money is an integer amount of minor units\nas a string with an ISO 4217 currency. Investor resources are never cached by intermediaries.\n",
     "license": {
       "name": "Proprietary"
@@ -823,6 +823,209 @@
           }
         }
       }
+    },
+    "/me/subscription-requests": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "requestReservation",
+        "summary": "Ask for a reservation; the investor confirms it on the website",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "offering_id",
+                  "units"
+                ],
+                "properties": {
+                  "offering_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "units": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,12}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A new request (open confirmation_uri_complete on the website; poll the request)",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequest"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The request made earlier with the same Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/subscription-requests/{requestId}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getSubscriptionRequest",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request and its status",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/subscriptions/{subscriptionId}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getSubscription",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One subscription with its payment instructions",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -857,6 +1060,16 @@
         "in": "header",
         "schema": {
           "type": "string"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "IETF draft 'The Idempotency-Key HTTP Header Field': the same key with the same body returns the same request (200); with another body it is a conflict (409). Scoped to the investor.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,64}$"
         }
       }
     },
@@ -1572,6 +1785,184 @@
           "statement_matches": {
             "type": "boolean",
             "description": "keccak256 of the published statement equals the statement hash on chain"
+          }
+        }
+      },
+      "SubscriptionRequest": {
+        "type": "object",
+        "description": "A reservation the app asked for. It reserves nothing and moves no money until the investor confirms it on the website (signed in, documents accepted, passkey step-up where available).",
+        "required": [
+          "id",
+          "kind",
+          "offering_id",
+          "units",
+          "amount",
+          "status",
+          "confirmation_code",
+          "confirmation_uri",
+          "confirmation_uri_complete",
+          "created_at",
+          "expires_at",
+          "subscription_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "reserve"
+            ]
+          },
+          "offering_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "units": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "amount": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "declined",
+              "expired"
+            ]
+          },
+          "confirmation_code": {
+            "type": "string",
+            "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+          },
+          "confirmation_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "confirmation_uri_complete": {
+            "type": "string",
+            "format": "uri"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "15 minutes after creation"
+          },
+          "subscription_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Set once confirmed: GET /me/subscriptions/{subscriptionId} gives the payment instructions"
+          }
+        }
+      },
+      "SubscriptionDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "offering_id",
+          "units",
+          "amount",
+          "status",
+          "created_at",
+          "expires_at",
+          "paid_at",
+          "withdrawal_until",
+          "payment"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "offering_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "units": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "paid_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "withdrawal_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "payment": {
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Pay this exact amount from the investor's own bank account by Raast with this code, before expires_at",
+                "required": [
+                  "code",
+                  "pay_to_account",
+                  "expires_at"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "pay_to_account": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expires_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       }

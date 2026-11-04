@@ -194,6 +194,49 @@ Updated 2026-10-24 (owner asked for a plain "done / remaining" list).
 4. Portal: CLI-only actions (~~bank statement import~~ done 2026-10-29: `/operations/bank`, migration 0037; ~~suspense returns~~, ~~follow-up batches~~ (0038, `/operations/bank`), ~~signer policy changes~~ (0039, `/operations/policies`; pt-signer loads them on start)); ~~session binding of S-01 maker requests~~ (done 2026-10-30, migration 0045: `/approvals/property` "Ask for a decision"; the other S-01 maker actions moved to PT Control `/onboarding` on 2026-11-03, migration 0049; only createSponsor stays CLI because it seals with keys the portal does not hold), ~~Playwright for the new screens~~ (done: `desk-followups.spec.ts` complaints + policies, `ops-followups.spec.ts` manager scope, suspense return, rent invoice, poll; rent buttons stay DB/HTTP + Besu e2e), enrol the 14 demo officers (owner action: each needs its own security key) so `seed:catalog` completes.
 5. Later features: ~~document vault T-038~~ (done 2026-10-30, migrations 0041-0043, ADR 0017; PT Control `/documents` upload, `vault:rotate`; `vault:serve` / `vault:put`, unit `pt-vault`, website `/api/documents/[sha]`; documents must be stored with `vault:put` before they download), ~~complaints system~~ (done 2026-10-30, migration 0040: website `/complaints`, PT Control `/complaints`; SLA days are placeholders, legal to confirm), ~~tenant rent-collection link~~ (done 2026-10-30, migration 0044: `/operations/invoices`, website `/pay/<link>`; account text is a placeholder), auto-reinvest, Roshan Digital Account, Flutter app + public API, ~~sponsor portal~~ (done 2026-11-03, migration 0048: website `/sponsor`; representatives submit KYB, add/edit/submit/withdraw properties, upload documents through one-time vault tickets), ~~token-holder voting~~ (done 2026-10-30, migration 0046: PT Control `/votes`, website `/votes`; matters and quorum legal to confirm), ~~regulatory reporting (goAML)~~ (draft done 2026-11-03, migration 0050: goAML STR XML in every STR export; entity values and indicator codes are placeholders until the FMU confirms them; filing stays manual), transaction monitoring (rules that open STR candidates), ~~website information pages~~ (done 2026-11-03: terms, privacy, risks, fees, FAQ, about, reports, contact; legal text is draft).
 
+### Handoff 2026-11-05: branch `phase-2a-app-invest` (NOT merged, NOT live; owner continues on the home laptop)
+
+The owner asked to push this work to a separate branch and to run the tests at home. On the home laptop: `git fetch && git checkout phase-2a-app-invest`, then `npm ci --ignore-scripts` in backend, admin and web, start PostgreSQL (`python backend/scripts/pg.py start`), then run the checks below. Merge into `main` (which deploys) only after they pass and the owner agrees.
+
+**What is on the branch (public API phase 2a, owner decision 2026-11-05: "Website pe ab, passkey baad"):** the app asks for a reservation; the investor confirms it on the website; passkeys inside the app come later, once there is a domain and TLS.
+- Migration `0060_public_api_requests.sql`:
+  - Table `papi.requests` (one Idempotency-Key per investor; 8-letter code; 15 minutes; at most 5 pending; decided once).
+  - `papi.request_reserve`, `papi.request`, `papi.subscription` (payment instructions) for the API.
+  - `papi.web_request_lookup`, `papi.web_request_done` (binds only the same investor, offering and units) and `papi.web_request_decline` for the website.
+- Contract `docs/api/openapi.json`: `POST /me/subscription-requests` (Idempotency-Key header, 201 new / 200 replay / 409 conflict or too many pending / 422 offering not open / 400 / 415), `GET /me/subscription-requests/{requestId}`, `GET /me/subscriptions/{subscriptionId}`.
+- `@pt/public-api`: repositories, services (`requestReservation`, `requestStatus`, `subscription`), HTTP routes; `cli.ts` passes `${WEB_PUBLIC_URL}/confirm`.
+- Website:
+  - New page `/confirm?code=…`: the request, the existing `ReserveForm` with the units fixed and the passkey step-up `offering.reserve`, and a decline button.
+  - `reserveAction` binds the new subscription to the request.
+  - New files: `lib/server/app-requests.ts`, `lib/i18n-confirm.ts`.
+- App: feature `mobile/lib/features/invest/` (domain, data, `InvestCubit` with polling, `InvestPage`), `ApiClient.postJson` with Idempotency-Key, an Invest button on live offerings, route `/invest`, EN/UR strings.
+- ADR 0018 amendment and CHANGELOG/TASKS lines are NOT written yet.
+
+**Checked on the office laptop:**
+- Backend typecheck and lint for the changed packages.
+- `packages/offering/test/app-requests.test.ts` 3/3: request, replay and conflict, limits, website binding and mismatch, decline, grants.
+- `packages/public-api` 13/13: contract-validated, including the new 400/415/422/404 answers.
+- Rent e2e cycle 2 (see the log).
+
+**NOT run on the office laptop (run at home):**
+1. `cd backend && npm run check` (full suite; service-roles may need `-u` for the new `papi` functions: `npx vitest run packages/db/test/service-roles.test.ts -u`, then review the diff).
+2. `cd web && npm run lint && npm run typecheck && npm run test`. Web typecheck passed here; web lint was not confirmed.
+3. `cd web && npm run test:e2e`: new `e2e/confirm.spec.ts` (unknown code, Bob cannot see Alice's request, decline). It skips itself when the e2e database has no offering.
+4. App: the office laptop's Flutter is 3.41 (Dart 3.11), but the app needs Dart ^3.12.2, so none of this ran:
+   - `cd mobile && flutter pub get && flutter gen-l10n`
+   - `dart format --set-exit-if-changed lib test` (the format check may flag `app.dart`, `api_client.dart` and `test/widget/app_test.dart`: run `dart format lib test` and commit)
+   - `flutter analyze`
+   - `flutter test` (new `test/features/invest_cubit_test.dart`)
+   - The ARB keys `investErr_*` use underscores; rename them to camelCase if the analyzer or gen-l10n complains.
+5. Admin is unchanged (no admin checks needed).
+6. Rent e2e: the next window (calculation 3) closes about 2026-11-06 22:58 UTC. The chain and `pt_rent_e2e` for it are on the OFFICE laptop.
+
+**Still to do after the tests:**
+- Write ADR 0018 amendment 1 (confirmation on the website, Idempotency-Key, limits).
+- Add CHANGELOG and TASKS lines.
+- Make one manual run on the demo after merge: app → Invest → code → `/confirm` on the website → app shows the payment code.
+- Then phase 2b: withdrawal and cancel from the app, market orders, push notifications.
+
 ### Handoff 2026-11-03 (continue on the home laptop)
 
 **Done today (all pushed to `main`, CI green, live on the demo server):**
@@ -268,6 +311,7 @@ Short, dated record of what the owner asked and what came out of it. Add a line 
 
 | Date | Owner asked | Outcome |
 |---|---|---|
+| 2026-11-05 | "Website pe ab, passkey baad", then "sub kuch kis aur branch per push ker dena, tests baad main run kerna ... ghar per ... continue karon ga" | Built public API phase 2a on branch `phase-2a-app-invest` (migration 0060, contract, API, website `/confirm`, app invest feature). Ran only targeted tests here (backend offering app-requests 3/3, public-api 13/13); the full suites, the website e2e and all Flutter checks are for the home laptop (this laptop's Flutter is too old for the app's Dart 3.12). Not merged, not live. See "Handoff 2026-11-05" in section 8 |
 | 2026-11-05 | (office laptop) "continue kero plz and push bhi ker do live per but pehele fetch pull ker lena" | Pulled the home-laptop work (up to 0498720, migration 0059). `npm ci` in backend, admin, web; started PostgreSQL and Besu (height ~46,500). Rent e2e cycle 2: 2/2 passed, distribution 3 finalized and calculation 2 booked; calculation 3 published (window closes ~2026-11-06 22:58 UTC, office laptop). Next: public API phase 2 needs an owner decision on how the app confirms money moves (passkeys in the app need a domain + TLS; the demo has only an IP) |
 | 2026-11-03 | (home laptop) "fetch pull karo and memory.md read ker lo and jo ghar k laptop per kerne wale kaam the wo ker lo", "tests waghera bhi ... run ker lo", "go on with coding", "tests itna time kyoun le rahe hain please optimze karo", "make sure k testing proper ho" | Ran the home-laptop runbook: backend 900, admin 1617 then 1689, HTTP matrix 2282 then 2364, admin e2e, website 385, website e2e. Fixes: the shared `property_token_test` was stale from an old local branch (`0033_web_tax_certificates.sql`): dropped and rebuilt with the owner's OK; `/verify` scrolled sideways by 6 px at 1440 px (signed-out header: the search box now shrinks); `admin/e2e/onboarding.spec.ts` written (duties only after enrolment). Built transaction monitoring (migration 0051, `/compliance/monitoring`, DB test 8, matrix entries, HTTP routes). Made the tests faster (template databases, synchronous_commit off, 4 parallel files with a serial chain group, pools keep connections after SQL errors: see Gotchas). The notify test `producers-kyc-ops` failed twice in full runs (2 producer failures) and passes alone: its assertion now lists the failing producers. Open: website `market.spec.ts` trade test times out on this laptop; rent e2e cycle 2 after 2026-11-04 18:51 UTC |
 | 2026-11-03 | "public website mein kya baqi", then "pehle ye implement ker k push ker dena, test ghar k laptop per run ker donga; memory.md mein update ker dena agar test run na hoon" | Built the website information pages (EN/UR): terms, privacy, risks, fees, FAQ, about, reports, contact; footer Help/Legal columns; sign-up links terms and privacy; robots (noindex while prototype) and sitemap. Legal text, fee and tax figures and retention periods are DRAFT placeholders (legal to confirm). Checked here: web lint, typecheck, `test/info-dict.test.ts` 3/3, all 8 pages 200 on `next dev`, Urdu RTL. **NOT run here (owner runs them on the home laptop):** web `npm run test:e2e` (layout.spec now opens /faq and /legal/terms; needs the Besu chain), full `cd web && npm run check`, full `cd backend && npm run check` after 0049/0050, full admin db tests and `npm run test:e2e` (no Playwright spec for the onboarding desk or the goAML settings yet). Admin HTTP matrix 2282/2282 and the targeted DB tests did pass here (`ADMIN_HTTP_PORT=3397` on this laptop). Next (code): transaction monitoring, monitoring/alerting dashboard, auto-reinvest, Roshan Digital Account, then public API |

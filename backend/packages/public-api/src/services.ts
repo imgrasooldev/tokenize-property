@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { render } from "@pt/notify";
 import { buildTree, rentLeaf } from "@pt/tax";
 import { keccak256, stringToBytes, type Address } from "viem";
-import type { CatalogueRepository, GrantRepository, InvestorRepository, OfferingRow } from "./repositories.ts";
+import type { CatalogueRepository, GrantRepository, InvestorRepository, OfferingRow, RequestRow } from "./repositories.ts";
 
 /**
  * Service layer (use cases) of the public API, ADR 0018 section 3: no HTTP and no SQL here. The
@@ -139,8 +139,82 @@ export class CatalogueService {
   }
 }
 
+/** Why a request was refused (mapped to Problem Details by the HTTP layer). */
+export class RequestError extends Error {
+  constructor(readonly reason: "offering" | "conflict" | "limit" | "token") {
+    super(reason);
+  }
+}
+
+const userCode = (): string => {
+  let raw = "";
+  for (let i = 0; i < 8; i++) raw += USER_CODE_ALPHABET.charAt(randomInt(USER_CODE_ALPHABET.length));
+  return raw;
+};
+
 export class InvestorService {
-  constructor(private readonly repo: InvestorRepository) {}
+  constructor(
+    private readonly repo: InvestorRepository,
+    /** The website's confirmation page (phase 2a): the investor confirms app requests there. */
+    private readonly confirmUri = "http://localhost:3100/confirm",
+  ) {}
+
+  private request(r: RequestRow) {
+    const code = `${r.code.slice(0, 4)}-${r.code.slice(4)}`;
+    return {
+      id: r.id,
+      kind: r.kind,
+      offering_id: r.offering_id,
+      units: r.units,
+      amount: r.amount_paisa === null ? null : money(r.amount_paisa),
+      status: r.status,
+      confirmation_code: code,
+      confirmation_uri: this.confirmUri,
+      confirmation_uri_complete: `${this.confirmUri}?code=${code}`,
+      created_at: new Date(r.created_at).toISOString(),
+      expires_at: new Date(r.expires_at).toISOString(),
+      subscription_id: r.subscription_id,
+    };
+  }
+
+  /**
+   * Phase 2a: asks for a reservation the investor then confirms on the website. The same
+   * Idempotency-Key returns the same request (created false); a fresh code is drawn if one collides.
+   */
+  async requestReservation(h: Buffer, input: { offeringId: string; units: bigint; idempotencyKey: string }) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const r = await this.repo.requestReserve(h, input.offeringId, input.units, input.idempotencyKey, userCode());
+      if ("error" in r) {
+        if (r.error === "code") continue;
+        throw new RequestError(r.error);
+      }
+      return { created: r.replayed !== true, body: this.request(r) };
+    }
+    throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  async requestStatus(h: Buffer, id: string) {
+    const r = await this.repo.request(h, id);
+    return r ? this.request(r) : null;
+  }
+
+  async subscription(h: Buffer, id: string) {
+    const s = await this.repo.subscription(h, id);
+    if (!s) return null;
+    const at = (v: string | null): string | null => (v ? new Date(v).toISOString() : null);
+    return {
+      id: s.id,
+      offering_id: s.offering_id,
+      units: s.units,
+      amount: money(s.amount_paisa),
+      status: s.status,
+      created_at: new Date(s.created_at).toISOString(),
+      expires_at: at(s.expires_at),
+      paid_at: at(s.paid_at),
+      withdrawal_until: at(s.withdrawal_until),
+      payment: s.payment ? { code: s.payment.code, pay_to_account: s.payment.pay_to_account, expires_at: at(s.payment.expires_at) } : null,
+    };
+  }
 
   /** The SHA-256 of a live access token, or null (the database checks expiry and revocation). */
   async authenticate(accessToken: string): Promise<Buffer | null> {

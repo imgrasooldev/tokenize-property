@@ -24,6 +24,8 @@ export function ReserveForm({
   docEnSha,
   docUrSha,
   riskSha,
+  appCode,
+  fixedUnits,
 }: {
   l: OfferingDict;
   lang: Lang;
@@ -35,10 +37,13 @@ export function ReserveForm({
   docEnSha: string;
   docUrSha: string;
   riskSha: string;
+  /** A request from the mobile app (migration 0060): its code, and the units it asked for (not editable). */
+  appCode?: string;
+  fixedUnits?: string;
 }) {
   const [state, action, pending] = useActionState<ReserveState, FormData>(reserveAction, {});
   const formRef = useRef<HTMLFormElement>(null);
-  const [units, setUnits] = useState(minUnits);
+  const [units, setUnits] = useState(fixedUnits ?? minUnits);
   const [docLang, setDocLang] = useState<Lang>(lang);
   // Controlled, so they survive React's form reset after the action (a passkey step-up re-submits the form).
   const [acceptDoc, setAcceptDoc] = useState(false);
@@ -62,6 +67,7 @@ export function ReserveForm({
       <input type="hidden" name="requestId" value={requestId} />
       <input type="hidden" name="docSha" value={docSha} />
       <input type="hidden" name="riskSha" value={riskSha} />
+      {appCode ? <input type="hidden" name="appCode" value={appCode} /> : null}
       <label>
         {l.units}
         <input
@@ -70,6 +76,7 @@ export function ReserveForm({
           dir="ltr"
           required
           maxLength={13}
+          readOnly={fixedUnits !== undefined}
           value={units}
           onChange={(e) => {
             setUnits(e.target.value.trim());
