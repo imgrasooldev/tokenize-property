@@ -5,6 +5,7 @@ The single place to pick this project up from. Read this first, then the linked 
 - Last updated: 2026-11-05
 - Repository: https://github.com/imgrasooldev/tokenize-property (public: never commit secrets; dev keys stay git-ignored)
 - Local path: `D:\property-token`
+- **Open work branch (2026-11-05): `phase-2a-app-invest`** (public API phase 2a: invest from the app, confirmed on the website; migration 0060). Not merged, not live, tests pending: `git fetch && git checkout phase-2a-app-invest` and follow "Handoff 2026-11-05" in that branch's MEMORY.md before merging.
 - Start here: docs/CURRENT_STATUS.md (handoff) and docs/TASKS.md (roadmap); this file keeps decisions, gotchas and the communication log.
 - Current position: **Steps 1-5 and the 6a-6d portals are done and live on the demo server; migrations 0001-0051 on `main` once the 2026-11-03 home-laptop commit is pushed (0051 transaction monitoring) (2026-10-29/11-03: rent publish/finalize + buttons + scheduler, platform roles + manager scope, website tax certificates / withdrawal / support reference, bank import + bank desk + signing policies, complaints, document vault + uploads + key rotation, tenant rent invoices, S-01 request binding, token-holder voting, sponsor portal, PT Control onboarding desk, goAML STR draft, website information pages). Next: see "Handoff 2026-11-03" in section 8 (tests to run first, then transaction monitoring, monitoring dashboard, auto-reinvest, Roshan Digital Account, public API, Flutter app).**
 
