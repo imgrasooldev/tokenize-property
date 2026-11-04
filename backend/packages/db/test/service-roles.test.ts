@@ -249,6 +249,15 @@ describe("what each service may not do (42501)", () => {
       "SELECT * FROM kyc.status",
       "SELECT * FROM webdemo.investors",
     ],
+    // ADR 0018 (0058): papi.* API functions only; never a table, a website or a decision function.
+    public_api: [
+      "SELECT * FROM papi.tokens",
+      "SELECT * FROM papi.device_grants",
+      "SELECT * FROM webdemo.investors",
+      "SELECT * FROM kyc.status",
+      "SELECT papi.web_device_decide('\\x00', 'BCDFGHJK', 'approve')",
+      "SELECT * FROM chain.holdings",
+    ],
   };
   it.each(SERVICES)("%s", async (s) => {
     for (const sql of new Map(Object.entries(forbidden)).get(s) ?? []) await denied(s, sql);

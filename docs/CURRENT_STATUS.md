@@ -2,6 +2,10 @@
 
 Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
 
+## Public API v1 + mobile app (2026-11-04, ADR 0018)
+
+- Phase 1 API on `main` (migration 0058, `pt-public-api`, `/v1/`, website `/device`). Next: the Flutter app in `mobile/` (BLoC + repository, Night Glass dark + Daylight-style light, EN/UR). Phase 1b: rent distributions with proofs. Phase 2: invest/market writes with Idempotency-Key, passkey step-up in the app, DPoP.
+
 ## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
 
 - Part 1 on `main`: residency in KYC, two-officer residency review (`/compliance/residency`), RDA-only payout accounts, money in/out only through the RDA. Part 2 (migration 0057): website sign-up abroad, account residency, RDA wording, onboarding waits for the review; Playwright `web/e2e/rda.spec.ts`. Not built: an admin Playwright spec for `/compliance/residency` (DB and HTTP tests only). Open for the owner/legal: SBP/SECP permission for RDA funds, partner bank, non-resident WHT, FCY RDAs, POC holders (spec S-08 section 3).

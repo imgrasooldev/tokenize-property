@@ -79,7 +79,7 @@ for unit in deploy/demo-server/pt-*.service deploy/demo-server/pt-*.timer; do
   fi
 done
 [ "$changed" = 1 ] && sudo systemctl daemon-reload
-BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-notify pt-transfer pt-rent-finalize pt-vault"
+BACKEND_UNITS="pt-indexer pt-signer pt-kyc pt-bank-payees pt-outbox pt-offboarding pt-notify pt-transfer pt-rent-finalize pt-vault pt-public-api"
 sudo systemctl enable $BACKEND_UNITS >/dev/null 2>&1
 # The signer reloads its keystore (new custodial wallets) and policies only on start.
 sudo systemctl restart $BACKEND_UNITS

@@ -1,0 +1,24 @@
+[Unit]
+Description=Property Token demo: public API for the mobile app (/v1, ADR 0018; 127.0.0.1:4960 only, published by nginx)
+After=pt-stack.service
+Requires=pt-stack.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/property-token/backend
+EnvironmentFile=/home/ubuntu/property-token/deploy/demo-server/stack.env
+# Database login: PUBLIC_API_PG_USER from backend/.env.local (group pt_svc_public_api: papi.* functions only).
+# Rollback to the admin login: bash deploy/demo-server/db-login.sh admin pt-public-api
+# The device verification page the app shows (RFC 8628 verification_uri); the demo has no domain.
+Environment=WEB_PUBLIC_URL=http://51.79.144.40
+Environment=TRUST_PROXY=1
+Environment=NODE_OPTIONS=--max-old-space-size=128
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs packages/public-api/src/cli.ts
+Restart=always
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

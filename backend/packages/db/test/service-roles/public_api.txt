@@ -1,0 +1,14 @@
+function papi.device_authorize(p_device_hash bytea, p_user_code text, p_client text, p_device_name text)
+function papi.device_token(p_device_hash bytea, p_access_hash bytea, p_refresh_hash bytea)
+function papi.holdings(p_access_hash bytea)
+function papi.me(p_access_hash bytea)
+function papi.notifications(p_access_hash bytea, p_locale text, p_before bigint, p_limit integer)
+function papi.offerings(p_offering uuid)
+function papi.refresh(p_refresh_hash bytea, p_access_hash bytea, p_new_refresh_hash bytea)
+function papi.revoke(p_hash bytea)
+function papi.status()
+function papi.subscriptions(p_access_hash bytea)
+function papi.tax_certificates(p_access_hash bytea)
+function papi.token_investor(p_access_hash bytea)
+schema papi: USAGE
+schema public: USAGE

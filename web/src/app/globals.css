@@ -958,3 +958,19 @@ html[dir="rtl"] .blkrow { mask-image: linear-gradient(270deg, transparent, #000 
 .info-nav { position: sticky; inset-block-start: 84px; }
 .info-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; }
 @media (max-width: 860px) { .info-grid { grid-template-columns: 1fr; } .info-nav { position: static; } }
+
+/* ADR 0018: linked mobile devices on /account */
+.device-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.device-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

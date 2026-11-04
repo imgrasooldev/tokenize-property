@@ -1,0 +1,201 @@
+import { createHash, randomBytes } from "node:crypto";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import pg from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { migrate } from "../../db/src/migrate.ts";
+import { contiguousMigrations, scratchDatabase, serviceLogin } from "../../db/test/helpers.ts";
+import { createApiServer } from "../src/http.ts";
+import { pgRepositories } from "../src/repositories.ts";
+import { AuthService, CatalogueService, InvestorService } from "../src/services.ts";
+import { OPENAPI, responseSchema, validate } from "./contract.ts";
+
+/**
+ * ADR 0018 / migration 0058 end to end on a scratch database, through HTTP, as the service's own
+ * login: the Device Authorization Grant (pending, slow_down, approval on the website, tokens),
+ * every read operation, refresh rotation with reuse detection, revocation, problems, ETag and rate
+ * limits. Every response is validated against docs/api/openapi.json.
+ */
+let admin: pg.Client;
+let pool: pg.Pool;
+let login: Awaited<ReturnType<typeof serviceLogin>>;
+let drop: () => Promise<void>;
+let server: Server;
+let base: string;
+const sha = (s: string): Buffer => createHash("sha256").update(s, "utf8").digest();
+
+beforeAll(async () => {
+  const s = await scratchDatabase();
+  ({ client: admin, drop } = s);
+  await migrate(admin, contiguousMigrations());
+  login = await serviceLogin("public_api", String(s.settings.database));
+  pool = new pg.Pool({ ...login.settings, max: 4 });
+  const repos = pgRepositories(pool);
+  server = createApiServer({
+    auth: new AuthService(repos.grants, "http://localhost:3100/device"),
+    catalogue: new CatalogueService(repos.catalogue),
+    investors: new InvestorService(repos.investors),
+    openapi: OPENAPI,
+    ratePerMinute: 200,
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
+}, 180_000);
+
+afterAll(async () => {
+  server.close();
+  await pool.end();
+  await drop();
+  await login.drop();
+}, 180_000);
+
+/** Calls the API and checks the answer against the contract operation (path template). */
+async function call(template: string, path: string, init: RequestInit = {}): Promise<{ status: number; body: unknown; headers: Headers }> {
+  const res = await fetch(`${base}/v1${path}`, init);
+  const text = await res.text();
+  const body: unknown = text ? JSON.parse(text) : undefined;
+  if (res.status !== 304) {
+    const spec = responseSchema(template, init.method ?? "GET", res.status);
+    if (spec) {
+      expect(res.headers.get("content-type")).toContain(spec.media);
+      expect(validate(spec.schema, body), `${template} ${String(res.status)}`).toEqual([]);
+    }
+  }
+  expect(res.headers.get("x-request-id")).toBeTruthy();
+  return { status: res.status, body, headers: res.headers };
+}
+
+const formPost = (fields: Record<string, string>): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams(fields).toString(),
+});
+
+/** A verified investor with a website session (as the website signs one up). */
+async function investor(): Promise<{ id: string; session: Buffer }> {
+  const k = await admin.query<{ id: string }>("SELECT kyc.register_subject($1::bytea[], '{1}'::smallint[], $2, $3, '2468', 'kyc-service') AS id", [[randomBytes(32)], randomBytes(32), randomBytes(60)]);
+  await admin.query("INSERT INTO kyc.decisions (subject_id, status, reason, basis, valid_until, decided_by) VALUES ($1, 'verified', 'test decision', '{}', now() + interval '1 year', 'kyc-service')", [k.rows[0]?.id]);
+  const { rows } = await admin.query<{ id: string }>(
+    "INSERT INTO webdemo.investors (display_name, wallet_address, kyc_status, kyc_subject) VALUES ('App Tester', $1, 'verified', $2) RETURNING id",
+    [`0x${randomBytes(20).toString("hex")}`, k.rows[0]?.id],
+  );
+  const t = randomBytes(32).toString("base64url");
+  await admin.query("SELECT webauth.web_start_session($1, $2, 'signup')", [sha(t), rows[0]?.id]);
+  return { id: rows[0]?.id ?? "", session: sha(t) };
+}
+
+type Tokens = { access_token: string; refresh_token: string };
+
+async function signIn(who: { session: Buffer }): Promise<Tokens> {
+  const d = await call("/oauth/device_authorization", "/oauth/device_authorization", formPost({ client_id: "pt-mobile", scope: "read", device_name: "Pixel 9" }));
+  expect(d.status).toBe(200);
+  const auth = d.body as { device_code: string; user_code: string };
+  const decided = await admin.query<{ r: { ok?: boolean } }>("SELECT papi.web_device_decide($1, $2, 'approve') AS r", [who.session, auth.user_code]);
+  expect(decided.rows[0]?.r.ok).toBe(true);
+  const t = await call("/oauth/token", "/oauth/token", formPost({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: auth.device_code, client_id: "pt-mobile" }));
+  expect(t.status).toBe(200);
+  return t.body as Tokens;
+}
+
+const bearer = (t: string): RequestInit => ({ headers: { authorization: `Bearer ${t}` } });
+
+describe("public API v1 (ADR 0018)", () => {
+  it("device grant: pending, slow_down, then tokens after the investor approves on the website; a code is used once", async () => {
+    const who = await investor();
+    const d = await call("/oauth/device_authorization", "/oauth/device_authorization", formPost({ client_id: "pt-mobile" }));
+    const auth = d.body as { device_code: string; user_code: string; verification_uri_complete: string; interval: number };
+    expect(auth.user_code).toMatch(/^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/);
+    expect(auth.verification_uri_complete).toBe(`http://localhost:3100/device?code=${auth.user_code}`);
+    const poll = () => call("/oauth/token", "/oauth/token", formPost({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: auth.device_code, client_id: "pt-mobile" }));
+    expect((await poll()).body).toEqual({ error: "authorization_pending" });
+    expect((await poll()).body).toEqual({ error: "slow_down" });
+    expect((await admin.query<{ r: unknown }>("SELECT papi.web_device_lookup($1, $2) AS r", [who.session, auth.user_code])).rows[0]?.r).toMatchObject({ deviceName: "Mobile device" });
+    await admin.query("SELECT papi.web_device_decide($1, $2, 'approve')", [who.session, auth.user_code]);
+    const ok = await poll();
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("cache-control")).toBe("no-store");
+    expect((await poll()).body).toEqual({ error: "invalid_grant" });
+    // Wrong client and unknown grant types follow RFC 6749.
+    expect((await call("/oauth/token", "/oauth/token", formPost({ grant_type: "password", client_id: "pt-mobile" }))).body).toEqual({ error: "unsupported_grant_type" });
+    expect((await call("/oauth/device_authorization", "/oauth/device_authorization", formPost({ client_id: "other" }))).body).toEqual({ error: "invalid_client" });
+  });
+
+  it("a denied code gives access_denied", async () => {
+    const who = await investor();
+    const d = (await call("/oauth/device_authorization", "/oauth/device_authorization", formPost({ client_id: "pt-mobile" }))).body as { device_code: string; user_code: string };
+    await admin.query("SELECT papi.web_device_decide($1, $2, 'deny')", [who.session, d.user_code]);
+    const t = await call("/oauth/token", "/oauth/token", formPost({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: d.device_code, client_id: "pt-mobile" }));
+    expect(t.body).toEqual({ error: "access_denied" });
+  });
+
+  it("every read follows the contract; investor data needs a live token; ETag gives 304", async () => {
+    const who = await investor();
+    const t = await signIn(who);
+    const me = await call("/me", "/me", bearer(t.access_token));
+    expect(me.body).toMatchObject({ id: who.id, kyc: "verified", residency: { status: "resident", document: "cnic", country: null } });
+    expect(me.headers.get("cache-control")).toBe("private, no-store");
+    const etag = me.headers.get("etag") ?? "";
+    expect((await call("/me", "/me", { headers: { authorization: `Bearer ${t.access_token}`, "if-none-match": etag } })).status).toBe(304);
+    expect((await call("/me/holdings", "/me/holdings", bearer(t.access_token))).body).toMatchObject({ data: [] });
+    expect((await call("/me/subscriptions", "/me/subscriptions?limit=5", bearer(t.access_token))).body).toEqual({ data: [], next_cursor: null });
+    expect((await call("/me/tax-certificates", "/me/tax-certificates", bearer(t.access_token))).body).toEqual({ data: [] });
+    // The KYC decision raised a notification (0030 producers); the API renders it like the e-mail, in the requested language.
+    const inbox = (await call("/me/notifications", "/me/notifications", bearer(t.access_token))).body as { data: { event: string; title: string }[] };
+    expect(inbox.data[0]).toMatchObject({ event: "security.kyc_status_changed", title: "Your verification status changed" });
+    const ur = (await call("/me/notifications", "/me/notifications", { headers: { authorization: `Bearer ${t.access_token}`, "accept-language": "ur" } })).body as { data: { title: string }[] };
+    expect(ur.data[0]?.title).not.toBe(inbox.data[0]?.title);
+    expect((await call("/offerings", "/offerings")).status).toBe(200);
+    expect((await call("/status", "/status")).status).toBe(200);
+    expect((await call("/offerings/{offeringId}", "/offerings/00000000-0000-4000-8000-000000000000")).status).toBe(404);
+    const anonymous = await call("/me", "/me");
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers.get("www-authenticate")).toContain("invalid_token");
+    expect((await call("/me/subscriptions", "/me/subscriptions?limit=500", bearer(t.access_token))).status).toBe(400);
+    const spec = await fetch(`${base}/v1/openapi.json`);
+    expect(((await spec.json()) as { openapi: string }).openapi).toBe("3.1.0");
+  });
+
+  it("refresh tokens rotate; a reused refresh token revokes the device; revocation signs out", async () => {
+    const who = await investor();
+    const first = await signIn(who);
+    const refresh = (rt: string) => call("/oauth/token", "/oauth/token", formPost({ grant_type: "refresh_token", refresh_token: rt, client_id: "pt-mobile" }));
+    const second = (await refresh(first.refresh_token)).body as Tokens;
+    expect(second.access_token).not.toBe(first.access_token);
+    expect((await call("/me", "/me", bearer(second.access_token))).status).toBe(200);
+    // The first refresh token is spent: presenting it again revokes the whole family.
+    expect((await refresh(first.refresh_token)).body).toEqual({ error: "invalid_grant" });
+    expect((await call("/me", "/me", bearer(second.access_token))).status).toBe(401);
+    expect((await refresh(second.refresh_token)).body).toEqual({ error: "invalid_grant" });
+
+    const other = await signIn(who);
+    expect((await call("/oauth/revoke", "/oauth/revoke", formPost({ token: other.refresh_token, client_id: "pt-mobile" }))).status).toBe(200);
+    expect((await call("/me", "/me", bearer(other.access_token))).status).toBe(401);
+    // Unknown tokens are not an error (RFC 7009).
+    expect((await call("/oauth/revoke", "/oauth/revoke", formPost({ token: "nope", client_id: "pt-mobile" }))).status).toBe(200);
+    const audit = await admin.query<{ action: string }>("SELECT DISTINCT action FROM webauth.audit WHERE action LIKE 'device.%'");
+    expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(["device.approved", "device.linked", "device.token_reuse", "device.revoked"]));
+  });
+
+  it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
+    expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
+    const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });
+    expect(m.status).toBe(405);
+    expect(m.headers.get("allow")).toBe("GET");
+    const tight = createApiServer({
+      auth: new AuthService(pgRepositories(pool).grants, "http://localhost:3100/device"),
+      catalogue: new CatalogueService(pgRepositories(pool).catalogue),
+      investors: new InvestorService(pgRepositories(pool).investors),
+      openapi: OPENAPI,
+      ratePerMinute: 2,
+    });
+    await new Promise<void>((r) => tight.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${String((tight.address() as AddressInfo).port)}/v1/status`;
+    const codes = [(await fetch(url)).status, (await fetch(url)).status];
+    const third = await fetch(url);
+    tight.close();
+    expect(codes).toEqual([200, 200]);
+    expect(third.status).toBe(429);
+    expect(third.headers.get("retry-after")).toMatch(/^[0-9]+$/);
+    expect(third.headers.get("ratelimit-policy")).toBe('"default";q=2;w=60');
+  });
+});

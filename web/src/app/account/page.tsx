@@ -19,6 +19,9 @@ import { passkeyAvailability } from "@/lib/server/passkey-config";
 import { listPasskeys } from "@/lib/server/passkeys";
 import { accountNotice, accountResidency, currentSession, sessionExpiresAt } from "@/lib/server/session";
 import { countryName, rdaDict } from "@/lib/i18n-rda";
+import { deviceDict } from "@/lib/i18n-device";
+import { linkedDevices } from "@/lib/server/devices";
+import { removeDeviceAction } from "@/app/actions/devices";
 import { PasskeyPanel } from "@/components/passkey/PasskeyPanel";
 import { passkeyDict } from "@/lib/i18n-passkey";
 
@@ -44,6 +47,9 @@ export default async function AccountPage() {
     certificates(session.hash),
   ]);
   const sponsors = await sponsorOverview(session.hash);
+  // ADR 0018: devices signed in to the mobile app (OAuth device grant), each can be signed out here.
+  const devices = await linkedDevices(session.hash);
+  const dl = deviceDict(lang);
   const now = Date.now();
   const notice = await accountNotice();
   // Spec S-08: a Pakistani living abroad (NICOP or POC) is paid only to their Roshan Digital Account.
@@ -150,6 +156,28 @@ export default async function AccountPage() {
         </section>
         <div className="stack">
           <PasskeyPanel l={passkeyDict(lang)} availability={availability} passkeys={passkeys} />
+          <section className="panel" data-testid="devices">
+            <h2>{dl.devices}</h2>
+            {devices.length === 0 ? (
+              <p className="note">{dl.noDevices}</p>
+            ) : (
+              <ul className="device-list">
+                {devices.map((d) => (
+                  <li key={d.family}>
+                    <span>
+                      {d.device_name} · {dl.linked} {pktTime(d.linked_at.toISOString())}
+                    </span>
+                    <form action={removeDeviceAction}>
+                      <input type="hidden" name="family" value={d.family} />
+                      <button type="submit" className="btn secondary small">
+                        {dl.remove}
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           <section className="panel">
             <h2>{t.howVerified}</h2>
             <div className="timeline">

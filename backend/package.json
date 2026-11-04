@@ -56,6 +56,7 @@
     "kyc:serve": "tsx packages/kyc/src/cli.ts serve",
     "kyc:rescreen": "tsx packages/kyc/src/cli.ts rescreen",
     "kyc:demo-personas": "tsx packages/kyc/src/cli.ts demo-personas",
+    "public-api": "tsx packages/public-api/src/cli.ts",
     "vault:setup": "tsx packages/vault/src/cli.ts setup",
     "vault:serve": "tsx packages/vault/src/cli.ts serve",
     "vault:put": "tsx packages/vault/src/cli.ts put",

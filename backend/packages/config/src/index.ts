@@ -87,6 +87,8 @@ export const SERVICE_DB_ROLES = {
   audit: { prefix: "AUDIT", group: "pt_svc_audit", login: "pt_audit_app" },
   console: { prefix: "CONSOLE", group: "pt_svc_console", login: "pt_console_app" },
   vault: { prefix: "VAULT", group: "pt_svc_vault", login: "pt_vault_app" },
+  // ADR 0018 (migration 0058): the public API for the mobile app; papi.* functions only.
+  public_api: { prefix: "PUBLIC_API", group: "pt_svc_public_api", login: "pt_public_api_app" },
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_DB_ROLES;

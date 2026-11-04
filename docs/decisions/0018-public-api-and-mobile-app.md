@@ -11,7 +11,7 @@ Investors use the website today. A Flutter app for Android and iOS needs a stabl
 
 ### 1. Contract first
 
-- **OpenAPI 3.1** (`docs/api/openapi.yaml`) is the source of truth. The service serves it at `GET /v1/openapi.json`; tests validate every response of every operation against it, and the Flutter data layer is written against it.
+- **OpenAPI 3.1** (`docs/api/openapi.json`) is the source of truth. The service serves it at `GET /v1/openapi.json`; tests validate every response of every operation against it, and the Flutter data layer is written against it.
 - **REST over HTTPS, JSON** (RFC 8259), resource names in plural nouns, path versioning `/v1` (breaking changes only in `/v2`; additive changes within `/v1`).
 - **Errors:** RFC 9457 Problem Details (`application/problem+json`: `type`, `title`, `status`, `detail`, `instance`, plus `code`); OAuth endpoints answer with the RFC 6749 error object.
 - **Data formats:** timestamps RFC 3339 in UTC; money as `{ "amount": "<integer minor units as a string>", "currency": "PKR" }` (ISO 4217, never floats); token units as decimal strings; addresses lower-case `0x` hex.
