@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cancelAppOrderAction } from "@/app/actions/market";
+import { cancelAppOrderAction, confirmAppTopUpAction } from "@/app/actions/market";
 import { declineAppRequestAction } from "@/app/actions/offering";
 import { offeringTitle } from "@/components/offering/OfferingParts";
 import { AppOrderForm } from "@/components/AppOrderForm";
@@ -15,7 +15,7 @@ import { fill } from "@/lib/i18n-verify";
 import { priceBand } from "@/lib/market-rules";
 import { canCancel, canWithdraw, formatPaisa, formatPkt } from "@/lib/offering-rules";
 import { findProperty } from "@/lib/properties";
-import { APP_CODE, isOrderRequest, lookupAppRequest } from "@/lib/server/app-requests";
+import { APP_CODE, isOrderRequest, isSubscriptionRequest, lookupAppRequest } from "@/lib/server/app-requests";
 import { getDict } from "@/lib/server/lang";
 import { investorById } from "@/lib/server/db";
 import { mySubscriptions, offeringById } from "@/lib/server/offerings";
@@ -35,6 +35,9 @@ export const dynamic = "force-dynamic";
  *
  * Amendment 4 (migration 0063): cancelling an open market order the app asked for runs the website's
  * own order cancellation; the request is confirmed only when the order really is cancelled.
+ *
+ * Amendment 5 (migration 0064): a demo cash top-up the app asked for runs the website's own demo
+ * top-up (a simulated Raast payment); the request is confirmed only when that top-up exists.
  */
 export default async function ConfirmPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await currentSession();
@@ -46,9 +49,9 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
   const raw = typeof q.code === "string" ? q.code.trim().toUpperCase() : "";
   const code = APP_CODE.test(raw) ? raw.replace("-", "") : "";
   const request = code ? await lookupAppRequest(session.hash, code) : null;
-  const offering = request && !isOrderRequest(request) ? await offeringById(request.offering_id) : null;
+  const offering = request && isSubscriptionRequest(request) ? await offeringById(request.offering_id) : null;
   // Reserve, cancel and withdraw requests (migrations 0060, 0061); orders are shown above them.
-  const subRequest = request && !isOrderRequest(request) ? request : null;
+  const subRequest = request && isSubscriptionRequest(request) ? request : null;
   const sub = typeof q.sub === "string" && /^[0-9a-f-]{36}$/.test(q.sub) ? q.sub : null;
   // A cancel / withdraw request acts on one of the investor's own subscriptions.
   const target =
@@ -79,8 +82,12 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
                   ? l.orderCancelled
                   : q.ordercancelfailed
                     ? l.orderCancelFailed
-                    : null;
-  const failed = Boolean(q.unbound ?? q.unlinked ?? q.orderunlinked ?? q.ordercancelfailed);
+                    : q.toppedup
+                      ? l.toppedUp
+                      : q.topupfailed
+                        ? l.topUpFailed
+                        : null;
+  const failed = Boolean(q.unbound ?? q.unlinked ?? q.orderunlinked ?? q.ordercancelfailed ?? q.topupfailed);
   return (
     <PortalShell active="subscriptions" title={l.title}>
       <section className="panel" style={{ maxInlineSize: 640 }}>
@@ -98,7 +105,9 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
                 ? l.introOrder
                 : request?.kind === "order_cancel"
                   ? l.introOrderCancel
-                  : l.intro}
+                  : request?.kind === "topup"
+                    ? l.introTopUp
+                    : l.intro}
         </p>
         <p className="fine">{l.warning}</p>
         {!request ? (
@@ -116,6 +125,27 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
               {l.find}
             </button>
           </form>
+        ) : request.kind === "topup" ? (
+          <>
+            <dl className="kv" data-testid="confirm-request">
+              <dt>{l.amount}</dt>
+              <dd>{formatPaisa(BigInt(request.amount_paisa), lang)}</dd>
+              <dt>{l.expires}</dt>
+              <dd>{formatPkt(request.expires_at, lang)}</dd>
+            </dl>
+            <form action={confirmAppTopUpAction} style={{ marginBlockStart: 12 }}>
+              <input type="hidden" name="appCode" value={code} />
+              <button type="submit" className="btn" data-testid="confirm-app-topup">
+                {l.addCash}
+              </button>
+            </form>
+            <form action={declineAppRequestAction} style={{ marginBlockStart: 10 }}>
+              <input type="hidden" name="appCode" value={code} />
+              <button type="submit" className="btn secondary small">
+                {l.decline}
+              </button>
+            </form>
+          </>
         ) : isOrderRequest(request) ? (
           <>
             <dl className="kv" data-testid="confirm-request">

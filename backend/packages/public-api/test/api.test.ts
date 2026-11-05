@@ -332,6 +332,37 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call(C, `/me/orders/${mine}/cancel-requests`, { method: "POST", headers: { "idempotency-key": "key-22222222" } })).status).toBe(401);
   });
 
+  it("phase 2b part 4: demo cash reads from the ledger; a top-up request follows the contract, replays with its key and conflicts with another amount", async () => {
+    const t = await signIn(await investor());
+    expect((await call("/me/cash", "/me/cash", bearer(t.access_token))).body).toEqual({
+      available: { amount: "0", currency: "PKR" },
+      in_orders: { amount: "0", currency: "PKR" },
+      demo: true,
+    });
+    expect((await call("/me/cash", "/me/cash")).status).toBe(401);
+    const R = "/me/topup-requests";
+    const post = (body: unknown, key?: string): RequestInit => ({
+      method: "POST",
+      headers: { authorization: `Bearer ${t.access_token}`, "content-type": "application/json", ...(key ? { "idempotency-key": key } : {}) },
+      body: JSON.stringify(body),
+    });
+    const ok = { amount: { amount: "500000", currency: "PKR" } };
+    expect((await call(R, R, post(ok))).body).toMatchObject({ code: "idempotency_key_required" });
+    expect((await call(R, R, post({ amount: { amount: "50050", currency: "PKR" } }, "key-44444444"))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(R, R, post({ amount: { amount: "200000000000", currency: "PKR" } }, "key-44444444"))).status).toBe(400);
+    expect((await call(R, R, post({ amount: { amount: "500000", currency: "USD" } }, "key-44444444"))).status).toBe(400);
+    const made = await call(R, R, post(ok, "key-44444444"));
+    expect(made.status).toBe(201);
+    const body = made.body as { id: string };
+    expect(made.body).toMatchObject({ kind: "topup", amount: { amount: "500000", currency: "PKR" }, status: "pending", topup_id: null });
+    expect((await call(R, R, post(ok, "key-44444444"))).status).toBe(200);
+    expect((await call(R, R, post({ amount: { amount: "600000", currency: "PKR" } }, "key-44444444"))).body).toMatchObject({ code: "idempotency_conflict" });
+    expect((await call("/me/topup-requests/{requestId}", `/me/topup-requests/${body.id}`, bearer(t.access_token))).body).toMatchObject({ id: body.id, status: "pending" });
+    expect((await call("/me/order-requests/{requestId}", `/me/order-requests/${body.id}`, bearer(t.access_token))).status).toBe(404);
+    const stranger = await signIn(await investor());
+    expect((await call("/me/topup-requests/{requestId}", `/me/topup-requests/${body.id}`, bearer(stranger.access_token))).status).toBe(404);
+  });
+
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
     expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
     const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });

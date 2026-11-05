@@ -12,9 +12,11 @@ class MarketRepositoryImpl implements MarketRepository {
   Future<MarketData> overview() async {
     final markets = await _api.get('/markets', auth: false);
     final orders = await _api.get('/me/orders', query: {'limit': '50'});
+    final cash = await _api.get('/me/cash');
     return MarketData(
       markets: (markets['data'] as List<dynamic>).map((e) => MarketBook.fromJson(e as Map<String, dynamic>)).toList(),
       orders: (orders['data'] as List<dynamic>).map((e) => MarketOrder.fromJson(e as Map<String, dynamic>)).toList(),
+      cash: Cash.fromJson(cash),
     );
   }
 
@@ -39,6 +41,17 @@ class MarketRepositoryImpl implements MarketRepository {
       OrderRequest.fromJson(
         await _api.postJson('/me/orders/$orderId/cancel-requests', {}, idempotencyKey: idempotencyKey),
       );
+
+  @override
+  Future<TopUpRequest> requestTopUp({required String amountPaisa, required String idempotencyKey}) async =>
+      TopUpRequest.fromJson(
+        await _api.postJson('/me/topup-requests', {
+          'amount': {'amount': amountPaisa, 'currency': 'PKR'},
+        }, idempotencyKey: idempotencyKey),
+      );
+
+  @override
+  Future<TopUpRequest> topUpRequest(String id) async => TopUpRequest.fromJson(await _api.get('/me/topup-requests/$id'));
 
   @override
   Future<OrderRequest> orderRequest(String id) async => OrderRequest.fromJson(await _api.get('/me/order-requests/$id'));

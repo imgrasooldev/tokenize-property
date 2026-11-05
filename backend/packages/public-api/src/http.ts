@@ -29,6 +29,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,64}$/;
+/** Whole rupees from Rs 1 to Rs 10,000,000 (as the website's demo top-up), in paisa. */
+const TOPUP = z.strictObject({ amount: z.strictObject({ amount: z.string().regex(/^[1-9][0-9]{0,9}00$/), currency: z.literal("PKR") }) });
 const SYMBOL = /^[A-Z][A-Z0-9]{2,11}$/;
 const ORDER = z.strictObject({
   symbol: z.string().regex(SYMBOL),
@@ -340,6 +342,49 @@ export function createApiServer(deps: ApiDeps): Server {
           if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used for another request");
           throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
         }
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/cash$/,
+      async (req) => {
+        const body = await deps.investors.cash(await signedIn(req));
+        if (!body) throw new Problem(401, "invalid_token", "Sign in again");
+        return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
+    [
+      "POST",
+      /^\/v1\/me\/topup-requests$/,
+      async (req) => {
+        const h = await signedIn(req);
+        const key = req.headers["idempotency-key"];
+        if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) {
+          throw new Problem(400, "idempotency_key_required", "Idempotency-Key header required", "8-64 characters: letters, digits, . _ : -");
+        }
+        const body = TOPUP.safeParse(await json(req));
+        if (!body.success || BigInt(body.data.amount.amount) > 1_000_000_000n) {
+          throw new Problem(400, "invalid_body", "Invalid request body", "amount {amount in paisa (whole rupees, Rs 1 to Rs 10,000,000), currency PKR} is required");
+        }
+        try {
+          const r = await deps.investors.requestTopUp(h, { amountPaisa: BigInt(body.data.amount.amount), idempotencyKey: key });
+          return { status: r.created ? 201 : 200, body: r.body, cache: "no-store" };
+        } catch (e) {
+          if (!(e instanceof RequestError)) throw e;
+          if (e.reason === "token") throw new Problem(401, "invalid_token", "Sign in again");
+          if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used with another body");
+          throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
+        }
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/topup-requests\/([^/]+)$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const body = UUID.test(id) ? await deps.investors.topUpRequest(h, id) : null;
+        if (!body) throw new Problem(404, "not_found", "No such request of yours");
+        return { status: 200, body, cache: "private, no-store" };
       },
     ],
     [

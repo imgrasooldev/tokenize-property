@@ -162,6 +162,27 @@ export interface OrderRequestRow {
 
 export type OrderRefusal = "token" | "input" | "conflict" | "limit" | "code";
 
+/** Migration 0064: a request to add demo cash, confirmed on the website (resource TopUpRequest). */
+export interface TopUpRequestRow {
+  id: string;
+  kind: "topup";
+  amount_paisa: string;
+  status: "pending" | "confirmed" | "declined" | "expired";
+  code: string;
+  created_at: string;
+  expires_at: string;
+  topup_id: string | null;
+  replayed?: boolean;
+}
+
+export type TopUpRefusal = "token" | "input" | "conflict" | "limit" | "code";
+
+/** Migration 0064: the investor's demo-market cash as the ledger has it. */
+export interface CashRow {
+  available_paisa: string;
+  in_orders_paisa: string;
+}
+
 /** Migration 0063: why a cancellation request for an order was refused ("order": not the investor's open order). */
 export type OrderCancelRefusal = "token" | "order" | "conflict" | "limit" | "code";
 
@@ -215,6 +236,10 @@ export interface InvestorRepository {
   /** Migration 0063: a request to cancel one of the investor's open orders. */
   requestOrderCancel(accessHash: Buffer, orderId: string, idempotencyKey: string, code: string): Promise<OrderRequestRow | { error: OrderCancelRefusal }>;
   orderRequest(accessHash: Buffer, id: string): Promise<OrderRequestRow | null>;
+  /** Migration 0064: demo cash, a top-up request and its status. */
+  cash(accessHash: Buffer): Promise<CashRow | null>;
+  requestTopUp(accessHash: Buffer, amountPaisa: bigint, idempotencyKey: string, code: string): Promise<TopUpRequestRow | { error: TopUpRefusal }>;
+  topUpRequest(accessHash: Buffer, id: string): Promise<TopUpRequestRow | null>;
   orders(accessHash: Buffer): Promise<OrderRow[]>;
   subscription(accessHash: Buffer, id: string): Promise<SubscriptionDetailRow | null>;
 }
@@ -299,6 +324,12 @@ export function pgRepositories(db: pg.Pool): Repositories {
           error: "token",
         },
       orderRequest: async (h, id) => (await one<{ r: OrderRequestRow | null }>("SELECT papi.order_request($1, $2) AS r", [h, id]))?.r ?? null,
+      cash: async (h) => (await one<{ r: CashRow | null }>("SELECT papi.cash($1) AS r", [h]))?.r ?? null,
+      requestTopUp: async (h, amount, key, code) =>
+        (await one<{ r: TopUpRequestRow | { error: TopUpRefusal } }>("SELECT papi.request_topup($1, $2, $3, $4) AS r", [h, amount.toString(), key, code]))?.r ?? {
+          error: "token",
+        },
+      topUpRequest: async (h, id) => (await one<{ r: TopUpRequestRow | null }>("SELECT papi.topup_request($1, $2) AS r", [h, id]))?.r ?? null,
       orders: async (h) =>
         (await db.query<OrderRow>("SELECT id, symbol, side, price_paisa::text, tokens::text, filled::text, status, created_at FROM papi.orders($1)", [h])).rows,
       request: async (h, id) => (await one<{ r: RequestRow | null }>("SELECT papi.request($1, $2) AS r", [h, id]))?.r ?? null,

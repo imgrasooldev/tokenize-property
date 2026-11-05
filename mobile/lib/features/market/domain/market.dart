@@ -74,15 +74,76 @@ class MarketOrder extends Equatable {
   List<Object?> get props => [id, status, filled];
 }
 
-/// The markets and the investor's orders, for the market screen.
+/// The investor's demo-market cash (schema Cash, ADR 0018 amendment 5).
+class Cash extends Equatable {
+  const Cash({required this.availablePaisa, required this.inOrdersPaisa});
+
+  factory Cash.fromJson(Map<String, dynamic> j) => Cash(
+    availablePaisa: (j['available'] as Map<String, dynamic>)['amount'] as String,
+    inOrdersPaisa: (j['in_orders'] as Map<String, dynamic>)['amount'] as String,
+  );
+
+  final String availablePaisa;
+
+  /// Held in the escrow of open buy orders.
+  final String inOrdersPaisa;
+
+  @override
+  List<Object?> get props => [availablePaisa, inOrdersPaisa];
+}
+
+/// The markets, the investor's orders and cash, for the market screen.
 class MarketData extends Equatable {
-  const MarketData({required this.markets, required this.orders});
+  const MarketData({required this.markets, required this.orders, this.cash});
 
   final List<MarketBook> markets;
   final List<MarketOrder> orders;
+  final Cash? cash;
 
   @override
-  List<Object?> get props => [markets, orders];
+  List<Object?> get props => [markets, orders, cash];
+}
+
+/// A demo cash top-up the app asked for; the investor confirms it on the
+/// website (schema TopUpRequest, ADR 0018 amendment 5).
+class TopUpRequest extends Equatable implements WebsiteConfirmation {
+  const TopUpRequest({
+    required this.id,
+    required this.amountPaisa,
+    required this.status,
+    required this.code,
+    required this.confirmUriComplete,
+    required this.expiresAt,
+    required this.topUpId,
+  });
+
+  factory TopUpRequest.fromJson(Map<String, dynamic> j) => TopUpRequest(
+    id: j['id'] as String,
+    amountPaisa: (j['amount'] as Map<String, dynamic>)['amount'] as String,
+    status: j['status'] as String,
+    code: j['confirmation_code'] as String,
+    confirmUriComplete: j['confirmation_uri_complete'] as String,
+    expiresAt: DateTime.parse(j['expires_at'] as String),
+    topUpId: j['topup_id'] as String?,
+  );
+
+  final String id;
+  final String amountPaisa;
+
+  /// pending, confirmed, declined or expired.
+  final String status;
+  @override
+  final String code;
+  @override
+  final String confirmUriComplete;
+  @override
+  final DateTime expiresAt;
+  final String? topUpId;
+
+  bool get pending => status == 'pending';
+
+  @override
+  List<Object?> get props => [id, status, topUpId];
 }
 
 /// A limit order the app asked for, or the cancellation of an open one; the
@@ -165,6 +226,11 @@ abstract interface class MarketRepository {
   Future<OrderRequest> requestOrderCancel({required String orderId, required String idempotencyKey});
 
   Future<OrderRequest> orderRequest(String id);
+
+  /// Asks for a demo cash top-up of [amountPaisa] (whole rupees).
+  Future<TopUpRequest> requestTopUp({required String amountPaisa, required String idempotencyKey});
+
+  Future<TopUpRequest> topUpRequest(String id);
 }
 
 /// "505", "505.5" or "505.25" rupees to paisa as a string; null for anything else (no floats).

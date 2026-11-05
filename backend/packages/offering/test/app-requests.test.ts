@@ -260,14 +260,67 @@ describe("app requests confirmed on the website (migration 0060)", () => {
     expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toMatchObject({ status: "confirmed", order_id: open });
   });
 
+  it("migration 0064: a top-up request adds no cash; the website's demo top-up is bound only for the same investor and amount; cash reads from the ledger", async () => {
+    const a = await app();
+    const other = await app();
+    type TReq = Req & { kind?: string; topup_id?: string | null };
+    const topup = async (x: App, amount: number, key: string, code: string): Promise<TReq> =>
+      (await w.client.query<{ r: TReq }>("SELECT papi.request_topup($1, $2, $3, $4) AS r", [x.access, amount, key, code])).rows[0]?.r ?? {};
+    const cash = async (x: App): Promise<unknown> => (await w.client.query<{ r: unknown }>("SELECT papi.cash($1) AS r", [x.access])).rows[0]?.r;
+    expect(await cash(a)).toEqual({ available_paisa: "0", in_orders_paisa: "0" });
+    expect(await topup(a, 150, "key-jjjjjjj1", "BCDFGHJM")).toEqual({ error: "input" }); // whole rupees only
+    expect(await topup(a, 0, "key-jjjjjjj1", "BCDFGHJM")).toEqual({ error: "input" });
+    expect(await topup(a, 2_000_000_000, "key-jjjjjjj1", "BCDFGHJM")).toEqual({ error: "input" });
+    const r = await topup(a, 500_000, "key-jjjjjjj2", "BCDFGHJN");
+    expect(r).toMatchObject({ kind: "topup", status: "pending", amount_paisa: "500000", topup_id: null, replayed: false });
+    expect(await topup(a, 500_000, "key-jjjjjjj2", "BCDFGHJP")).toMatchObject({ id: r.id, replayed: true });
+    expect(await topup(a, 600_000, "key-jjjjjjj2", "BCDFGHJP")).toEqual({ error: "conflict" });
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.topup_request($1, $2) AS r", [other.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: { kind?: string } }>("SELECT papi.web_request_lookup($1, 'BCDF-GHJN') AS r", [a.session])).rows[0]?.r).toMatchObject({ kind: "topup", amount_paisa: "500000" });
+    expect(await cash(a)).toEqual({ available_paisa: "0", in_orders_paisa: "0" });
+
+    // What the website's demo top-up does: one webdemo.topups row (request id = the app request) and one journal.
+    const demoTopUp = async (x: App, requestId: string, amount: number): Promise<void> => {
+      const id = randomUUID();
+      await w.client.query("INSERT INTO webdemo.topups (id, request_id, investor_id, amount_paisa, bank_ref) VALUES ($1, $2, $3, $4, 'RAAST-DEMO-0123456789AB')", [id, requestId, x.investorId, amount]);
+      await w.client.query("SELECT ledger.open_account('web:bank:client-money', 'asset', 'PKR', false)");
+      await w.client.query("SELECT ledger.open_account($1, 'liability', 'PKR', false)", [`web:investor:${x.investorId}:cash`]);
+      await w.client.query("SELECT ledger.post_journal($1, 'cash_topup', 'Raast top-up (demo)', NULL, 'web-market', $2::jsonb)", [
+        `web:topup:${id}`,
+        JSON.stringify([
+          { account: "web:bank:client-money", amount: String(amount) },
+          { account: `web:investor:${x.investorId}:cash`, amount: String(-amount) },
+        ]),
+      ]);
+    };
+    const finish = async (x: App): Promise<unknown> => (await w.client.query<{ r: unknown }>("SELECT papi.web_request_topup_done($1, 'BCDFGHJN') AS r", [x.session])).rows[0]?.r;
+    expect(await finish(a)).toEqual({ error: "mismatch" });
+    await demoTopUp(other, r.id ?? "", 500_000); // the other investor's top-up never binds
+    expect(await finish(a)).toEqual({ error: "mismatch" });
+    expect(await finish(other)).toEqual({ error: "code" });
+    const a2 = await topup(a, 300_000, "key-jjjjjjj3", "BCDFGHJQ");
+    await demoTopUp(a, a2.id ?? "", 200_000); // another amount never binds either
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.web_request_topup_done($1, 'BCDFGHJQ') AS r", [a.session])).rows[0]?.r).toEqual({ error: "mismatch" });
+
+    const b = await topup(a, 400_000, "key-jjjjjjj4", "BCDFGHJR");
+    await demoTopUp(a, b.id ?? "", 400_000);
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.web_request_topup_done($1, 'BCDFGHJR') AS r", [a.session])).rows[0]?.r).toEqual({ ok: true });
+    expect((await w.client.query<{ r: TReq }>("SELECT papi.topup_request($1, $2) AS r", [a.access, b.id])).rows[0]?.r).toMatchObject({ status: "confirmed", topup_id: expect.any(String) as unknown });
+    expect(await cash(a)).toEqual({ available_paisa: "600000", in_orders_paisa: "0" });
+    expect((await w.client.query("SELECT papi.cash($1) AS r", [sha("nope")])).rows[0]).toEqual({ r: null });
+  });
+
   it("the service's login and the website's role can call only their own functions", async () => {
     const grants = await w.client.query<{ routine: string; grantee: string }>(
       `SELECT p.proname AS routine, r.rolname AS grantee FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        CROSS JOIN pg_roles r WHERE n.nspname = 'papi' AND r.rolname IN ('pt_svc_public_api', 'pt_web')
-         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done', 'request_order_cancel', 'web_request_order_cancel_done')
+         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done', 'request_order_cancel', 'web_request_order_cancel_done', 'cash', 'request_topup', 'topup_request', 'web_request_topup_done')
          AND has_function_privilege(r.oid, p.oid, 'EXECUTE') ORDER BY 1, 2`,
     );
     expect(grants.rows.map((g) => `${g.routine}:${g.grantee}`)).toEqual([
+      "cash:pt_svc_public_api",
       "markets:pt_svc_public_api",
       "order_request:pt_svc_public_api",
       "orders:pt_svc_public_api",
@@ -276,13 +329,16 @@ describe("app requests confirmed on the website (migration 0060)", () => {
       "request_order:pt_svc_public_api",
       "request_order_cancel:pt_svc_public_api",
       "request_reserve:pt_svc_public_api",
+      "request_topup:pt_svc_public_api",
       "subscription:pt_svc_public_api",
+      "topup_request:pt_svc_public_api",
       "web_request_decline:pt_web",
       "web_request_done:pt_web",
       "web_request_finish:pt_web",
       "web_request_lookup:pt_web",
       "web_request_order_cancel_done:pt_web",
       "web_request_order_done:pt_web",
+      "web_request_topup_done:pt_web",
     ]);
   });
 });

@@ -172,6 +172,13 @@ class _FakeMarket implements MarketRepository {
       throw const ApiException(404, 'not_found');
 
   @override
+  Future<TopUpRequest> requestTopUp({required String amountPaisa, required String idempotencyKey}) =>
+      throw const ApiException(409, 'too_many_pending');
+
+  @override
+  Future<TopUpRequest> topUpRequest(String id) => throw const ApiException(404, 'not_found');
+
+  @override
   Future<OrderRequest> orderRequest(String id) => throw const ApiException(404, 'not_found');
 }
 

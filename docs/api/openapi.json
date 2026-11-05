@@ -1566,6 +1566,188 @@
           }
         }
       }
+    },
+    "/me/cash": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getCash",
+        "summary": "The investor's demo-market cash",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash available and held in open buy orders",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cash"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/topup-requests": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "requestTopUp",
+        "summary": "Ask for a demo cash top-up; the investor confirms it on the website",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount"
+                ],
+                "properties": {
+                  "amount": {
+                    "$ref": "#/components/schemas/Money",
+                    "description": "Whole rupees, Rs 1 to Rs 10,000,000 (amount in paisa ending in 00)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A new request (open confirmation_uri_complete on the website; poll the request)",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopUpRequest"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The request made earlier with the same Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopUpRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/topup-requests/{requestId}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getTopUpRequest",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request and its status",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopUpRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2728,6 +2910,96 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "Cash": {
+        "type": "object",
+        "description": "The investor's cash on the demo market (ledger): available for buy orders, and held in the escrow of open buy orders. Demo money: topped up by a simulated Raast payment.",
+        "required": [
+          "available",
+          "in_orders",
+          "demo"
+        ],
+        "properties": {
+          "available": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "in_orders": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "demo": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "TopUpRequest": {
+        "type": "object",
+        "description": "A demo cash top-up the app asked for. It adds nothing until the investor confirms it on the website, which runs the website's own demo top-up (a simulated Raast payment into the cash account).",
+        "required": [
+          "id",
+          "kind",
+          "amount",
+          "status",
+          "confirmation_code",
+          "confirmation_uri",
+          "confirmation_uri_complete",
+          "created_at",
+          "expires_at",
+          "topup_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "topup"
+            ]
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "declined",
+              "expired"
+            ]
+          },
+          "confirmation_code": {
+            "type": "string",
+            "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+          },
+          "confirmation_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "confirmation_uri_complete": {
+            "type": "string",
+            "format": "uri"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "15 minutes after creation"
+          },
+          "topup_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The website's top-up, once confirmed (null before)"
           }
         }
       }

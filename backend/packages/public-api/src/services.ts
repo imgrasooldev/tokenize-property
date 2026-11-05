@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { render } from "@pt/notify";
 import { buildTree, rentLeaf } from "@pt/tax";
 import { keccak256, stringToBytes, type Address } from "viem";
-import type { CatalogueRepository, GrantRepository, InvestorRepository, MarketBookRow, OfferingRow, OrderRequestRow, RequestRow } from "./repositories.ts";
+import type { CatalogueRepository, GrantRepository, InvestorRepository, MarketBookRow, OfferingRow, OrderRequestRow, RequestRow, TopUpRequestRow } from "./repositories.ts";
 
 /**
  * Service layer (use cases) of the public API, ADR 0018 section 3: no HTTP and no SQL here. The
@@ -280,6 +280,47 @@ export class InvestorService {
       return { created: r.replayed !== true, body: this.orderRequestView(r) };
     }
     throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  private topUpView(r: TopUpRequestRow) {
+    const code = `${r.code.slice(0, 4)}-${r.code.slice(4)}`;
+    return {
+      id: r.id,
+      kind: r.kind,
+      amount: money(r.amount_paisa),
+      status: r.status,
+      confirmation_code: code,
+      confirmation_uri: this.confirmUri,
+      confirmation_uri_complete: `${this.confirmUri}?code=${code}`,
+      created_at: new Date(r.created_at).toISOString(),
+      expires_at: new Date(r.expires_at).toISOString(),
+      topup_id: r.topup_id,
+    };
+  }
+
+  /** Migration 0064: the investor's demo-market cash (available, held in open buy orders). */
+  async cash(h: Buffer) {
+    const c = await this.repo.cash(h);
+    return c ? { available: money(c.available_paisa), in_orders: money(c.in_orders_paisa), demo: true as const } : null;
+  }
+
+  /** Phase 2b part 4 (migration 0064): asks for a demo cash top-up the investor confirms on the website. */
+  async requestTopUp(h: Buffer, input: { amountPaisa: bigint; idempotencyKey: string }) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const r = await this.repo.requestTopUp(h, input.amountPaisa, input.idempotencyKey, userCode());
+      if ("error" in r) {
+        if (r.error === "code") continue;
+        if (r.error === "input") throw new Error("top-up amount not checked by the route");
+        throw new RequestError(r.error);
+      }
+      return { created: r.replayed !== true, body: this.topUpView(r) };
+    }
+    throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  async topUpRequest(h: Buffer, id: string) {
+    const r = await this.repo.topUpRequest(h, id);
+    return r ? this.topUpView(r) : null;
   }
 
   async orderRequest(h: Buffer, id: string) {

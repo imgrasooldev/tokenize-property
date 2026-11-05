@@ -83,3 +83,13 @@ Owner: "ok ok go on plz" after the 2b part 2 follow-ups were listed (2026-11-05)
 - In the app, My orders shows a Cancel button on open orders (route `/market/cancel`, `OrderCubit.cancelOrder`, the shared website-confirmation widget).
 - Cash top-ups and push notifications stay for later (push needs a Firebase/APNs account: owner).
 
+## Amendment 5 (2026-11-05): phase 2b part 4, demo cash and top-ups from the app, confirmed on the website
+
+Owner: "ok ok go on plz, continue code" (2026-11-05), same rule as amendments 1-4; migration `0064_public_api_cash.sql`.
+
+- `GET /v1/me/cash` returns the investor's demo-market cash: `available` (the website's demo cash account) and `in_orders` (the escrow of open buy orders), both Money, with `demo: true`. Read from the ledger balances, no other investor's data.
+- `POST /v1/me/topup-requests` (`{amount: Money}`, whole rupees, Rs 1 to Rs 10,000,000, `Idempotency-Key`) creates a pending request of kind `topup` (`TopUpRequest`, `GET /v1/me/topup-requests/{id}`). Same 15 minutes, 8-letter code, at most 5 pending of any kind, same key with another amount 409. A request moves no money.
+- The investor confirms on the website `/confirm`: the website runs its own demo top-up (a simulated Raast payment) with the request's id as its request id, so a repeat adds nothing; `papi.web_request_topup_done` marks the request confirmed only when that top-up exists for the same investor and amount, and `topup_id` then names it. Declining works as for every kind.
+- In the app, Market shows the cash card with "Add cash" (route `/market/topup`, `TopUpCubit`, the shared website-confirmation widget); the market screen reloads the cash with the books and orders.
+- This is demo money only. Real pay-ins stay with the payment code and the trustee account (amendment 1). Push notifications stay for later (owner: Firebase/APNs).
+

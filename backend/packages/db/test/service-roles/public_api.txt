@@ -1,3 +1,4 @@
+function papi.cash(p_access_hash bytea)
 function papi.device_authorize(p_device_hash bytea, p_user_code text, p_client text, p_device_name text)
 function papi.device_token(p_device_hash bytea, p_access_hash bytea, p_refresh_hash bytea)
 function papi.distribution_statement(p_access_hash bytea, p_token text, p_onchain_id numeric)
@@ -15,11 +16,13 @@ function papi.request_change(p_access_hash bytea, p_subscription uuid, p_kind te
 function papi.request_order(p_access_hash bytea, p_symbol text, p_side text, p_price bigint, p_tokens bigint, p_key text, p_code text)
 function papi.request_order_cancel(p_access_hash bytea, p_order uuid, p_key text, p_code text)
 function papi.request_reserve(p_access_hash bytea, p_offering uuid, p_units bigint, p_key text, p_code text)
+function papi.request_topup(p_access_hash bytea, p_amount bigint, p_key text, p_code text)
 function papi.revoke(p_hash bytea)
 function papi.status()
 function papi.subscription(p_access_hash bytea, p_id uuid)
 function papi.subscriptions(p_access_hash bytea)
 function papi.tax_certificates(p_access_hash bytea)
 function papi.token_investor(p_access_hash bytea)
+function papi.topup_request(p_access_hash bytea, p_id uuid)
 schema papi: USAGE
 schema public: USAGE

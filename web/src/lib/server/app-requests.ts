@@ -34,11 +34,26 @@ export interface OrderAppRequest {
   target_order_id?: string | null;
 }
 
-export type AppRequest = SubscriptionAppRequest | OrderAppRequest;
+/** A demo cash top-up the app asked for (migration 0064). */
+export interface TopUpAppRequest {
+  id: string;
+  kind: "topup";
+  amount_paisa: string;
+  status: string;
+  code: string;
+  expires_at: string;
+}
+
+export type AppRequest = SubscriptionAppRequest | OrderAppRequest | TopUpAppRequest;
 
 /** A market request (place or cancel an order) rather than a subscription request. */
 export function isOrderRequest(r: AppRequest): r is OrderAppRequest {
   return r.kind === "order" || r.kind === "order_cancel";
+}
+
+/** A reserve, cancel or withdraw request (the subscription kinds). */
+export function isSubscriptionRequest(r: AppRequest): r is SubscriptionAppRequest {
+  return r.kind === "reserve" || r.kind === "cancel" || r.kind === "withdraw";
 }
 
 export const APP_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
@@ -79,5 +94,14 @@ export async function finishAppRequest(session: Buffer, code: string): Promise<b
  */
 export async function finishAppOrderCancel(session: Buffer, code: string): Promise<boolean> {
   const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_order_cancel_done($1, $2) AS r", [session, code]);
+  return rows[0]?.r.ok === true;
+}
+
+/**
+ * After the website's own demo top-up (migration 0064 CT-3): marks the app's request confirmed; the
+ * database checks that the top-up exists for the same investor and amount.
+ */
+export async function finishAppTopUp(session: Buffer, code: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_topup_done($1, $2) AS r", [session, code]);
   return rows[0]?.r.ok === true;
 }

@@ -23,6 +23,19 @@ class MarketPage extends StatelessWidget {
         builder: (context, d) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (d.cash case final cash?)
+              Card(
+                child: ListTile(
+                  key: const Key('market-cash'),
+                  title: Text(l.cashTitle),
+                  subtitle: Text(l.cashLine(formatPkr(cash.availablePaisa, lang), formatPkr(cash.inOrdersPaisa, lang))),
+                  trailing: TextButton(
+                    key: const Key('cash-add'),
+                    onPressed: () => unawaited(context.push('/market/topup')),
+                    child: Text(l.cashAdd),
+                  ),
+                ),
+              ),
             if (d.markets.isEmpty) Text(l.marketNone),
             for (final m in d.markets) _BookCard(m),
             const SizedBox(height: 16),

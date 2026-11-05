@@ -27,6 +27,8 @@ import 'package:property_token_app/features/market/presentation/market_page.dart
 import 'package:property_token_app/features/market/presentation/order_cancel_page.dart';
 import 'package:property_token_app/features/market/presentation/order_cubit.dart';
 import 'package:property_token_app/features/market/presentation/order_page.dart';
+import 'package:property_token_app/features/market/presentation/top_up_cubit.dart';
+import 'package:property_token_app/features/market/presentation/top_up_page.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_bloc.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_page.dart';
@@ -209,6 +211,13 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
           child: OrderCancelPage(order: o),
         );
       },
+    ),
+    GoRoute(
+      path: '/market/topup',
+      builder: (c, _) => BlocProvider(
+        create: (_) => TopUpCubit(c.read<MarketRepository>()),
+        child: const TopUpPage(),
+      ),
     ),
     GoRoute(
       path: '/subscription-change',

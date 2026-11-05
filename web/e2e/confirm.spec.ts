@@ -110,3 +110,27 @@ test("an app request to cancel an open order cancels it through the website", as
     order_id: order[0]?.id,
   });
 });
+
+/**
+ * ADR 0018 amendment 5 (migration 0064): a demo cash top-up the app asked for runs the website's own
+ * demo top-up (one webdemo.topups row with the request id); the request is confirmed only then.
+ */
+test("an app top-up request adds the demo cash through the website", async ({ page }) => {
+  test.setTimeout(180_000);
+  const alice = await testDb<{ id: string }>("SELECT id FROM webdemo.investors WHERE display_name LIKE 'Alice%' ORDER BY created_at LIMIT 1");
+  test.skip(!alice[0], "no Alice in the e2e database");
+  const c = code();
+  const req = await testDb<{ id: string }>(
+    `INSERT INTO papi.requests (investor_id, kind, units, idempotency_key, code, created_at, expires_at, topup_paisa)
+     SELECT $1, 'topup', 1, $2, $3, t, t + interval '15 minutes', 250000 FROM (SELECT date_trunc('microseconds', clock_timestamp()) AS t) x RETURNING id`,
+    [alice[0]?.id, `e2e-${randomBytes(6).toString("hex")}`, c],
+  );
+  await loginAs(page, "Alice");
+  await page.goto(`/confirm?code=${c}`);
+  await expect(page.getByTestId("confirm-request")).toContainText("2,500");
+  await page.getByTestId("confirm-app-topup").click();
+  await expect(page.getByTestId("confirm-status")).toContainText("Cash added", { timeout: 60_000 });
+  const topup = await testDb<{ amount_paisa: string }>("SELECT amount_paisa::text FROM webdemo.topups WHERE request_id = $1", [req[0]?.id]);
+  expect(topup).toEqual([{ amount_paisa: "250000" }]);
+  expect((await testDb<{ status: string }>("SELECT status FROM papi.requests WHERE code = $1", [c]))[0]?.status).toBe("confirmed");
+});

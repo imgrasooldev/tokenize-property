@@ -6,7 +6,7 @@ import { z } from "zod";
 import { MAX_TOPUP_PAISA, orderSchema, topUpSchema } from "@/lib/market-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { nudgeFollower } from "@/lib/server/follower";
-import { APP_CODE, bindAppOrder, finishAppOrderCancel, lookupAppRequest } from "@/lib/server/app-requests";
+import { APP_CODE, bindAppOrder, finishAppOrderCancel, finishAppTopUp, lookupAppRequest } from "@/lib/server/app-requests";
 import { cancelOrder, placeOrder, topUp, type PlaceError } from "@/lib/server/market";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
@@ -111,6 +111,33 @@ export async function cancelAppOrderAction(formData: FormData): Promise<void> {
     logError("app-order-cancel", e);
   }
   redirect(`/confirm?${finished ? "ordercancelled" : "ordercancelfailed"}=1`);
+}
+
+/**
+ * Adds the demo cash the mobile app asked for (migration 0064): the website's own demo top-up with
+ * the app request's id as its request id (so a repeat adds nothing), then the request is confirmed.
+ */
+export async function confirmAppTopUpAction(formData: FormData): Promise<void> {
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
+  if (!take("topup", investor.id)) redirect("/confirm");
+  const code = formData.get("appCode");
+  if (typeof code !== "string" || !APP_CODE.test(code)) redirect("/confirm");
+  const request = await lookupAppRequest(session.hash, code);
+  if (request?.kind !== "topup") redirect("/confirm");
+  const amount = BigInt(request.amount_paisa);
+  let finished = false;
+  if (amount > 0n && amount <= MAX_TOPUP_PAISA) {
+    try {
+      await topUp(investor, amount, request.id);
+      revalidatePath("/market");
+      finished = await finishAppTopUp(session.hash, code);
+    } catch (e) {
+      logError("app-topup", e);
+    }
+  }
+  redirect(`/confirm?${finished ? "toppedup" : "topupfailed"}=1`);
 }
 
 export async function topUpAction(_prev: MarketState, formData: FormData): Promise<MarketState> {

@@ -239,5 +239,32 @@
       }
     }
   },
-  "orderCancelNotOpen": "This order is no longer open (filled or cancelled already)."
+  "orderCancelNotOpen": "This order is no longer open (filled or cancelled already).",
+  "cashTitle": "Cash (demo)",
+  "cashLine": "{available} available · {inOrders} in open orders",
+  "@cashLine": {
+    "placeholders": {
+      "available": {
+        "type": "String"
+      },
+      "inOrders": {
+        "type": "String"
+      }
+    }
+  },
+  "cashAdd": "Add cash",
+  "topUpTitle": "Add cash (demo)",
+  "topUpAmount": "Amount (whole rupees)",
+  "topUpAsk": "Ask to add",
+  "topUpHow": "You confirm on the website. On this demo that simulates a Raast payment from your bank into your market cash. Nothing is added until you do.",
+  "topUpDone": "Added. Your cash now shows the new balance.",
+  "topUpEnded": "This request was {status}. No cash was added.",
+  "@topUpEnded": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpInvalid": "Enter whole rupees, from Rs 1 to Rs 10,000,000."
 }
