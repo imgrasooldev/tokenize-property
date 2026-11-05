@@ -164,5 +164,20 @@
   "investErr_invalid_units": "Enter a whole number of units.",
   "investErr_offering_not_open": "This offering is not open for reservations.",
   "investErr_too_many_pending": "Confirm or let a waiting request expire first.",
-  "investErr_other": "Could not send the request. Please try again."
+  "investErr_other": "Could not send the request. Please try again.",
+  "changeTitle": "Change subscription",
+  "changeCancel": "Ask to cancel",
+  "changeWithdraw": "Ask to withdraw",
+  "changeHowCancel": "You confirm the cancellation on the website. Nothing changes until you do.",
+  "changeHowWithdraw": "Withdrawing refunds your payment to the account it came from. You confirm on the website; nothing changes until you do.",
+  "changeDone": "Done. The website confirmed the change.",
+  "changeEnded": "This request was {status}. Nothing changed.",
+  "@changeEnded": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "changeErr_not_allowed_now": "This subscription cannot be changed now."
 }

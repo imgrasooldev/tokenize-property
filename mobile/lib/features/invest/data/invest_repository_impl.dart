@@ -1,7 +1,7 @@
 import 'package:property_token_app/core/network/api_client.dart';
 import 'package:property_token_app/features/invest/domain/invest.dart';
 
-/// Reservation requests over the public API (phase 2a, ADR 0018 amendment 1).
+/// App requests over the public API (phases 2a and 2b, ADR 0018 amendments 1 and 2).
 class InvestRepositoryImpl implements InvestRepository {
   InvestRepositoryImpl(this._api);
 
@@ -16,6 +16,17 @@ class InvestRepositoryImpl implements InvestRepository {
     await _api.postJson('/me/subscription-requests', {
       'offering_id': offeringId,
       'units': units,
+    }, idempotencyKey: idempotencyKey),
+  );
+
+  @override
+  Future<SubscriptionRequest> requestChange({
+    required String subscriptionId,
+    required String action,
+    required String idempotencyKey,
+  }) async => SubscriptionRequest.fromJson(
+    await _api.postJson('/me/subscriptions/$subscriptionId/change-requests', {
+      'action': action,
     }, idempotencyKey: idempotencyKey),
   );
 

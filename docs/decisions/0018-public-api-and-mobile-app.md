@@ -55,3 +55,11 @@ Owner decision 2026-11-05: "Website pe ab, passkey baad" (confirm on the website
 - The investor confirms on the website (`/confirm?code=...`), signed in, through the website's own reservation path: documents accepted, the KYC gate and limits of `offering.web_reserve`, and the passkey step-up `offering.reserve` where the investor has a passkey. The website binds the new subscription to the request only for the same investor, offering and units, or the investor declines it. The app never confirms its own request.
 - `GET /v1/me/subscription-requests/{id}` (the app polls it) and `GET /v1/me/subscriptions/{id}` (payment code, trustee collection account and deadline, exactly as the website shows them).
 - Passkeys inside the app (WebAuthn with platform passkeys bound to the domain), DPoP and writes without a website step need the production domain and TLS: phase 2b or later.
+
+## Amendment 2 (2026-11-05): phase 2b, cancel and withdraw from the app, confirmed on the website
+
+Same rule as amendment 1 ("Website pe ab, passkey baad"); migration `0061_public_api_change_requests.sql` (PC-1..PC-3).
+
+- `POST /v1/me/subscriptions/{id}/change-requests` with `{"action": "cancel" | "withdraw"}` and an `Idempotency-Key` creates a pending request (kinds `cancel` / `withdraw` of the same `SubscriptionRequest` resource; same 15 minutes, 8-letter code, at most 5 pending, same-key-other-body 409). Cancel: a reservation not yet paid (`kyc_pending`, `payment_pending`, `waitlisted`; S-02 V11). Withdraw: a paid, not yet allocated subscription while the offering's withdrawal window is open (S-02 OF-22/OF-23). Anything else is 422; another investor's subscription is 404.
+- The investor confirms on the website `/confirm` with the website's own cancel or withdraw (passkey step-up `offering.cancel` / `offering.withdraw` where available; the offering functions decide again); the request is then marked confirmed only when the subscription really reached `cancelled` (cancel) or a withdrawal refund (`refund_pending` / `refunded`, cause `withdrawal`). Or the investor declines it.
+- Market orders and push notifications stay for later steps (push needs a Firebase/APNs account: owner action).

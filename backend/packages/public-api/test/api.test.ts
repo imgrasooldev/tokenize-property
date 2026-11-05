@@ -253,6 +253,26 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/me/subscriptions/{subscriptionId}", "/me/subscriptions/not-a-uuid", bearer(t.access_token))).status).toBe(404);
   });
 
+  it("phase 2b: a change request needs an Idempotency-Key and action cancel or withdraw; an unknown or another investor's subscription is 404", async () => {
+    const t = await signIn(await investor());
+    const post = (body: string, headers: Record<string, string>): RequestInit => ({
+      method: "POST",
+      headers: { authorization: `Bearer ${t.access_token}`, "content-type": "application/json", ...headers },
+      body,
+    });
+    const T = "/me/subscriptions/{subscriptionId}/change-requests";
+    const P = "/me/subscriptions/00000000-0000-4000-8000-000000000063/change-requests";
+    const cancel = JSON.stringify({ action: "cancel" });
+    expect((await call(T, P, post(cancel, {}))).body).toMatchObject({ code: "idempotency_key_required" });
+    expect((await call(T, P, post(JSON.stringify({ action: "sell" }), { "idempotency-key": "key-87654321" }))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(T, P, post(JSON.stringify({ action: "cancel", extra: 1 }), { "idempotency-key": "key-87654321" }))).status).toBe(400);
+    const unknown = await call(T, P, post(cancel, { "idempotency-key": "key-87654321" }));
+    expect(unknown.status).toBe(404);
+    expect(unknown.body).toMatchObject({ code: "not_found" });
+    expect((await call(T, "/me/subscriptions/not-a-uuid/change-requests", post(cancel, { "idempotency-key": "key-87654321" }))).status).toBe(404);
+    expect((await call(T, P, { ...post(cancel, { "idempotency-key": "key-87654321" }), headers: { "content-type": "application/json", "idempotency-key": "key-87654321" } })).status).toBe(401);
+  });
+
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
     expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
     const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });

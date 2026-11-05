@@ -315,4 +315,4 @@ Fields: **P** priority (critical / high / medium / low), **C** complexity (S / M
 | A5 e2e not in CI | T-011 |
 | A6 status buried in long lines | T-013 |
 
-- Public API / mobile app (ADR 0018), 2026-11-05: phase 1 (read-only), 1b (rent and proofs) and 2a (invest confirmed on the website, migration 0060) done. Next: phase 2b (withdraw and cancel from the app, market orders, push notifications); passkeys in the app, DPoP and an iOS build need the production domain and TLS (owner).
+- Public API / mobile app (ADR 0018), 2026-11-05: phase 1 (read-only), 1b (rent and proofs) and 2a (invest confirmed on the website, migration 0060) done. Phase 2b part 1 (cancel and withdraw from the app confirmed on the website, migration 0061) done 2026-11-05. Next: market orders and push notifications (push needs a Firebase/APNs account: owner); passkeys in the app, DPoP and an iOS build need the production domain and TLS (owner).

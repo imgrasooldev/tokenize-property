@@ -29,6 +29,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,64}$/;
+const CHANGE = z.strictObject({ action: z.enum(["cancel", "withdraw"]) });
 const RESERVE = z.strictObject({ offering_id: z.string().regex(UUID), units: z.string().regex(/^[1-9][0-9]{0,12}$/) });
 
 class Problem extends Error {
@@ -241,6 +242,31 @@ export function createApiServer(deps: ApiDeps): Server {
           if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used with another body");
           if (e.reason === "limit") throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
           throw new Problem(422, "offering_not_open", "The offering is not open for reservations");
+        }
+      },
+    ],
+    [
+      "POST",
+      /^\/v1\/me\/subscriptions\/([^/]+)\/change-requests$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const key = req.headers["idempotency-key"];
+        if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) {
+          throw new Problem(400, "idempotency_key_required", "Idempotency-Key header required", "8-64 characters: letters, digits, . _ : -");
+        }
+        const body = CHANGE.safeParse(await json(req));
+        if (!body.success) throw new Problem(400, "invalid_body", "Invalid request body", 'action is "cancel" or "withdraw"');
+        if (!UUID.test(id)) throw new Problem(404, "not_found", "No such subscription of yours");
+        try {
+          const r = await deps.investors.requestChange(h, { subscriptionId: id, action: body.data.action, idempotencyKey: key });
+          return { status: r.created ? 201 : 200, body: r.body, cache: "no-store" };
+        } catch (e) {
+          if (!(e instanceof RequestError)) throw e;
+          if (e.reason === "token") throw new Problem(401, "invalid_token", "Sign in again");
+          if (e.reason === "unknown") throw new Problem(404, "not_found", "No such subscription of yours");
+          if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used with another body");
+          if (e.reason === "limit") throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
+          throw new Problem(422, "not_allowed_now", `This subscription cannot be ${body.data.action === "cancel" ? "cancelled" : "withdrawn"} now`);
         }
       },
     ],

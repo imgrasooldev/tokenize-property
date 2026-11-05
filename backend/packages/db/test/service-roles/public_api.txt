@@ -8,6 +8,7 @@ function papi.notifications(p_access_hash bytea, p_locale text, p_before bigint,
 function papi.offerings(p_offering uuid)
 function papi.refresh(p_refresh_hash bytea, p_access_hash bytea, p_new_refresh_hash bytea)
 function papi.request(p_access_hash bytea, p_id uuid)
+function papi.request_change(p_access_hash bytea, p_subscription uuid, p_kind text, p_key text, p_code text)
 function papi.request_reserve(p_access_hash bytea, p_offering uuid, p_units bigint, p_key text, p_code text)
 function papi.revoke(p_hash bytea)
 function papi.status()

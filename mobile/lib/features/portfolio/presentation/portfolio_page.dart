@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:property_token_app/core/bloc/loader_view.dart';
 import 'package:property_token_app/core/format/money.dart';
+import 'package:property_token_app/features/invest/presentation/change_page.dart';
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
 import 'package:property_token_app/features/portfolio/presentation/portfolio_bloc.dart';
 import 'package:property_token_app/l10n/gen/app_localizations.dart';
@@ -45,8 +48,15 @@ class PortfolioPage extends StatelessWidget {
             for (final s in p.subscriptions)
               Card(
                 child: ListTile(
+                  key: Key('subscription-${s.id}'),
                   title: Text('${l.units(formatUnits(s.units, lang))} · ${formatPkr(s.amountPaisa, lang)}'),
                   subtitle: Text(s.status),
+                  trailing: ChangePage.canCancel(s.status) || ChangePage.canWithdraw(s.status)
+                      ? const Icon(Icons.chevron_right)
+                      : null,
+                  onTap: ChangePage.canCancel(s.status) || ChangePage.canWithdraw(s.status)
+                      ? () => unawaited(context.push('/subscription-change', extra: s))
+                      : null,
                 ),
               ),
           ],

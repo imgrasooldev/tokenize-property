@@ -9,12 +9,13 @@ import { label, type OfferingDict } from "@/lib/i18n-offering";
  * Cancel a reservation or leave the queue before paying (S-02 V11). The backend checks ownership and
  * state; the database asks for a passkey step-up first when the investor has a passkey (T-030).
  */
-export function CancelForm({ l, subscriptionId, queued }: { l: OfferingDict; subscriptionId: string; queued: boolean }) {
+export function CancelForm({ l, subscriptionId, queued, appCode }: { l: OfferingDict; subscriptionId: string; queued: boolean; appCode?: string }) {
   const [state, action, pending] = useActionState<CancelState, FormData>(cancelReservationAction, {});
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form ref={formRef} action={action} className="btn-row">
       <input type="hidden" name="subscriptionId" value={subscriptionId} />
+      {appCode ? <input type="hidden" name="appCode" value={appCode} /> : null}
       <button type="submit" className="btn secondary small" disabled={pending || state.ok === true}>
         {pending ? l.cancelling : queued ? l.leaveQueue : l.cancelBtn}
       </button>

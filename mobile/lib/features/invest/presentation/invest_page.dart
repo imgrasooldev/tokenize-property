@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:property_token_app/core/format/money.dart';
+import 'package:property_token_app/features/invest/presentation/confirm_on_website.dart';
 import 'package:property_token_app/features/invest/presentation/invest_cubit.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/l10n/gen/app_localizations.dart';
@@ -88,34 +89,7 @@ class _InvestPageState extends State<InvestPage> {
               const SizedBox(height: 12),
               Text(l.investHow, style: Theme.of(context).textTheme.bodySmall),
             ],
-            InvestWaiting(:final request) => [
-              Text(l.investWaiting, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              Text(l.investCode),
-              SelectableText(
-                request.code,
-                key: const Key('invest-code'),
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 16),
-              Text(l.investOpen),
-              SelectableText(request.confirmUriComplete),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.copy),
-                label: Text(l.investCopy),
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: request.confirmUriComplete));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.investCopied)));
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              Text(l.investConfirmBefore(time.format(request.expiresAt.toLocal()))),
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(),
-            ],
+            InvestWaiting(:final request) => [ConfirmOnWebsite(request: request)],
             InvestConfirmed(:final subscription) => [
               Text(
                 l.investConfirmed,

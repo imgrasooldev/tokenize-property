@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cancelSchema, reserveSchema, type CancelErrorKey, type ReserveErrorKey } from "@/lib/offering-rules";
-import { APP_CODE, bindAppRequest, declineAppRequest } from "@/lib/server/app-requests";
+import { APP_CODE, bindAppRequest, declineAppRequest, finishAppRequest } from "@/lib/server/app-requests";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { logError } from "@/lib/server/log";
 import { cancelSubscription, reserveUnits, withdrawSubscription } from "@/lib/server/offerings";
@@ -90,6 +90,19 @@ export async function declineAppRequestAction(formData: FormData): Promise<void>
   redirect(ok ? "/confirm?declined=1" : "/confirm");
 }
 
+/** A cancel / withdraw the mobile app asked for (migration 0061): mark its request confirmed and go back to /confirm. */
+async function finishFromApp(formData: FormData, session: Buffer, subscriptionId: string): Promise<void> {
+  const appCode = formData.get("appCode");
+  if (typeof appCode !== "string" || !APP_CODE.test(appCode)) return;
+  let finished = false;
+  try {
+    finished = await finishAppRequest(session, appCode);
+  } catch (e) {
+    logError("app-request-finish", e);
+  }
+  redirect(`/confirm?${finished ? "changed" : "unlinked"}=1&sub=${subscriptionId}`);
+}
+
 export interface CancelState {
   ok?: boolean;
   error?: CancelErrorKey;
@@ -112,6 +125,7 @@ export async function cancelReservationAction(_prev: CancelState, formData: Form
     return { error: "generic" };
   }
   revalidatePath("/subscriptions");
+  await finishFromApp(formData, investor.session, parsed.data.subscriptionId);
   return { ok: true };
 }
 
@@ -132,5 +146,6 @@ export async function withdrawSubscriptionAction(_prev: CancelState, formData: F
     return { error: "generic" };
   }
   revalidatePath("/subscriptions");
+  await finishFromApp(formData, investor.session, parsed.data.subscriptionId);
   return { ok: true };
 }

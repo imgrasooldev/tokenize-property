@@ -141,7 +141,7 @@ export class CatalogueService {
 
 /** Why a request was refused (mapped to Problem Details by the HTTP layer). */
 export class RequestError extends Error {
-  constructor(readonly reason: "offering" | "conflict" | "limit" | "token") {
+  constructor(readonly reason: "offering" | "conflict" | "limit" | "token" | "unknown" | "state") {
     super(reason);
   }
 }
@@ -186,6 +186,23 @@ export class InvestorService {
       const r = await this.repo.requestReserve(h, input.offeringId, input.units, input.idempotencyKey, userCode());
       if ("error" in r) {
         if (r.error === "code") continue;
+        throw new RequestError(r.error);
+      }
+      return { created: r.replayed !== true, body: this.request(r) };
+    }
+    throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  /**
+   * Phase 2b (migration 0061): asks to cancel an unpaid reservation or withdraw a paid subscription;
+   * the investor confirms on the website. Same idempotency rules as a reservation request.
+   */
+  async requestChange(h: Buffer, input: { subscriptionId: string; action: "cancel" | "withdraw"; idempotencyKey: string }) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const r = await this.repo.requestChange(h, input.subscriptionId, input.action, input.idempotencyKey, userCode());
+      if ("error" in r) {
+        if (r.error === "code") continue;
+        if (r.error === "input") throw new Error("unexpected change request action");
         throw new RequestError(r.error);
       }
       return { created: r.replayed !== true, body: this.request(r) };

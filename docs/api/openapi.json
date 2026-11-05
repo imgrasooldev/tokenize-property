@@ -1026,6 +1026,115 @@
           }
         }
       }
+    },
+    "/me/subscriptions/{subscriptionId}/change-requests": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "createSubscriptionChangeRequest",
+        "summary": "Ask to cancel an unpaid reservation or withdraw a paid subscription; the investor confirms on the website (ADR 0018 amendment 2)",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "cancel",
+                      "withdraw"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A new request (open confirmation_uri_complete on the website; poll the request)",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequest"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The request made earlier with the same Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1790,7 +1899,7 @@
       },
       "SubscriptionRequest": {
         "type": "object",
-        "description": "A reservation the app asked for. It reserves nothing and moves no money until the investor confirms it on the website (signed in, documents accepted, passkey step-up where available).",
+        "description": "A change the app asked for (reserve, cancel or withdraw). It changes nothing and moves no money until the investor confirms it on the website (signed in, documents accepted for a reservation, passkey step-up where available).",
         "required": [
           "id",
           "kind",
@@ -1813,7 +1922,9 @@
           "kind": {
             "type": "string",
             "enum": [
-              "reserve"
+              "reserve",
+              "cancel",
+              "withdraw"
             ]
           },
           "offering_id": {
@@ -1869,7 +1980,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Set once confirmed: GET /me/subscriptions/{subscriptionId} gives the payment instructions"
+            "description": "reserve: the subscription the website created, once confirmed (null before); cancel/withdraw: the subscription it acts on"
           }
         }
       },

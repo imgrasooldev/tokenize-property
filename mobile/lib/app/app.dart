@@ -17,6 +17,8 @@ import 'package:property_token_app/features/inbox/domain/message.dart';
 import 'package:property_token_app/features/inbox/presentation/inbox_bloc.dart';
 import 'package:property_token_app/features/inbox/presentation/inbox_page.dart';
 import 'package:property_token_app/features/invest/domain/invest.dart';
+import 'package:property_token_app/features/invest/presentation/change_cubit.dart';
+import 'package:property_token_app/features/invest/presentation/change_page.dart';
 import 'package:property_token_app/features/invest/presentation/invest_cubit.dart';
 import 'package:property_token_app/features/invest/presentation/invest_page.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
@@ -167,6 +169,17 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
         return BlocProvider(
           create: (_) => InvestCubit(c.read<InvestRepository>(), offeringId: offering.id),
           child: InvestPage(offering: offering),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/subscription-change',
+      redirect: (_, state) => state.extra is Subscription ? null : '/portfolio',
+      builder: (c, state) {
+        final sub = state.extra! as Subscription;
+        return BlocProvider(
+          create: (_) => ChangeCubit(c.read<InvestRepository>(), subscriptionId: sub.id),
+          child: ChangePage(subscription: sub),
         );
       },
     ),

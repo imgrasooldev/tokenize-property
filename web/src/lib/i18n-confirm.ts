@@ -1,6 +1,6 @@
 import type { Lang } from "./i18n";
 
-/** Confirming a reservation the mobile app asked for (ADR 0018 amendment 1), English and Urdu. */
+/** Confirming what the mobile app asked for (ADR 0018 amendments 1 and 2), English and Urdu. */
 const en = {
   title: "Confirm from the app",
   intro: "The Property Token app asked to reserve units for you. Check the details, accept the documents and confirm. Nothing is reserved until you do.",
@@ -16,6 +16,11 @@ const en = {
   done: "Confirmed. Your reservation is on My subscriptions and the app now shows how to pay.",
   bindFailed: "Your reservation was made, but it could not be linked to the app request. You can still pay from My subscriptions.",
   warning: "Only confirm a request you made yourself in the app just now. We never ask you to confirm by phone, SMS or e-mail.",
+  introCancel: "The Property Token app asked to cancel this reservation. Nothing changes until you confirm here.",
+  introWithdraw: "The Property Token app asked to withdraw this paid subscription. Your payment is then refunded to the account it came from. Nothing changes until you confirm here.",
+  subscription: "Subscription",
+  changed: "Done. The app now shows the new state.",
+  unlinked: "Your change was made, but it could not be linked to the app request. My subscriptions shows the new state.",
 };
 export type ConfirmDict = typeof en;
 
@@ -34,6 +39,11 @@ const ur: ConfirmDict = {
   done: "تصدیق ہو گئی۔ آپ کی ریزرویشن میری سبسکرپشنز میں ہے اور ایپ اب ادائیگی کا طریقہ دکھاتی ہے۔",
   bindFailed: "آپ کی ریزرویشن ہو گئی، لیکن ایپ کی درخواست سے جڑ نہ سکی۔ آپ پھر بھی میری سبسکرپشنز سے ادائیگی کر سکتے ہیں۔",
   warning: "صرف وہی درخواست تصدیق کریں جو آپ نے ابھی خود ایپ میں کی ہو۔ ہم کبھی فون، ایس ایم ایس یا ای میل پر تصدیق نہیں مانگتے۔",
+  introCancel: "پراپرٹی ٹوکن ایپ نے یہ ریزرویشن منسوخ کرنے کی درخواست کی ہے۔ یہاں آپ کی تصدیق کے بغیر کچھ نہیں بدلتا۔",
+  introWithdraw: "پراپرٹی ٹوکن ایپ نے اس ادا شدہ سبسکرپشن سے دستبرداری کی درخواست کی ہے۔ پھر آپ کی رقم اسی اکاؤنٹ میں واپس جاتی ہے جہاں سے آئی تھی۔ یہاں آپ کی تصدیق کے بغیر کچھ نہیں بدلتا۔",
+  subscription: "سبسکرپشن",
+  changed: "ہو گیا۔ ایپ اب نئی حالت دکھاتی ہے۔",
+  unlinked: "آپ کی تبدیلی ہو گئی، لیکن ایپ کی درخواست سے جڑ نہ سکی۔ میری سبسکرپشنز میں نئی حالت دکھائی دیتی ہے۔",
 };
 
 export function confirmDict(lang: Lang): ConfirmDict {

@@ -60,6 +60,23 @@ class _FakePortfolio implements PortfolioRepository {
   );
 }
 
+class _FakePortfolioWithSubscription implements PortfolioRepository {
+  @override
+  Future<Portfolio> portfolio() async => Portfolio(
+    holdings: const [],
+    subscriptions: [
+      Subscription(
+        id: 's1',
+        units: '10',
+        amountPaisa: '1000000',
+        status: 'payment_pending',
+        createdAt: DateTime.utc(2026, 11, 5),
+      ),
+    ],
+    asOfBlock: '5',
+  );
+}
+
 class _FakeInbox implements InboxRepository {
   @override
   Future<MessagePage> page({String? cursor}) async => MessagePage([
@@ -109,14 +126,14 @@ class _FakeRent implements RentRepository {
   );
 }
 
-Widget _app({required bool signedIn}) {
+Widget _app({required bool signedIn, PortfolioRepository? portfolio}) {
   final auth = _FakeAuth(signedIn: signedIn);
   return PropertyTokenApp(
     authBloc: AuthBloc(auth, delay: (_) async {})..add(const AuthStarted()),
     repositories: AppRepositories(
       auth: auth,
       offerings: _FakeOfferings(),
-      portfolio: _FakePortfolio(),
+      portfolio: portfolio ?? _FakePortfolio(),
       inbox: _FakeInbox(),
       account: _FakeAccount(),
       rent: _FakeRent(),
@@ -126,6 +143,19 @@ Widget _app({required bool signedIn}) {
 }
 
 void main() {
+  testWidgets('phase 2b: an unpaid reservation opens the cancel page; a refusal is shown', (tester) async {
+    await tester.pumpWidget(_app(signedIn: true, portfolio: _FakePortfolioWithSubscription()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Portfolio').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('subscription-s1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ask to cancel'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('change-ask')));
+    await tester.pumpAndSettle();
+    expect(find.text('This subscription cannot be changed now.'), findsOneWidget);
+  });
+
   testWidgets('signed out: the device code is shown, then the app opens on Discover', (tester) async {
     await tester.pumpWidget(_app(signedIn: false));
     await tester.pumpAndSettle();
@@ -185,6 +215,13 @@ class _FakeInvest implements InvestRepository {
     required String units,
     required String idempotencyKey,
   }) => throw const ApiException(422, 'offering_not_open');
+
+  @override
+  Future<SubscriptionRequest> requestChange({
+    required String subscriptionId,
+    required String action,
+    required String idempotencyKey,
+  }) => throw const ApiException(422, 'not_allowed_now');
 
   @override
   Future<SubscriptionRequest> request(String id) => throw const ApiException(404, 'not_found');

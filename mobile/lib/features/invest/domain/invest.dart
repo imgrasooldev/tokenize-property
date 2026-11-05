@@ -1,7 +1,8 @@
 import 'package:equatable/equatable.dart';
 
-/// A reservation the app asked for; the investor confirms it on the website
-/// (schema SubscriptionRequest of docs/api/openapi.json, ADR 0018 amendment 1).
+/// A reservation, cancel or withdrawal the app asked for; the investor confirms
+/// it on the website (schema SubscriptionRequest of docs/api/openapi.json,
+/// ADR 0018 amendments 1 and 2).
 class SubscriptionRequest extends Equatable {
   const SubscriptionRequest({
     required this.id,
@@ -14,6 +15,7 @@ class SubscriptionRequest extends Equatable {
     required this.confirmUriComplete,
     required this.expiresAt,
     required this.subscriptionId,
+    this.kind = 'reserve',
   });
 
   factory SubscriptionRequest.fromJson(Map<String, dynamic> j) => SubscriptionRequest(
@@ -27,6 +29,7 @@ class SubscriptionRequest extends Equatable {
     confirmUriComplete: j['confirmation_uri_complete'] as String,
     expiresAt: DateTime.parse(j['expires_at'] as String),
     subscriptionId: j['subscription_id'] as String?,
+    kind: j['kind'] as String,
   );
 
   final String id;
@@ -42,10 +45,13 @@ class SubscriptionRequest extends Equatable {
   final DateTime expiresAt;
   final String? subscriptionId;
 
+  /// reserve, cancel or withdraw.
+  final String kind;
+
   bool get pending => status == 'pending';
 
   @override
-  List<Object?> get props => [id, status, subscriptionId];
+  List<Object?> get props => [id, kind, status, subscriptionId];
 }
 
 /// One subscription with its payment instructions (schema SubscriptionDetail).
@@ -90,6 +96,14 @@ abstract interface class InvestRepository {
   Future<SubscriptionRequest> requestReservation({
     required String offeringId,
     required String units,
+    required String idempotencyKey,
+  });
+
+  /// Asks to cancel (unpaid) or withdraw (paid, window open) a subscription
+  /// (phase 2b); the same [idempotencyKey] returns the same request.
+  Future<SubscriptionRequest> requestChange({
+    required String subscriptionId,
+    required String action,
     required String idempotencyKey,
   });
 

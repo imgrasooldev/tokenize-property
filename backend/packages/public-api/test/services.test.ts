@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogueRepository, GrantRepository, InvestorRepository, OfferingRow } from "../src/repositories.ts";
 import { AuthService, CatalogueService, decodeCursor, encodeCursor, InvestorService, OAuthError, sha256 } from "../src/services.ts";
+import { responseSchema, validate } from "./contract.ts";
 
 /** The service layer against in-memory repositories (ADR 0018 section 3): no database, no HTTP. */
 function grants(outcome: Awaited<ReturnType<GrantRepository["exchange"]>> = "ok"): GrantRepository & { calls: string[] } {
@@ -75,6 +76,7 @@ describe("InvestorService", () => {
       statement: () => Promise.resolve(null),
       notifications: () => Promise.resolve([{ id: "9", kind: "unknown.kind", params: { cnic: "should-not-appear" }, created_at: new Date(0), read: false, subject: "x", body: "y" }]),
       requestReserve: () => Promise.resolve({ error: "token" as const }),
+      requestChange: () => Promise.resolve({ error: "token" as const }),
       request: () => Promise.resolve(null),
       subscription: () => Promise.resolve(null),
     };
@@ -97,6 +99,7 @@ describe("InvestorService phase 2a requests", () => {
     statement: () => Promise.resolve(null),
     notifications: () => Promise.resolve([]),
     requestReserve: () => Promise.resolve({ error: "token" as const }),
+    requestChange: () => Promise.resolve({ error: "token" as const }),
     request: () => Promise.resolve(null),
     subscription: () => Promise.resolve(null),
   };
@@ -141,6 +144,28 @@ describe("InvestorService phase 2a requests", () => {
     for (const reason of ["offering", "conflict", "limit"] as const) {
       const s = new InvestorService({ ...base, requestReserve: () => Promise.resolve({ error: reason }) });
       await expect(s.requestReservation(Buffer.alloc(32), { offeringId: "x", units: 1n, idempotencyKey: "key-12345" })).rejects.toMatchObject({ reason });
+    }
+  });
+
+  it("phase 2b: a cancel or withdraw request follows the contract; a collided code is drawn again; refusals become typed errors", async () => {
+    const codes: string[] = [];
+    const sub = "00000000-0000-4000-8000-000000000003";
+    const s = new InvestorService({
+      ...base,
+      requestChange: (_h, target, action, _k, code) => {
+        codes.push(code);
+        return Promise.resolve(codes.length === 1 ? { error: "code" as const } : { ...row(code, false), kind: action, subscription_id: target });
+      },
+    });
+    const r = await s.requestChange(Buffer.alloc(32), { subscriptionId: sub, action: "withdraw", idempotencyKey: "key-12345" });
+    expect(r.created).toBe(true);
+    expect(r.body).toMatchObject({ kind: "withdraw", subscription_id: sub, status: "pending" });
+    const spec = responseSchema("/me/subscriptions/{subscriptionId}/change-requests", "POST", 201);
+    expect(spec).not.toBeNull();
+    expect(validate(spec?.schema ?? {}, r.body)).toEqual([]);
+    for (const reason of ["unknown", "state", "conflict", "limit", "token"] as const) {
+      const x = new InvestorService({ ...base, requestChange: () => Promise.resolve({ error: reason }) });
+      await expect(x.requestChange(Buffer.alloc(32), { subscriptionId: sub, action: "cancel", idempotencyKey: "key-12345" })).rejects.toMatchObject({ reason });
     }
   });
 });

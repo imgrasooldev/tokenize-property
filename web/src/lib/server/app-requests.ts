@@ -7,13 +7,15 @@ import { db } from "./db";
  */
 export interface AppRequest {
   id: string;
-  kind: "reserve";
+  kind: "reserve" | "cancel" | "withdraw";
   offering_id: string;
   units: string;
   amount_paisa: string | null;
   status: string;
   code: string;
   expires_at: string;
+  /** For cancel / withdraw (migration 0061): the subscription the request acts on. */
+  subscription_id: string | null;
 }
 
 export const APP_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
@@ -30,5 +32,14 @@ export async function bindAppRequest(session: Buffer, code: string, subscription
 
 export async function declineAppRequest(session: Buffer, code: string): Promise<boolean> {
   const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_decline($1, $2) AS r", [session, code]);
+  return rows[0]?.r.ok === true;
+}
+
+/**
+ * After the website's own cancel or withdraw (migration 0061 PC-2): marks the app's request
+ * confirmed; the database checks that the subscription really is cancelled or withdrawn.
+ */
+export async function finishAppRequest(session: Buffer, code: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_finish($1, $2) AS r", [session, code]);
   return rows[0]?.r.ok === true;
 }

@@ -113,10 +113,10 @@ export interface StatementRow {
   merkle_root: string;
 }
 
-/** Phase 2a (migration 0060): an app request the investor confirms on the website. */
+/** Phase 2a/2b (migrations 0060, 0061): an app request the investor confirms on the website. */
 export interface RequestRow {
   id: string;
-  kind: "reserve";
+  kind: "reserve" | "cancel" | "withdraw";
   offering_id: string;
   units: string;
   amount_paisa: string | null;
@@ -129,6 +129,9 @@ export interface RequestRow {
 }
 
 export type RequestRefusal = "token" | "offering" | "conflict" | "limit" | "code";
+
+/** Why a cancel / withdraw request was refused (migration 0061). */
+export type ChangeRefusal = "token" | "input" | "unknown" | "state" | "conflict" | "limit" | "code";
 
 export interface SubscriptionDetailRow {
   id: string;
@@ -155,6 +158,7 @@ export interface InvestorRepository {
   statement(accessHash: Buffer, token: string, onchainId: string): Promise<StatementRow | null>;
   /** A new reservation request, the one already made with this key, or why not. */
   requestReserve(accessHash: Buffer, offeringId: string, units: bigint, idempotencyKey: string, code: string): Promise<RequestRow | { error: RequestRefusal }>;
+  requestChange(accessHash: Buffer, subscriptionId: string, action: "cancel" | "withdraw", idempotencyKey: string, code: string): Promise<RequestRow | { error: ChangeRefusal }>;
   request(accessHash: Buffer, id: string): Promise<RequestRow | null>;
   subscription(accessHash: Buffer, id: string): Promise<SubscriptionDetailRow | null>;
 }
@@ -215,6 +219,10 @@ export function pgRepositories(db: pg.Pool): Repositories {
         (await one<StatementRow>("SELECT wallet, registry, statement, statement_hash, merkle_root FROM papi.distribution_statement($1, $2, $3)", [h, token, onchainId])) ?? null,
       requestReserve: async (h, offeringId, units, key, code) =>
         (await one<{ r: RequestRow | { error: RequestRefusal } }>("SELECT papi.request_reserve($1, $2, $3, $4, $5) AS r", [h, offeringId, units.toString(), key, code]))?.r ?? {
+          error: "token",
+        },
+      requestChange: async (h, sub, action, key, code) =>
+        (await one<{ r: RequestRow | { error: ChangeRefusal } }>("SELECT papi.request_change($1, $2, $3, $4, $5) AS r", [h, sub, action, key, code]))?.r ?? {
           error: "token",
         },
       request: async (h, id) => (await one<{ r: RequestRow | null }>("SELECT papi.request($1, $2) AS r", [h, id]))?.r ?? null,

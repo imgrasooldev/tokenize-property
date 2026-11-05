@@ -10,12 +10,13 @@ import { label, type OfferingDict } from "@/lib/i18n-offering";
  * checks ownership, state and the window and opens the refund; a passkey step-up comes first when
  * the investor has a passkey.
  */
-export function WithdrawForm({ l, subscriptionId, until }: { l: OfferingDict; subscriptionId: string; until: string }) {
+export function WithdrawForm({ l, subscriptionId, until, appCode }: { l: OfferingDict; subscriptionId: string; until: string; appCode?: string }) {
   const [state, action, pending] = useActionState<CancelState, FormData>(withdrawSubscriptionAction, {});
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form ref={formRef} action={action} className="btn-row" data-testid="withdraw">
       <input type="hidden" name="subscriptionId" value={subscriptionId} />
+      {appCode ? <input type="hidden" name="appCode" value={appCode} /> : null}
       <span className="small">{until}</span>
       <button type="submit" className="btn secondary small" disabled={pending || state.ok === true}>
         {pending ? l.withdrawing : l.withdrawBtn}
