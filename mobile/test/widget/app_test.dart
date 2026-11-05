@@ -180,8 +180,11 @@ void main() {
 
 class _FakeInvest implements InvestRepository {
   @override
-  Future<SubscriptionRequest> requestReservation({required String offeringId, required String units, required String idempotencyKey}) =>
-      throw const ApiException(422, 'offering_not_open');
+  Future<SubscriptionRequest> requestReservation({
+    required String offeringId,
+    required String units,
+    required String idempotencyKey,
+  }) => throw const ApiException(422, 'offering_not_open');
 
   @override
   Future<SubscriptionRequest> request(String id) => throw const ApiException(404, 'not_found');

@@ -35,8 +35,13 @@ void main() {
     'asks, waits for the website, then shows the payment instructions',
     build: () {
       final repo = _MockInvest();
-      when(() => repo.requestReservation(offeringId: 'o-1', units: '10', idempotencyKey: any(named: 'idempotencyKey')))
-          .thenAnswer((_) async => _r('pending'));
+      when(
+        () => repo.requestReservation(
+          offeringId: 'o-1',
+          units: '10',
+          idempotencyKey: any(named: 'idempotencyKey'),
+        ),
+      ).thenAnswer((_) async => _r('pending'));
       when(() => repo.request('r-1')).thenAnswer((_) async => _r('confirmed', sub: 's-1'));
       when(() => repo.subscription('s-1')).thenAnswer((_) async => _detail);
       return InvestCubit(repo, offeringId: 'o-1', pollEvery: null);
@@ -45,7 +50,11 @@ void main() {
       await c.submit('10');
       await c.refresh();
     },
-    expect: () => [const InvestSubmitting(), InvestWaiting(_r('pending')), InvestConfirmed(_r('confirmed', sub: 's-1'), _detail)],
+    expect: () => [
+      const InvestSubmitting(),
+      InvestWaiting(_r('pending')),
+      InvestConfirmed(_r('confirmed', sub: 's-1'), _detail),
+    ],
   );
 
   blocTest<InvestCubit, InvestState>(
@@ -53,7 +62,13 @@ void main() {
     build: () {
       final repo = _MockInvest();
       final keys = <String>[];
-      when(() => repo.requestReservation(offeringId: 'o-1', units: '10', idempotencyKey: any(named: 'idempotencyKey'))).thenAnswer((i) async {
+      when(
+        () => repo.requestReservation(
+          offeringId: 'o-1',
+          units: '10',
+          idempotencyKey: any(named: 'idempotencyKey'),
+        ),
+      ).thenAnswer((i) async {
         keys.add(i.namedArguments[#idempotencyKey] as String);
         if (keys.length == 1) throw const ApiException(0, 'unreachable');
         return _r('declined');
@@ -87,8 +102,13 @@ void main() {
     'bad units never reach the API; a refusal is shown by its code',
     build: () {
       final repo = _MockInvest();
-      when(() => repo.requestReservation(offeringId: 'o-1', units: '5', idempotencyKey: any(named: 'idempotencyKey')))
-          .thenThrow(const ApiException(422, 'offering_not_open'));
+      when(
+        () => repo.requestReservation(
+          offeringId: 'o-1',
+          units: '5',
+          idempotencyKey: any(named: 'idempotencyKey'),
+        ),
+      ).thenThrow(const ApiException(422, 'offering_not_open'));
       return InvestCubit(repo, offeringId: 'o-1', pollEvery: null);
     },
     act: (c) async {

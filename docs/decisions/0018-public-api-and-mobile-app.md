@@ -46,3 +46,12 @@ Investors use the website today. A Flutter app for Android and iOS needs a stabl
 - One more service and schema to operate; the website gains `/device` and a "linked devices" list.
 - The demo can be used from a phone over plain HTTP only as a demo (tokens over HTTP are acceptable there exactly as the demo's cookies are; production requires TLS and HSTS).
 - Phase 2 (invest, market orders, passkey step-up in the app, DPoP) needs its own amendment.
+
+## Amendment 1 (2026-11-05): phase 2a, investing from the app, confirmed on the website
+
+Owner decision 2026-11-05: "Website pe ab, passkey baad" (confirm on the website now, passkeys in the app later). Migration `0060_public_api_requests.sql` (PR-1..PR-4).
+
+- `POST /v1/me/subscription-requests` (scope `read` plus a live token; body `{offering_id, units}`) creates a **pending request** with an 8-letter confirmation code, valid 15 minutes. It moves no money and reserves nothing. Header `Idempotency-Key` (IETF draft) is required: the same key and body return the same request (200), the same key with another body is 409, a new request is 201. At most 5 pending requests per investor (409); an offering that is not open is 422.
+- The investor confirms on the website (`/confirm?code=...`), signed in, through the website's own reservation path: documents accepted, the KYC gate and limits of `offering.web_reserve`, and the passkey step-up `offering.reserve` where the investor has a passkey. The website binds the new subscription to the request only for the same investor, offering and units, or the investor declines it. The app never confirms its own request.
+- `GET /v1/me/subscription-requests/{id}` (the app polls it) and `GET /v1/me/subscriptions/{id}` (payment code, trustee collection account and deadline, exactly as the website shows them).
+- Passkeys inside the app (WebAuthn with platform passkeys bound to the domain), DPoP and writes without a website step need the production domain and TLS: phase 2b or later.

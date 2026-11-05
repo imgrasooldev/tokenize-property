@@ -87,7 +87,11 @@ class SubscriptionDetail extends Equatable {
 
 abstract interface class InvestRepository {
   /// Asks for a reservation; the same [idempotencyKey] returns the same request.
-  Future<SubscriptionRequest> requestReservation({required String offeringId, required String units, required String idempotencyKey});
+  Future<SubscriptionRequest> requestReservation({
+    required String offeringId,
+    required String units,
+    required String idempotencyKey,
+  });
 
   Future<SubscriptionRequest> request(String id);
 

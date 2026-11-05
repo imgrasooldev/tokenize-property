@@ -66,15 +66,23 @@ class _InvestPageState extends State<InvestPage> {
               ),
               const SizedBox(height: 8),
               if (RegExp(r'^[1-9][0-9]{0,12}$').hasMatch(_units.text))
-                Text(l.investYouPay(formatPkr((BigInt.parse(o.pricePaisa) * BigInt.parse(_units.text)).toString(), lang))),
+                Text(
+                  l.investYouPay(formatPkr((BigInt.parse(o.pricePaisa) * BigInt.parse(_units.text)).toString(), lang)),
+                ),
               if (s is InvestEditing && s.error != null) ...[
                 const SizedBox(height: 8),
-                Text(_error(l, s.error!), key: const Key('invest-error'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                Text(
+                  _error(l, s.error!),
+                  key: const Key('invest-error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ],
               const SizedBox(height: 16),
               FilledButton(
                 key: const Key('invest-ask'),
-                onPressed: s is InvestSubmitting ? null : () => unawaited(context.read<InvestCubit>().submit(_units.text)),
+                onPressed: s is InvestSubmitting
+                    ? null
+                    : () => unawaited(context.read<InvestCubit>().submit(_units.text)),
                 child: Text(l.investAsk),
               ),
               const SizedBox(height: 12),
@@ -84,7 +92,11 @@ class _InvestPageState extends State<InvestPage> {
               Text(l.investWaiting, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
               Text(l.investCode),
-              SelectableText(request.code, key: const Key('invest-code'), style: Theme.of(context).textTheme.headlineMedium),
+              SelectableText(
+                request.code,
+                key: const Key('invest-code'),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
               const SizedBox(height: 16),
               Text(l.investOpen),
               SelectableText(request.confirmUriComplete),
@@ -94,7 +106,9 @@ class _InvestPageState extends State<InvestPage> {
                 label: Text(l.investCopy),
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: request.confirmUriComplete));
-                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.investCopied)));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.investCopied)));
+                  }
                 },
               ),
               const SizedBox(height: 16),
@@ -103,13 +117,22 @@ class _InvestPageState extends State<InvestPage> {
               const LinearProgressIndicator(),
             ],
             InvestConfirmed(:final subscription) => [
-              Text(l.investConfirmed, key: const Key('invest-confirmed'), style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                l.investConfirmed,
+                key: const Key('invest-confirmed'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               ListTile(title: Text(l.investAmount), subtitle: Text(formatPkr(subscription.amountPaisa, lang))),
               if (subscription.paymentCode != null)
-                ListTile(title: Text(l.investPayCode), subtitle: SelectableText(subscription.paymentCode!, key: const Key('invest-pay-code'))),
-              if (subscription.payToAccount != null) ListTile(title: Text(l.investPayTo), subtitle: SelectableText(subscription.payToAccount!)),
-              if (subscription.payBefore != null) ListTile(title: Text(l.investPayBefore(time.format(subscription.payBefore!.toLocal())))),
+                ListTile(
+                  title: Text(l.investPayCode),
+                  subtitle: SelectableText(subscription.paymentCode!, key: const Key('invest-pay-code')),
+                ),
+              if (subscription.payToAccount != null)
+                ListTile(title: Text(l.investPayTo), subtitle: SelectableText(subscription.payToAccount!)),
+              if (subscription.payBefore != null)
+                ListTile(title: Text(l.investPayBefore(time.format(subscription.payBefore!.toLocal())))),
               const SizedBox(height: 8),
               Text(l.investPayNote, style: Theme.of(context).textTheme.bodySmall),
             ],

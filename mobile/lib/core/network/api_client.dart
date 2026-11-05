@@ -83,7 +83,11 @@ class ApiClient {
   /// A signed-in JSON POST that creates something (phase 2a). The same
   /// [idempotencyKey] makes a retry return the first answer instead of a
   /// second request (IETF Idempotency-Key header); 200 and 201 are both success.
-  Future<Map<String, dynamic>> postJson(String path, Map<String, Object?> body, {required String idempotencyKey}) async {
+  Future<Map<String, dynamic>> postJson(
+    String path,
+    Map<String, Object?> body, {
+    required String idempotencyKey,
+  }) async {
     Future<http.Response> send() async {
       final access = (await tokens.read())?.accessToken;
       try {

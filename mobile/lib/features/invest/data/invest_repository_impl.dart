@@ -8,14 +8,22 @@ class InvestRepositoryImpl implements InvestRepository {
   final ApiClient _api;
 
   @override
-  Future<SubscriptionRequest> requestReservation({required String offeringId, required String units, required String idempotencyKey}) async =>
-      SubscriptionRequest.fromJson(
-        await _api.postJson('/me/subscription-requests', {'offering_id': offeringId, 'units': units}, idempotencyKey: idempotencyKey),
-      );
+  Future<SubscriptionRequest> requestReservation({
+    required String offeringId,
+    required String units,
+    required String idempotencyKey,
+  }) async => SubscriptionRequest.fromJson(
+    await _api.postJson('/me/subscription-requests', {
+      'offering_id': offeringId,
+      'units': units,
+    }, idempotencyKey: idempotencyKey),
+  );
 
   @override
-  Future<SubscriptionRequest> request(String id) async => SubscriptionRequest.fromJson(await _api.get('/me/subscription-requests/$id'));
+  Future<SubscriptionRequest> request(String id) async =>
+      SubscriptionRequest.fromJson(await _api.get('/me/subscription-requests/$id'));
 
   @override
-  Future<SubscriptionDetail> subscription(String id) async => SubscriptionDetail.fromJson(await _api.get('/me/subscriptions/$id'));
+  Future<SubscriptionDetail> subscription(String id) async =>
+      SubscriptionDetail.fromJson(await _api.get('/me/subscriptions/$id'));
 }

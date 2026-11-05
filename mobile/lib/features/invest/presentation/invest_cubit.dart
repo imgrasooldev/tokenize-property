@@ -54,7 +54,8 @@ class InvestEnded extends InvestState {
 
 class InvestCubit extends Cubit<InvestState> {
   /// [pollEvery] null disables the timer (tests call [refresh] themselves).
-  InvestCubit(this._repo, {required this.offeringId, this.pollEvery = const Duration(seconds: 3)}) : super(const InvestEditing());
+  InvestCubit(this._repo, {required this.offeringId, this.pollEvery = const Duration(seconds: 3)})
+    : super(const InvestEditing());
 
   final InvestRepository _repo;
   final String offeringId;
