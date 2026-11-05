@@ -61,10 +61,14 @@ describe("notify CLI", () => {
   it("creates the keys once without printing them, runs the worker once and reports status", async () => {
     const first = cli("setup");
     expect(first.code, first.err).toBe(0);
-    expect(first.out).toMatch(/added 2 notify key\(s\)/);
+    expect(first.out).toMatch(/added 4 notify key\(s\)/);
     const keys = readEnvFile(envFile);
     expect(keys.NOTIFY_DATA_KEY).toMatch(/^[0-9a-f]{64}$/);
     expect(keys.NOTIFY_LOOKUP_KEY).toMatch(/^[0-9a-f]{64}$/);
+    // Push (0065): an X25519 pair, the public half for the API, the private half for the worker.
+    expect(keys.NOTIFY_PUSH_PUBLIC_KEY).toMatch(/^[A-Za-z0-9+/]{59}=$/);
+    expect(keys.NOTIFY_PUSH_PRIVATE_KEY).toMatch(/^[A-Za-z0-9+/]{64}$/);
+    expect(first.out + first.err).not.toContain(keys.NOTIFY_PUSH_PRIVATE_KEY ?? "x");
     expect(first.out + first.err).not.toContain(keys.NOTIFY_DATA_KEY ?? "x");
     expect(first.out + first.err).not.toContain(keys.NOTIFY_LOOKUP_KEY ?? "x");
     // Created once: a second run never replaces a key (sealed contacts would stop opening).

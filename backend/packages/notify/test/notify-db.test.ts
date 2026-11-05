@@ -54,13 +54,14 @@ describe("catalogue and templates", () => {
     expect(fromDb).toEqual(JSON.parse(JSON.stringify(EVENT_KINDS)));
   });
 
-  it("every kind has SMS and e-mail templates in English and Urdu that render with the longest values and fit the SMS limit", async () => {
+  it("every kind has SMS, e-mail and push templates in English and Urdu that render with the longest values and fit the SMS limit", async () => {
     const { rows } = await db.query<{ kind: string; channel: Channel; locale: Locale; subject: string | null; body: string }>(
       // The current version of each template (0030 adds version 2 of two security templates).
       "SELECT DISTINCT ON (kind, channel, locale) kind, channel, locale, subject, body FROM notify.templates ORDER BY kind, channel, locale, version DESC",
     );
     const kinds = Object.keys(EVENT_KINDS);
-    expect(rows.length).toBe(kinds.length * 4);
+    // SMS, e-mail and (migration 0065) push, each in English and Urdu.
+    expect(rows.length).toBe(kinds.length * 6);
     let longestSms = 0;
     for (const tpl of rows) {
       if (!isEventKind(tpl.kind)) throw new Error(tpl.kind);
@@ -70,6 +71,10 @@ describe("catalogue and templates", () => {
         if (tpl.channel === "sms") {
           expect(r.segments, `${tpl.kind} ${tpl.locale}`).toBeLessThanOrEqual(SMS_MAX_SEGMENTS);
           longestSms = Math.max(longestSms, r.segments ?? 0);
+        } else if (tpl.channel === "push") {
+          // Push carries the SMS text (PN-6): no subject, no HTML.
+          expect(r.subject).toBeUndefined();
+          expect(r.html).toBeUndefined();
         } else {
           expect(r.subject).toBeTruthy();
           expect(r.html).toContain(`lang="${tpl.locale}"`);

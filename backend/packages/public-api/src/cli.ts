@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { readEnvFile, servicePgAuth } from "@pt/config";
+import { PushSealer } from "@pt/notify";
 import pg from "pg";
 import { createApiServer } from "./http.ts";
 import { pgRepositories } from "./repositories.ts";
-import { AuthService, CatalogueService, InvestorService } from "./services.ts";
+import { AuthService, CatalogueService, InvestorService, PushService } from "./services.ts";
 
 /**
  * Public API for the mobile app (ADR 0018, migration 0058).
@@ -32,11 +33,14 @@ function main(): void {
     connectionTimeoutMillis: 5_000,
   });
   const repos = pgRepositories(db);
+  // Push (migration 0065): the public half of the worker's key; without it the push routes answer 503.
+  const sealer = e.NOTIFY_PUSH_PUBLIC_KEY ? PushSealer.fromEnv(e) : null;
   const web = (e.WEB_PUBLIC_URL ?? "http://localhost:3100").replace(/\/$/, "");
   const server = createApiServer({
     auth: new AuthService(repos.grants, `${web}/device`),
     catalogue: new CatalogueService(repos.catalogue),
     investors: new InvestorService(repos.investors, `${web}/confirm`),
+    push: new PushService(repos.push, sealer),
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path of the contract in the repository
     openapi: JSON.parse(readFileSync(OPENAPI, "utf8")) as unknown,
   });

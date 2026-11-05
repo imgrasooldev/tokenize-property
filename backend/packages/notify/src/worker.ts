@@ -1,7 +1,8 @@
 import type pg from "pg";
 import { ContactError, type ContactSecrets } from "./crypto.ts";
 import type { Channel, Locale } from "./events.ts";
-import { ProviderRejected, ProviderUnavailable, type Provider } from "./providers.ts";
+import { ProviderRejected, ProviderUnavailable, PushTokenGone, type Provider } from "./providers.ts";
+import type { PushOpener } from "./push.ts";
 import { render, RenderError } from "./render.ts";
 
 /**
@@ -26,6 +27,8 @@ export interface NotifyWorkerOptions {
   workerId: string;
   providers: Partial<Record<Channel, Provider>>;
   secrets: ContactSecrets;
+  /** Opens push device tokens (NOTIFY_PUSH_PRIVATE_KEY, migration 0065); without it push deliveries fail. */
+  push?: PushOpener;
   batch?: number;
   /** Lease per claimed delivery. Must exceed the send timeout by at least 10 s. */
   leaseSeconds?: number;
@@ -171,14 +174,18 @@ export class NotifyWorker {
     let to: string;
     let message: ReturnType<typeof render>;
     try {
-      if (m.channel === "push") throw new RenderError("push deliveries are not supported yet");
-      to = this.opts.secrets.open({
-        recipientId: m.recipient_id,
-        channel: m.channel,
-        lookupHash: m.lookup_hash,
-        sealed: m.sealed,
-        keyVersion: m.key_version,
-      });
+      if (m.channel === "push") {
+        if (!this.opts.push) throw new ContactError("no push key configured (NOTIFY_PUSH_PRIVATE_KEY)");
+        to = this.opts.push.open(m.recipient_id, m.lookup_hash, m.sealed);
+      } else {
+        to = this.opts.secrets.open({
+          recipientId: m.recipient_id,
+          channel: m.channel,
+          lookupHash: m.lookup_hash,
+          sealed: m.sealed,
+          keyVersion: m.key_version,
+        });
+      }
       message = render({ kind: m.kind, channel: m.channel, locale: m.locale, subject: m.subject, body: m.body, params: m.params });
     } catch (e) {
       if (e instanceof ContactError || e instanceof RenderError) {
@@ -225,7 +232,11 @@ export class NotifyWorker {
       ]);
       messageId = result.messageId;
     } catch (e) {
-      if (e instanceof ProviderRejected) await this.fail(d.id, "rejected", `${e.name}: ${e.message}`);
+      if (e instanceof PushTokenGone) {
+        // PN-5: the token no longer exists; stop using it (still under this worker's lease).
+        await this.pool.query("SELECT notify.push_contact_gone($1, $2)", [d.id, this.opts.workerId]);
+        await this.fail(d.id, "rejected", `${e.name}: ${e.message}`);
+      } else if (e instanceof ProviderRejected) await this.fail(d.id, "rejected", `${e.name}: ${e.message}`);
       else if (e instanceof ProviderUnavailable) await this.fail(d.id, "not_accepted", `${e.name}: ${e.message}`);
       // Anything else: the provider may have accepted. Leave it 'sending'; after the lease a worker
       // asks the provider (resolve). Never retry here.

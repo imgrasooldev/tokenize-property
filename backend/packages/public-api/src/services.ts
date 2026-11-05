@@ -1,8 +1,8 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { render } from "@pt/notify";
+import { PUSH_TOKEN, render, type PushSealer } from "@pt/notify";
 import { buildTree, rentLeaf } from "@pt/tax";
 import { keccak256, stringToBytes, type Address } from "viem";
-import type { CatalogueRepository, GrantRepository, InvestorRepository, MarketBookRow, OfferingRow, OrderRequestRow, RequestRow, TopUpRequestRow } from "./repositories.ts";
+import type { CatalogueRepository, GrantRepository, InvestorRepository, PushRepository, MarketBookRow, OfferingRow, OrderRequestRow, RequestRow, TopUpRequestRow } from "./repositories.ts";
 
 /**
  * Service layer (use cases) of the public API, ADR 0018 section 3: no HTTP and no SQL here. The
@@ -466,5 +466,39 @@ export class InvestorService {
     });
     const last = data.at(-1);
     return { data, next_cursor: rows.length > limit && last ? encodeCursor(BigInt(last.id)) : null };
+  }
+}
+
+/** Why a push registration was refused (migration 0065). */
+export class PushError extends Error {
+  constructor(readonly reason: "token" | "subject" | "input" | "unavailable") {
+    super(reason);
+  }
+}
+
+/**
+ * Push devices (ADR 0018 amendment 6, migration 0065 PN-2/PN-3): the token is sealed here for the
+ * notification worker only (this service holds the public key and cannot open it again).
+ */
+export class PushService {
+  constructor(
+    private readonly repo: PushRepository,
+    /** null: no NOTIFY_PUSH_PUBLIC_KEY configured; registration answers 503. */
+    private readonly sealer: PushSealer | null,
+  ) {}
+
+  async register(h: Buffer, input: { platform: "android" | "ios"; token: string; locale: "en" | "ur" }): Promise<void> {
+    if (!this.sealer) throw new PushError("unavailable");
+    if (!PUSH_TOKEN.test(input.token)) throw new PushError("input");
+    const recipient = await this.repo.recipient(h, input.locale);
+    if (!recipient) throw new PushError("subject");
+    const { lookupHash, sealed } = this.sealer.seal(recipient, input.token);
+    const r = await this.repo.register(h, recipient, input.platform, lookupHash, sealed);
+    if (r === "token") throw new PushError("token");
+    if (r !== "ok") throw new PushError(r === "recipient" ? "subject" : "input");
+  }
+
+  async unregister(h: Buffer): Promise<void> {
+    if (!(await this.repo.unregister(h))) throw new PushError("token");
   }
 }

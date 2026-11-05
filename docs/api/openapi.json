@@ -1748,6 +1748,139 @@
           }
         }
       }
+    },
+    "/me/push-device": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "registerPushDevice",
+        "summary": "Receive notifications on this device (its FCM registration token)",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "description": "Registers the calling device's push token (Firebase Cloud Messaging; on iOS the FCM token for APNs). One token per signed-in device: a new token replaces the old one, and the same token on another account moves here. Signing the device out ends it. The token is sealed for the notification worker and never stored readable. Notices are the same short texts as the SMS, in the language of Accept-Language at first registration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "platform",
+                  "token"
+                ],
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "android",
+                      "ios"
+                    ]
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 256,
+                    "pattern": "^[A-Za-z0-9:_\\-.]+$",
+                    "description": "The FCM registration token"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Registered",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "The account is not verified yet (code not_verified)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "description": "Push is not set up on this server (code push_unavailable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "removePushDevice",
+        "summary": "Stop notifications on this device",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (also when nothing was registered)",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "description": "Push is not set up on this server (code push_unavailable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { newPushKeyPair, PushOpener, PushSealer } from "@pt/notify";
 import { refIdFor } from "../src/service.ts";
 import { hex32, investor, liveOffering, makeWorld, OF, pay, type Investor, type Offering, type World } from "./world.ts";
 
@@ -312,11 +313,85 @@ describe("app requests confirmed on the website (migration 0060)", () => {
     expect((await w.client.query("SELECT papi.cash($1) AS r", [sha("nope")])).rows[0]).toEqual({ r: null });
   });
 
+  it("push devices (migration 0065): sealed for the worker only, one per device, moved, removed and ended by sign-out", async () => {
+    const keys = newPushKeyPair();
+    const sealer = PushSealer.fromEnv({ NOTIFY_PUSH_PUBLIC_KEY: keys.publicKey });
+    const opener = PushOpener.fromEnv({ NOTIFY_PUSH_PRIVATE_KEY: keys.privateKey });
+    const a = await app();
+    const other = await app();
+    const recipient = async (x: App): Promise<string> =>
+      (await w.client.query<{ r: string }>("SELECT papi.push_recipient($1, 'ur')::text AS r", [x.access])).rows[0]?.r ?? "";
+    const register = async (x: App, rcpt: string, token: string, platform = "android"): Promise<string> => {
+      const { lookupHash, sealed } = sealer.seal(rcpt, token);
+      return (await w.client.query<{ r: string }>("SELECT papi.register_push($1, $2, $3, $4, $5) AS r", [x.access, rcpt, platform, lookupHash, sealed])).rows[0]?.r ?? "";
+    };
+    const current = async (x: App): Promise<{ id: string; lookup_hash: Buffer; sealed: Buffer; recipient_id: string }[]> =>
+      (
+        await w.client.query<{ id: string; lookup_hash: Buffer; sealed: Buffer; recipient_id: string }>(
+          `SELECT c.id::text, c.lookup_hash, c.sealed, c.recipient_id::text FROM notify.contacts c JOIN papi.push_devices d ON d.contact_id = c.id
+           WHERE d.investor_id = $1 AND c.superseded_at IS NULL AND d.removed_at IS NULL`,
+          [x.investorId],
+        )
+      ).rows;
+    const tokenA = `fcm-token-a:${"A".repeat(140)}`;
+    const tokenB = `fcm-token-b:${"B".repeat(140)}`;
+
+    const ra = await recipient(a);
+    expect(ra).toMatch(/^[0-9a-f-]{36}$/);
+    expect((await w.client.query("SELECT papi.push_recipient($1, 'en') AS r", [sha("nope")])).rows[0]).toEqual({ r: null });
+    expect(await register(a, await recipient(other), tokenA)).toBe("recipient");
+    expect(await register(a, ra, tokenA, "windows")).toBe("input");
+    expect(await register(a, ra, tokenA)).toBe("ok");
+    expect(await register(a, ra, tokenA)).toBe("ok"); // the same token again changes nothing
+    let rows = await current(a);
+    expect(rows).toHaveLength(1);
+    // The database holds no readable token; only the worker's key opens it, and only for this recipient.
+    expect(rows[0]?.sealed.toString("latin1")).not.toContain("fcm-token");
+    expect(opener.open(ra, rows[0]?.lookup_hash ?? Buffer.alloc(0), rows[0]?.sealed ?? Buffer.alloc(0))).toBe(tokenA);
+    expect(() => opener.open(randomUUID(), rows[0]?.lookup_hash ?? Buffer.alloc(0), rows[0]?.sealed ?? Buffer.alloc(0))).toThrow(/cannot be opened/);
+
+    // A new token for the device replaces the old one.
+    expect(await register(a, ra, tokenB)).toBe("ok");
+    rows = await current(a);
+    expect(rows).toHaveLength(1);
+    expect(opener.open(ra, rows[0]?.lookup_hash ?? Buffer.alloc(0), rows[0]?.sealed ?? Buffer.alloc(0))).toBe(tokenB);
+
+    // A notice fans out to the push contact with the push template (same text as the SMS).
+    const subject = a.inv.subjectId;
+    await w.client.query("SELECT notify.enqueue($1, 'security.account_frozen', 'investor', $2, $3::jsonb, 'test')", [
+      `push-test:${randomUUID()}`,
+      subject,
+      JSON.stringify({ at: "2026-11-06T09:00:00Z" }),
+    ]);
+    const push = await w.client.query<{ channel: string; contact_id: string }>(
+      "SELECT d.channel, d.contact_id::text FROM notify.deliveries d JOIN notify.notifications n ON n.id = d.notification_id WHERE n.recipient_id = $1 AND d.channel = 'push'",
+      [ra],
+    );
+    expect(push.rows).toEqual([{ channel: "push", contact_id: rows[0]?.id }]);
+
+    // The same phone signed in to another account: the token moves there.
+    const ro = await recipient(other);
+    expect(await register(other, ro, tokenB)).toBe("ok");
+    expect(await current(a)).toHaveLength(0);
+    expect(await current(other)).toHaveLength(1);
+
+    // Removing the device, then signing out, end the push contact.
+    expect((await w.client.query("SELECT papi.unregister_push($1) AS r", [other.access])).rows[0]).toEqual({ r: true });
+    expect(await current(other)).toHaveLength(0);
+    expect(await register(a, ra, tokenA)).toBe("ok");
+    await w.client.query("SELECT papi.revoke($1)", [a.access]);
+    expect(await current(a)).toHaveLength(0);
+    expect(await register(a, ra, tokenA)).toBe("token");
+    expect((await w.client.query("SELECT papi.unregister_push($1) AS r", [a.access])).rows[0]).toEqual({ r: false });
+    const why = await w.client.query<{ removed_why: string }>("SELECT removed_why FROM papi.push_devices WHERE investor_id IN ($1, $2) ORDER BY id", [a.investorId, other.investorId]);
+    expect(why.rows.map((r) => r.removed_why)).toEqual(["replaced", "moved", "unregistered", "signed_out"]);
+  });
+
   it("the service's login and the website's role can call only their own functions", async () => {
     const grants = await w.client.query<{ routine: string; grantee: string }>(
       `SELECT p.proname AS routine, r.rolname AS grantee FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        CROSS JOIN pg_roles r WHERE n.nspname = 'papi' AND r.rolname IN ('pt_svc_public_api', 'pt_web')
-         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done', 'request_order_cancel', 'web_request_order_cancel_done', 'cash', 'request_topup', 'topup_request', 'web_request_topup_done')
+         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done', 'request_order_cancel', 'web_request_order_cancel_done', 'cash', 'request_topup', 'topup_request', 'web_request_topup_done', 'push_recipient', 'register_push', 'unregister_push', 'push_end')
          AND has_function_privilege(r.oid, p.oid, 'EXECUTE') ORDER BY 1, 2`,
     );
     expect(grants.rows.map((g) => `${g.routine}:${g.grantee}`)).toEqual([
@@ -324,6 +399,8 @@ describe("app requests confirmed on the website (migration 0060)", () => {
       "markets:pt_svc_public_api",
       "order_request:pt_svc_public_api",
       "orders:pt_svc_public_api",
+      "push_recipient:pt_svc_public_api",
+      "register_push:pt_svc_public_api",
       "request:pt_svc_public_api",
       "request_change:pt_svc_public_api",
       "request_order:pt_svc_public_api",
@@ -332,6 +409,7 @@ describe("app requests confirmed on the website (migration 0060)", () => {
       "request_topup:pt_svc_public_api",
       "subscription:pt_svc_public_api",
       "topup_request:pt_svc_public_api",
+      "unregister_push:pt_svc_public_api",
       "web_request_decline:pt_web",
       "web_request_done:pt_web",
       "web_request_finish:pt_web",

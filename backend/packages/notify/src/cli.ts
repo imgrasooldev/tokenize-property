@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { readEnvFile, servicePgAuth } from "@pt/config";
 import pg from "pg";
 import { ContactSecrets } from "./crypto.ts";
-import { MockProvider, type MockRecord } from "./providers.ts";
+import { FcmProvider, readServiceAccount } from "./fcm.ts";
+import { newPushKeyPair, PushOpener } from "./push.ts";
+import { MockProvider, type MockRecord, type Provider } from "./providers.ts";
 import { deadLetters, producerFailures, stats, sweep, undeliverable, verifyAudit, type SweepResult } from "./service.ts";
 import { NotifyWorker, redact } from "./worker.ts";
 
@@ -13,8 +15,9 @@ import { NotifyWorker, redact } from "./worker.ts";
  * Notifications command line (ADR 0013).
  *   npm run notify:setup            LOCAL DEV ONLY: creates NOTIFY_DATA_KEY and NOTIFY_LOOKUP_KEY in
  *                                   backend/.env.local once (never printed; production keys live in the KMS)
- *   npm run notify:run [-- --once]  the delivery worker with MOCK providers (records what would be
- *                                   sent; real SMS/e-mail providers are task T-031)
+ *   npm run notify:run [-- --once]  the delivery worker with MOCK SMS and e-mail providers (real ones
+ *                                   are task T-031); push through FCM when FCM_SERVICE_ACCOUNT_FILE
+ *                                   names a Google service account file, else the push mock
  *   npm run notify:sweep            time-based reminders once (reservation expiring, payout account active,
  *                                   KYC expired, compliance SLA breaches); `run` also sweeps every minute
  *   npm run notify:status           queue health, dead letters, undeliverable security notices, producer
@@ -56,9 +59,19 @@ async function setup(): Promise<void> {
   // Created once: an existing key is never replaced (sealed contacts would no longer open).
   if (!e.NOTIFY_DATA_KEY) add.push(`NOTIFY_DATA_KEY=${randomBytes(32).toString("hex")}`);
   if (!e.NOTIFY_LOOKUP_KEY) add.push(`NOTIFY_LOOKUP_KEY=${randomBytes(32).toString("hex")}`);
+  // Push (migration 0065): the public API seals with the public key, only the worker opens.
+  if (!e.NOTIFY_PUSH_PUBLIC_KEY && !e.NOTIFY_PUSH_PRIVATE_KEY) {
+    const pair = newPushKeyPair();
+    add.push(`NOTIFY_PUSH_PUBLIC_KEY=${pair.publicKey}`, `NOTIFY_PUSH_PRIVATE_KEY=${pair.privateKey}`);
+  }
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- backend/.env.local (or a test file)
   if (add.length) await appendFile(envFile(), `\n# Notifications (local dev, generated)\n${add.join("\n")}\n`, { mode: 0o600 });
   console.log(add.length ? `added ${String(add.length)} notify key(s) to ${envFile() === `${BACKEND}.env.local` ? "backend/.env.local" : "the env file"}` : "notify keys already present");
+}
+
+/** FCM with the operator's service account file, else the mock (the demo without a Firebase project). */
+function pushProvider(e: Record<string, string>): Provider {
+  return e.FCM_SERVICE_ACCOUNT_FILE ? new FcmProvider({ account: readServiceAccount(e.FCM_SERVICE_ACCOUNT_FILE) }) : new MockProvider("push", { onAccept: printAccepted });
 }
 
 function printAccepted(r: MockRecord): void {
@@ -73,8 +86,9 @@ async function run(once: boolean): Promise<void> {
   const db = pool(4, true);
   const worker = new NotifyWorker(db, {
     workerId: `notify-${String(process.pid)}@${hostname().replace(/[^\w.-]/g, "").slice(0, 60) || "host"}`,
-    providers: { sms: new MockProvider("sms", { onAccept: printAccepted }), email: new MockProvider("email", { onAccept: printAccepted }) },
+    providers: { sms: new MockProvider("sms", { onAccept: printAccepted }), email: new MockProvider("email", { onAccept: printAccepted }), push: pushProvider(e) },
     secrets,
+    ...(e.NOTIFY_PUSH_PRIVATE_KEY ? { push: PushOpener.fromEnv(e) } : {}),
     onError: (context, err) => {
       console.error(`${context}: ${redact((err as Error).message)}`);
     },
@@ -90,7 +104,7 @@ async function run(once: boolean): Promise<void> {
     return;
   }
   await worker.start();
-  console.log("notify worker running (mock SMS and e-mail providers; LISTEN notify + polling; reminders every minute)");
+  console.log(`notify worker running (mock SMS and e-mail, ${e.FCM_SERVICE_ACCOUNT_FILE ? "FCM" : "mock"} push${e.NOTIFY_PUSH_PRIVATE_KEY ? "" : " without a push key"}; LISTEN notify + polling; reminders every minute)`);
   const sweeper = setInterval(() => {
     sweep(db).then(printSweep, (err: unknown) => {
       console.error(`sweep: ${redact((err as Error).message)}`);

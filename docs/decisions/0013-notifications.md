@@ -95,3 +95,7 @@ Defaults chosen for the open questions (owner to confirm; with them the ADR can 
 - The tipping-off mapping above answers the 6c wording question by default: generic words or nothing; compliance tells the investor by hand.
 
 Not built: contact capture with one-time codes (the centre shows only whether a contact is on file), real providers (T-031), an officer notification screen in PT Control (officers' notices are in `notify.notification_status`), investor `security.large_transaction_pending` (a signing request's amount is in token units, not paisa), the `notify:run` service on the demo server (T-034).
+
+## Amendment 2 (2026-11-06): push channel (migration 0065)
+
+Push to the investor app is built as planned: a third channel with the same rules (N-1..N-9). Contacts of channel `push` are one per app installation (several per recipient, one current contact per token), sealed by the public API to the worker's X25519 public key so that only the worker opens them; delivered through FCM HTTP v1 (`fcm.ts`) or the push mock. Details in ADR 0018 amendment 6.

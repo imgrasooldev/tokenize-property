@@ -19,6 +19,7 @@ export {
   MockProvider,
   ProviderRejected,
   ProviderUnavailable,
+  PushTokenGone,
   type LookupFault,
   type LookupResult,
   type MockProviderOptions,
@@ -46,3 +47,5 @@ export {
   type SweepResult,
 } from "./service.ts";
 export { NotifyWorker, redact, type NotifyWorkerOptions } from "./worker.ts";
+export { newPushKeyPair, PUSH_TOKEN, PushOpener, PushSealer, pushLookupHash } from "./push.ts";
+export { FcmProvider, readServiceAccount, type FcmOptions, type ServiceAccount } from "./fcm.ts";

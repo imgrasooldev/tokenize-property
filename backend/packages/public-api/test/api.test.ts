@@ -9,7 +9,8 @@ import { buildTree, processProof, rentLeaf } from "@pt/tax";
 import { keccak256, stringToBytes, type Address } from "viem";
 import { createApiServer } from "../src/http.ts";
 import { pgRepositories } from "../src/repositories.ts";
-import { AuthService, CatalogueService, InvestorService } from "../src/services.ts";
+import { newPushKeyPair, PushOpener, PushSealer } from "@pt/notify";
+import { AuthService, CatalogueService, InvestorService, PushService } from "../src/services.ts";
 import { OPENAPI, responseSchema, validate } from "./contract.ts";
 
 /**
@@ -25,6 +26,7 @@ let drop: () => Promise<void>;
 let server: Server;
 let base: string;
 const sha = (s: string): Buffer => createHash("sha256").update(s, "utf8").digest();
+const pushKeys = newPushKeyPair();
 
 beforeAll(async () => {
   const s = await scratchDatabase();
@@ -37,6 +39,7 @@ beforeAll(async () => {
     auth: new AuthService(repos.grants, "http://localhost:3100/device"),
     catalogue: new CatalogueService(repos.catalogue),
     investors: new InvestorService(repos.investors),
+    push: new PushService(repos.push, PushSealer.fromEnv({ NOTIFY_PUSH_PUBLIC_KEY: pushKeys.publicKey })),
     openapi: OPENAPI,
     ratePerMinute: 200,
   });
@@ -361,6 +364,53 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/me/order-requests/{requestId}", `/me/order-requests/${body.id}`, bearer(t.access_token))).status).toBe(404);
     const stranger = await signIn(await investor());
     expect((await call("/me/topup-requests/{requestId}", `/me/topup-requests/${body.id}`, bearer(stranger.access_token))).status).toBe(404);
+  });
+
+  it("push devices (migration 0065): register, replace and remove the device's token; sealed for the worker only", async () => {
+    const who = await investor();
+    const t = await signIn(who);
+    const P = "/me/push-device";
+    const put = (body: unknown, token = t.access_token): RequestInit => ({
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "accept-language": "ur" },
+      body: JSON.stringify(body),
+    });
+    const fcm = `cXVpZXQtZGV2aWNl:APA91b${"q".repeat(140)}`;
+    expect((await call(P, P, put({ platform: "android", token: fcm }, "x".repeat(43)))).status).toBe(401);
+    expect((await call(P, P, put({ platform: "windows", token: fcm }))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(P, P, put({ platform: "android", token: "has spaces in it, not a token" }))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(P, P, put({ platform: "android", token: fcm }))).status).toBe(204);
+    expect((await call(P, P, put({ platform: "android", token: `${fcm}2` }))).status).toBe(204);
+    const rows = await admin.query<{ recipient_id: string; lookup_hash: Buffer; sealed: Buffer; locale: string }>(
+      `SELECT c.recipient_id::text, c.lookup_hash, c.sealed, r.locale FROM notify.contacts c JOIN notify.recipients r ON r.id = c.recipient_id
+       WHERE c.channel = 'push' AND c.superseded_at IS NULL AND r.subject_id = (SELECT kyc_subject::text FROM webdemo.investors WHERE id = $1)`,
+      [who.id],
+    );
+    expect(rows.rows).toHaveLength(1);
+    const row = rows.rows[0];
+    const opener = PushOpener.fromEnv({ NOTIFY_PUSH_PRIVATE_KEY: pushKeys.privateKey });
+    expect(opener.open(row?.recipient_id ?? "", row?.lookup_hash ?? Buffer.alloc(0), row?.sealed ?? Buffer.alloc(0))).toBe(`${fcm}2`);
+    const del: RequestInit = { method: "DELETE", headers: { authorization: `Bearer ${t.access_token}` } };
+    expect((await call(P, P, del)).status).toBe(204);
+    expect((await call(P, P, del)).status).toBe(204);
+    expect((await admin.query("SELECT 1 FROM notify.contacts c JOIN notify.recipients r ON r.id = c.recipient_id WHERE c.recipient_id = $1 AND c.superseded_at IS NULL", [row?.recipient_id])).rowCount).toBe(0);
+
+    // Without the worker's public key the server says push is not set up.
+    const bare = createApiServer({
+      auth: new AuthService(pgRepositories(pool).grants, "http://localhost:3100/device"),
+      catalogue: new CatalogueService(pgRepositories(pool).catalogue),
+      investors: new InvestorService(pgRepositories(pool).investors),
+      push: new PushService(pgRepositories(pool).push, null),
+      openapi: OPENAPI,
+    });
+    await new Promise<void>((r) => bare.listen(0, "127.0.0.1", r));
+    try {
+      const res = await fetch(`http://127.0.0.1:${String((bare.address() as AddressInfo).port)}/v1/me/push-device`, put({ platform: "ios", token: fcm }));
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { code: string }).code).toBe("push_unavailable");
+    } finally {
+      bare.close();
+    }
   });
 
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {

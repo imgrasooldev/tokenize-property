@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import type { Locale } from "./events.ts";
+import type { Channel, Locale } from "./events.ts";
 
 /**
- * Delivery providers (ADR 0013). SMS and e-mail now; push comes with the investor app (T-040).
+ * Delivery providers (ADR 0013). SMS and e-mail (mocks until T-031); push through Firebase Cloud
+ * Messaging (fcm.ts, migration 0065) or the mock.
  * Real SMS gateways and e-mail services are task T-031; until then only the mocks below exist.
  *
  * Contract every adapter must keep (the worker's exactly-once argument depends on it):
@@ -22,8 +23,8 @@ import type { Locale } from "./events.ts";
 export interface OutboundMessage {
   /** The delivery's uid: identical on every attempt for the same delivery. */
   idempotencyKey: string;
-  channel: "sms" | "email";
-  /** Plain phone number (E.164) or e-mail address; opened in memory only for this call. */
+  channel: Channel;
+  /** Plain phone number (E.164), e-mail address or push device token; opened in memory only for this call. */
   to: string;
   locale: Locale;
   subject?: string;
@@ -36,7 +37,7 @@ export type LookupResult = { state: "accepted"; messageId: string } | { state: "
 export interface Provider {
   /** Recorded with each delivery, e.g. "mock-sms". Lower case, 2-32 characters. */
   readonly name: string;
-  readonly channel: "sms" | "email";
+  readonly channel: Channel;
   send(message: OutboundMessage, signal: AbortSignal): Promise<{ messageId: string }>;
   lookup(idempotencyKey: string): Promise<LookupResult>;
 }
@@ -44,6 +45,11 @@ export interface Provider {
 /** The provider refused the message for good; it will never be delivered. */
 export class ProviderRejected extends Error {
   override name = "ProviderRejected";
+}
+
+/** The push service says the device token no longer exists (app removed or token rotated). */
+export class PushTokenGone extends ProviderRejected {
+  override name = "PushTokenGone";
 }
 
 /** The request provably never reached the provider; safe to retry. */
@@ -98,7 +104,7 @@ export class MockProvider implements Provider {
   private readonly byKey = new Map<string, MockRecord>();
 
   constructor(
-    readonly channel: "sms" | "email",
+    readonly channel: Channel,
     private readonly opts: MockProviderOptions = {},
   ) {
     this.name = opts.name ?? `mock-${channel}`;

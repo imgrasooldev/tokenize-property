@@ -244,10 +244,22 @@ export interface InvestorRepository {
   subscription(accessHash: Buffer, id: string): Promise<SubscriptionDetailRow | null>;
 }
 
+/** Push devices (migration 0065): the investor's notification recipient and the sealed token. */
+export type PushOutcome = "ok" | "token" | "recipient" | "input";
+
+export interface PushRepository {
+  /** The notification recipient of the token's investor (null: no live token or no KYC subject). */
+  recipient(accessHash: Buffer, locale: "en" | "ur"): Promise<string | null>;
+  register(accessHash: Buffer, recipientId: string, platform: "android" | "ios", lookupHash: Buffer, sealed: Buffer): Promise<PushOutcome>;
+  /** false without a live access token. */
+  unregister(accessHash: Buffer): Promise<boolean>;
+}
+
 export interface Repositories {
   grants: GrantRepository;
   catalogue: CatalogueRepository;
   investors: InvestorRepository;
+  push: PushRepository;
 }
 
 const OFFERING_COLUMNS =
@@ -334,6 +346,12 @@ export function pgRepositories(db: pg.Pool): Repositories {
         (await db.query<OrderRow>("SELECT id, symbol, side, price_paisa::text, tokens::text, filled::text, status, created_at FROM papi.orders($1)", [h])).rows,
       request: async (h, id) => (await one<{ r: RequestRow | null }>("SELECT papi.request($1, $2) AS r", [h, id]))?.r ?? null,
       subscription: async (h, id) => (await one<{ r: SubscriptionDetailRow | null }>("SELECT papi.subscription($1, $2) AS r", [h, id]))?.r ?? null,
+    },
+    push: {
+      recipient: async (h, locale) => (await one<{ r: string | null }>("SELECT papi.push_recipient($1, $2)::text AS r", [h, locale]))?.r ?? null,
+      register: async (h, recipient, platform, lookupHash, sealed) =>
+        (await one<{ r: PushOutcome }>("SELECT papi.register_push($1, $2, $3, $4, $5) AS r", [h, recipient, platform, lookupHash, sealed]))?.r ?? "token",
+      unregister: async (h) => (await one<{ r: boolean }>("SELECT papi.unregister_push($1) AS r", [h]))?.r ?? false,
     },
   };
 }

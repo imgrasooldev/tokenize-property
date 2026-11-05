@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readBody } from "@pt/http-auth";
 import { z } from "zod";
-import { AuthService, CatalogueService, InvestorService, OAuthError, RequestError } from "./services.ts";
+import { AuthService, CatalogueService, InvestorService, OAuthError, PushError, RequestError, type PushService } from "./services.ts";
 
 /**
  * HTTP layer (controllers) of the public API, ADR 0018: parses and validates requests, calls one
@@ -15,6 +15,8 @@ export interface ApiDeps {
   auth: AuthService;
   catalogue: CatalogueService;
   investors: InvestorService;
+  /** Push devices (migration 0065); without it the push routes answer 503. */
+  push?: PushService;
   /** The OpenAPI document served at /v1/openapi.json. */
   openapi: unknown;
   /** Requests per minute per client key (bearer token or address). */
@@ -38,6 +40,7 @@ const ORDER = z.strictObject({
   price: z.strictObject({ amount: z.string().regex(/^[1-9][0-9]{0,8}$/), currency: z.literal("PKR") }),
   tokens: z.string().regex(/^[1-9][0-9]{0,5}$/),
 });
+const PUSH_DEVICE = z.strictObject({ platform: z.enum(["android", "ios"]), token: z.string().min(20).max(256) });
 const CHANGE = z.strictObject({ action: z.enum(["cancel", "withdraw"]) });
 const RESERVE = z.strictObject({ offering_id: z.string().regex(UUID), units: z.string().regex(/^[1-9][0-9]{0,12}$/) });
 
@@ -114,6 +117,14 @@ function nextLink(url: URL, next: string | null): string | undefined {
   const u = new URL(url.toString());
   u.searchParams.set("cursor", next);
   return `<${u.pathname}${u.search}>; rel="next"`;
+}
+
+function pushProblem(e: unknown): unknown {
+  if (!(e instanceof PushError)) return e;
+  if (e.reason === "token") return new Problem(401, "invalid_token", "Sign in again");
+  if (e.reason === "unavailable") return new Problem(503, "push_unavailable", "Notifications to the app are not set up on this server");
+  if (e.reason === "subject") return new Problem(409, "not_verified", "Finish verification first", "notifications need a verified account");
+  return new Problem(400, "invalid_body", "Invalid request body", "the token is not a valid FCM registration token");
 }
 
 export function createApiServer(deps: ApiDeps): Server {
@@ -425,6 +436,36 @@ export function createApiServer(deps: ApiDeps): Server {
         const body = UUID.test(id) ? await deps.investors.subscription(h, id) : null;
         if (!body) throw new Problem(404, "not_found", "No such subscription of yours");
         return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
+    [
+      "PUT",
+      /^\/v1\/me\/push-device$/,
+      async (req) => {
+        const h = await signedIn(req);
+        const body = PUSH_DEVICE.safeParse(await json(req));
+        if (!body.success) throw new Problem(400, "invalid_body", "Invalid request body", "platform (android or ios) and token (the FCM registration token) are required");
+        try {
+          if (!deps.push) throw new PushError("unavailable");
+          await deps.push.register(h, { platform: body.data.platform, token: body.data.token, locale: locale(req) });
+          return { status: 204, cache: "no-store" };
+        } catch (e) {
+          throw pushProblem(e);
+        }
+      },
+    ],
+    [
+      "DELETE",
+      /^\/v1\/me\/push-device$/,
+      async (req) => {
+        const h = await signedIn(req);
+        try {
+          if (!deps.push) throw new PushError("unavailable");
+          await deps.push.unregister(h);
+          return { status: 204, cache: "no-store" };
+        } catch (e) {
+          throw pushProblem(e);
+        }
       },
     ],
     ["GET", /^\/v1\/me\/tax-certificates$/, async (req) => ({ status: 200, body: await deps.investors.certificates(await signedIn(req)), cache: "private, no-store" })],

@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-06
+
+- Push notifications to the app, server side (ADR 0018 amendment 6, ADR 0013 amendment 2, migration `0065_push_notifications.sql`, PN-1..PN-6). `PUT /v1/me/push-device` and `DELETE /v1/me/push-device`; push is a third notification channel (contact per device, SMS texts as push templates, same consent and rate limits); the token is sealed by the public API to the worker's X25519 key (`NOTIFY_PUSH_PUBLIC_KEY` / `NOTIFY_PUSH_PRIVATE_KEY`, created by `notify:setup`) and opened only by the worker; Firebase Cloud Messaging HTTP v1 provider (`FCM_SERVICE_ACCOUNT_FILE`) or the push mock; sign-out ends the device's push contact; a token FCM reports gone is superseded. Tests: `offering/test/app-requests.test.ts` 9/9, `notify` 74/74 (new `push.test.ts`: sealing, FCM answer mapping, worker end to end), `public-api` 20/20 (contract-validated), service-roles snapshots. The app side follows (needs the owner's Firebase project).
+
 ## 2026-11-05
 
 - Public API and app phase 2b part 4: demo cash and cash top-ups from the app, confirmed on the website (ADR 0018 amendment 5, migration `0064_public_api_cash.sql`). `GET /v1/me/cash` (available and in open orders, demo), `POST /v1/me/topup-requests` (`{amount: Money}`, whole rupees, Rs 1 to Rs 10,000,000, Idempotency-Key) and `GET /v1/me/topup-requests/{id}`. The website `/confirm` shows the amount and "Add this cash (demo)", which runs its own demo top-up with the request id (a repeat adds nothing); the database confirms the request only once that top-up exists for the same investor and amount. App: Market shows the cash card with "Add cash" (`TopUpPage`, `TopUpCubit`). Tests: backend `offering/test/app-requests.test.ts` 8/8, `public-api` 19/19 (contract-validated), service-roles 54/54 (+3 papi functions); web typecheck and lint; new e2e case in `confirm.spec.ts` and Flutter `top_up_cubit_test.dart` (run by CI / the home laptop).
