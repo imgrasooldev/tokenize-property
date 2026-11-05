@@ -1,9 +1,16 @@
 import 'package:equatable/equatable.dart';
 
+/// What the investor opens on the website to confirm an app request (ADR 0018).
+abstract interface class WebsiteConfirmation {
+  String get code;
+  String get confirmUriComplete;
+  DateTime get expiresAt;
+}
+
 /// A reservation, cancel or withdrawal the app asked for; the investor confirms
 /// it on the website (schema SubscriptionRequest of docs/api/openapi.json,
 /// ADR 0018 amendments 1 and 2).
-class SubscriptionRequest extends Equatable {
+class SubscriptionRequest extends Equatable implements WebsiteConfirmation {
   const SubscriptionRequest({
     required this.id,
     required this.offeringId,
@@ -39,9 +46,12 @@ class SubscriptionRequest extends Equatable {
 
   /// pending, confirmed, declined or expired.
   final String status;
+  @override
   final String code;
   final String confirmUri;
+  @override
   final String confirmUriComplete;
+  @override
   final DateTime expiresAt;
   final String? subscriptionId;
 

@@ -28,6 +28,13 @@ class PortfolioPage extends StatelessWidget {
               label: Text(l.openRent),
               onPressed: () => context.push('/rent'),
             ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              key: const Key('open-market'),
+              icon: const Icon(Icons.candlestick_chart_rounded),
+              label: Text(l.openMarket),
+              onPressed: () => context.push('/market'),
+            ),
             const SizedBox(height: 16),
             Text(l.holdings, style: Theme.of(context).textTheme.titleMedium),
             if (p.holdings.isEmpty)

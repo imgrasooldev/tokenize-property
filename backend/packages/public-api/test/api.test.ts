@@ -273,6 +273,36 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call(T, P, { ...post(cancel, { "idempotency-key": "key-00000000" }), headers: { "content-type": "application/json", "idempotency-key": "key-00000000" } })).status).toBe(401);
   });
 
+  it("phase 2b part 2: an order request follows the contract, replays with its key and conflicts with another body; markets and own orders read", async () => {
+    const t = await signIn(await investor());
+    const post = (body: unknown, key?: string): RequestInit => ({
+      method: "POST",
+      headers: { authorization: `Bearer ${t.access_token}`, "content-type": "application/json", ...(key ? { "idempotency-key": key } : {}) },
+      body: JSON.stringify(body),
+    });
+    const R = "/me/order-requests";
+    const ok = { symbol: "GPF3", side: "buy", price: { amount: "50000", currency: "PKR" }, tokens: "2" };
+    expect((await call(R, R, post(ok))).body).toMatchObject({ code: "idempotency_key_required" });
+    expect((await call(R, R, post({ ...ok, side: "hold" }, "key-11111111"))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(R, R, post({ ...ok, price: { amount: "500.5", currency: "PKR" } }, "key-11111111"))).status).toBe(400);
+    expect((await call(R, R, post({ ...ok, tokens: "1000000" }, "key-11111111"))).status).toBe(400);
+    const made = await call(R, R, post(ok, "key-11111111"));
+    expect(made.status).toBe(201);
+    const body = made.body as { id: string; total: { amount: string }; order_id: string | null; confirmation_uri_complete: string };
+    expect(body).toMatchObject({ symbol: "GPF3", side: "buy", total: { amount: "100000", currency: "PKR" }, status: "pending", order_id: null });
+    expect((await call(R, R, post(ok, "key-11111111"))).status).toBe(200);
+    expect((await call(R, R, post({ ...ok, tokens: "3" }, "key-11111111"))).body).toMatchObject({ code: "idempotency_conflict" });
+    const seen = await call("/me/order-requests/{requestId}", `/me/order-requests/${body.id}`, bearer(t.access_token));
+    expect(seen.body).toMatchObject({ id: body.id, status: "pending" });
+    // An order request is not a subscription request.
+    expect((await call("/me/subscription-requests/{requestId}", `/me/subscription-requests/${body.id}`, bearer(t.access_token))).status).toBe(404);
+    expect((await call("/me/orders", "/me/orders", bearer(t.access_token))).body).toEqual({ data: [], next_cursor: null });
+    expect((await call("/markets", "/markets")).status).toBe(200);
+    expect((await call("/markets/{symbol}", "/markets/NONE1")).status).toBe(404);
+    expect((await call("/markets/{symbol}", "/markets/bad")).status).toBe(404);
+    expect((await call("/me/orders", "/me/orders")).status).toBe(401);
+  });
+
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
     expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
     const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });

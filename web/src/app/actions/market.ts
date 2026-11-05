@@ -6,10 +6,11 @@ import { z } from "zod";
 import { MAX_TOPUP_PAISA, orderSchema, topUpSchema } from "@/lib/market-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { nudgeFollower } from "@/lib/server/follower";
+import { APP_CODE, bindAppOrder, lookupAppRequest } from "@/lib/server/app-requests";
 import { cancelOrder, placeOrder, topUp, type PlaceError } from "@/lib/server/market";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
-import { currentInvestorId } from "@/lib/server/session";
+import { currentInvestorId, currentSession } from "@/lib/server/session";
 
 async function signedIn(): Promise<InvestorRow> {
   const id = await currentInvestorId();
@@ -44,6 +45,47 @@ export async function placeOrderAction(_prev: MarketState, formData: FormData): 
   void nudgeFollower();
   revalidatePath("/market");
   return { ok: true };
+}
+
+/**
+ * Places exactly the order the mobile app asked for (ADR 0018 amendment 3, migration 0062): the
+ * request is read again here by its code (never from the form), the website's own checks decide
+ * (KYC, on-chain registration, band, cash or tokens, limits) and the request id is the order's
+ * request id, so a repeated confirmation never places a second order. Then the order is bound.
+ */
+export async function confirmAppOrderAction(_prev: MarketState, formData: FormData): Promise<MarketState> {
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
+  if (!take("order", investor.id)) return { error: "rate" };
+  const code = formData.get("appCode");
+  if (typeof code !== "string" || !APP_CODE.test(code)) return { error: "input" };
+  const request = await lookupAppRequest(session.hash, code);
+  if (request?.kind !== "order") return { error: "input" };
+  let orderId: string;
+  try {
+    const r = await placeOrder(investor, {
+      symbol: request.symbol,
+      side: request.side,
+      price: BigInt(request.price_paisa),
+      tokens: BigInt(request.tokens),
+      requestId: request.id,
+    });
+    if ("error" in r) return { error: r.error };
+    orderId = r.orderId;
+  } catch (e) {
+    logError("app-order", e);
+    return { error: "generic" };
+  }
+  void nudgeFollower();
+  revalidatePath("/market");
+  let bound = false;
+  try {
+    bound = await bindAppOrder(session.hash, code, orderId);
+  } catch (e) {
+    logError("app-order-bind", e);
+  }
+  redirect(`/confirm?${bound ? "ordered" : "orderunlinked"}=1`);
 }
 
 export async function topUpAction(_prev: MarketState, formData: FormData): Promise<MarketState> {

@@ -5,7 +5,7 @@ import { db } from "./db";
  * confirms them here, signed in, through the website's own reservation path; the database binds the
  * new subscription to the request only for the same investor, offering and units.
  */
-export interface AppRequest {
+export interface SubscriptionAppRequest {
   id: string;
   kind: "reserve" | "cancel" | "withdraw";
   offering_id: string;
@@ -17,6 +17,22 @@ export interface AppRequest {
   /** For cancel / withdraw (migration 0061): the subscription the request acts on. */
   subscription_id: string | null;
 }
+
+/** A limit order on the demo market the app asked for (migration 0062). */
+export interface OrderAppRequest {
+  id: string;
+  kind: "order";
+  symbol: string;
+  side: "buy" | "sell";
+  price_paisa: string;
+  tokens: string;
+  total_paisa: string;
+  status: string;
+  code: string;
+  expires_at: string;
+}
+
+export type AppRequest = SubscriptionAppRequest | OrderAppRequest;
 
 export const APP_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 
@@ -32,6 +48,12 @@ export async function bindAppRequest(session: Buffer, code: string, subscription
 
 export async function declineAppRequest(session: Buffer, code: string): Promise<boolean> {
   const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_decline($1, $2) AS r", [session, code]);
+  return rows[0]?.r.ok === true;
+}
+
+/** Binds the order the website just placed to the app's order request (same investor, symbol, side, price, tokens). */
+export async function bindAppOrder(session: Buffer, code: string, orderId: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_order_done($1, $2, $3) AS r", [session, code, orderId]);
   return rows[0]?.r.ok === true;
 }
 

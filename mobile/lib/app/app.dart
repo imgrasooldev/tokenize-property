@@ -21,6 +21,11 @@ import 'package:property_token_app/features/invest/presentation/change_cubit.dar
 import 'package:property_token_app/features/invest/presentation/change_page.dart';
 import 'package:property_token_app/features/invest/presentation/invest_cubit.dart';
 import 'package:property_token_app/features/invest/presentation/invest_page.dart';
+import 'package:property_token_app/features/market/domain/market.dart';
+import 'package:property_token_app/features/market/presentation/market_bloc.dart';
+import 'package:property_token_app/features/market/presentation/market_page.dart';
+import 'package:property_token_app/features/market/presentation/order_cubit.dart';
+import 'package:property_token_app/features/market/presentation/order_page.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_bloc.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_page.dart';
@@ -43,6 +48,7 @@ class AppRepositories {
     required this.account,
     required this.rent,
     required this.invest,
+    required this.market,
     this.api,
   });
 
@@ -53,6 +59,7 @@ class AppRepositories {
   final AccountRepository account;
   final RentRepository rent;
   final InvestRepository invest;
+  final MarketRepository market;
 
   /// The HTTP client, told the language for Accept-Language (absent in widget tests).
   final ApiClient? api;
@@ -96,6 +103,7 @@ class _PropertyTokenAppState extends State<PropertyTokenApp> {
         RepositoryProvider.value(value: r.account),
         RepositoryProvider.value(value: r.rent),
         RepositoryProvider.value(value: r.invest),
+        RepositoryProvider.value(value: r.market),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -169,6 +177,24 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
         return BlocProvider(
           create: (_) => InvestCubit(c.read<InvestRepository>(), offeringId: offering.id),
           child: InvestPage(offering: offering),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/market',
+      builder: (c, _) => BlocProvider(
+        create: (_) => MarketBloc(c.read<MarketRepository>())..add(const LoadRequested()),
+        child: const MarketPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/market/order',
+      redirect: (_, state) => state.extra is MarketBook ? null : '/market',
+      builder: (c, state) {
+        final m = state.extra! as MarketBook;
+        return BlocProvider(
+          create: (_) => OrderCubit(c.read<MarketRepository>(), symbol: m.symbol),
+          child: OrderPage(market: m),
         );
       },
     ),

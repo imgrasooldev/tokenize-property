@@ -29,6 +29,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,64}$/;
+const SYMBOL = /^[A-Z][A-Z0-9]{2,11}$/;
+const ORDER = z.strictObject({
+  symbol: z.string().regex(SYMBOL),
+  side: z.enum(["buy", "sell"]),
+  price: z.strictObject({ amount: z.string().regex(/^[1-9][0-9]{0,8}$/), currency: z.literal("PKR") }),
+  tokens: z.string().regex(/^[1-9][0-9]{0,5}$/),
+});
 const CHANGE = z.strictObject({ action: z.enum(["cancel", "withdraw"]) });
 const RESERVE = z.strictObject({ offering_id: z.string().regex(UUID), units: z.string().regex(/^[1-9][0-9]{0,12}$/) });
 
@@ -174,6 +181,24 @@ export function createApiServer(deps: ApiDeps): Server {
         return { status: 200, body, cache: "public, max-age=30", etag: true };
       },
     ],
+    [
+      "GET",
+      /^\/v1\/markets$/,
+      async (_req, url) => {
+        const { cursor, limit } = pageParams(url);
+        const body = await deps.catalogue.markets(cursor, limit);
+        return { status: 200, body, cache: "public, max-age=30", etag: true, link: nextLink(url, body.next_cursor) };
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/markets\/([^/]+)$/,
+      async (_req, _url, [symbol = ""]) => {
+        const body = SYMBOL.test(symbol) ? await deps.catalogue.market(symbol) : null;
+        if (!body) throw new Problem(404, "not_found", "No market for this symbol");
+        return { status: 200, body, cache: "public, max-age=30", etag: true };
+      },
+    ],
     ["GET", /^\/v1\/status$/, async () => ({ status: 200, body: await deps.catalogue.status(), cache: "public, max-age=30" })],
     [
       "GET",
@@ -268,6 +293,51 @@ export function createApiServer(deps: ApiDeps): Server {
           if (e.reason === "limit") throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
           throw new Problem(422, "not_allowed_now", `This subscription cannot be ${body.data.action === "cancel" ? "cancelled" : "withdrawn"} now`);
         }
+      },
+    ],
+    [
+      "POST",
+      /^\/v1\/me\/order-requests$/,
+      async (req) => {
+        const h = await signedIn(req);
+        const key = req.headers["idempotency-key"];
+        if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) {
+          throw new Problem(400, "idempotency_key_required", "Idempotency-Key header required", "8-64 characters: letters, digits, . _ : -");
+        }
+        const body = ORDER.safeParse(await json(req));
+        if (!body.success) {
+          throw new Problem(400, "invalid_body", "Invalid request body", "symbol, side (buy or sell), price {amount in paisa, currency PKR} and tokens (1-999999) are required");
+        }
+        const o = body.data;
+        try {
+          const r = await deps.investors.requestOrder(h, { symbol: o.symbol, side: o.side, pricePaisa: BigInt(o.price.amount), tokens: BigInt(o.tokens), idempotencyKey: key });
+          return { status: r.created ? 201 : 200, body: r.body, cache: "no-store" };
+        } catch (e) {
+          if (!(e instanceof RequestError)) throw e;
+          if (e.reason === "token") throw new Problem(401, "invalid_token", "Sign in again");
+          if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used with another body");
+          throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
+        }
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/order-requests\/([^/]+)$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const body = UUID.test(id) ? await deps.investors.orderRequest(h, id) : null;
+        if (!body) throw new Problem(404, "not_found", "No such request of yours");
+        return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/orders$/,
+      async (req, url) => {
+        const h = await signedIn(req);
+        const { cursor, limit } = pageParams(url);
+        const body = await deps.investors.orders(h, cursor, limit);
+        return { status: 200, body, cache: "private, no-store", link: nextLink(url, body.next_cursor) };
       },
     ],
     [

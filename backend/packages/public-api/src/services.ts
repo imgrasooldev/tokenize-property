@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { render } from "@pt/notify";
 import { buildTree, rentLeaf } from "@pt/tax";
 import { keccak256, stringToBytes, type Address } from "viem";
-import type { CatalogueRepository, GrantRepository, InvestorRepository, OfferingRow, RequestRow } from "./repositories.ts";
+import type { CatalogueRepository, GrantRepository, InvestorRepository, MarketBookRow, OfferingRow, OrderRequestRow, RequestRow } from "./repositories.ts";
 
 /**
  * Service layer (use cases) of the public API, ADR 0018 section 3: no HTTP and no SQL here. The
@@ -137,7 +137,25 @@ export class CatalogueService {
   status() {
     return this.repo.status();
   }
+
+  /** Migration 0062 (PO-1): the demo markets' order books. */
+  async markets(cursor: string | null, limit: number) {
+    return page((await this.repo.markets(null)).map(book), cursor, limit);
+  }
+
+  async market(symbol: string) {
+    const b = (await this.repo.markets(symbol)).at(0);
+    return b ? book(b) : null;
+  }
 }
+
+const book = (b: MarketBookRow) => ({
+  symbol: b.symbol,
+  bids: b.bids.map((l) => ({ price: money(l.price_paisa), tokens: l.tokens })),
+  asks: b.asks.map((l) => ({ price: money(l.price_paisa), tokens: l.tokens })),
+  last_price: b.last_price_paisa === null ? null : money(b.last_price_paisa),
+  last_trade_at: b.last_trade_at === null ? null : new Date(b.last_trade_at).toISOString(),
+});
 
 /** Why a request was refused (mapped to Problem Details by the HTTP layer). */
 export class RequestError extends Error {
@@ -208,6 +226,61 @@ export class InvestorService {
       return { created: r.replayed !== true, body: this.request(r) };
     }
     throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  private orderRequestView(r: OrderRequestRow) {
+    const code = `${r.code.slice(0, 4)}-${r.code.slice(4)}`;
+    return {
+      id: r.id,
+      symbol: r.symbol,
+      side: r.side,
+      price: money(r.price_paisa),
+      tokens: r.tokens,
+      total: money(r.total_paisa),
+      status: r.status,
+      confirmation_code: code,
+      confirmation_uri: this.confirmUri,
+      confirmation_uri_complete: `${this.confirmUri}?code=${code}`,
+      created_at: new Date(r.created_at).toISOString(),
+      expires_at: new Date(r.expires_at).toISOString(),
+      order_id: r.order_id,
+    };
+  }
+
+  /**
+   * Phase 2b part 2 (migration 0062): asks for a limit order on the demo market; the investor
+   * confirms on the website, which checks the band, cash or tokens and limits and places it.
+   */
+  async requestOrder(h: Buffer, input: { symbol: string; side: "buy" | "sell"; pricePaisa: bigint; tokens: bigint; idempotencyKey: string }) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const r = await this.repo.requestOrder(h, input, input.idempotencyKey, userCode());
+      if ("error" in r) {
+        if (r.error === "code") continue;
+        if (r.error === "input") throw new Error("order request format not checked by the route");
+        throw new RequestError(r.error);
+      }
+      return { created: r.replayed !== true, body: this.orderRequestView(r) };
+    }
+    throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  async orderRequest(h: Buffer, id: string) {
+    const r = await this.repo.orderRequest(h, id);
+    return r ? this.orderRequestView(r) : null;
+  }
+
+  async orders(h: Buffer, cursor: string | null, limit: number) {
+    const rows = (await this.repo.orders(h)).map((o) => ({
+      id: o.id,
+      symbol: o.symbol,
+      side: o.side,
+      price: money(o.price_paisa),
+      tokens: o.tokens,
+      filled: o.filled,
+      status: o.status,
+      created_at: o.created_at.toISOString(),
+    }));
+    return page(rows, cursor, limit);
   }
 
   async requestStatus(h: Buffer, id: string) {

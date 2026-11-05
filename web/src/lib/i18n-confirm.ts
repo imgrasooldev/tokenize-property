@@ -21,6 +21,17 @@ const en = {
   subscription: "Subscription",
   changed: "Done. The app now shows the new state.",
   unlinked: "Your change was made, but it could not be linked to the app request. My subscriptions shows the new state.",
+  introOrder: "The Property Token app asked to place this order on the market. Nothing is placed until you confirm here; the usual checks (price band, cash or tokens, limits) apply.",
+  symbol: "Token",
+  side: "Order",
+  buy: "Buy",
+  sell: "Sell",
+  price: "Price per token",
+  tokens: "Tokens",
+  total: "Total",
+  placeOrder: "Place this order",
+  ordered: "Order placed. The app now shows it; the market page shows whether it matched.",
+  orderUnlinked: "Your order was placed, but it could not be linked to the app request. The market page shows it.",
 };
 export type ConfirmDict = typeof en;
 
@@ -44,6 +55,17 @@ const ur: ConfirmDict = {
   subscription: "سبسکرپشن",
   changed: "ہو گیا۔ ایپ اب نئی حالت دکھاتی ہے۔",
   unlinked: "آپ کی تبدیلی ہو گئی، لیکن ایپ کی درخواست سے جڑ نہ سکی۔ میری سبسکرپشنز میں نئی حالت دکھائی دیتی ہے۔",
+  introOrder: "پراپرٹی ٹوکن ایپ نے مارکیٹ میں یہ آرڈر لگانے کی درخواست کی ہے۔ یہاں آپ کی تصدیق کے بغیر کچھ نہیں لگتا؛ معمول کی جانچ (قیمت کی حد، رقم یا ٹوکن، حدود) لاگو ہوتی ہے۔",
+  symbol: "ٹوکن",
+  side: "آرڈر",
+  buy: "خریدیں",
+  sell: "بیچیں",
+  price: "فی ٹوکن قیمت",
+  tokens: "ٹوکن",
+  total: "کل",
+  placeOrder: "یہ آرڈر لگائیں",
+  ordered: "آرڈر لگ گیا۔ ایپ اب اسے دکھاتی ہے؛ مارکیٹ کے صفحے پر دیکھیں کہ میچ ہوا یا نہیں۔",
+  orderUnlinked: "آپ کا آرڈر لگ گیا، لیکن ایپ کی درخواست سے جڑ نہ سکا۔ مارکیٹ کے صفحے پر دکھائی دیتا ہے۔",
 };
 
 export function confirmDict(lang: Lang): ConfirmDict {

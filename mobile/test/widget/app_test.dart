@@ -7,6 +7,7 @@ import 'package:property_token_app/features/auth/domain/auth_repository.dart';
 import 'package:property_token_app/features/auth/presentation/auth_bloc.dart';
 import 'package:property_token_app/features/inbox/domain/message.dart';
 import 'package:property_token_app/features/invest/domain/invest.dart';
+import 'package:property_token_app/features/market/domain/market.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
 import 'package:property_token_app/features/rent/domain/rent.dart';
@@ -138,11 +139,54 @@ Widget _app({required bool signedIn, PortfolioRepository? portfolio}) {
       account: _FakeAccount(),
       rent: _FakeRent(),
       invest: _FakeInvest(),
+      market: _FakeMarket(),
     ),
   );
 }
 
+class _FakeMarket implements MarketRepository {
+  @override
+  Future<MarketData> overview() async => const MarketData(
+    markets: [
+      MarketBook(
+        symbol: 'GPF3',
+        bids: [BookLevel(pricePaisa: '49000', tokens: '20')],
+        asks: [BookLevel(pricePaisa: '51000', tokens: '5')],
+        lastPricePaisa: '50000',
+      ),
+    ],
+    orders: [],
+  );
+
+  @override
+  Future<OrderRequest> requestOrder({
+    required String symbol,
+    required String side,
+    required String pricePaisa,
+    required String tokens,
+    required String idempotencyKey,
+  }) => throw const ApiException(409, 'too_many_pending');
+
+  @override
+  Future<OrderRequest> orderRequest(String id) => throw const ApiException(404, 'not_found');
+}
+
 void main() {
+  testWidgets('market: the book opens the order form; a refusal is shown', (tester) async {
+    await tester.pumpWidget(_app(signedIn: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Portfolio').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-market')));
+    await tester.pumpAndSettle();
+    expect(find.text('GPF3'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('order-open-GPF3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('order-ask')));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirm or let a waiting request expire first.'), findsOneWidget);
+  });
+
   testWidgets('phase 2b: an unpaid reservation opens the cancel page; a refusal is shown', (tester) async {
     await tester.pumpWidget(_app(signedIn: true, portfolio: _FakePortfolioWithSubscription()));
     await tester.pumpAndSettle();

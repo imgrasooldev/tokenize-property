@@ -9,7 +9,7 @@ import 'package:property_token_app/l10n/gen/app_localizations.dart';
 class ConfirmOnWebsite extends StatelessWidget {
   const ConfirmOnWebsite({required this.request, super.key});
 
-  final SubscriptionRequest request;
+  final WebsiteConfirmation request;
 
   @override
   Widget build(BuildContext context) {

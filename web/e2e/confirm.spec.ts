@@ -39,3 +39,43 @@ test("an unknown code is refused; the investor's own app request can be declined
   const row = await testDb<{ status: string }>("SELECT status FROM papi.requests WHERE code = $1", [c]);
   expect(row[0]?.status).toBe("declined");
 });
+
+/**
+ * ADR 0018 amendment 3 (migration 0062): a market order the app asked for is placed by the website's
+ * own checks when the investor confirms it; outside the price band it is refused and nothing is placed.
+ */
+test("an app order request is placed only through the website's checks and then bound to the request", async ({ page }) => {
+  test.setTimeout(300_000);
+  const alice = await testDb<{ id: string }>("SELECT id FROM webdemo.investors WHERE display_name LIKE 'Alice%' ORDER BY created_at LIMIT 1");
+  test.skip(!alice[0], "no Alice in the e2e database");
+  const insert = async (price: number): Promise<string> => {
+    const c = code();
+    await testDb(
+      `INSERT INTO papi.requests (investor_id, kind, units, idempotency_key, code, created_at, expires_at, symbol, side, price_paisa)
+       SELECT $1, 'order', 10, $2, $3, t, t + interval '15 minutes', 'GPF3', 'sell', $4 FROM (SELECT date_trunc('microseconds', clock_timestamp()) AS t) x`,
+      [alice[0]?.id, `e2e-${randomBytes(6).toString("hex")}`, c, price],
+    );
+    return c;
+  };
+  await loginAs(page, "Alice");
+  const outside = await insert(10_000);
+  await page.goto(`/confirm?code=${outside}`);
+  await expect(page.getByTestId("confirm-request")).toContainText("GPF3");
+  await page.getByRole("button", { name: "Place this order" }).click();
+  await expect(page.getByTestId("app-order").getByRole("alert")).toContainText("must be between", { timeout: 60_000 });
+  expect((await testDb<{ status: string }>("SELECT status FROM papi.requests WHERE code = $1", [outside]))[0]?.status).toBe("pending");
+  await page.getByRole("button", { name: "I did not ask for this" }).click();
+  await expect(page.getByTestId("confirm-status")).toContainText("Declined");
+
+  // At the top of the band (Rs 549): far above any bid the other specs leave, so it rests in the book.
+  const inside = await insert(54_900);
+  await page.goto(`/confirm?code=${inside}`);
+  await page.getByRole("button", { name: "Place this order" }).click();
+  await expect(page.getByTestId("confirm-status")).toContainText("Order placed", { timeout: 60_000 });
+  const row = await testDb<{ status: string; order_id: string | null }>("SELECT status, order_id FROM papi.requests WHERE code = $1", [inside]);
+  expect(row[0]?.status).toBe("confirmed");
+  const placed = await testDb<{ side: string; price_paisa: string }>("SELECT side, price_paisa::text FROM webdemo.orders WHERE id = $1", [row[0]?.order_id]);
+  expect(placed[0]).toEqual({ side: "sell", price_paisa: "54900" });
+  // Leave the book as the other specs expect it (a sell order holds no cash in escrow).
+  await testDb("UPDATE webdemo.orders SET status = 'cancelled', note = 'e2e cleanup' WHERE id = $1 AND status = 'open'", [row[0]?.order_id]);
+});

@@ -47,7 +47,7 @@ describe("AuthService", () => {
 
 describe("CatalogueService", () => {
   it("pages with an opaque cursor and maps money and units as strings", async () => {
-    const repo: CatalogueRepository = { offerings: () => Promise.resolve([row(1), row(2), row(3)]), offering: () => Promise.resolve(null), status: () => Promise.reject(new Error("unused")) };
+    const repo: CatalogueRepository = { offerings: () => Promise.resolve([row(1), row(2), row(3)]), offering: () => Promise.resolve(null), markets: () => Promise.resolve([]), status: () => Promise.reject(new Error("unused")) };
     const s = new CatalogueService(repo);
     const p1 = await s.offerings(null, 2);
     expect(p1.data.map((o) => o.building)).toEqual(["B1", "B2"]);
@@ -77,6 +77,9 @@ describe("InvestorService", () => {
       notifications: () => Promise.resolve([{ id: "9", kind: "unknown.kind", params: { cnic: "should-not-appear" }, created_at: new Date(0), read: false, subject: "x", body: "y" }]),
       requestReserve: () => Promise.resolve({ error: "token" as const }),
       requestChange: () => Promise.resolve({ error: "token" as const }),
+      requestOrder: () => Promise.resolve({ error: "token" as const }),
+      orderRequest: () => Promise.resolve(null),
+      orders: () => Promise.resolve([]),
       request: () => Promise.resolve(null),
       subscription: () => Promise.resolve(null),
     };
@@ -100,6 +103,9 @@ describe("InvestorService phase 2a requests", () => {
     notifications: () => Promise.resolve([]),
     requestReserve: () => Promise.resolve({ error: "token" as const }),
     requestChange: () => Promise.resolve({ error: "token" as const }),
+    requestOrder: () => Promise.resolve({ error: "token" as const }),
+    orderRequest: () => Promise.resolve(null),
+    orders: () => Promise.resolve([]),
     request: () => Promise.resolve(null),
     subscription: () => Promise.resolve(null),
   };
@@ -167,5 +173,25 @@ describe("InvestorService phase 2a requests", () => {
       const x = new InvestorService({ ...base, requestChange: () => Promise.resolve({ error: reason }) });
       await expect(x.requestChange(Buffer.alloc(32), { subscriptionId: sub, action: "cancel", idempotencyKey: "key-12345" })).rejects.toMatchObject({ reason });
     }
+  });
+});
+
+describe("CatalogueService markets (migration 0062)", () => {
+  it("maps an order book to the contract: money in paisa, levels best first, no investors", async () => {
+    const row = { symbol: "GPF3", bids: [{ price_paisa: "50000", tokens: "3" }], asks: [{ price_paisa: "52000", tokens: "5" }], last_price_paisa: "51000", last_trade_at: "2026-11-05T10:00:00Z" };
+    const s = new CatalogueService({ offerings: () => Promise.resolve([]), offering: () => Promise.resolve(null), markets: (sym) => Promise.resolve(sym === null || sym === "GPF3" ? [row] : []), status: () => Promise.reject(new Error("unused")) });
+    const b = await s.market("GPF3");
+    expect(b).toEqual({
+      symbol: "GPF3",
+      bids: [{ price: { amount: "50000", currency: "PKR" }, tokens: "3" }],
+      asks: [{ price: { amount: "52000", currency: "PKR" }, tokens: "5" }],
+      last_price: { amount: "51000", currency: "PKR" },
+      last_trade_at: "2026-11-05T10:00:00.000Z",
+    });
+    const spec = responseSchema("/markets/{symbol}", "GET", 200);
+    expect(validate(spec?.schema ?? {}, b)).toEqual([]);
+    expect(await s.market("NONE1")).toBeNull();
+    const list = await s.markets(null, 20);
+    expect(validate(responseSchema("/markets", "GET", 200)?.schema ?? {}, list)).toEqual([]);
   });
 });

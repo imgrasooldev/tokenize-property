@@ -357,6 +357,127 @@
         }
       }
     },
+    "/markets": {
+      "get": {
+        "tags": [
+          "catalogue"
+        ],
+        "operationId": "listMarkets",
+        "summary": "Demo-market tokens with their order books, by symbol",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of markets",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/PublicShort"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MarketBook"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/markets/{symbol}": {
+      "get": {
+        "tags": [
+          "catalogue"
+        ],
+        "operationId": "getMarketBook",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9]{2,11}$"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order book and the last trade",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/PublicShort"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketBook"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
     "/status": {
       "get": {
         "tags": [
@@ -1131,6 +1252,239 @@
             "$ref": "#/components/responses/TooManyRequests"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/me/order-requests": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "createOrderRequest",
+        "summary": "Ask to place a limit order on the demo market; the investor confirms on the website (ADR 0018 amendment 3)",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "symbol",
+                  "side",
+                  "price",
+                  "tokens"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "symbol": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9]{2,11}$"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "price": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "tokens": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,5}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A new request (open confirmation_uri_complete on the website; poll the request)",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRequest"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The request made earlier with the same Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/order-requests/{requestId}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "getOrderRequest",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request and its status",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/me/orders": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "listOrders",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The investor's demo-market orders, newest first",
+            "headers": {
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/PrivateNoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "400": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -2074,6 +2428,212 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "OrderRequest": {
+        "type": "object",
+        "description": "A market order the app asked for (limit order on the demo market). It places nothing until the investor confirms it on the website, which checks the price band, cash or free tokens and limits, then places exactly this order.",
+        "required": [
+          "id",
+          "symbol",
+          "side",
+          "price",
+          "tokens",
+          "total",
+          "status",
+          "confirmation_code",
+          "confirmation_uri",
+          "confirmation_uri_complete",
+          "created_at",
+          "expires_at",
+          "order_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9]{2,11}$"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "declined",
+              "expired"
+            ]
+          },
+          "confirmation_code": {
+            "type": "string",
+            "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+          },
+          "confirmation_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "confirmation_uri_complete": {
+            "type": "string",
+            "format": "uri"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "15 minutes after creation"
+          },
+          "order_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The order the website placed, once confirmed (null before)"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "required": [
+          "id",
+          "symbol",
+          "side",
+          "price",
+          "tokens",
+          "filled",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "filled": {
+            "$ref": "#/components/schemas/Units"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "filled",
+              "cancelled"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MarketBook": {
+        "type": "object",
+        "description": "The demo market's order book by price level (no investors shown).",
+        "required": [
+          "symbol",
+          "bids",
+          "asks",
+          "last_price",
+          "last_trade_at"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "bids": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": [
+                "price",
+                "tokens"
+              ],
+              "properties": {
+                "price": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "tokens": {
+                  "$ref": "#/components/schemas/Units"
+                }
+              }
+            },
+            "description": "Best first (highest price)"
+          },
+          "asks": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": [
+                "price",
+                "tokens"
+              ],
+              "properties": {
+                "price": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "tokens": {
+                  "$ref": "#/components/schemas/Units"
+                }
+              }
+            },
+            "description": "Best first (lowest price)"
+          },
+          "last_price": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_trade_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }

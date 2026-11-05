@@ -4,7 +4,7 @@ Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; op
 
 ## Public API v1 + mobile app (2026-11-04, ADR 0018)
 
-- Phase 1 API on `main` and live on the demo (`http://51.79.144.40/v1/status`); website `/device`. Flutter app `mobile/` phase 1 (read-only, BLoC + repository, Night Glass dark + Daylight-style light, EN/UR); not yet run on a phone or emulator (analyze and 15 tests only; no APK built on this laptop). Phase 1b (rent distributions with proofs) done 2026-11-04 (migration 0059). Phase 2a (invest from the app, confirmed on the website, migration 0060) and phase 2b part 1 (cancel and withdraw from the app, confirmed on the website, migration 0061) done 2026-11-05; not yet tried end to end on a phone. Next: market orders, push notifications (Firebase/APNs: owner), passkey step-up in the app and DPoP (need a domain and TLS).
+- Phase 1 API on `main` and live on the demo (`http://51.79.144.40/v1/status`); website `/device`. Flutter app `mobile/` phase 1 (read-only, BLoC + repository, Night Glass dark + Daylight-style light, EN/UR); not yet run on a phone or emulator (analyze and 15 tests only; no APK built on this laptop). Phase 1b (rent distributions with proofs) done 2026-11-04 (migration 0059). Phase 2a (invest from the app, confirmed on the website, migration 0060) phase 2b part 1 (cancel and withdraw from the app, migration 0061) and part 2 (market orders from the app, migration 0062), all confirmed on the website, done 2026-11-05; not yet tried end to end on a phone. Next: cancelling an open order from the app, push notifications (Firebase/APNs: owner), passkey step-up in the app and DPoP (need a domain and TLS).
 
 ## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
 

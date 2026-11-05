@@ -43,9 +43,20 @@ export interface StatusRow {
   reconciliation: { status: "passed" | "failed"; finished_at: string } | null;
 }
 
+/** Migration 0062 (PO-1): one demo-market order book by price level and the last settled trade. */
+export interface MarketBookRow {
+  symbol: string;
+  bids: { price_paisa: string; tokens: string }[];
+  asks: { price_paisa: string; tokens: string }[];
+  last_price_paisa: string | null;
+  last_trade_at: string | null;
+}
+
 export interface CatalogueRepository {
   offerings(): Promise<OfferingRow[]>;
   offering(id: string): Promise<OfferingRow | null>;
+  /** Every symbol with a demo market, or the one given. */
+  markets(symbol: string | null): Promise<MarketBookRow[]>;
   status(): Promise<StatusRow>;
 }
 
@@ -130,6 +141,36 @@ export interface RequestRow {
 
 export type RequestRefusal = "token" | "offering" | "conflict" | "limit" | "code";
 
+/** Migration 0062: an order request the investor confirms on the website (resource OrderRequest). */
+export interface OrderRequestRow {
+  id: string;
+  kind: "order";
+  symbol: string;
+  side: "buy" | "sell";
+  price_paisa: string;
+  tokens: string;
+  total_paisa: string;
+  status: "pending" | "confirmed" | "declined" | "expired";
+  code: string;
+  created_at: string;
+  expires_at: string;
+  order_id: string | null;
+  replayed?: boolean;
+}
+
+export type OrderRefusal = "token" | "input" | "conflict" | "limit" | "code";
+
+export interface OrderRow {
+  id: string;
+  symbol: string;
+  side: "buy" | "sell";
+  price_paisa: string;
+  tokens: string;
+  filled: string;
+  status: "open" | "filled" | "cancelled";
+  created_at: Date;
+}
+
 /** Why a cancel / withdraw request was refused (migration 0061). */
 export type ChangeRefusal = "token" | "input" | "unknown" | "state" | "conflict" | "limit" | "code";
 
@@ -160,6 +201,14 @@ export interface InvestorRepository {
   requestReserve(accessHash: Buffer, offeringId: string, units: bigint, idempotencyKey: string, code: string): Promise<RequestRow | { error: RequestRefusal }>;
   requestChange(accessHash: Buffer, subscriptionId: string, action: "cancel" | "withdraw", idempotencyKey: string, code: string): Promise<RequestRow | { error: ChangeRefusal }>;
   request(accessHash: Buffer, id: string): Promise<RequestRow | null>;
+  requestOrder(
+    accessHash: Buffer,
+    order: { symbol: string; side: "buy" | "sell"; pricePaisa: bigint; tokens: bigint },
+    idempotencyKey: string,
+    code: string,
+  ): Promise<OrderRequestRow | { error: OrderRefusal }>;
+  orderRequest(accessHash: Buffer, id: string): Promise<OrderRequestRow | null>;
+  orders(accessHash: Buffer): Promise<OrderRow[]>;
   subscription(accessHash: Buffer, id: string): Promise<SubscriptionDetailRow | null>;
 }
 
@@ -189,6 +238,7 @@ export function pgRepositories(db: pg.Pool): Repositories {
     catalogue: {
       offerings: async () => (await db.query<OfferingRow>(`SELECT ${OFFERING_COLUMNS} FROM papi.offerings(NULL)`)).rows,
       offering: async (id) => (await one<OfferingRow>(`SELECT ${OFFERING_COLUMNS} FROM papi.offerings($1)`, [id])) ?? null,
+      markets: async (symbol) => (await db.query<{ book: MarketBookRow }>("SELECT book FROM papi.markets($1)", [symbol])).rows.map((r) => r.book),
       status: async () => (await one<{ s: StatusRow }>("SELECT papi.status() AS s", []))?.s ?? { as_of_block: null, indexed_at: null, reconciliation: null },
     },
     investors: {
@@ -225,6 +275,21 @@ export function pgRepositories(db: pg.Pool): Repositories {
         (await one<{ r: RequestRow | { error: ChangeRefusal } }>("SELECT papi.request_change($1, $2, $3, $4, $5) AS r", [h, sub, action, key, code]))?.r ?? {
           error: "token",
         },
+      requestOrder: async (h, o, key, code) =>
+        (
+          await one<{ r: OrderRequestRow | { error: OrderRefusal } }>("SELECT papi.request_order($1, $2, $3, $4, $5, $6, $7) AS r", [
+            h,
+            o.symbol,
+            o.side,
+            o.pricePaisa.toString(),
+            o.tokens.toString(),
+            key,
+            code,
+          ])
+        )?.r ?? { error: "token" },
+      orderRequest: async (h, id) => (await one<{ r: OrderRequestRow | null }>("SELECT papi.order_request($1, $2) AS r", [h, id]))?.r ?? null,
+      orders: async (h) =>
+        (await db.query<OrderRow>("SELECT id, symbol, side, price_paisa::text, tokens::text, filled::text, status, created_at FROM papi.orders($1)", [h])).rows,
       request: async (h, id) => (await one<{ r: RequestRow | null }>("SELECT papi.request($1, $2) AS r", [h, id]))?.r ?? null,
       subscription: async (h, id) => (await one<{ r: SubscriptionDetailRow | null }>("SELECT papi.subscription($1, $2) AS r", [h, id]))?.r ?? null,
     },

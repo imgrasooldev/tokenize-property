@@ -179,5 +179,51 @@
       }
     }
   },
-  "changeErr_not_allowed_now": "This subscription cannot be changed now."
+  "changeErr_not_allowed_now": "This subscription cannot be changed now.",
+  "openMarket": "Market: buy and sell tokens",
+  "marketTitle": "Market",
+  "marketNone": "No token has a market yet.",
+  "marketLast": "Last",
+  "marketBids": "Buy orders",
+  "marketAsks": "Sell orders",
+  "marketOrderButton": "Place an order",
+  "marketMyOrders": "My orders",
+  "marketNoOrders": "No orders yet.",
+  "marketFilled": "{filled} of {tokens} filled",
+  "@marketFilled": {
+    "placeholders": {
+      "filled": {
+        "type": "String"
+      },
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
+  "marketNote": "Demo market with test money. Cash top-ups and cancelling an open order are on the website.",
+  "orderTitle": "Order",
+  "orderBuy": "Buy",
+  "orderSell": "Sell",
+  "orderPrice": "Price per token (Rs)",
+  "orderTokens": "Tokens",
+  "orderTotal": "Total {amount}",
+  "@orderTotal": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "orderAsk": "Ask to place",
+  "orderHow": "You confirm on the website. The price band (within 10% of the value), your cash or tokens and the limits are checked there. Nothing is placed until you do.",
+  "orderPlaced": "Placed on the market. My orders shows whether it matched.",
+  "orderEnded": "This request was {status}. No order was placed.",
+  "@orderEnded": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "orderErr_invalid": "Enter a price in rupees (up to 2 decimals) and a whole number of tokens."
 }

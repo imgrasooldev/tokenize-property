@@ -177,22 +177,68 @@ describe("app requests confirmed on the website (migration 0060)", () => {
     expect((await w.client.query<{ r: Req }>("SELECT papi.request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toMatchObject({ status: "confirmed", subscription_id: sub });
   }, 120_000);
 
+  it("migration 0062: an order request places nothing; the website binds only the same order of the same investor; the book and own orders read", async () => {
+    const a = await app();
+    const other = await app();
+    const order = async (x: App, side: string, price: number, tokens: number, key: string, code: string, symbol = "GPF3"): Promise<Req & { order_id?: string | null; total_paisa?: string; kind?: string }> =>
+      (await w.client.query<{ r: Req }>("SELECT papi.request_order($1, $2, $3, $4, $5, $6, $7) AS r", [x.access, symbol, side, price, tokens, key, code])).rows[0]?.r ?? {};
+    expect(await order(a, "hold", 50000, 2, "key-hhhhhhh1", "VWXZBCDF")).toEqual({ error: "input" });
+    expect(await order(a, "buy", 50000, 2, "key-hhhhhhh1", "VWXZBCDF", "gpf3")).toEqual({ error: "input" });
+    const r = await order(a, "buy", 50000, 2, "key-hhhhhhh2", "VWXZBCDF");
+    expect(r).toMatchObject({ kind: "order", status: "pending", total_paisa: "100000", order_id: null, replayed: false });
+    expect(await order(a, "buy", 50000, 2, "key-hhhhhhh2", "WXZBCDFG")).toMatchObject({ id: r.id, replayed: true });
+    expect(await order(a, "buy", 50100, 2, "key-hhhhhhh2", "WXZBCDFG")).toEqual({ error: "conflict" });
+    // A reserve request with the same key is a conflict too; the order request is not a subscription request.
+    expect(await ask(a, 10, "key-hhhhhhh2")).toEqual({ error: "conflict" });
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [other.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: { kind?: string } }>("SELECT papi.web_request_lookup($1, 'VWXZ-BCDF') AS r", [a.session])).rows[0]?.r).toMatchObject({ kind: "order", symbol: "GPF3", side: "buy" });
+
+    const place = async (x: App, side: string, price: number, tokens: number): Promise<string> => {
+      const id = randomUUID();
+      await w.client.query("INSERT INTO webdemo.orders (id, request_id, investor_id, symbol, side, price_paisa, tokens, status) VALUES ($1, $2, $3, 'GPF3', $4, $5, $6, 'open')", [id, randomUUID(), x.investorId, side, price, tokens]);
+      return id;
+    };
+    const done = async (x: App, code: string, id: string): Promise<unknown> => (await w.client.query<{ r: unknown }>("SELECT papi.web_request_order_done($1, $2, $3) AS r", [x.session, code, id])).rows[0]?.r;
+    expect(await done(a, "VWXZBCDF", await place(a, "buy", 50000, 3))).toEqual({ error: "mismatch" });
+    expect(await done(a, "VWXZBCDF", await place(other, "buy", 50000, 2))).toEqual({ error: "mismatch" });
+    expect(await done(other, "VWXZBCDF", await place(other, "buy", 50000, 2))).toEqual({ error: "code" });
+    const mine = await place(a, "buy", 50000, 2);
+    expect(await done(a, "VWXZBCDF", mine)).toEqual({ ok: true });
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toMatchObject({ status: "confirmed", order_id: mine });
+
+    await place(other, "sell", 52000, 4);
+    await place(other, "sell", 52000, 1);
+    const book = (await w.client.query<{ book: { bids: { price_paisa: string; tokens: string }[]; asks: { price_paisa: string; tokens: string }[] } }>("SELECT book FROM papi.markets('GPF3')")).rows[0]?.book;
+    expect(book?.asks[0]).toEqual({ price_paisa: "52000", tokens: "5" });
+    expect(book?.bids[0]?.price_paisa).toBe("50000");
+    const own = await w.client.query<{ id: string }>("SELECT id FROM papi.orders($1)", [a.access]);
+    expect(own.rows.map((o) => o.id)).toContain(mine);
+    expect(own.rows).toHaveLength(2);
+    expect((await w.client.query("SELECT id FROM papi.orders($1)", [sha("nope")])).rowCount).toBe(0);
+  });
+
   it("the service's login and the website's role can call only their own functions", async () => {
     const grants = await w.client.query<{ routine: string; grantee: string }>(
       `SELECT p.proname AS routine, r.rolname AS grantee FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        CROSS JOIN pg_roles r WHERE n.nspname = 'papi' AND r.rolname IN ('pt_svc_public_api', 'pt_web')
-         AND p.proname IN ('request_reserve', 'request_change', 'request', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish')
+         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done')
          AND has_function_privilege(r.oid, p.oid, 'EXECUTE') ORDER BY 1, 2`,
     );
     expect(grants.rows.map((g) => `${g.routine}:${g.grantee}`)).toEqual([
+      "markets:pt_svc_public_api",
+      "order_request:pt_svc_public_api",
+      "orders:pt_svc_public_api",
       "request:pt_svc_public_api",
       "request_change:pt_svc_public_api",
+      "request_order:pt_svc_public_api",
       "request_reserve:pt_svc_public_api",
       "subscription:pt_svc_public_api",
       "web_request_decline:pt_web",
       "web_request_done:pt_web",
       "web_request_finish:pt_web",
       "web_request_lookup:pt_web",
+      "web_request_order_done:pt_web",
     ]);
   });
 });
