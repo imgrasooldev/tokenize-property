@@ -1,5 +1,4 @@
 import 'package:bloc_test/bloc_test.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:property_token_app/core/network/api_client.dart';
 import 'package:property_token_app/features/market/domain/market.dart';
