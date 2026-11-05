@@ -73,3 +73,13 @@ Owner: "Haan, market orders" (2026-11-05), same rule as amendments 1 and 2 ("Web
 - `POST /v1/me/order-requests` with `{symbol, side: "buy" | "sell", price: Money, tokens}` and an `Idempotency-Key` creates a pending order request (resource `OrderRequest`; same 15 minutes, 8-letter code, at most 5 pending requests of any kind, same-key-other-body 409). The API checks only the format (symbol pattern, whole tokens 1..999999, price in whole paisa). `GET /v1/me/order-requests/{id}` for polling.
 - The investor confirms on the website `/confirm`: the website places exactly the requested order through its own path (KYC and on-chain registration, the ±10% price band, cash or free tokens, self-trade and holding limits; the matcher runs), with the request id as the order's request id, so a repeated confirmation never places a second order. The database binds the order to the request only for the same investor, symbol, side, price and tokens (PO-3). A refused order (for example outside the band, not enough cash) is shown on the website and the request stays pending until declined or expired.
 - Cancelling an open order, cash top-ups and push notifications stay on the website for now.
+
+## Amendment 4 (2026-11-05): phase 2b part 3, cancelling an open order from the app, confirmed on the website
+
+Owner: "ok ok go on plz" after the 2b part 2 follow-ups were listed (2026-11-05), same rule as amendments 1-3 ("Website pe ab, passkey baad"); migration `0063_public_api_order_cancel.sql` (OC-1..OC-3).
+
+- `POST /v1/me/orders/{orderId}/cancel-requests` with an `Idempotency-Key` (no body) creates a pending request of kind `order_cancel` in the `OrderRequest` resource, which now always carries `kind` (`order` or `order_cancel`) and `target_order_id` (the order to cancel; null for `order`). Same 15 minutes, 8-letter code, at most 5 pending requests of any kind, same key with another target 409. Only the investor's own order, while it is open and not fully filled; anything else, another investor's order included, is 404 (no difference is shown).
+- The investor confirms on the website `/confirm`: the website cancels through its own path (matcher lock; the buy escrow is released), then `papi.web_request_order_cancel_done` marks the request confirmed only when the target order really is `cancelled`; `order_id` then names it. Declining works as for every kind.
+- In the app, My orders shows a Cancel button on open orders (route `/market/cancel`, `OrderCubit.cancelOrder`, the shared website-confirmation widget).
+- Cash top-ups and push notifications stay for later (push needs a Firebase/APNs account: owner).
+

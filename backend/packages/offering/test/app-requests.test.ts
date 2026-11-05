@@ -218,11 +218,53 @@ describe("app requests confirmed on the website (migration 0060)", () => {
     expect((await w.client.query("SELECT id FROM papi.orders($1)", [sha("nope")])).rowCount).toBe(0);
   });
 
+  it("migration 0063: cancelling an open order needs the website; only the investor's own open order, bound only once really cancelled", async () => {
+    const a = await app();
+    const other = await app();
+    const place = async (x: App, status = "open", filled = 0): Promise<string> => {
+      const id = randomUUID();
+      await w.client.query("INSERT INTO webdemo.orders (id, request_id, investor_id, symbol, side, price_paisa, tokens, filled, status) VALUES ($1, $2, $3, 'GPF3', 'sell', 51000, 4, $4, $5)", [
+        id,
+        randomUUID(),
+        x.investorId,
+        filled,
+        status,
+      ]);
+      return id;
+    };
+    type OReq = Req & { kind?: string; order_id?: string | null; target_order_id?: string | null; side?: string; tokens?: string };
+    const cancel = async (x: App, order: string, key: string, code: string): Promise<OReq> =>
+      (await w.client.query<{ r: OReq }>("SELECT papi.request_order_cancel($1, $2, $3, $4) AS r", [x.access, order, key, code])).rows[0]?.r ?? {};
+    const open = await place(a);
+    // Not the investor's, not open, fully filled, unknown: refused alike.
+    expect(await cancel(a, await place(other), "key-iiiiiii1", "XZBCDFGH")).toEqual({ error: "order" });
+    expect(await cancel(a, await place(a, "cancelled"), "key-iiiiiii1", "XZBCDFGH")).toEqual({ error: "order" });
+    expect(await cancel(a, await place(a, "open", 4), "key-iiiiiii1", "XZBCDFGH")).toEqual({ error: "order" });
+    expect(await cancel(a, randomUUID(), "key-iiiiiii1", "XZBCDFGH")).toEqual({ error: "order" });
+    const r = await cancel(a, open, "key-iiiiiii2", "ZBCDFGHJ");
+    expect(r).toMatchObject({ kind: "order_cancel", status: "pending", side: "sell", tokens: "4", order_id: null, target_order_id: open, replayed: false });
+    expect(await cancel(a, open, "key-iiiiiii2", "BCDFGHKL")).toMatchObject({ id: r.id, replayed: true });
+    expect(await cancel(a, await place(a), "key-iiiiiii2", "BCDFGHKL")).toEqual({ error: "conflict" });
+    // The request itself changes nothing; it is an order request, never a subscription request.
+    expect((await w.client.query<{ status: string }>("SELECT status FROM webdemo.orders WHERE id = $1", [open])).rows[0]?.status).toBe("open");
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toBeNull();
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toMatchObject({ kind: "order_cancel", target_order_id: open });
+    expect((await w.client.query<{ r: { kind?: string } }>("SELECT papi.web_request_lookup($1, 'ZBCD-FGHJ') AS r", [a.session])).rows[0]?.r).toMatchObject({ kind: "order_cancel" });
+
+    const finish = async (x: App): Promise<unknown> => (await w.client.query<{ r: unknown }>("SELECT papi.web_request_order_cancel_done($1, 'ZBCDFGHJ') AS r", [x.session])).rows[0]?.r;
+    expect(await finish(a)).toEqual({ error: "mismatch" });
+    expect(await finish(other)).toEqual({ error: "code" });
+    await w.client.query("UPDATE webdemo.orders SET status = 'cancelled', note = 'cancelled by investor' WHERE id = $1", [open]);
+    expect(await finish(a)).toEqual({ ok: true });
+    expect(await finish(a)).toEqual({ error: "code" });
+    expect((await w.client.query<{ r: unknown }>("SELECT papi.order_request($1, $2) AS r", [a.access, r.id])).rows[0]?.r).toMatchObject({ status: "confirmed", order_id: open });
+  });
+
   it("the service's login and the website's role can call only their own functions", async () => {
     const grants = await w.client.query<{ routine: string; grantee: string }>(
       `SELECT p.proname AS routine, r.rolname AS grantee FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        CROSS JOIN pg_roles r WHERE n.nspname = 'papi' AND r.rolname IN ('pt_svc_public_api', 'pt_web')
-         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done')
+         AND p.proname IN ('request_reserve', 'request_change', 'request_order', 'request', 'order_request', 'markets', 'orders', 'subscription', 'web_request_lookup', 'web_request_done', 'web_request_decline', 'web_request_finish', 'web_request_order_done', 'request_order_cancel', 'web_request_order_cancel_done')
          AND has_function_privilege(r.oid, p.oid, 'EXECUTE') ORDER BY 1, 2`,
     );
     expect(grants.rows.map((g) => `${g.routine}:${g.grantee}`)).toEqual([
@@ -232,12 +274,14 @@ describe("app requests confirmed on the website (migration 0060)", () => {
       "request:pt_svc_public_api",
       "request_change:pt_svc_public_api",
       "request_order:pt_svc_public_api",
+      "request_order_cancel:pt_svc_public_api",
       "request_reserve:pt_svc_public_api",
       "subscription:pt_svc_public_api",
       "web_request_decline:pt_web",
       "web_request_done:pt_web",
       "web_request_finish:pt_web",
       "web_request_lookup:pt_web",
+      "web_request_order_cancel_done:pt_web",
       "web_request_order_done:pt_web",
     ]);
   });

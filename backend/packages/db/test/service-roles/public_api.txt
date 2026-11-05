@@ -13,6 +13,7 @@ function papi.refresh(p_refresh_hash bytea, p_access_hash bytea, p_new_refresh_h
 function papi.request(p_access_hash bytea, p_id uuid)
 function papi.request_change(p_access_hash bytea, p_subscription uuid, p_kind text, p_key text, p_code text)
 function papi.request_order(p_access_hash bytea, p_symbol text, p_side text, p_price bigint, p_tokens bigint, p_key text, p_code text)
+function papi.request_order_cancel(p_access_hash bytea, p_order uuid, p_key text, p_code text)
 function papi.request_reserve(p_access_hash bytea, p_offering uuid, p_units bigint, p_key text, p_code text)
 function papi.revoke(p_hash bytea)
 function papi.status()

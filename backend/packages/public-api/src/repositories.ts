@@ -144,7 +144,8 @@ export type RequestRefusal = "token" | "offering" | "conflict" | "limit" | "code
 /** Migration 0062: an order request the investor confirms on the website (resource OrderRequest). */
 export interface OrderRequestRow {
   id: string;
-  kind: "order";
+  /** order: place an order; order_cancel (migration 0063): cancel target_order_id. */
+  kind: "order" | "order_cancel";
   symbol: string;
   side: "buy" | "sell";
   price_paisa: string;
@@ -155,10 +156,14 @@ export interface OrderRequestRow {
   created_at: string;
   expires_at: string;
   order_id: string | null;
+  target_order_id?: string | null;
   replayed?: boolean;
 }
 
 export type OrderRefusal = "token" | "input" | "conflict" | "limit" | "code";
+
+/** Migration 0063: why a cancellation request for an order was refused ("order": not the investor's open order). */
+export type OrderCancelRefusal = "token" | "order" | "conflict" | "limit" | "code";
 
 export interface OrderRow {
   id: string;
@@ -207,6 +212,8 @@ export interface InvestorRepository {
     idempotencyKey: string,
     code: string,
   ): Promise<OrderRequestRow | { error: OrderRefusal }>;
+  /** Migration 0063: a request to cancel one of the investor's open orders. */
+  requestOrderCancel(accessHash: Buffer, orderId: string, idempotencyKey: string, code: string): Promise<OrderRequestRow | { error: OrderCancelRefusal }>;
   orderRequest(accessHash: Buffer, id: string): Promise<OrderRequestRow | null>;
   orders(accessHash: Buffer): Promise<OrderRow[]>;
   subscription(accessHash: Buffer, id: string): Promise<SubscriptionDetailRow | null>;
@@ -287,6 +294,10 @@ export function pgRepositories(db: pg.Pool): Repositories {
             code,
           ])
         )?.r ?? { error: "token" },
+      requestOrderCancel: async (h, order, key, code) =>
+        (await one<{ r: OrderRequestRow | { error: OrderCancelRefusal } }>("SELECT papi.request_order_cancel($1, $2, $3, $4) AS r", [h, order, key, code]))?.r ?? {
+          error: "token",
+        },
       orderRequest: async (h, id) => (await one<{ r: OrderRequestRow | null }>("SELECT papi.order_request($1, $2) AS r", [h, id]))?.r ?? null,
       orders: async (h) =>
         (await db.query<OrderRow>("SELECT id, symbol, side, price_paisa::text, tokens::text, filled::text, status, created_at FROM papi.orders($1)", [h])).rows,

@@ -321,6 +321,28 @@ export function createApiServer(deps: ApiDeps): Server {
       },
     ],
     [
+      "POST",
+      /^\/v1\/me\/orders\/([^/]+)\/cancel-requests$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const key = req.headers["idempotency-key"];
+        if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) {
+          throw new Problem(400, "idempotency_key_required", "Idempotency-Key header required", "8-64 characters: letters, digits, . _ : -");
+        }
+        if (!UUID.test(id)) throw new Problem(404, "not_found", "No open order of yours");
+        try {
+          const r = await deps.investors.requestOrderCancel(h, { orderId: id, idempotencyKey: key });
+          return { status: r.created ? 201 : 200, body: r.body, cache: "no-store" };
+        } catch (e) {
+          if (!(e instanceof RequestError)) throw e;
+          if (e.reason === "token") throw new Problem(401, "invalid_token", "Sign in again");
+          if (e.reason === "order") throw new Problem(404, "not_found", "No open order of yours", "only an open, not fully filled order of yours can be cancelled");
+          if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used for another request");
+          throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
+        }
+      },
+    ],
+    [
       "GET",
       /^\/v1\/me\/order-requests\/([^/]+)$/,
       async (req, _url, [id = ""]) => {

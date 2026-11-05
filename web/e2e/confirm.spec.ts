@@ -79,3 +79,34 @@ test("an app order request is placed only through the website's checks and then 
   // Leave the book as the other specs expect it (a sell order holds no cash in escrow).
   await testDb("UPDATE webdemo.orders SET status = 'cancelled', note = 'e2e cleanup' WHERE id = $1 AND status = 'open'", [row[0]?.order_id]);
 });
+
+/**
+ * ADR 0018 amendment 4 (migration 0063): cancelling an open order the app asked for runs the
+ * website's own cancellation; the request is confirmed only once the order really is cancelled.
+ */
+test("an app request to cancel an open order cancels it through the website", async ({ page }) => {
+  test.setTimeout(180_000);
+  const alice = await testDb<{ id: string }>("SELECT id FROM webdemo.investors WHERE display_name LIKE 'Alice%' ORDER BY created_at LIMIT 1");
+  test.skip(!alice[0], "no Alice in the e2e database");
+  // A resting sell order (no cash in escrow), far above any bid the other specs leave.
+  const order = await testDb<{ id: string }>(
+    "INSERT INTO webdemo.orders (id, request_id, investor_id, symbol, side, price_paisa, tokens, status) VALUES (gen_random_uuid(), gen_random_uuid(), $1, 'GPF3', 'sell', 54900, 3, 'open') RETURNING id",
+    [alice[0]?.id],
+  );
+  const c = code();
+  await testDb(
+    `INSERT INTO papi.requests (investor_id, kind, units, idempotency_key, code, created_at, expires_at, symbol, side, price_paisa, target_order)
+     SELECT $1, 'order_cancel', 3, $2, $3, t, t + interval '15 minutes', 'GPF3', 'sell', 54900, $4 FROM (SELECT date_trunc('microseconds', clock_timestamp()) AS t) x`,
+    [alice[0]?.id, `e2e-${randomBytes(6).toString("hex")}`, c, order[0]?.id],
+  );
+  await loginAs(page, "Alice");
+  await page.goto(`/confirm?code=${c}`);
+  await expect(page.getByTestId("confirm-request")).toContainText("GPF3");
+  await page.getByTestId("cancel-app-order").click();
+  await expect(page.getByTestId("confirm-status")).toContainText("Order cancelled", { timeout: 60_000 });
+  expect((await testDb<{ status: string }>("SELECT status FROM webdemo.orders WHERE id = $1", [order[0]?.id]))[0]?.status).toBe("cancelled");
+  expect((await testDb<{ status: string; order_id: string | null }>("SELECT status, order_id FROM papi.requests WHERE code = $1", [c]))[0]).toEqual({
+    status: "confirmed",
+    order_id: order[0]?.id,
+  });
+});

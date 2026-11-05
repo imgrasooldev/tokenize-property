@@ -24,6 +24,7 @@ import 'package:property_token_app/features/invest/presentation/invest_page.dart
 import 'package:property_token_app/features/market/domain/market.dart';
 import 'package:property_token_app/features/market/presentation/market_bloc.dart';
 import 'package:property_token_app/features/market/presentation/market_page.dart';
+import 'package:property_token_app/features/market/presentation/order_cancel_page.dart';
 import 'package:property_token_app/features/market/presentation/order_cubit.dart';
 import 'package:property_token_app/features/market/presentation/order_page.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
@@ -195,6 +196,17 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
         return BlocProvider(
           create: (_) => OrderCubit(c.read<MarketRepository>(), symbol: m.symbol),
           child: OrderPage(market: m),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/market/cancel',
+      redirect: (_, state) => state.extra is MarketOrder ? null : '/market',
+      builder: (c, state) {
+        final o = state.extra! as MarketOrder;
+        return BlocProvider(
+          create: (_) => OrderCubit(c.read<MarketRepository>(), symbol: o.symbol),
+          child: OrderCancelPage(order: o),
         );
       },
     ),

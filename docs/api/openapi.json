@@ -1489,6 +1489,83 @@
           }
         }
       }
+    },
+    "/me/orders/{orderId}/cancel-requests": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "requestOrderCancel",
+        "summary": "Ask to cancel one of your open orders; you confirm it on the website",
+        "security": [
+          {
+            "bearer": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "A new cancellation request (open confirmation_uri_complete on the website; poll /me/order-requests/{requestId})",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRequest"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The request made earlier with the same Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2433,9 +2510,10 @@
       },
       "OrderRequest": {
         "type": "object",
-        "description": "A market order the app asked for (limit order on the demo market). It places nothing until the investor confirms it on the website, which checks the price band, cash or free tokens and limits, then places exactly this order.",
+        "description": "A market order the app asked for (limit order on the demo market). It places nothing until the investor confirms it on the website, which checks the price band, cash or free tokens and limits, then places exactly this order. With kind order_cancel (ADR 0018 amendment 4) it asks to cancel target_order_id; the website cancels it, and order_id names it once confirmed.",
         "required": [
           "id",
+          "kind",
           "symbol",
           "side",
           "price",
@@ -2447,12 +2525,20 @@
           "confirmation_uri_complete",
           "created_at",
           "expires_at",
-          "order_id"
+          "order_id",
+          "target_order_id"
         ],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "order",
+              "order_cancel"
+            ]
           },
           "symbol": {
             "type": "string",
@@ -2511,6 +2597,14 @@
             ],
             "format": "uuid",
             "description": "The order the website placed, once confirmed (null before)"
+          },
+          "target_order_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "For order_cancel: the open order to cancel (null for order)"
           }
         }
       },

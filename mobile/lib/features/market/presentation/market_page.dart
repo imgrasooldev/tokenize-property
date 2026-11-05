@@ -39,6 +39,13 @@ class MarketPage extends StatelessWidget {
                   subtitle: Text(
                     '${o.status} · ${l.marketFilled(formatUnits(o.filled, lang), formatUnits(o.tokens, lang))}',
                   ),
+                  trailing: o.status == 'open'
+                      ? TextButton(
+                          key: Key('order-cancel-${o.id}'),
+                          onPressed: () => unawaited(context.push('/market/cancel', extra: o)),
+                          child: Text(l.orderCancelButton),
+                        )
+                      : null,
                 ),
               ),
             const SizedBox(height: 12),

@@ -85,8 +85,9 @@ class MarketData extends Equatable {
   List<Object?> get props => [markets, orders];
 }
 
-/// A limit order the app asked for; the investor confirms it on the website
-/// (schema OrderRequest, ADR 0018 amendment 3).
+/// A limit order the app asked for, or the cancellation of an open one; the
+/// investor confirms it on the website (schema OrderRequest, ADR 0018
+/// amendments 3 and 4).
 class OrderRequest extends Equatable implements WebsiteConfirmation {
   const OrderRequest({
     required this.id,
@@ -100,6 +101,8 @@ class OrderRequest extends Equatable implements WebsiteConfirmation {
     required this.confirmUriComplete,
     required this.expiresAt,
     required this.orderId,
+    this.kind = 'order',
+    this.targetOrderId,
   });
 
   factory OrderRequest.fromJson(Map<String, dynamic> j) => OrderRequest(
@@ -114,6 +117,8 @@ class OrderRequest extends Equatable implements WebsiteConfirmation {
     confirmUriComplete: j['confirmation_uri_complete'] as String,
     expiresAt: DateTime.parse(j['expires_at'] as String),
     orderId: j['order_id'] as String?,
+    kind: j['kind'] as String? ?? 'order',
+    targetOrderId: j['target_order_id'] as String?,
   );
 
   final String id;
@@ -133,6 +138,10 @@ class OrderRequest extends Equatable implements WebsiteConfirmation {
   final DateTime expiresAt;
   final String? orderId;
 
+  /// order (place) or order_cancel (cancel [targetOrderId]).
+  final String kind;
+  final String? targetOrderId;
+
   bool get pending => status == 'pending';
 
   @override
@@ -151,6 +160,9 @@ abstract interface class MarketRepository {
     required String tokens,
     required String idempotencyKey,
   });
+
+  /// Asks to cancel one of the investor's open orders (ADR 0018 amendment 4).
+  Future<OrderRequest> requestOrderCancel({required String orderId, required String idempotencyKey});
 
   Future<OrderRequest> orderRequest(String id);
 }

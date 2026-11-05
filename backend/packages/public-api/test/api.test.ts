@@ -303,6 +303,35 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/me/orders", "/me/orders")).status).toBe(401);
   });
 
+  it("phase 2b part 3: a cancellation request for one's own open order follows the contract; others' and unknown orders are 404", async () => {
+    const who = await investor();
+    const t = await signIn(who);
+    const stranger = await investor();
+    const order = async (investorId: string): Promise<string> =>
+      (
+        await admin.query<{ id: string }>(
+          "INSERT INTO webdemo.orders (id, request_id, investor_id, symbol, side, price_paisa, tokens, status) VALUES (gen_random_uuid(), gen_random_uuid(), $1, 'GPF3', 'buy', 50000, 2, 'open') RETURNING id",
+          [investorId],
+        )
+      ).rows[0]?.id ?? "";
+    const mine = await order(who.id);
+    const theirs = await order(stranger.id);
+    const C = "/me/orders/{orderId}/cancel-requests";
+    const post = (key?: string): RequestInit => ({ method: "POST", headers: { authorization: `Bearer ${t.access_token}`, ...(key ? { "idempotency-key": key } : {}) } });
+    expect((await call(C, `/me/orders/${mine}/cancel-requests`, post())).body).toMatchObject({ code: "idempotency_key_required" });
+    const made = await call(C, `/me/orders/${mine}/cancel-requests`, post("key-22222222"));
+    expect(made.status).toBe(201);
+    const body = made.body as { id: string };
+    expect(made.body).toMatchObject({ kind: "order_cancel", target_order_id: mine, order_id: null, status: "pending", side: "buy", tokens: "2" });
+    expect((await call(C, `/me/orders/${mine}/cancel-requests`, post("key-22222222"))).status).toBe(200);
+    expect((await call(C, `/me/orders/${theirs}/cancel-requests`, post("key-22222222"))).body).toMatchObject({ code: "idempotency_conflict" });
+    expect((await call(C, `/me/orders/${theirs}/cancel-requests`, post("key-33333333"))).status).toBe(404);
+    expect((await call(C, "/me/orders/00000000-0000-4000-8000-000000000063/cancel-requests", post("key-33333333"))).status).toBe(404);
+    expect((await call(C, "/me/orders/not-a-uuid/cancel-requests", post("key-33333333"))).status).toBe(404);
+    expect((await call("/me/order-requests/{requestId}", `/me/order-requests/${body.id}`, bearer(t.access_token))).body).toMatchObject({ kind: "order_cancel", target_order_id: mine });
+    expect((await call(C, `/me/orders/${mine}/cancel-requests`, { method: "POST", headers: { "idempotency-key": "key-22222222" } })).status).toBe(401);
+  });
+
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
     expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
     const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });

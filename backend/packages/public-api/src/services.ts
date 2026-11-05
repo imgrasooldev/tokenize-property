@@ -159,7 +159,7 @@ const book = (b: MarketBookRow) => ({
 
 /** Why a request was refused (mapped to Problem Details by the HTTP layer). */
 export class RequestError extends Error {
-  constructor(readonly reason: "offering" | "conflict" | "limit" | "token" | "unknown" | "state") {
+  constructor(readonly reason: "offering" | "conflict" | "limit" | "token" | "unknown" | "state" | "order") {
     super(reason);
   }
 }
@@ -232,6 +232,7 @@ export class InvestorService {
     const code = `${r.code.slice(0, 4)}-${r.code.slice(4)}`;
     return {
       id: r.id,
+      kind: r.kind,
       symbol: r.symbol,
       side: r.side,
       price: money(r.price_paisa),
@@ -244,6 +245,7 @@ export class InvestorService {
       created_at: new Date(r.created_at).toISOString(),
       expires_at: new Date(r.expires_at).toISOString(),
       order_id: r.order_id,
+      target_order_id: r.target_order_id ?? null,
     };
   }
 
@@ -257,6 +259,22 @@ export class InvestorService {
       if ("error" in r) {
         if (r.error === "code") continue;
         if (r.error === "input") throw new Error("order request format not checked by the route");
+        throw new RequestError(r.error);
+      }
+      return { created: r.replayed !== true, body: this.orderRequestView(r) };
+    }
+    throw new Error("no free confirmation code after 5 attempts");
+  }
+
+  /**
+   * Phase 2b part 3 (migration 0063): asks to cancel one of the investor's open orders; the
+   * investor confirms on the website, which cancels it through its own path.
+   */
+  async requestOrderCancel(h: Buffer, input: { orderId: string; idempotencyKey: string }) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const r = await this.repo.requestOrderCancel(h, input.orderId, input.idempotencyKey, userCode());
+      if ("error" in r) {
+        if (r.error === "code") continue;
         throw new RequestError(r.error);
       }
       return { created: r.replayed !== true, body: this.orderRequestView(r) };

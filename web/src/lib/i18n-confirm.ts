@@ -30,6 +30,10 @@ const en = {
   tokens: "Tokens",
   total: "Total",
   placeOrder: "Place this order",
+  introOrderCancel: "The Property Token app asked to cancel this open order of yours. Nothing changes until you confirm here; what is not yet filled is cancelled and any reserved cash is released.",
+  cancelOrder: "Cancel this order",
+  orderCancelled: "Order cancelled. The app now shows it as cancelled.",
+  orderCancelFailed: "The order could not be cancelled here (it may be filled already). The market page shows its state.",
   ordered: "Order placed. The app now shows it; the market page shows whether it matched.",
   orderUnlinked: "Your order was placed, but it could not be linked to the app request. The market page shows it.",
 };
@@ -64,6 +68,10 @@ const ur: ConfirmDict = {
   tokens: "ٹوکن",
   total: "کل",
   placeOrder: "یہ آرڈر لگائیں",
+  introOrderCancel: "پراپرٹی ٹوکن ایپ نے آپ کا یہ کھلا آرڈر منسوخ کرنے کی درخواست کی ہے۔ یہاں آپ کی تصدیق کے بغیر کچھ نہیں بدلتا؛ جو حصہ ابھی پورا نہیں ہوا وہ منسوخ ہوتا ہے اور روکی گئی رقم واپس ہو جاتی ہے۔",
+  cancelOrder: "یہ آرڈر منسوخ کریں",
+  orderCancelled: "آرڈر منسوخ ہو گیا۔ ایپ اب اسے منسوخ دکھاتی ہے۔",
+  orderCancelFailed: "آرڈر یہاں منسوخ نہیں ہو سکا (شاید پہلے ہی پورا ہو چکا ہے)۔ مارکیٹ کے صفحے پر اس کی حالت دیکھیں۔",
   ordered: "آرڈر لگ گیا۔ ایپ اب اسے دکھاتی ہے؛ مارکیٹ کے صفحے پر دیکھیں کہ میچ ہوا یا نہیں۔",
   orderUnlinked: "آپ کا آرڈر لگ گیا، لیکن ایپ کی درخواست سے جڑ نہ سکا۔ مارکیٹ کے صفحے پر دکھائی دیتا ہے۔",
 };

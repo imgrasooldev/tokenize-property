@@ -18,10 +18,10 @@ export interface SubscriptionAppRequest {
   subscription_id: string | null;
 }
 
-/** A limit order on the demo market the app asked for (migration 0062). */
+/** A limit order on the demo market the app asked for (migration 0062), or the cancellation of an open one (0063). */
 export interface OrderAppRequest {
   id: string;
-  kind: "order";
+  kind: "order" | "order_cancel";
   symbol: string;
   side: "buy" | "sell";
   price_paisa: string;
@@ -30,9 +30,16 @@ export interface OrderAppRequest {
   status: string;
   code: string;
   expires_at: string;
+  /** For order_cancel (migration 0063): the investor's open order to cancel. */
+  target_order_id?: string | null;
 }
 
 export type AppRequest = SubscriptionAppRequest | OrderAppRequest;
+
+/** A market request (place or cancel an order) rather than a subscription request. */
+export function isOrderRequest(r: AppRequest): r is OrderAppRequest {
+  return r.kind === "order" || r.kind === "order_cancel";
+}
 
 export const APP_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 
@@ -63,5 +70,14 @@ export async function bindAppOrder(session: Buffer, code: string, orderId: strin
  */
 export async function finishAppRequest(session: Buffer, code: string): Promise<boolean> {
   const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_finish($1, $2) AS r", [session, code]);
+  return rows[0]?.r.ok === true;
+}
+
+/**
+ * After the website's own order cancellation (migration 0063 OC-2): marks the app's request
+ * confirmed; the database checks that the target order really is cancelled.
+ */
+export async function finishAppOrderCancel(session: Buffer, code: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_order_cancel_done($1, $2) AS r", [session, code]);
   return rows[0]?.r.ok === true;
 }

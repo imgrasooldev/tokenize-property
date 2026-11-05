@@ -225,5 +225,19 @@
       }
     }
   },
-  "orderErr_invalid": "Enter a price in rupees (up to 2 decimals) and a whole number of tokens."
+  "orderErr_invalid": "Enter a price in rupees (up to 2 decimals) and a whole number of tokens.",
+  "orderCancelTitle": "Cancel order",
+  "orderCancelButton": "Cancel",
+  "orderCancelAsk": "Ask to cancel",
+  "orderCancelHow": "You confirm on the website. What is not yet filled is cancelled there and any reserved cash is released. Nothing changes until you do.",
+  "orderCancelDone": "Cancelled. My orders now shows it as cancelled.",
+  "orderCancelEnded": "This request was {status}. The order was not cancelled.",
+  "@orderCancelEnded": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "orderCancelNotOpen": "This order is no longer open (filled or cancelled already)."
 }

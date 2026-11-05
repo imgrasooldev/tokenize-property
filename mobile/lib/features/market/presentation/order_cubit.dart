@@ -34,7 +34,7 @@ class OrderWaiting extends OrderState {
   List<Object?> get props => [request];
 }
 
-/// The website placed the order.
+/// The website placed the order (or, for a cancellation, cancelled it).
 class OrderPlaced extends OrderState {
   const OrderPlaced(this.request);
   final OrderRequest request;
@@ -88,6 +88,20 @@ class OrderCubit extends Cubit<OrderState> {
       _show(r);
     } on ApiException catch (e) {
       // A refusal (4xx) is final for this key; a network failure keeps it for the retry.
+      if (e.status >= 400 && e.status < 500) _key = _newKey();
+      emit(OrderEditing(error: e.code));
+    }
+  }
+
+  /// Asks to cancel the investor's open order [orderId] (ADR 0018 amendment 4);
+  /// the investor confirms on the website, then [OrderPlaced] carries the result.
+  Future<void> cancelOrder(String orderId) async {
+    emit(const OrderSubmitting());
+    try {
+      final r = await _repo.requestOrderCancel(orderId: orderId, idempotencyKey: _key);
+      _key = _newKey();
+      _show(r);
+    } on ApiException catch (e) {
       if (e.status >= 400 && e.status < 500) _key = _newKey();
       emit(OrderEditing(error: e.code));
     }

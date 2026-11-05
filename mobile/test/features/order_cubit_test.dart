@@ -121,4 +121,40 @@ void main() {
     expect(r.totalPaisa, '500000');
     expect(r.pending, isTrue);
   });
+
+  blocTest<OrderCubit, OrderState>(
+    'cancelling an open order: asks with a key, waits for the website, then shows it cancelled',
+    build: () {
+      final repo = _MockMarket();
+      when(
+        () => repo.requestOrderCancel(
+          orderId: 'o-9',
+          idempotencyKey: any(named: 'idempotencyKey'),
+        ),
+      ).thenAnswer((_) async => _r('pending'));
+      when(() => repo.orderRequest('q-1')).thenAnswer((_) async => _r('confirmed', order: 'o-9'));
+      return OrderCubit(repo, symbol: 'GPF3', pollEvery: null);
+    },
+    act: (c) async {
+      await c.cancelOrder('o-9');
+      await c.refresh();
+    },
+    expect: () => [const OrderSubmitting(), OrderWaiting(_r('pending')), OrderPlaced(_r('confirmed', order: 'o-9'))],
+  );
+
+  blocTest<OrderCubit, OrderState>(
+    'cancelling an order that is no longer open shows the refusal',
+    build: () {
+      final repo = _MockMarket();
+      when(
+        () => repo.requestOrderCancel(
+          orderId: 'o-9',
+          idempotencyKey: any(named: 'idempotencyKey'),
+        ),
+      ).thenThrow(const ApiException(404, 'not_found'));
+      return OrderCubit(repo, symbol: 'GPF3', pollEvery: null);
+    },
+    act: (c) => c.cancelOrder('o-9'),
+    expect: () => [const OrderSubmitting(), const OrderEditing(error: 'not_found')],
+  );
 }

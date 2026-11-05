@@ -6,7 +6,7 @@ import { z } from "zod";
 import { MAX_TOPUP_PAISA, orderSchema, topUpSchema } from "@/lib/market-rules";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { nudgeFollower } from "@/lib/server/follower";
-import { APP_CODE, bindAppOrder, lookupAppRequest } from "@/lib/server/app-requests";
+import { APP_CODE, bindAppOrder, finishAppOrderCancel, lookupAppRequest } from "@/lib/server/app-requests";
 import { cancelOrder, placeOrder, topUp, type PlaceError } from "@/lib/server/market";
 import { logError } from "@/lib/server/log";
 import { take } from "@/lib/server/rate-limit";
@@ -86,6 +86,31 @@ export async function confirmAppOrderAction(_prev: MarketState, formData: FormDa
     logError("app-order-bind", e);
   }
   redirect(`/confirm?${bound ? "ordered" : "orderunlinked"}=1`);
+}
+
+/**
+ * Cancels an open order the mobile app asked to cancel (migration 0063): through the website's own
+ * cancellation (matcher lock, buy escrow released), then the request is marked confirmed.
+ */
+export async function cancelAppOrderAction(formData: FormData): Promise<void> {
+  const session = await currentSession();
+  const investor = session ? await investorById(session.investorId) : null;
+  if (!session || !investor) redirect("/login");
+  if (!take("cancel", investor.id)) redirect("/confirm");
+  const code = formData.get("appCode");
+  if (typeof code !== "string" || !APP_CODE.test(code)) redirect("/confirm");
+  const request = await lookupAppRequest(session.hash, code);
+  if (request?.kind !== "order_cancel" || !request.target_order_id) redirect("/confirm");
+  let finished = false;
+  try {
+    if (await cancelOrder(investor, request.target_order_id)) {
+      revalidatePath("/market");
+      finished = await finishAppOrderCancel(session.hash, code);
+    }
+  } catch (e) {
+    logError("app-order-cancel", e);
+  }
+  redirect(`/confirm?${finished ? "ordercancelled" : "ordercancelfailed"}=1`);
 }
 
 export async function topUpAction(_prev: MarketState, formData: FormData): Promise<MarketState> {
