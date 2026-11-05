@@ -23,7 +23,7 @@ const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 /** An OAuth error (RFC 6749 section 5.2 / RFC 8628 section 3.5). */
 export class OAuthError extends Error {
   constructor(
-    readonly error: "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type" | "invalid_scope" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token",
+    readonly error: "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type" | "invalid_scope" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token" | "invalid_dpop_proof",
     readonly description?: string,
   ) {
     super(error);
@@ -76,21 +76,29 @@ export class AuthService {
     };
   }
 
-  async token(input: { grantType: string; clientId: string; deviceCode?: string | undefined; refreshToken?: string | undefined }) {
+  /** `jkt`: the key thumbprint of a valid DPoP proof sent with the request (RFC 9449, migration 0066). */
+  async token(input: { grantType: string; clientId: string; deviceCode?: string | undefined; refreshToken?: string | undefined; jkt?: string | undefined }) {
     if (input.clientId !== CLIENT_ID) throw new OAuthError("invalid_client");
     const access = token();
     const refresh = token();
     if (input.grantType === "urn:ietf:params:oauth:grant-type:device_code") {
       if (!input.deviceCode) throw new OAuthError("invalid_request", "device_code is required");
-      const r = await this.grants.exchange(sha256(input.deviceCode), sha256(access), sha256(refresh));
+      const r = await this.grants.exchange(sha256(input.deviceCode), sha256(access), sha256(refresh), input.jkt ?? null);
       if (r !== "ok") throw new OAuthError(r);
     } else if (input.grantType === "refresh_token") {
       if (!input.refreshToken) throw new OAuthError("invalid_request", "refresh_token is required");
-      if ((await this.grants.refresh(sha256(input.refreshToken), sha256(access), sha256(refresh))) !== "ok") throw new OAuthError("invalid_grant");
+      if ((await this.grants.refresh(sha256(input.refreshToken), sha256(access), sha256(refresh), input.jkt ?? null)) !== "ok") throw new OAuthError("invalid_grant");
     } else {
       throw new OAuthError("unsupported_grant_type");
     }
-    return { access_token: access, token_type: "Bearer" as const, expires_in: ACCESS_SECONDS, refresh_token: refresh, scope: "read" as const };
+    // With a proof the family is bound (a refresh may bind a family that was not bound before, DP-3).
+    const bound = input.jkt !== undefined;
+    return { access_token: access, token_type: bound ? ("DPoP" as const) : ("Bearer" as const), expires_in: ACCESS_SECONDS, refresh_token: refresh, scope: "read" as const };
+  }
+
+  /** The key thumbprint the live token is bound to, or null (DP-4). */
+  binding(accessHash: Buffer): Promise<string | null> {
+    return this.grants.binding(accessHash);
   }
 
   async revoke(input: { clientId: string; token: string }): Promise<void> {

@@ -14,6 +14,7 @@ function grants(outcome: Awaited<ReturnType<GrantRepository["exchange"]>> = "ok"
     },
     exchange: () => Promise.resolve(outcome),
     refresh: () => Promise.resolve("invalid_grant"),
+    binding: () => Promise.resolve(null),
     revoke: () => {
       calls.push("revoke");
       return Promise.resolve();

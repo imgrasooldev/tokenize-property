@@ -12,6 +12,7 @@ import { pgRepositories } from "../src/repositories.ts";
 import { newPushKeyPair, PushOpener, PushSealer } from "@pt/notify";
 import { AuthService, CatalogueService, InvestorService, PushService } from "../src/services.ts";
 import { OPENAPI, responseSchema, validate } from "./contract.ts";
+import { TestDpopKey } from "./dpop-keys.ts";
 
 /**
  * ADR 0018 / migration 0058 end to end on a scratch database, through HTTP, as the service's own
@@ -41,6 +42,7 @@ beforeAll(async () => {
     investors: new InvestorService(repos.investors),
     push: new PushService(repos.push, PushSealer.fromEnv({ NOTIFY_PUSH_PUBLIC_KEY: pushKeys.publicKey })),
     openapi: OPENAPI,
+    publicUrl: "http://api.test/v1",
     ratePerMinute: 200,
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -179,6 +181,67 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/oauth/revoke", "/oauth/revoke", formPost({ token: "nope", client_id: "pt-mobile" }))).status).toBe(200);
     const audit = await admin.query<{ action: string }>("SELECT DISTINCT action FROM webauth.audit WHERE action LIKE 'device.%'");
     expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(["device.approved", "device.linked", "device.token_reuse", "device.revoked"]));
+  });
+
+  it("DPoP (migration 0066): tokens bound to the app's key need a proof of that key; refresh too; an unbound family can be bound", async () => {
+    const who = await investor();
+    const key = new TestDpopKey();
+    const TOKEN_URL = "http://api.test/v1/oauth/token";
+    const d = (await call("/oauth/device_authorization", "/oauth/device_authorization", formPost({ client_id: "pt-mobile", scope: "read", device_name: "Pixel 9" }))).body as {
+      device_code: string;
+      user_code: string;
+    };
+    await admin.query("SELECT papi.web_device_decide($1, $2, 'approve')", [who.session, d.user_code]);
+    const tokenWith = (fields: Record<string, string>, proof?: string): RequestInit => {
+      const init = formPost(fields);
+      return { ...init, headers: { ...(init.headers as Record<string, string>), ...(proof ? { dpop: proof } : {}) } };
+    };
+    const grant = { grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: d.device_code, client_id: "pt-mobile" };
+    expect((await call("/oauth/token", "/oauth/token", tokenWith(grant, key.proof("POST", "http://api.test/v1/oauth/device_authorization")))).body).toMatchObject({
+      error: "invalid_dpop_proof",
+    });
+    const t = (await call("/oauth/token", "/oauth/token", tokenWith(grant, key.proof("POST", TOKEN_URL)))).body as Tokens & { token_type: string };
+    expect(t.token_type).toBe("DPoP");
+
+    const ME = "http://api.test/v1/me";
+    const dpopCall = (token: string, proof: string): RequestInit => ({ headers: { authorization: `DPoP ${token}`, dpop: proof } });
+    // A bound token as a plain bearer token is refused (RFC 9449 section 7.1).
+    const asBearer = await call("/me", "/me", bearer(t.access_token));
+    expect(asBearer.status).toBe(401);
+    expect(asBearer.headers.get("www-authenticate")).toContain("DPoP");
+    expect((await call("/me", "/me", dpopCall(t.access_token, key.proof("GET", ME, { accessToken: t.access_token })))).status).toBe(200);
+    const thief = new TestDpopKey();
+    const stolen = await call("/me", "/me", dpopCall(t.access_token, thief.proof("GET", ME, { accessToken: t.access_token })));
+    expect(stolen.status).toBe(401);
+    expect(stolen.body).toMatchObject({ code: "invalid_dpop_proof" });
+    expect(stolen.headers.get("www-authenticate")).toContain('error="invalid_dpop_proof"');
+    const once = key.proof("GET", ME, { accessToken: t.access_token });
+    expect((await call("/me", "/me", dpopCall(t.access_token, once))).status).toBe(200);
+    expect((await call("/me", "/me", dpopCall(t.access_token, once))).body).toMatchObject({ code: "invalid_dpop_proof" });
+    // Writes carry their own proof (htm and htu of that call).
+    const push = await fetch(`${base}/v1/me/push-device`, {
+      method: "DELETE",
+      headers: { authorization: `DPoP ${t.access_token}`, dpop: key.proof("DELETE", "http://api.test/v1/me/push-device", { accessToken: t.access_token }) },
+    });
+    expect(push.status).toBe(204);
+
+    // Refresh: a copied refresh token without the key is useless and does not end the device.
+    const refresh = (rt: string, proof?: string) => call("/oauth/token", "/oauth/token", tokenWith({ grant_type: "refresh_token", refresh_token: rt, client_id: "pt-mobile" }, proof));
+    expect((await refresh(t.refresh_token)).body).toEqual({ error: "invalid_grant" });
+    expect((await refresh(t.refresh_token, thief.proof("POST", TOKEN_URL))).body).toEqual({ error: "invalid_grant" });
+    const t2 = (await refresh(t.refresh_token, key.proof("POST", TOKEN_URL))).body as Tokens & { token_type: string };
+    expect(t2.token_type).toBe("DPoP");
+    expect((await call("/me", "/me", dpopCall(t2.access_token, key.proof("GET", ME, { accessToken: t2.access_token })))).status).toBe(200);
+
+    // An app signed in before DPoP binds its family on the next refresh with a proof.
+    const old = await signIn(who);
+    expect((await call("/me", "/me", dpopCall(old.access_token, key.proof("GET", ME, { accessToken: old.access_token })))).status).toBe(401);
+    const upgraded = (await refresh(old.refresh_token, key.proof("POST", TOKEN_URL))).body as Tokens & { token_type: string };
+    expect(upgraded.token_type).toBe("DPoP");
+    expect((await call("/me", "/me", bearer(upgraded.access_token))).status).toBe(401);
+    expect((await call("/me", "/me", dpopCall(upgraded.access_token, key.proof("GET", ME, { accessToken: upgraded.access_token })))).status).toBe(200);
+    const audit = await admin.query<{ action: string }>("SELECT DISTINCT action FROM webauth.audit WHERE action IN ('device.dpop_bound', 'device.dpop_mismatch')");
+    expect(audit.rows.map((r) => r.action).sort()).toEqual(["device.dpop_bound", "device.dpop_mismatch"]);
   });
 
   it("phase 1b: the investor's distributions and a Merkle proof that rebuilds the root on chain", async () => {

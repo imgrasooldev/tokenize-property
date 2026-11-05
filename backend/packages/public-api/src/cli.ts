@@ -41,6 +41,8 @@ function main(): void {
     catalogue: new CatalogueService(repos.catalogue),
     investors: new InvestorService(repos.investors, `${web}/confirm`),
     push: new PushService(repos.push, sealer),
+    // DPoP htu (RFC 9449): the URL the app calls through nginx.
+    publicUrl: e.PUBLIC_API_URL ?? `${web}/v1`,
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path of the contract in the repository
     openapi: JSON.parse(readFileSync(OPENAPI, "utf8")) as unknown,
   });

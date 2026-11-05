@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readBody } from "@pt/http-auth";
 import { z } from "zod";
+import { DpopError, DpopVerifier } from "./dpop.ts";
 import { AuthService, CatalogueService, InvestorService, OAuthError, PushError, RequestError, type PushService } from "./services.ts";
 
 /**
@@ -19,6 +20,13 @@ export interface ApiDeps {
   push?: PushService;
   /** The OpenAPI document served at /v1/openapi.json. */
   openapi: unknown;
+  /**
+   * The public URL of /v1 as the app calls it (behind nginx), for the DPoP htu check (RFC 9449),
+   * e.g. "http://51.79.144.40/v1". Default http://localhost:4960/v1.
+   */
+  publicUrl?: string;
+  /** DPoP proof checker (one per process: it remembers used proofs). */
+  dpop?: DpopVerifier;
   /** Requests per minute per client key (bearer token or address). */
   ratePerMinute?: number;
   now?: () => number;
@@ -44,12 +52,17 @@ const PUSH_DEVICE = z.strictObject({ platform: z.enum(["android", "ios"]), token
 const CHANGE = z.strictObject({ action: z.enum(["cancel", "withdraw"]) });
 const RESERVE = z.strictObject({ offering_id: z.string().regex(UUID), units: z.string().regex(/^[1-9][0-9]{0,12}$/) });
 
+/** RFC 6750 and RFC 9449 challenges on a 401 (the app may use either scheme; DPoP with ES256). */
+const CHALLENGE = 'Bearer realm="pt", error="invalid_token", DPoP algs="ES256"';
+const DPOP_CHALLENGE = 'DPoP algs="ES256", error="invalid_dpop_proof"';
+
 class Problem extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     readonly title: string,
     readonly detail?: string,
+    readonly challenge: string = CHALLENGE,
   ) {
     super(title);
   }
@@ -78,9 +91,14 @@ function locale(req: IncomingMessage): "en" | "ur" {
   return /^\s*ur\b/i.test(req.headers["accept-language"] ?? "") ? "ur" : "en";
 }
 
+/** The access token of a Bearer (RFC 6750) or DPoP (RFC 9449) Authorization header. */
+function credentials(req: IncomingMessage): { scheme: "Bearer" | "DPoP"; token: string } | null {
+  const m = /^(Bearer|DPoP) ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? "");
+  return m?.[1] && m[2] ? { scheme: m[1] as "Bearer" | "DPoP", token: m[2] } : null;
+}
+
 function bearer(req: IncomingMessage): string | null {
-  const m = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? "");
-  return m?.[1] ?? null;
+  return credentials(req)?.token ?? null;
 }
 
 async function form(req: IncomingMessage): Promise<URLSearchParams> {
@@ -132,10 +150,30 @@ export function createApiServer(deps: ApiDeps): Server {
   const perMinute = deps.ratePerMinute ?? 120;
   const buckets = new Map<string, { start: number; used: number }>();
 
+  const publicUrl = (deps.publicUrl ?? "http://localhost:4960/v1").replace(/\/$/, "");
+  const dpop = deps.dpop ?? new DpopVerifier({ now });
+  /** The URL the app called, as DPoP's htu names it. */
+  const htu = (req: IncomingMessage): string => `${publicUrl}${new URL(req.url ?? "/", "http://internal").pathname.replace(/^\/v1/, "")}`;
+
   const signedIn = async (req: IncomingMessage): Promise<Buffer> => {
-    const t = bearer(req);
-    const h = t ? await deps.investors.authenticate(t) : null;
-    if (!h) throw new Problem(401, "invalid_token", "Sign in again", "the access token is missing, expired or revoked");
+    const c = credentials(req);
+    const h = c ? await deps.investors.authenticate(c.token) : null;
+    if (!c || !h) throw new Problem(401, "invalid_token", "Sign in again", "the access token is missing, expired or revoked");
+    // RFC 9449 section 7: a bound token only with the DPoP scheme and a proof of its key.
+    const jkt = await deps.auth.binding(h);
+    if (jkt === null) {
+      if (c.scheme === "DPoP") throw new Problem(401, "invalid_token", "Sign in again", "this access token is not bound to a key; send it as Bearer");
+      return h;
+    }
+    if (c.scheme !== "DPoP") throw new Problem(401, "invalid_token", "Sign in again", "this access token is bound to a key; send it with the DPoP scheme and a proof");
+    let proven: string;
+    try {
+      proven = dpop.verify(req.headers.dpop, { method: req.method ?? "GET", url: htu(req), accessToken: c.token });
+    } catch (e) {
+      if (e instanceof DpopError) throw new Problem(401, "invalid_dpop_proof", "Invalid DPoP proof", e.message, DPOP_CHALLENGE);
+      throw e;
+    }
+    if (proven !== jkt) throw new Problem(401, "invalid_dpop_proof", "Invalid DPoP proof", "the proof is signed by another key", DPOP_CHALLENGE);
     return h;
   };
 
@@ -155,11 +193,22 @@ export function createApiServer(deps: ApiDeps): Server {
       /^\/v1\/oauth\/token$/,
       async (req) => {
         const p = await form(req);
+        // RFC 9449 section 5: a proof binds the tokens to the app's key.
+        let jkt: string | undefined;
+        if (req.headers.dpop !== undefined) {
+          try {
+            jkt = dpop.verify(req.headers.dpop, { method: "POST", url: htu(req) });
+          } catch (e) {
+            if (e instanceof DpopError) throw new OAuthError("invalid_dpop_proof", e.message);
+            throw e;
+          }
+        }
         const body = await deps.auth.token({
           grantType: p.get("grant_type") ?? "",
           clientId: p.get("client_id") ?? "",
           deviceCode: p.get("device_code") ?? undefined,
           refreshToken: p.get("refresh_token") ?? undefined,
+          ...(jkt === undefined ? {} : { jkt }),
         });
         return { status: 200, body, cache: "no-store" };
       },
@@ -533,7 +582,7 @@ export function createApiServer(deps: ApiDeps): Server {
           send(res, 400, { error: e.error, ...(e.description ? { error_description: e.description } : {}) }, { ...base, "Cache-Control": "no-store", Pragma: "no-cache" });
         } else if (e instanceof Problem) {
           send(res, e.status, { type: "about:blank", title: e.title, status: e.status, code: e.code, ...(e.detail ? { detail: e.detail } : {}), instance: url.pathname },
-            { ...base, "Cache-Control": "no-store", ...(e.status === 401 ? { "WWW-Authenticate": 'Bearer realm="pt", error="invalid_token"' } : {}) }, "application/problem+json");
+            { ...base, "Cache-Control": "no-store", ...(e.status === 401 ? { "WWW-Authenticate": e.challenge } : {}) }, "application/problem+json");
         } else if (e instanceof RangeError) {
           send(res, 400, { type: "about:blank", title: "Invalid cursor", status: 400, code: "invalid_cursor", instance: url.pathname }, { ...base, "Cache-Control": "no-store" }, "application/problem+json");
         } else {

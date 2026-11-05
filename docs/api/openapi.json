@@ -182,7 +182,12 @@
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DPoP"
+          }
+        ]
       }
     },
     "/oauth/revoke": {
@@ -1888,7 +1893,7 @@
       "bearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Opaque access token from /oauth/token (RFC 6750), 15 minutes"
+        "description": "Opaque access token from /oauth/token, 15 minutes. Sent as Authorization: Bearer <token> (RFC 6750), or, when the token is bound to the app's key (token_type DPoP), as Authorization: DPoP <token> together with a DPoP proof header (RFC 9449, parameter DPoP). A bound token sent as Bearer is refused."
       }
     },
     "parameters": {
@@ -1925,6 +1930,16 @@
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._:-]{8,64}$"
+        }
+      },
+      "DPoP": {
+        "name": "DPoP",
+        "in": "header",
+        "required": false,
+        "description": "RFC 9449 proof: a compact JWS with typ dpop+jwt, alg ES256 and the app's public P-256 key (jwk); claims jti, htm, htu (the public URL without query), iat (within 60 s), and ath (base64url SHA-256 of the access token) on API calls. At /oauth/token it binds the tokens to the key (token_type DPoP); a bound family refreshes only with a proof of the same key. API calls with a bound token send Authorization: DPoP <token> and a fresh proof; each proof is accepted once.",
+        "schema": {
+          "type": "string",
+          "maxLength": 4096
         }
       }
     },
@@ -2029,7 +2044,8 @@
                     "authorization_pending",
                     "slow_down",
                     "access_denied",
-                    "expired_token"
+                    "expired_token",
+                    "invalid_dpop_proof"
                   ]
                 },
                 "error_description": {
@@ -2148,7 +2164,11 @@
           },
           "token_type": {
             "type": "string",
-            "const": "Bearer"
+            "enum": [
+              "Bearer",
+              "DPoP"
+            ],
+            "description": "DPoP when the request carried a valid DPoP proof (RFC 9449): the tokens are bound to that key"
           },
           "expires_in": {
             "type": "integer"

@@ -12,10 +12,15 @@ export interface GrantRepository {
   /** Stores a new device grant; returns its lifetime in seconds. */
   authorize(deviceHash: Buffer, userCode: string, clientId: string, deviceName: string): Promise<number>;
   /** One poll of the device; on "ok" the token family exists with these hashes. */
-  exchange(deviceHash: Buffer, accessHash: Buffer, refreshHash: Buffer): Promise<DeviceTokenOutcome>;
-  /** Refresh-token rotation; "ok" or "invalid_grant" (also on reuse, which revokes the family). */
-  refresh(refreshHash: Buffer, accessHash: Buffer, newRefreshHash: Buffer): Promise<"ok" | "invalid_grant">;
+  exchange(deviceHash: Buffer, accessHash: Buffer, refreshHash: Buffer, jkt?: string | null): Promise<DeviceTokenOutcome>;
+  /**
+   * Refresh-token rotation; "ok" or "invalid_grant" (also on reuse, which revokes the family, and
+   * for a DPoP-bound family without a proof of its key, migration 0066 DP-3).
+   */
+  refresh(refreshHash: Buffer, accessHash: Buffer, newRefreshHash: Buffer, jkt?: string | null): Promise<"ok" | "invalid_grant">;
   revoke(hash: Buffer): Promise<void>;
+  /** The DPoP key thumbprint a live access token is bound to; null when unbound or not live (DP-4). */
+  binding(accessHash: Buffer): Promise<string | null>;
 }
 
 export interface OfferingRow {
@@ -271,10 +276,11 @@ export function pgRepositories(db: pg.Pool): Repositories {
     grants: {
       authorize: async (deviceHash, userCode, clientId, deviceName) =>
         (await one<{ s: number }>("SELECT papi.device_authorize($1, $2, $3, $4) AS s", [deviceHash, userCode, clientId, deviceName]))?.s ?? 0,
-      exchange: async (deviceHash, accessHash, refreshHash) =>
-        ((await one<{ r: string }>("SELECT papi.device_token($1, $2, $3) AS r", [deviceHash, accessHash, refreshHash]))?.r ?? "invalid_grant") as DeviceTokenOutcome,
-      refresh: async (refreshHash, accessHash, newRefreshHash) =>
-        (await one<{ r: string }>("SELECT papi.refresh($1, $2, $3) AS r", [refreshHash, accessHash, newRefreshHash]))?.r === "ok" ? "ok" : "invalid_grant",
+      exchange: async (deviceHash, accessHash, refreshHash, jkt = null) =>
+        ((await one<{ r: string }>("SELECT papi.device_token($1, $2, $3, $4) AS r", [deviceHash, accessHash, refreshHash, jkt]))?.r ?? "invalid_grant") as DeviceTokenOutcome,
+      refresh: async (refreshHash, accessHash, newRefreshHash, jkt = null) =>
+        (await one<{ r: string }>("SELECT papi.refresh($1, $2, $3, $4) AS r", [refreshHash, accessHash, newRefreshHash, jkt]))?.r === "ok" ? "ok" : "invalid_grant",
+      binding: async (h) => (await one<{ j: string | null }>("SELECT papi.token_jkt($1) AS j", [h]))?.j ?? null,
       revoke: async (hash) => {
         await db.query("SELECT papi.revoke($1)", [hash]);
       },
