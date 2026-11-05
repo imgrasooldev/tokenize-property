@@ -5,6 +5,7 @@ import 'package:property_token_app/core/storage/token_store.dart';
 import 'package:property_token_app/features/account/data/account_repository_impl.dart';
 import 'package:property_token_app/features/auth/data/auth_repository_impl.dart';
 import 'package:property_token_app/features/inbox/data/inbox_repository_impl.dart';
+import 'package:property_token_app/features/invest/data/invest_repository_impl.dart';
 import 'package:property_token_app/features/offerings/data/offerings_repository_impl.dart';
 import 'package:property_token_app/features/portfolio/data/portfolio_repository_impl.dart';
 import 'package:property_token_app/features/rent/data/rent_repository_impl.dart';
@@ -26,6 +27,7 @@ void main() {
         inbox: InboxRepositoryImpl(api),
         account: AccountRepositoryImpl(api),
         rent: RentRepositoryImpl(api),
+        invest: InvestRepositoryImpl(api),
         api: api,
       ),
     ),

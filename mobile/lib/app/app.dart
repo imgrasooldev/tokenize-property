@@ -16,6 +16,9 @@ import 'package:property_token_app/features/auth/presentation/sign_in_page.dart'
 import 'package:property_token_app/features/inbox/domain/message.dart';
 import 'package:property_token_app/features/inbox/presentation/inbox_bloc.dart';
 import 'package:property_token_app/features/inbox/presentation/inbox_page.dart';
+import 'package:property_token_app/features/invest/domain/invest.dart';
+import 'package:property_token_app/features/invest/presentation/invest_cubit.dart';
+import 'package:property_token_app/features/invest/presentation/invest_page.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_bloc.dart';
 import 'package:property_token_app/features/offerings/presentation/offerings_page.dart';
@@ -37,6 +40,7 @@ class AppRepositories {
     required this.inbox,
     required this.account,
     required this.rent,
+    required this.invest,
     this.api,
   });
 
@@ -46,6 +50,7 @@ class AppRepositories {
   final InboxRepository inbox;
   final AccountRepository account;
   final RentRepository rent;
+  final InvestRepository invest;
 
   /// The HTTP client, told the language for Accept-Language (absent in widget tests).
   final ApiClient? api;
@@ -88,6 +93,7 @@ class _PropertyTokenAppState extends State<PropertyTokenApp> {
         RepositoryProvider.value(value: r.inbox),
         RepositoryProvider.value(value: r.account),
         RepositoryProvider.value(value: r.rent),
+        RepositoryProvider.value(value: r.invest),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -152,6 +158,17 @@ GoRouter _buildRouter(AuthBloc auth) => GoRouter(
         create: (_) => RentBloc(c.read<RentRepository>())..add(const LoadRequested()),
         child: const RentPage(),
       ),
+    ),
+    GoRoute(
+      path: '/invest',
+      redirect: (_, state) => state.extra is Offering ? null : '/discover',
+      builder: (c, state) {
+        final offering = state.extra! as Offering;
+        return BlocProvider(
+          create: (_) => InvestCubit(c.read<InvestRepository>(), offeringId: offering.id),
+          child: InvestPage(offering: offering),
+        );
+      },
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => _HomeShell(shell: shell),

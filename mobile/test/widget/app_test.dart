@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:property_token_app/app/app.dart';
+import 'package:property_token_app/core/network/api_client.dart';
 import 'package:property_token_app/features/account/domain/me.dart';
 import 'package:property_token_app/features/auth/domain/auth_repository.dart';
 import 'package:property_token_app/features/auth/presentation/auth_bloc.dart';
 import 'package:property_token_app/features/inbox/domain/message.dart';
+import 'package:property_token_app/features/invest/domain/invest.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
 import 'package:property_token_app/features/portfolio/domain/portfolio.dart';
 import 'package:property_token_app/features/rent/domain/rent.dart';
@@ -118,6 +120,7 @@ Widget _app({required bool signedIn}) {
       inbox: _FakeInbox(),
       account: _FakeAccount(),
       rent: _FakeRent(),
+      invest: _FakeInvest(),
     ),
   );
 }
@@ -173,4 +176,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ویب سائٹ کے ذریعے سائن اِن'), findsOneWidget);
   });
+}
+
+class _FakeInvest implements InvestRepository {
+  @override
+  Future<SubscriptionRequest> requestReservation({
+    required String offeringId,
+    required String units,
+    required String idempotencyKey,
+  }) => throw const ApiException(422, 'offering_not_open');
+
+  @override
+  Future<SubscriptionRequest> request(String id) => throw const ApiException(404, 'not_found');
+
+  @override
+  Future<SubscriptionDetail> subscription(String id) => throw const ApiException(404, 'not_found');
 }

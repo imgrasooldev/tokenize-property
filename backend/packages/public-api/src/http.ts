@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readBody } from "@pt/http-auth";
 import { z } from "zod";
-import { AuthService, CatalogueService, InvestorService, OAuthError } from "./services.ts";
+import { AuthService, CatalogueService, InvestorService, OAuthError, RequestError } from "./services.ts";
 
 /**
  * HTTP layer (controllers) of the public API, ADR 0018: parses and validates requests, calls one
@@ -28,6 +28,8 @@ const CURSOR = z.string().max(200).nullable();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,64}$/;
+const RESERVE = z.strictObject({ offering_id: z.string().regex(UUID), units: z.string().regex(/^[1-9][0-9]{0,12}$/) });
 
 class Problem extends Error {
   constructor(
@@ -76,6 +78,18 @@ async function form(req: IncomingMessage): Promise<URLSearchParams> {
   // RFC 6749 section 3.2: parameters must not be repeated.
   for (const k of new Set(p.keys())) if (p.getAll(k).length > 1) throw new OAuthError("invalid_request", `repeated parameter ${k}`);
   return p;
+}
+
+/** A small JSON body (phase 2a writes). */
+async function json(req: IncomingMessage): Promise<unknown> {
+  if (!(req.headers["content-type"] ?? "").startsWith("application/json")) throw new Problem(415, "unsupported_media_type", "Send application/json");
+  const body = await readBody(req, MAX_BODY);
+  if (body === null) throw new Problem(413, "body_too_large", "Body too large");
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    throw new Problem(400, "invalid_body", "The body is not valid JSON");
+  }
 }
 
 function pageParams(url: URL): { cursor: string | null; limit: number } {
@@ -204,6 +218,49 @@ export function createApiServer(deps: ApiDeps): Server {
       async (req, _url, [token = "", id = ""]) => {
         const body = await deps.investors.proof(await signedIn(req), token, id);
         if (!body) throw new Problem(404, "not_found", "No entitlement of yours in this distribution");
+        return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
+    [
+      "POST",
+      /^\/v1\/me\/subscription-requests$/,
+      async (req) => {
+        const h = await signedIn(req);
+        const key = req.headers["idempotency-key"];
+        if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) {
+          throw new Problem(400, "idempotency_key_required", "Idempotency-Key header required", "8-64 characters: letters, digits, . _ : -");
+        }
+        const body = RESERVE.safeParse(await json(req));
+        if (!body.success) throw new Problem(400, "invalid_body", "Invalid request body", "offering_id (uuid) and units (whole number as a string) are required");
+        try {
+          const r = await deps.investors.requestReservation(h, { offeringId: body.data.offering_id, units: BigInt(body.data.units), idempotencyKey: key });
+          return { status: r.created ? 201 : 200, body: r.body, cache: "no-store" };
+        } catch (e) {
+          if (!(e instanceof RequestError)) throw e;
+          if (e.reason === "token") throw new Problem(401, "invalid_token", "Sign in again");
+          if (e.reason === "conflict") throw new Problem(409, "idempotency_conflict", "This Idempotency-Key was used with another body");
+          if (e.reason === "limit") throw new Problem(409, "too_many_pending", "Too many requests wait for confirmation", "confirm or let one expire first");
+          throw new Problem(422, "offering_not_open", "The offering is not open for reservations");
+        }
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/subscription-requests\/([^/]+)$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const body = UUID.test(id) ? await deps.investors.requestStatus(h, id) : null;
+        if (!body) throw new Problem(404, "not_found", "No such request of yours");
+        return { status: 200, body, cache: "private, no-store" };
+      },
+    ],
+    [
+      "GET",
+      /^\/v1\/me\/subscriptions\/([^/]+)$/,
+      async (req, _url, [id = ""]) => {
+        const h = await signedIn(req);
+        const body = UUID.test(id) ? await deps.investors.subscription(h, id) : null;
+        if (!body) throw new Problem(404, "not_found", "No such subscription of yours");
         return { status: 200, body, cache: "private, no-store" };
       },
     ],

@@ -36,7 +36,7 @@ function main(): void {
   const server = createApiServer({
     auth: new AuthService(repos.grants, `${web}/device`),
     catalogue: new CatalogueService(repos.catalogue),
-    investors: new InvestorService(repos.investors),
+    investors: new InvestorService(repos.investors, `${web}/confirm`),
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed path of the contract in the repository
     openapi: JSON.parse(readFileSync(OPENAPI, "utf8")) as unknown,
   });

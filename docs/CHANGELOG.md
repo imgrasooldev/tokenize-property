@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-05
+
+- Public API and app phase 2a: investing from the app, confirmed on the website (ADR 0018 amendment 1, migration `0060_public_api_requests.sql`). The app's Invest button on a live offering sends `POST /v1/me/subscription-requests` with an Idempotency-Key and shows an 8-letter code; the investor confirms it on the website `/confirm` through the normal reservation path (documents, KYC gate, limits, passkey step-up) or declines it; the app polls the request and then shows the payment code and the trustee account (`GET /v1/me/subscriptions/{id}`). A request moves no money; 15 minutes; at most 5 pending; same key + other body = 409. Tests: backend `offering/test/app-requests.test.ts`, contract-validated public-api tests, Playwright `web/e2e/confirm.spec.ts`, Flutter `invest_cubit_test.dart`.
+
 ## 2026-11-04
 
 - Public API and app, phase 1b: rent distributions and Merkle proofs (migration `0059_public_api_distributions.sql`, contract operations `listDistributions` and `getDistributionProof`). `GET /v1/me/distributions` lists the investor's lines of every calculation whose statement is published on chain (units, gross, WHT, net, on-chain status); `GET /v1/me/distributions/{token}/{id}/proof` rebuilds the tree from the published statement's own entitlements, checks keccak256(statement) against the chain's statement hash and the rebuilt root against the chain's root, and returns only the investor's leaf and proof. The app's Portfolio opens "Rent and proofs" (RentBloc + ProofCubit + RentRepository), EN/UR. A new Android APK is built with it.

@@ -1,0 +1,34 @@
+import { db } from "./db";
+
+/**
+ * Reservations the mobile app asked for (ADR 0018 amendment 1, migration 0060). The investor
+ * confirms them here, signed in, through the website's own reservation path; the database binds the
+ * new subscription to the request only for the same investor, offering and units.
+ */
+export interface AppRequest {
+  id: string;
+  kind: "reserve";
+  offering_id: string;
+  units: string;
+  amount_paisa: string | null;
+  status: string;
+  code: string;
+  expires_at: string;
+}
+
+export const APP_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
+
+export async function lookupAppRequest(session: Buffer, code: string): Promise<AppRequest | null> {
+  const { rows } = await (await db()).query<{ r: AppRequest | null }>("SELECT papi.web_request_lookup($1, $2) AS r", [session, code]);
+  return rows[0]?.r ?? null;
+}
+
+export async function bindAppRequest(session: Buffer, code: string, subscriptionId: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_done($1, $2, $3) AS r", [session, code, subscriptionId]);
+  return rows[0]?.r.ok === true;
+}
+
+export async function declineAppRequest(session: Buffer, code: string): Promise<boolean> {
+  const { rows } = await (await db()).query<{ r: { ok?: boolean } }>("SELECT papi.web_request_decline($1, $2) AS r", [session, code]);
+  return rows[0]?.r.ok === true;
+}

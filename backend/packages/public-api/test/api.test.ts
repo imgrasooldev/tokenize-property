@@ -229,6 +229,30 @@ describe("public API v1 (ADR 0018)", () => {
     expect((await call("/me/distributions/{token}/{distributionId}/proof", `/me/distributions/${token}/7/proof`, bearer(stranger.access_token))).status).toBe(404);
   });
 
+  it("phase 2a: a reservation request needs an Idempotency-Key and a valid JSON body; a closed or unknown offering is 422; others' items are 404", async () => {
+    const t = await signIn(await investor());
+    const post = (body: string, headers: Record<string, string>): RequestInit => ({
+      method: "POST",
+      headers: { authorization: `Bearer ${t.access_token}`, "content-type": "application/json", ...headers },
+      body,
+    });
+    const R = "/me/subscription-requests";
+    const ok = JSON.stringify({ offering_id: "00000000-0000-4000-8000-000000000060", units: "10" });
+    expect((await call(R, R, post(ok, {}))).body).toMatchObject({ code: "idempotency_key_required" });
+    expect((await call(R, R, post(ok, { "idempotency-key": "short" }))).status).toBe(400);
+    expect((await call(R, R, post("{", { "idempotency-key": "key-12345678" }))).body).toMatchObject({ code: "invalid_body" });
+    expect((await call(R, R, post(JSON.stringify({ offering_id: "x", units: "10" }), { "idempotency-key": "key-12345678" }))).status).toBe(400);
+    expect((await call(R, R, post(JSON.stringify({ offering_id: "00000000-0000-4000-8000-000000000060", units: "10", extra: 1 }), { "idempotency-key": "key-12345678" }))).status).toBe(400);
+    expect((await call(R, R, { ...post(ok, { "idempotency-key": "key-12345678" }), headers: { authorization: `Bearer ${t.access_token}`, "content-type": "text/plain", "idempotency-key": "key-12345678" } })).status).toBe(415);
+    const closed = await call(R, R, post(ok, { "idempotency-key": "key-12345678" }));
+    expect(closed.status).toBe(422);
+    expect(closed.body).toMatchObject({ code: "offering_not_open" });
+    expect((await call(R, R, { ...post(ok, { "idempotency-key": "key-12345678" }), headers: { "content-type": "application/json", "idempotency-key": "key-12345678" } })).status).toBe(401);
+    expect((await call("/me/subscription-requests/{requestId}", "/me/subscription-requests/00000000-0000-4000-8000-000000000061", bearer(t.access_token))).status).toBe(404);
+    expect((await call("/me/subscriptions/{subscriptionId}", "/me/subscriptions/00000000-0000-4000-8000-000000000062", bearer(t.access_token))).status).toBe(404);
+    expect((await call("/me/subscriptions/{subscriptionId}", "/me/subscriptions/not-a-uuid", bearer(t.access_token))).status).toBe(404);
+  });
+
   it("problems: unknown path 404, wrong method 405, too many requests 429 with Retry-After", async () => {
     expect((await fetch(`${base}/v1/nothing`)).status).toBe(404);
     const m = await fetch(`${base}/v1/offerings`, { method: "DELETE" });

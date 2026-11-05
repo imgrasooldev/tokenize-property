@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cancelSchema, reserveSchema, type CancelErrorKey, type ReserveErrorKey } from "@/lib/offering-rules";
+import { APP_CODE, bindAppRequest, declineAppRequest } from "@/lib/server/app-requests";
 import { investorById, type InvestorRow } from "@/lib/server/db";
 import { logError } from "@/lib/server/log";
 import { cancelSubscription, reserveUnits, withdrawSubscription } from "@/lib/server/offerings";
@@ -60,7 +61,33 @@ export async function reserveAction(_prev: ReserveState, formData: FormData): Pr
     return { error: result.error };
   }
   revalidatePath("/subscriptions");
+  // A request from the mobile app (migration 0060): bind the new subscription to it so the app can show how to pay.
+  const appCode = formData.get("appCode");
+  if (typeof appCode === "string" && APP_CODE.test(appCode)) {
+    let bound = false;
+    try {
+      bound = await bindAppRequest(investor.session, appCode, result.subscriptionId);
+    } catch (e) {
+      logError("app-request-bind", e);
+    }
+    redirect(`/confirm?${bound ? "done" : "unbound"}=1&sub=${result.subscriptionId}`);
+  }
   redirect(`/subscriptions?sub=${result.subscriptionId}`);
+}
+
+/** Declines a request from the mobile app (nothing was reserved). */
+export async function declineAppRequestAction(formData: FormData): Promise<void> {
+  const investor = await signedIn();
+  if (!take("reserve", investor.id)) redirect("/confirm?error=rate");
+  const code = formData.get("appCode");
+  if (typeof code !== "string" || !APP_CODE.test(code)) redirect("/confirm");
+  let ok = false;
+  try {
+    ok = await declineAppRequest(investor.session, code);
+  } catch (e) {
+    logError("app-request-decline", e);
+  }
+  redirect(ok ? "/confirm?declined=1" : "/confirm");
 }
 
 export interface CancelState {

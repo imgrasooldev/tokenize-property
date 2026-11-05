@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:property_token_app/core/bloc/loader_view.dart';
 import 'package:property_token_app/core/format/money.dart';
 import 'package:property_token_app/features/offerings/domain/offering.dart';
@@ -74,6 +77,17 @@ class _OfferingCard extends StatelessWidget {
               l.unitsAvailable(formatUnits(o.availableUnits, lang), formatUnits(o.hardCapUnits, lang)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (o.state == 'live') ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: FilledButton(
+                  key: Key('invest-${o.id}'),
+                  onPressed: () => unawaited(context.push('/invest', extra: o)),
+                  child: Text(l.investButton),
+                ),
+              ),
+            ],
           ],
         ),
       ),
