@@ -155,6 +155,8 @@ describe("KYC and compliance producers (NP-4)", () => {
       await w.su.query("ALTER TABLE compliance.kyc_cases ENABLE TRIGGER USER");
     }
     await sweep(w.pool);
+    // A later sweep (another second) repeats nothing and fails nothing (0067: the alert time is the breach time).
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     await sweep(w.pool);
     expect((await notesOf(w.pool, "investor", a.subjectId, "security.kyc_status_changed")).map((x) => x.params.status)).toEqual(["verified", "expired"]);
     for (const o of [compA, compB]) {

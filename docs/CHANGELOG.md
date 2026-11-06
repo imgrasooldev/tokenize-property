@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-07
+
+- Fix: the compliance SLA reminder (`notify.sweep`, officer alert `sla_breach`) is idempotent again (migration `0067_notify_sla_alert_time.sql`). The alert's time is now the moment the service level was breached instead of the time of the sweep, so a sweep in a later second no longer reuses the alert's key with other parameters (a producer failure that made CI fail now and then). The test now sweeps twice a second apart.
+
 ## 2026-11-06
 
 - DPoP for the app's tokens, server side (RFC 9449, ADR 0018 amendment 7, migration `0066_public_api_dpop.sql`, DP-1..DP-4). A `DPoP` proof (ES256) at `/oauth/token` binds the token family to the app's key (`token_type: DPoP`); bound families refresh only with a proof of the same key, unbound families can be bound on refresh; calls with a bound token need `Authorization: DPoP` and a fresh proof (method, URL, time, access-token hash, one use). Unbound tokens keep working as Bearer. Tests: `public-api` 24/24 (new `dpop.test.ts`: every refusal reason; contract-validated flow in `api.test.ts`), service-roles snapshot. The app side follows.
