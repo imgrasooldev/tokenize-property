@@ -1,17 +1,26 @@
+import 'dart:async';
+
 import 'package:property_token_app/core/network/api_client.dart';
+import 'package:property_token_app/core/push/push_registrar.dart';
 import 'package:property_token_app/core/storage/token_store.dart';
 import 'package:property_token_app/features/auth/domain/auth_repository.dart';
 
 /// OAuth 2.0 Device Authorization Grant against `/v1/oauth/*` (RFC 8628,
-/// RFC 7009). Tokens go to the keystore only.
+/// RFC 7009). Tokens go to the keystore only. With a [PushRegistrar] the phone
+/// is registered for notices once signed in and removed before sign-out.
 class AuthRepositoryImpl implements AuthRepository {
-  AuthRepositoryImpl(this._api, this._tokens);
+  AuthRepositoryImpl(this._api, this._tokens, [this._push]);
 
   final ApiClient _api;
   final TokenStore _tokens;
+  final PushRegistrar? _push;
 
   @override
-  Future<bool> isSignedIn() async => await _tokens.read() != null;
+  Future<bool> isSignedIn() async {
+    final signedIn = await _tokens.read() != null;
+    if (signedIn) unawaited(_push?.register());
+    return signedIn;
+  }
 
   @override
   Future<DeviceCode> start(String deviceName) async {
@@ -39,6 +48,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'client_id': ApiClient.clientId,
       });
       await _tokens.write(TokenPair.fromJson(j));
+      unawaited(_push?.register());
       return PollResult.approved;
     } on ApiException catch (e) {
       return switch (e.code) {
@@ -53,6 +63,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    await _push?.unregister();
     final t = await _tokens.read();
     await _tokens.clear();
     if (t == null) return;
