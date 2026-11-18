@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+## 2026-11-19
+
+- App: DPoP and push (ADR 0018 amendments 6 and 7, app side). The app keeps a P-256 key in the keystore and sends an ES256 DPoP proof with every token request and API call (`Authorization: DPoP`), so its tokens are bound to the phone; installed apps bind on their next refresh. After sign-in the phone registers its FCM token (`PUT /v1/me/push-device`), again when it changes, and removes it before sign-out. Firebase options come from the build (`--dart-define=FIREBASE_API_KEY=...`); without the key push is off and the app works as before. New packages: `firebase_core`, `firebase_messaging`, `pointycastle`. Tests: Flutter 33 passed (new `test/core/dpop_push_test.dart`), analyze clean; the Dart proofs were also checked against the server's verifier.
+
 ## 2026-11-07
 
 - Fix: the compliance SLA reminder (`notify.sweep`, officer alert `sla_breach`) is idempotent again (migration `0067_notify_sla_alert_time.sql`). The alert's time is now the moment the service level was breached instead of the time of the sweep, so a sweep in a later second no longer reuses the alert's key with other parameters (a producer failure that made CI fail now and then). The test now sweeps twice a second apart.
