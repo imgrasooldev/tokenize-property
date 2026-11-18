@@ -49,8 +49,13 @@ class FirebasePushTokenSource implements PushTokenSource {
   }
 
   @override
+  // The server sends to registration tokens (FCM HTTP v1 `message.token`, migration 0065); the
+  // plugin's newer installation-id API needs a server change first.
+  // ignore: deprecated_member_use
   Future<String?> token() => FirebaseMessaging.instance.getToken();
 
   @override
+  // As above: registration tokens until the server sends to installation ids.
+  // ignore: deprecated_member_use
   Stream<String> get onTokenRefresh => FirebaseMessaging.instance.onTokenRefresh;
 }

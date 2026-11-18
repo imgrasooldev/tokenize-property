@@ -25,8 +25,8 @@ bool _verifies(String jwt) {
   final sig = base64Url.decode(base64Url.normalize(jwt.split('.')[2]));
   final verifier = ECDSASigner(SHA256Digest())..init(false, PublicKeyParameter<ECPublicKey>(ECPublicKey(q, curve)));
   final input = Uint8List.fromList(ascii.encode('${jwt.split('.')[0]}.${jwt.split('.')[1]}'));
-  final r = sig.sublist(0, 32).fold(BigInt.zero, (BigInt v, b) => (v << 8) | BigInt.from(b));
-  final s = sig.sublist(32).fold(BigInt.zero, (BigInt v, b) => (v << 8) | BigInt.from(b));
+  final r = sig.sublist(0, 32).fold(BigInt.zero, (v, b) => (v << 8) | BigInt.from(b));
+  final s = sig.sublist(32).fold(BigInt.zero, (v, b) => (v << 8) | BigInt.from(b));
   return verifier.verifySignature(input, ECSignature(r, s));
 }
 
