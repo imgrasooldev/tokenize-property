@@ -2,6 +2,10 @@
 
 Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are commit dates. Grouped by date and step; commit hashes in brackets.
 
+
+## 2026-11-23
+
+- Security: Next.js 16.4.2 -> 16.4.6 in `web/` and `admin/` (lowest fixed release is 16.4.5). Fixes the advisories npm audit reports for 16.0.0-16.4.4: GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8, GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf (cache leaks and poisoning, HttpOnly cookie exposure on Edge routes, SVG rejection bypass in image optimisation, cross-client response injection). Only `next`, `@next/env` and the SWC binaries change in the lock files. Tests: web check 390/390, admin check 1911, web e2e 21 + 1 skipped with `market.spec` timing out once under load and passing 2/2 when run alone.
 ## 2026-11-19
 
 - App: DPoP and push (ADR 0018 amendments 6 and 7, app side). The app keeps a P-256 key in the keystore and sends an ES256 DPoP proof with every token request and API call (`Authorization: DPoP`), so its tokens are bound to the phone; installed apps bind on their next refresh. After sign-in the phone registers its FCM token (`PUT /v1/me/push-device`), again when it changes, and removes it before sign-out. Firebase options come from the build (`--dart-define=FIREBASE_API_KEY=...`); without the key push is off and the app works as before. New packages: `firebase_core`, `firebase_messaging`, `pointycastle`. Tests: Flutter 33 passed (new `test/core/dpop_push_test.dart`), analyze clean; the Dart proofs were also checked against the server's verifier.
