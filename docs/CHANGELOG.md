@@ -5,6 +5,7 @@ Built only from `git log` of `main` up to `41241b3` (60 commits). Dates are comm
 
 ## 2026-11-23
 
+- Playwright `admin/e2e/residency.spec.ts` (spec S-08, migration 0056) in a real browser with virtual FIDO2 keys: the residency list shows an open NICOP review; one compliance officer proposes approval and cannot confirm it; a second officer confirms and the investor turns from `review` to `verified`; a rejected review keeps the other investor out of `verified`. 1/1 passed. `docs/CURRENT_STATUS.md` rewritten as a short, current handoff (the old per-branch notes predated the merges).
 - Security: Next.js 16.4.2 -> 16.4.6 in `web/` and `admin/` (lowest fixed release is 16.4.5). Fixes the advisories npm audit reports for 16.0.0-16.4.4: GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8, GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf (cache leaks and poisoning, HttpOnly cookie exposure on Edge routes, SVG rejection bypass in image optimisation, cross-client response injection). Only `next`, `@next/env` and the SWC binaries change in the lock files. Tests: web check 390/390, admin check 1911, web e2e 21 + 1 skipped with `market.spec` timing out once under load and passing 2/2 when run alone.
 ## 2026-11-19
 

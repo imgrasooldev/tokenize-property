@@ -1,185 +1,54 @@
 # Current Status
 
-Short handoff for the next session. Read this and [TASKS.md](TASKS.md) first; open other docs only when the task needs them.
+Short handoff for the next session (rewritten 2026-11-23; the old per-branch notes were out of date). Read this and [TASKS.md](TASKS.md) first; [MEMORY.md](../MEMORY.md) holds decisions, gotchas and the communication log, [CHANGELOG.md](CHANGELOG.md) the history. Open other docs only when the task needs them.
 
-## Public API v1 + mobile app (2026-11-04, ADR 0018)
+## Where things stand
 
-- Phase 1 API on `main` and live on the demo (`http://51.79.144.40/v1/status`); website `/device`. Flutter app `mobile/` phase 1 (read-only, BLoC + repository, Night Glass dark + Daylight-style light, EN/UR); not yet run on a phone or emulator (analyze and 15 tests only; no APK built on this laptop). Phase 1b (rent distributions with proofs) done 2026-11-04 (migration 0059). Phase 2a (invest from the app, confirmed on the website, migration 0060) phase 2b part 1 (cancel and withdraw from the app, migration 0061) and part 2 (market orders from the app, migration 0062), all confirmed on the website, done 2026-11-05; not yet tried end to end on a phone. Next: cancelling an open order from the app, push notifications (Firebase/APNs: owner), passkey step-up in the app and DPoP (need a domain and TLS).
+- Everything is on `main` (migrations 0001-0067). No open work branches: `app-push-dpop`, `phase-2a-app-invest` and `next-security-upgrade` are merged.
+- **Demo server `http://51.79.144.40` is unreachable since about 2026-11-17** (ping, HTTP and SSH time out; Deploy demo fails on SSH). Ploi's connection diagnostics (2026-11-23): ports 22, 80 and 443 all time out (dropped, not refused), so the machine is off or blocked at OVH, not an SSH problem. The owner has to check the VPS `vps-55a01eb0` in the OVH panel (state, KVM console, network firewall, billing). The last deployed commit is about 0cd4114; `main` beyond that is not live.
+- Local run on one laptop: see "Run locally" below.
 
-## Roshan Digital Account (2026-11-04, spec S-08, migration 0056)
+| Area | State |
+|---|---|
+| Contracts | 137 forge tests; internal review only, external audits pending |
+| Chain | Four-validator Besu (`chain/net.py`, `chain/flow.py`) |
+| Backend | 23 packages in `backend/packages/`: ledger, outbox + signing service, indexer, reconciliation, anchoring (local Anvil stand-in), KYC and bank mocks, offering (S-02), property onboarding (S-01), operations and tax (S-03), transfers (S-04), exit (S-05), recovery (S-06), notifications with push (FCM provider, needs the key on the server), document vault, public API |
+| Website `web/` | Investor site on the outbox and signer (signs nothing); offerings, portfolio, demo market, rent proofs, `/verify`, `/exit`, `/transfers`, RDA sign-up, `/device`, `/confirm` for app requests |
+| PT Control `admin/` | Officer portal (FIDO2, roles, maker-checker, audit): approvals, compliance (freezes, partial freezes, STR, monitoring, residency, offboarding), operations, trustee, tax, onboarding desk, health |
+| Public API `/v1` | OpenAPI 3.1 contract `docs/api/openapi.json`; device grant, rotating refresh tokens, DPoP (RFC 9449); reads plus app requests the investor confirms on the website (invest, cancel, withdraw, market orders, order cancel, demo cash top-up) |
+| App `mobile/` | Flutter, BLoC + repository, EN/UR, Night Glass and Daylight themes, push registration and DPoP proofs; APKs side-loadable; **never run on a phone yet** |
 
-- Part 1 on `main`: residency in KYC, two-officer residency review (`/compliance/residency`), RDA-only payout accounts, money in/out only through the RDA. Part 2 (migration 0057): website sign-up abroad, account residency, RDA wording, onboarding waits for the review; Playwright `web/e2e/rda.spec.ts`. Not built: an admin Playwright spec for `/compliance/residency` (DB and HTTP tests only). Open for the owner/legal: SBP/SECP permission for RDA funds, partner bank, non-resident WHT, FCY RDAs, POC holders (spec S-08 section 3).
-
-## Compliance follow-ups (2026-11-03/04, on `main`)
-
-- Offboarding steps 2-3 and assisted payout-account changes (migration 0055): `/compliance/offboarding`, `/operations/payees`; bank service client `admin` (`npm run bank:setup` writes `BANK_CLIENT_SECRET_ADMIN`; restart `bank:payees` and the portal). Identity deletion itself is an Admin Safe timelock call (shown on the page), not run by the platform. Not seen in a browser yet (DB and HTTP tests).
-
-- Partial freezes in PT Control (migration 0054): `/compliance/freezes` + `/compliance/partial-freezes/[id]`, signer kinds `compliance.freeze_partial` / `compliance.unfreeze_partial` (`npm run signer:setup` adds their dev policies), recon checks `compliance.partial_unmatched` / `compliance.partial_pending`. Not run on Besu (signer, DB and HTTP tests only).
-- Playwright `admin/e2e/compliance.spec.ts` (KYC review, freeze, partial freeze, STR flow); admin e2e 19 + 1 skipped.
-- CI job `web-e2e-chain` (website main e2e on Besu); informational (`continue-on-error`) until it has passed on GitHub several times.
-
-## T-028 notification producers (2026-10-23, branch `t-028-producers`, not merged; migration 0030)
-
-- Real events now raise notifications in the same transaction (deferred triggers; reminders via `notify.sweep`, run every minute by `notify:run`): offerings, bank, rent, tax, exit, transfers (officers), KYC/compliance (generic words only, no tipping-off), passkeys and new-device sign-in, officer queues and alerts. Marketing is opt-in. Investor notification centre `/notifications` (EN/UR). ADR 0013 amendment 1 proposes Accepted with documented defaults.
-- Main 418444d (0027-0029) merged into the branch; 0030 applies on top of 0029. `pt_svc_notify` gains only `notify.sweep`. Not seen in a browser; no Playwright spec; providers still mocks; contacts cannot be added yet (one-time codes).
-- Tests (scratch databases): backend typecheck/lint, vitest 851 passed + 13 skipped; web typecheck/lint, vitest 359 passed + 24 skipped, build. `migrate -- --test` on the shared database not run (lead).
-
-## S-04 phase 0 transfers (2026-10-23, branch `s-04-transfers`, not merged; migration 0028)
-
-- Off-market transfers between verified investors: website request with the buyer's receive code, desk completion, compliance + trustee approval, payment into a per-case escrow, RecoveryGuard ForcedTransfer (48 h) through the signing service, execution only with the exact movement in the read model, register entries, maker-checker settlement or refund. Spec S-04 section 16; runbook `transfers.md`.
-- Main (S-05's 0027, Next.js 16.4.2) merged into the branch 2026-10-23; 0028 applies on top of 0027. Owner questions TQ-1..TQ-6 (spec 16.10). Not seen in a browser; no Playwright spec; `transfer:tick` is not a demo-server unit yet.
-- Tests: backend typecheck/lint, vitest 722 passed + 13 skipped (with a temporary uncommitted local 0027 placeholder; incl. `transfer/test/transfer.test.ts` 19, `signer/test/transfer-kinds.test.ts` 6, `recon/test/transfer-checks.test.ts` 3); admin typecheck/lint, `npm test` 1117/1117, build, `test:http` 1304/1304; web typecheck/lint, vitest 320 passed + 24 skipped (incl. transfer unit + integration 60), build.
-- After merging main 2337afa (S-05 0027, Next.js 16.4.2) on 2026-10-23, no placeholder: backend typecheck/lint, `migrate -- --test` (0028 on top of 0027), vitest 761 passed + 13 skipped; admin typecheck/lint, `npm test` 1203/1203, build, `test:http` 1433/1433; web typecheck/lint, vitest 350 passed + 24 skipped, build.
-
-## S-05 exit / redemption / burn (2026-10-22, branch `s-05-exit`, not merged; migration 0027)
-
-- Sale or wind-up exit end to end in the database (cases X1-X18 with capacity decisions, proceeds from the trustee escrow, waterfall, final distribution, redemption batch, burns via the new signer kind `issuance.burn` after payment by default, tick, closure), recon burn/exit checks, PT Control `/exit`, website `/exit` with a phase-0 redemption request queue (no money moves). Spec S-05 §14-16 (owner questions §16.4), runbook `exit-redemption.md`.
-- Not run on Besu; no Playwright e2e. Merge after 0026 (no other migration reserved). After merging: `npm run migrate`, `npm run signer:setup` (burn policy), run `npm run exit:tick -- --loop` as a service.
-
-## T-012 service database roles + T-011 e2e in CI (2026-10-23, branch `t-012-service-roles`, not merged; migration 0029)
-
-- Every backend service now connects as its own login `pt_<service>_app` (group `pt_svc_<service>`) and refuses the admin outside local development (`PT_DB_ADMIN_FALLBACK=1`). ADR 0016 Proposed.
-- After merging: `npm run migrate` then `npm run db:service-roles` on every machine (the demo server's `update.sh` does both before restarting services). Rollback per unit: `deploy/demo-server/db-login.sh admin <unit>`.
-- CI gains `admin-e2e` and `web-e2e` (passkeys) on Chromium; the website's chain e2e stays local-only. Not yet run on GitHub.
-
-## T-046 portal votes (2026-10-22, merged; migration 0026)
-
-- PT Control now has screens for the investment committee (`/committees`), the trustee's P8 acceptance (`/trustee/properties`) and the platform L3 / S-02 votes (`/approvals/offering`); committee votes, the close and P8 decisions under an officer's handle are refused outside the portal. ADR 0011 section 13.
-- `seed:catalog` + these screens take DHA6 and BAO2 to approved offerings (walkthrough: `docs/runbooks/portal-votes.md`, `deploy/demo-server/README.md`). `ready` still needs the token (DeployLib), trustee cap and anchored documents.
-- **Merge 0025 first** (runner refuses the gap). Not seen in a browser; no Playwright spec yet.
-
-## T-047 public-anchoring status on the website (2026-10-22, merged; migration 0025)
-
-- Rail and `/verify#anchor` show real anchors through `anchor.web_status()` / `anchor.web_recent()` (pt_web may execute only these in schema `anchor`). Chain 586650 is labelled as the local stand-in everywhere.
-- After merging: `npm run migrate` (0025) on the demo server; `pt-web.service` now sets `ANCHOR_INTERVAL_SECONDS=900` (must match `pt-anchor.service`). Playwright e2e not run.
-
-## T-030 investor passkeys (2026-10-13, branch `t-030-investor-passkeys`, not merged; migration 0024)
-
-- Passkeys on the website (register/list/remove on `/account`, sign-in on `/login`), database-enforced sessions for every sign-in path, passkey step-up for offering reserve (from PKR 100,000) and cancel decided in SQL. ADR 0010 section 8.
-- Up to date with main (0020-0023 merged in); after merging, `npm run migrate` before the website starts (pages read sessions from `webauth`).
-- Passkeys are off on the plain-HTTP IP demo (the sign-in page says why). **Owner action:** domain + TLS, then `WEB_ORIGIN`, then `require_passkey` on. Demo personas still sign in without authentication.
-
-## Latest update (2026-10-13, Step 6c merged)
-## Latest update (2026-10-13, Step 6d built on a branch)
-
-- **Step 6d (T-006) on branch `step-6d-trustee-portal`, not merged** (ADR 0011 section 12, migration `0023_trustee.sql`; merge the reserved 0020-0022 first, the backend runner refuses the gap). Trustee portal: register vs chain read model (pinned block, supply vs cap, differences, two-officer adjustments, SHA-256 export), co-signing (mints above the threshold now need a trustee officer in addition to the platform approvals, decided through the signing service; S-02 trustee votes), distribution review in the 48 h window (a rejection blocks booking and payout in SQL), daily reconciliation report, recovery requests (S-06 hook), trustee audit chain.
-- 2026-10-22: main merged into the branch (0023 now on top of 0022); S-03 charges above the operations limit and calculation approvals now need the trustee (OP-21, D4). Lead-style check after merging main 1379147: backend typecheck/lint, `migrate -- --test` (0023 on top of 0022), vitest 656 passed + 13 skipped (chain not running); admin typecheck/lint, `npm test` 893/893, build, `test:http` 1048/1048; web typecheck/lint, 231 passed + 24 skipped.
-- The demo catalogue seed (`seed:catalog`) now stops at every officer vote and lists it (K4 in PT Control; committee, P8 and non-trustee L3 votes have no screen yet).
-- **Behaviour change on merge:** website mints above 10,000 tokens wait for a trustee officer's co-signature in the portal as well (demo: enrol a trustee officer).
-- Owner to confirm: trustee co-signature threshold (above the platform threshold vs every mint), require a trustee approval before booking a distribution (S-03 Q-7), closing the command-line trustee duty.
-## T-045 website functional (2026-10-22, branch `t-045-web-functional` merged up to main c55351d, not merged into main; migration 0022)
-
-- Website shows records only: catalogue, filters/sort, Pakistan map, price/rent history, documents with SHA-256, trust structure, rule-based property score, payout accounts (bank service `bank:payees`), search and the grounded analyst (Claude optional, owner adds the key). Still labelled: passkey sign-in (T-030), Docs & Tax (S-03), anchoring status in the rail (lead).
-- 0022 applies on top of S-06 (0020) and S-03 (0021). Demo catalogue (`seed:catalog`) runs only after an administrator enrols the demo officers in PT Control; until then it skips. Not seen in a browser; Playwright not run (see branch report).
-
-
-## Latest update (2026-10-22, S-03 on a branch, brought up to date with main)
-
-- **S-03 operations + FBR withholding (T-023/T-024) built on branch `s-03-operations-tax`, not merged** (migration `0021_operations_tax.sql`, applies on top of S-06's 0020; ADR 0014 Proposed: sealed CNIC for tax). Partial: see TASKS T-023/T-024 for what is not built. Tax rates are PLACEHOLDERS (LEGAL/TAX TO CONFIRM); approval of a distribution with them is refused unless `ops.settings.allow_placeholder_rates` (local dev only).
-
-## Earlier update (2026-10-13, S-06 on branch `s-06-recovery`, not merged)
-
-- **S-06 recovery / succession / reversals (T-026)** built on a branch: migration `0020_recovery.sql` (0021 is reserved for parallel work), signer kinds `recovery.*`, `@pt/recovery`, KYC re-verification, recon checks, portal `/recovery` with the new `legal_officer` role. Spec S-06 section 14 lists what is built and owner questions OQ-1..OQ-7 (notably: a lost custodial key cannot be recovered on chain with today's identities). Not run on Besu (48 h delay), no Playwright e2e; the website still shows the old wallet after a recovery (T-045).
-
-## Earlier update (2026-10-13, Step 6c merged)
-
-- **Step 6c (T-005) merged from branch `step-6c-compliance-portal`** (ADR 0011 section 11, migration `0019_compliance.sql`). Compliance portal: dashboard (counts, SLA breaches, recent decisions), KYC review queue (screenings open cases by themselves; high risk needs two compliance officers, enforced in SQL; PEP accepted only after EDD by two officers), sanctions/PEP results with re-screening run by the KYC service, freeze/unfreeze maker-checker (hold → KYC `suspended` → existing `compliance.freeze` policy; new signer kind `compliance.unfreeze`), STR case log (append-only notes, two-officer closure, export recorded before release, manual FMU filing). **Merge the reserved 0018 first** (no-gap rule; tests use `contiguousMigrations()`).
-- Owner to confirm: investor wording for `suspended`/PEP (tipping-off), SLA values, PEP provider, goAML format.
-
-## T-044 investor offering screens (2026-10-13, merged; migration 0018)
-
-- Website: `/offerings`, `/offerings/[id]` (reserve with document acceptance; KYC-verified investors only), `/subscriptions` (timeline, payment instructions with countdown, refund status, cancel). Migration `0018_web_offering.sql` grants `pt_web` six `offering.web_*` functions only. Not built: withdrawal (OF-22) button, investor category choice (retail only), document download (no document store), notifications.
-- Not verified in a browser (no seeded live offering in a shared database; see the branch report). Tests: see docs/TASKS.md T-044.
-
-## Earlier update (2026-10-13, S-07, S-02, 6b and notifications merged)
-
-- **Merged into `main`:** S-07 public `/verify` (live on the demo server), S-02 offering backend (`0015_offering.sql`), Step 6b approvals portal (`0016_admin_approvals.sql`) and T-028 notifications backend (`0017_notify.sql`, ADR 0013 Proposed). Migrations 0001–0017 apply cleanly.
-- One cross-branch break fixed after the merges: the signer preview test fixture lacked S-02's `requireOfferingBatch` (d6789e9).
-- **Tests on `main` (lead run, d6789e9):** backend 504/504 (60 files), admin 207 unit/DB, web 94 (unit + integration); typecheck and lint clean in all three.
-
-## Earlier update (2026-10-13, Step 6b built on a branch)
-
-- **Step 6b (T-004) built on a branch, not merged** (ADR 0011 section 10, migration `0016_admin_approvals.sql`). The approvals portal: inbox; signing requests shown as the exact call (decoded from the calldata, call hash) and decided by the **signing service** through a new admin-scoped HTTP client and one-time database tickets; payout batches (lines, held lines, gate, items digest); unfreeze request (maker) and decision (checker); S-01 maker-checker requests; a reason and a fresh security-key step-up on every decision; maker != checker enforced by the backend; officer names bound to officer sessions; S-01 duties linked to officer roles (S-01 refinement 10). **Merge S-02 (0015) first**: until then the backend runner refuses the gap (tests use a renumbered copy).
-- Tests on the branch (0016 renumbered to 0015 locally for the run, not committed): backend 422 passed + 3 skipped (Anvil anchor stand-in not running) of 425 incl. 15 new; admin 207 unit/db (129 + 78 new) and 272 HTTP matrix (183 + 89 new); admin e2e 5/5 in Edge (3 + 2 new) with virtual FIDO2 keys and a real signing service.
-- Demo server: unchanged exposure (SSH tunnel only); `update.sh` now also runs `npm run signer:admin-client` (idempotent, secret never printed).
-
-## Earlier update (2026-10-13, after the 5h and 6a merges)
-
-- **Step 5h merged** (c962432, ADR 0010): the website signs nothing and holds no key; reads come from the indexer read model; invest, DvP trades and sign-up go through outbox + signer (maker-checker above 10,000 tokens); web uses its own least-privilege DB role `pt_web_app`; `webdemo` DDL moved into migration 0012. Demo server: services pt-indexer, pt-signer, pt-kyc, pt-outbox, pt-offboarding active; **reconciliation PASSED on the demo server (0 blocking, 0 warnings, with indexer verify)**; signer audit intact.
-- **Step 6a merged** (55d2c39, ADR 0011): `admin/` internal portal foundation (FIDO2-only officers, roles + SoD in the DB, audit viewer with evidence export, maker-checker officer management), migration 0013, 127.0.0.1:3300 only (SSH tunnel).
-- **Tests on main after both merges:** backend 362/362 (with 0013: 361/362, the one failure was the load-sensitive signer p99 gate, now fixed under T-001); web 69/69; admin 129 unit/db + 183 authorization-matrix; contracts 137/137 (unchanged).
-- **T-001 (partly):** the signer speed test now gates only the median in the unit suite; the full p50/p99 budget is `npm run perf:signer` (PT_PERF_GATES=1). Other timing checks listed in TASKS remain.
-- **S-01 backend merged** (043ab74, T-021): `@pt/property` + migration 0014 (sponsor KYB, property state machine, duplicates, due diligence, maker-checker, audit). Backend 410/410 on main. Not yet in the portal (needs 6b screens) and DocumentRegistry anchoring needs a `document.add` signer kind.
-- **Next:** S-07 public verification page (read-only), then S-02 offering, then 6b approvals portal.
-- **T-027 / S-07 (branch `t-027-public-verification`, awaiting lead review):** public `/verify` page (EN + Urdu): supply/cap/pause/holder count as of the cursor block, DocumentRegistry list with a browser-only file hash check, anchor commitment recomputed in the browser, entitlement check in the browser and on chain. Labelled as not available (no fake data): trustee register attestation (Q-2), anchor records and reconciliation status (website role has no read grant: needs a migration), public anchor chain (L2 pending), `anchor:verify` result (not stored). Web tests 94/94 (69 before + 22 unit + 3 integration); e2e `verify.spec.ts` 6/6; full e2e 15/17 with both `market.spec.ts` tests failing identically on main's code on this machine at the same time (pool/connection timeouts under load; see the branch report).
-- **S-02 backend built on branch `t-020-offering`** (T-020, not merged): migration `0015_offering.sql` (schema `offering` + additive bank amendment), `@pt/offering` (service, CLI `offering:*`), reconciliation amended (`issuance.paid_not_minted` SLA starts at the mint window; `offering.*` checks), signer `requireOfferingBatch`. ADR 0005/0007/0009 amendments; deviations in S-02 §16. Not built: completion payment batch (OF-45), returned refunds (OF-52), escrow per trust, investor and portal screens.
-- **Next:** S-07 public verification page (read-only), then merge S-02 (0015), then 6b approvals portal.
-
-- **Last audited commit:** `main` @ `41241b3` "test(signer): gate the speed test on the median on CI" (2026-10-13), 60 commits.
-- **Audit date:** 2026-10-13.
-
-## 1. Verified progress
-
-| Area | State | Evidence |
-|---|---|---|
-| Contracts (Step 3) | Done internally; external audits pending | 137 forge tests pass (lead run 2026-10-13, incl. paused/frozen agent actions); Slither in CI |
-| Local chain (Step 4) | Done | `chain/net.py`, `chain/flow.py` 50 checks |
-| Backend 5a-5g | Done (mock providers, local anchor stand-in) | 13 packages, migrations 0001-0011 |
-| Backend 5h | Parts 1-4 on `main` (held payouts, freeze and payout-record signer kinds, automatic offboarding, payout record through the outbox); rest **in progress on a branch** | commits 88d43cf, 246f2e9, 07d03b2 |
-| Website prototype W1-W5 + v2 design | Done (demo); still on the demo signer | `web/`; `demo-signer.ts` used by 10 files |
-| Internal portals (Step 6) | 6a **in progress on a branch**; 6b-6d not started | no `admin/` on `main` |
-| Mobile app | Not started | no `mobile/` |
-| Demo server | Live at `http://51.79.144.40` (Besu, PostgreSQL, web, console); deploys from `main` after CI | `deploy/demo-server/README.md` |
-
-Feature-level detail: [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md).
-
-## 2. Test evidence (lead run, 2026-10-13, on `41241b3`)
+## Last test evidence (home laptop, 2026-11-23, Next.js 16.4.6)
 
 | Suite | Result |
 |---|---|
-| contracts `forge test` | 137 / 137 pass |
-| web `npm run typecheck` | OK |
-| web `npm test` (vitest) | 67 / 67 pass (chain integration tests skip without a local chain) |
-| backend `npm test` (vitest, 36 files) | 311 pass, **1 fail**: signer speed test p99 63 ms > 50 ms on a busy machine (p50 7 ms). Same gate failed CI #34 and #48 before the median-only CI change |
-| web `npm run test:e2e` (Playwright, 11 tests) | Not run in this audit; not in CI |
+| web `npm run check` | 390 / 390 (chain running) |
+| admin `npm run check` | 1911 / 1911 |
+| admin `e2e/residency.spec.ts` | 1 / 1 (new; residency reviews by two officers) |
+| web `npm run test:e2e` | 21 passed + 1 skipped; `market.spec` "trade settles" timed out once while the local dev stack also ran, then 2/2 alone |
+| backend `npm run check` | 943 + 1 skipped on 2026-11-05 (later parts were tested by the session that built them; see the MEMORY log) |
+| app `flutter test` | 33 passed (2026-11-19, Flutter 3.44.5 in `D:\pt-tools`) |
 
-Not re-run by the documentation audit itself (no `node_modules` in the audit worktree).
+## Run locally
 
-## 3. Branches in progress (do not duplicate)
+1. `python backend/scripts/pg.py start` and `python chain/net.py start`.
+2. After a pull: `npm ci --ignore-scripts` in `backend/`, `web/`, `admin/`; then `cd backend && npm run migrate`.
+3. Backend services (each in its own terminal or in the background): `npm run indexer`, `signer` (4900), `outbox`, `kyc:serve` (4910), `public-api` (4960), `bank:payees` (4920), `notify:run`, `demo` (console 4800). `bank:payees` and `notify:run` need `npm run bank:setup` / `notify:setup` once per machine.
+4. `cd web && npm run dev` (http://127.0.0.1:3100) and `cd admin && npm run dev` (http://localhost:3300; 127.0.0.1 answers 421 by design).
+5. `python scripts/demo.py up` starts only the chain, PostgreSQL, the website and the console, not the backend services of step 3.
 
-| Work | Scope |
-|---|---|
-| Step 5h (remaining) | website onto outbox + signer + indexer read model; retire `web/src/lib/server/demo-signer.ts`; rent and mint journals so recon passes; demo-server services |
-| Step 6a | new `admin/` app: internal portal foundation with WebAuthn, roles and separation of duties, audit viewer |
-| T-020 (S-02 backend) | branch `t-020-offering`: migration `0015_offering.sql` (schema `offering`; bank amendment: cancelled payment codes, refunds of matched credits, trigger on `bank.credits`) and `@pt/offering`; recon and signer amendments. Needs 0014 (merged) |
-| T-021 (S-01 backend) | merged (043ab74). Was branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
+## Waiting on the owner
 
-| T-004 (Step 6b) | branch with `admin/` approvals pages and API routes, migration `0016_admin_approvals.sql`, signer preview + officer decisions (`/v1/requests/preview`, `/v1/decide`, `npm run signer:admin-client`). Merge after S-02 (0015) |
+- OVH: bring the demo VPS back (above).
+- Firebase: place the FCM service-account key on the server (push is off until then).
+- A phone run of the app (invest, cancel, withdraw, market order, top-up, push).
+- Production domain and TLS (passkeys in the app, iOS build, store release).
+- Decisions in MEMORY.md section 7: GPL-3.0 review of ERC-3643, which public L2, auditor rulings, retail limits; plus SECP/SBP permissions, real providers (NADRA, bank/Raast, SMS, e-mail), HSM/MPC vendor, legal texts still marked DRAFT and placeholder thresholds.
+- Enrol the 14 demo officers (one security key each) so `seed:catalog` completes.
 
-| T-028 notifications (backend) | branch: migration `0017_notify.sql` (schema `notify`) and `@pt/notify` (sealed contacts, consent, EN/UR templates, delivery worker with record-before-send and provider lookup, mock providers, CLI `notify:*`), ADR 0013 Proposed. Numbered 0017 after S-02 (0015) and 6b (0016): merge those first. Producers not wired yet (list in TASKS T-028) |
-| T-021 (S-01 backend) | branch `t-021-property-onboarding`: migration `0014_property.sql` (schema `property`) and `@pt/property` (sponsor KYB, property submission, duplicate detection, due diligence, IC, trustee acceptance; operator CLI `property:*`). Numbered 0014 after the 5h (0012) and 6a (0013) migrations: merge those first, or the runner refuses the numbering gap |
+## Known issues
 
-## 4. Blockers and owner decisions
-
-- Owner decisions: which public L2 for anchoring; HSM/MPC vendor; real provider contracts (NADRA Verisys, liveness, sanctions/PEP, trustee bank Raast/payout API); GPL-3.0 legal review; retail investment limits; KYC 10-year retention confirmation; accepted-exceptions list for recon.
-- Owner actions: GitHub branch protection, signed commits, Dependabot, secret scanning.
-
-## 5. Known issues
-
-| ID | Issue | Task |
-|---|---|---|
-| A4 | Timing assertions in unit tests fail under load (signer p99) | T-001 |
-| A5 | Playwright e2e not in CI | T-011 |
-| — | Reconciliation fails on the local chain by design until rent and mint journals are booked (`issuance.orphan_mint`, `rent.missing_ledger`) | T-002, T-022 |
-| A1 | ADR 0001 names NestJS/Fastify and Redis; code uses plain `node:http` and PostgreSQL queues | T-010 |
-| A2 | `webdemo` schema created by runtime DDL, outside migrations | T-008 |
-| A3 | Web has its own mock KYC and ledger client next to `@pt/kyc` / `@pt/ledger` | T-009 |
-| A6 | Status buried in long lines of MEMORY.md and README; README lists `admin/`, `mobile/` that do not exist | T-013 |
-| — | Web connects to PostgreSQL as the admin user | T-012 |
-| — | Website reads the chain directly in page loads (ADR 0001 read-path rule) | T-002 |
-| — | Indexer, recon, anchor, signer, bank are not running on the demo server; no scheduler for recon/anchor:verify | T-034 |
-| — | ADR 0007 and 0009 still "Proposed, awaiting lead review" after merge | T-015 |
-
-## 6. Next recommended task
-
-**T-001**: move tail-latency gates out of unit tests into bench scripts, so `npm test` is reliable before the 5h and 6a branches merge. Then reconcile the 5h and 6a branches (T-002, T-003).
+- CI job `web-e2e-chain` is informational (`continue-on-error`) until it has passed on GitHub several times.
+- Load-sensitive tests: `market.spec` (website e2e) and the ledger timing test can time out on a busy laptop; rerun alone before suspecting a regression.
+- firebase_messaging 17 deprecates `getToken` / `onTokenRefresh`; the app keeps them because the server sends to the token. Moving to installation ids needs a server change.
+- Auto-reinvest is on hold (owner).
