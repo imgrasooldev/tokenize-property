@@ -5,7 +5,7 @@ Short handoff for the next session (rewritten 2026-11-23; the old per-branch not
 ## Where things stand
 
 - Everything is on `main` (migrations 0001-0067). No open work branches: `app-push-dpop`, `phase-2a-app-invest` and `next-security-upgrade` are merged.
-- **Demo server `http://51.79.144.40` is unreachable since about 2026-11-17** (ping, HTTP and SSH time out; Deploy demo fails on SSH). Ploi's connection diagnostics (2026-11-23): ports 22, 80 and 443 all time out (dropped, not refused), so the machine is off at OVH. Cause found in OVH billing: the VPS `vps-55a01eb0` subscription **expired on 2026-11-12** (manual renewal). The owner renews it in OVH (My offers and services), then re-run Deploy demo. The last deployed commit is about 0cd4114; `main` beyond that is not live.
+- Demo server `http://51.79.144.40` is live again on `main` (2026-11-23, after the owner renewed the OVH VPS that had expired on 2026-11-12). Renewal is manual: switching it to automatic renewal is the owner's call. `ubuntu` now has `loginctl enable-linger` so PostgreSQL keeps its shared memory when SSH sessions close (see MEMORY.md).
 - Local run on one laptop: see "Run locally" below.
 
 | Area | State |
